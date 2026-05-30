@@ -73,7 +73,7 @@ public final class STTService {
         let options = DecodingOptions(
             language: "ko",
             wordTimestamps: false,
-            noSpeechThreshold: 0.90   // default 0.6 → 배경소음 환경에서 발화를 무음으로 잘못 판정 방지
+            noSpeechThreshold: 0.80   // g2 350샘플 실험: 0.80 최적 (CER 5.7%)
         )
 
         let wkResults = try await pipe.transcribe(
