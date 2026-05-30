@@ -40,17 +40,21 @@ public final class LLMCorrectionService: ObservableObject {
         activeCorrections += 1
         defer { activeCorrections -= 1 }
 
+        fputs("[LLM] correcting via \(selectedProvider.rawValue): \"\(text)\"\n", stderr)
         do {
+            let corrected: String
             switch selectedProvider {
             case .none:
                 return nil
             case .gemini:
-                return try await GeminiOAuthService.shared.correct(text: text, context: context)
+                corrected = try await GeminiOAuthService.shared.correct(text: text, context: context)
             case .copilot:
-                return try await CopilotOAuthService.shared.correct(text: text, context: context)
+                corrected = try await CopilotOAuthService.shared.correct(text: text, context: context)
             case .codex:
-                return try await CodexOAuthService.shared.correct(text: text, context: context)
+                corrected = try await CodexOAuthService.shared.correct(text: text, context: context)
             }
+            fputs("[LLM] corrected → \"\(corrected)\"\n", stderr)
+            return corrected
         } catch {
             fputs("[LLM] correction failed: \(error)\n", stderr)
             return nil

@@ -23,8 +23,8 @@ struct STTFileTests {
     func mp4TranscriptionAccuracy() async throws {
         guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1" else { return }
 
-        let mp4URL    = Self.sampleDir.appendingPathComponent("test.mp4")
-        let scriptURL = Self.sampleDir.appendingPathComponent("test.script.txt")
+        let mp4URL    = Self.sampleDir.appendingPathComponent("you/audio/test.mp4")
+        let scriptURL = Self.sampleDir.appendingPathComponent("you/script/test.transcription.txt")
 
         guard FileManager.default.fileExists(atPath: mp4URL.path) else {
             Issue.record("test.mp4 없음: \(mp4URL.path)")
@@ -78,6 +78,47 @@ CER          : \(String(format: "%.1f%%", cer * 100))
 """)
 
         #expect(cer < 0.40, "CER 40% 미만이어야 합니다. 실제: \(String(format: "%.1f%%", cer * 100))")
+    }
+
+    @Test("sample 첫 청크 전사 → Codex 교정 비교")
+    func transcribeThenCorrect() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1" else { return }
+
+        let mp4URL = Self.sampleDir.appendingPathComponent("you/audio/test.mp4")
+        guard FileManager.default.fileExists(atPath: mp4URL.path) else {
+            Issue.record("test.mp4 없음: \(mp4URL.path)")
+            return
+        }
+
+        let service = STTService()
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        guard case .loaded = service.modelState else {
+            Issue.record("모델 로드 실패: \(service.modelState)")
+            return
+        }
+
+        // 첫 30초 청크만 전사 (교정 검증용 세그먼트 확보)
+        let allSamples = try await extractPCM(from: mp4URL)
+        let chunkSize = 16000 * 30
+        let firstChunk = Array(allSamples[0..<min(chunkSize, allSamples.count)])
+        let raw = try await service.transcribe(pcmSamples: firstChunk).segment.text
+        print("[CorrectionTest] 원본 전사:\n\(raw)")
+
+        guard CodexOAuthService.shared.isLoggedIn else {
+            Issue.record("Codex 미로그인 — 앱에서 먼저 로그인 필요")
+            return
+        }
+
+        let corrected = try await CodexOAuthService.shared.correct(text: raw, context: "")
+        print("""
+
+=== Codex 교정 비교 ===
+원본  : \(raw)
+교정본: \(corrected)
+=======================
+""")
+
+        #expect(!corrected.isEmpty, "교정본이 비어있지 않아야 합니다")
     }
 
     // MARK: - 오디오 → PCM 추출

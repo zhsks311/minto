@@ -31,6 +31,13 @@ public struct MenuBarView: View {
             Divider()
             opacitySlider
             Divider()
+            SettingsLink {
+                Text("설정…")
+            }
+            .keyboardShortcut(",", modifiers: .command)
+            .simultaneousGesture(TapGesture().onEnded {
+                NSApp.activate(ignoringOtherApps: true)
+            })
             Button("종료") { NSApp.terminate(nil) }
         }
         .padding(8)

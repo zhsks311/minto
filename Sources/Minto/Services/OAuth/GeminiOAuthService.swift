@@ -57,12 +57,20 @@ public final class GeminiOAuthService: NSObject {
 
     // MARK: - Persisted state
 
+    // 메모리 캐시: 바깥 Optional이 "아직 로드 안 함" 여부, 안쪽이 실제 자격증명.
+    // SwiftUI body가 매 렌더마다 isLoggedIn을 호출해도 Keychain 접근은 실행당 최초 1회로 제한된다.
+    private var cachedCredentials: GeminiCredentials??
+
     private(set) var credentials: GeminiCredentials? {
         get {
-            guard let data = KeychainService.load(provider: kKeychainKey) else { return nil }
-            return try? JSONDecoder().decode(GeminiCredentials.self, from: data)
+            if let cached = cachedCredentials { return cached }
+            let loaded = KeychainService.load(provider: kKeychainKey)
+                .flatMap { try? JSONDecoder().decode(GeminiCredentials.self, from: $0) }
+            cachedCredentials = .some(loaded)
+            return loaded
         }
         set {
+            cachedCredentials = .some(newValue)
             if let v = newValue, let data = try? JSONEncoder().encode(v) {
                 KeychainService.save(provider: kKeychainKey, data: data)
             } else {
