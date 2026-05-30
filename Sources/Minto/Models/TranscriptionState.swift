@@ -25,6 +25,13 @@ public struct TranscriptionState: Sendable {
         }
     }
 
+    /// LLM 교정 결과로 특정 segment의 텍스트를 교체한다.
+    public mutating func updateSegmentText(id: UUID, newText: String) {
+        guard let idx = committedSegments.firstIndex(where: { $0.id == id }) else { return }
+        let old = committedSegments[idx]
+        committedSegments[idx] = Segment(id: old.id, text: newText, timestamp: old.timestamp, duration: old.duration)
+    }
+
     private func isSimilar(_ a: String, _ b: String) -> Bool {
         guard !a.isEmpty, !b.isEmpty else { return false }
         let norm: (String) -> String = {

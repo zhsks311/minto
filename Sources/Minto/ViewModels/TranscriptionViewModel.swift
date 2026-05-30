@@ -18,6 +18,7 @@ public final class TranscriptionViewModel: ObservableObject {
     // MARK: - Private
 
     private let sttService = STTService()
+    private let llmService = LLMCorrectionService.shared
     private var transcriptionTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
@@ -116,6 +117,20 @@ public final class TranscriptionViewModel: ObservableObject {
                     guard !result.segment.text.isEmpty else { continue }
                     state.advanceWindow(newResult: result)
                     committedSegments = state.displaySegments
+
+                    // LLM 비동기 교정: 원본 즉시 표시 후 교정본으로 조용히 교체
+                    if let lastSeg = state.committedSegments.last {
+                        let segId = lastSeg.id
+                        let original = lastSeg.text
+                        let context = state.recentCommittedText
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
+                            guard let corrected = await llmService.correct(text: original, context: context),
+                                  corrected != original else { return }
+                            self.state.updateSegmentText(id: segId, newText: corrected)
+                            self.committedSegments = self.state.displaySegments
+                        }
+                    }
                 } catch {
                     fputs("[VM] transcription error: \(error)\n", stderr)
                     errorMessage = "전사 오류: \(error.localizedDescription)"

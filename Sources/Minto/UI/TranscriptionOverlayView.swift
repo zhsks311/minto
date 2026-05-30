@@ -3,6 +3,7 @@ import AppKit
 
 public struct TranscriptionOverlayView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
+    @ObservedObject private var llmService = LLMCorrectionService.shared
 
     public init(viewModel: TranscriptionViewModel) {
         self.viewModel = viewModel
@@ -42,6 +43,21 @@ public struct TranscriptionOverlayView: View {
             }
 
             Spacer()
+
+            if llmService.activeCorrections > 0 {
+                HStack(spacing: 3) {
+                    Text("✦")
+                        .font(.system(size: 9))
+                        .foregroundColor(.blue)
+                    Text("교정 중")
+                        .font(.system(size: 10))
+                        .foregroundColor(.blue)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.blue.opacity(0.12))
+                .clipShape(Capsule())
+            }
 
             modelStateBadge
         }

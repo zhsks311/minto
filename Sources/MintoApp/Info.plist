@@ -18,5 +18,14 @@
     <string>Minto는 회의 내용을 실시간으로 전사하기 위해 마이크에 접근합니다.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Minto. All rights reserved.</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>minto</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
