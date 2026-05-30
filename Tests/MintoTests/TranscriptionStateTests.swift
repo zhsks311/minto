@@ -21,13 +21,12 @@ struct TranscriptionStateTests {
             state.advanceWindow(newResult: makeResult(text: text))
         }
 
-        // After 10 calls: segments 0-8 are committed (segment 9 is still pending)
+        // 직접 커밋: 10번 호출 → 10개 모두 committed
         let committed = state.committedSegments
-        #expect(committed.count == 9)
+        #expect(committed.count == 10)
         for (index, segment) in committed.enumerated() {
             #expect(segment.text == "segment \(index)", "Order must be preserved at index \(index)")
         }
-        #expect(state.pendingSegment?.text == "segment 9")
     }
 
     @Test("101번째 advanceWindow: flush 알림 발생 + 배열 초기화")
@@ -42,12 +41,11 @@ struct TranscriptionStateTests {
         ) { _ in flushed = true }
         defer { NotificationCenter.default.removeObserver(observer) }
 
-        // Fill to 101 committed (102 advanceWindow calls: first fills pending, rest commit)
-        for i in 0..<102 {
+        // 직접 커밋: 101번 호출 → 101번째에서 flush
+        for i in 0..<101 {
             state.advanceWindow(newResult: makeResult(text: "s\(i)"))
         }
 
-        // Give notification time to propagate
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         #expect(flushed, "Should post transcriptionNeedsFlush notification")
@@ -61,7 +59,7 @@ struct TranscriptionStateTests {
         for text in texts {
             state.advanceWindow(newResult: makeResult(text: text))
         }
-        // Committed: one, two, three, four (five is pending)
-        #expect(state.recentCommittedText == "two three four")
+        // 직접 커밋: 5개 모두 committed, 최근 3개 = three four five
+        #expect(state.recentCommittedText == "three four five")
     }
 }

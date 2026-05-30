@@ -101,6 +101,7 @@ public final class STTService {
                 guard !text.isEmpty else { continue }
                 // [MUSIC], [BLANK_AUDIO], (웃음) 등 Whisper 메타 태그
                 guard !text.hasPrefix("["), !text.hasPrefix("(") else { continue }
+                guard !Self.isKnownHallucination(text) else { continue }
                 fullText += text
             }
         }
@@ -128,6 +129,13 @@ public final class STTService {
             with: "",
             options: .regularExpression
         )
+    }
+
+    /// 모델 메트릭으로 잡히지 않는 확정 할루시네이션
+    private static func isKnownHallucination(_ text: String) -> Bool {
+        // 현재는 모델 메트릭(noSpeechProb, avgLogprob, compressionRatio)에 위임
+        // 텍스트 기반 필터는 실제 발화를 오필터링할 수 있어 사용하지 않음
+        return false
     }
 
 }
