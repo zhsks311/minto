@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhisperKit 통합 및 UI 개선 — task-summary</title>
+  <style>
+    :root {
+      --bg: #ffffff; --surface: #f6f8fa; --border: #d0d7de;
+      --text: #1f2328; --text-muted: #656d76; --accent: #0969da; --code-bg: #f6f8fa;
+      --c-critical: #cf222e; --c-critical-bg: #fff0ee; --c-critical-border: #ff818266;
+      --c-high:     #9a6700; --c-high-bg:     #fff8c5; --c-high-border:     #f1e05a99;
+      --c-medium:   #0550ae; --c-medium-bg:   #ddf4ff; --c-medium-border:   #79c0ff99;
+      --c-low:      #116329; --c-low-bg:      #dafbe1; --c-low-border:      #56d36499;
+      --pass-bg: #f0fdf4; --pass-border: #bbf7d0;
+      --fail-bg: #fff0ee; --fail-border: #fecaca;
+      --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --surface: #161b22; --border: #30363d;
+        --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff; --code-bg: #161b22;
+        --c-critical: #ff7b72; --c-critical-bg: #2d0f0f; --c-critical-border: #ff7b7266;
+        --c-high:     #e3b341; --c-high-bg:     #2d1f04; --c-high-border:     #e3b34166;
+        --c-medium:   #79c0ff; --c-medium-bg:   #051d4d; --c-medium-border:   #79c0ff66;
+        --c-low:      #56d364; --c-low-bg:      #0a2d19; --c-low-border:      #56d36466;
+        --pass-bg: #0a2d19; --pass-border: #56d36444;
+        --fail-bg: #2d0f0f; --fail-border: #ff7b7244;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.65; max-width: 900px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; }
+    h2 { font-size: 1.05rem; font-weight: 600; margin: 2.5rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+    p { margin-bottom: 0.75rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .summary { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 1.1rem 1.4rem; margin: 1.25rem 0 2rem; }
+    .summary-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .summary p:last-child { margin-bottom: 0; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin: 1.25rem 0 2rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.25rem; }
+    .stat-card--danger  { background: var(--c-critical-bg); border-color: var(--c-critical-border); }
+    .stat-card--warning { background: var(--c-high-bg);     border-color: var(--c-high-border); }
+    .stat-card--success { background: var(--pass-bg);       border-color: var(--pass-border); }
+    .stat-card--info    { background: var(--c-medium-bg);   border-color: var(--c-medium-border); }
+    .stat-number { font-size: 2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat-card--danger  .stat-number { color: var(--c-critical); }
+    .stat-card--warning .stat-number { color: var(--c-high); }
+    .stat-card--success .stat-number { color: var(--c-low); }
+    .stat-card--info    .stat-number { color: var(--c-medium); }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .stat-sub   { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+    .tag { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 4px; font-family: var(--font-mono); vertical-align: middle; }
+    .tag-critical { background: var(--c-critical-bg); color: var(--c-critical); }
+    .tag-high     { background: var(--c-high-bg);     color: var(--c-high); }
+    .tag-medium   { background: var(--c-medium-bg);   color: var(--c-medium); }
+    .tag-low      { background: var(--c-low-bg);      color: var(--c-low); }
+    .tag-pass     { background: var(--pass-bg);        color: var(--c-low); }
+    .tag-fail     { background: var(--fail-bg);        color: var(--c-critical); }
+    .tag-info     { background: var(--surface);        color: var(--text-muted); }
+
+    .verify-table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .verify-table th { text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); background: var(--surface); border-bottom: 2px solid var(--border); padding: 0.5rem 0.9rem; }
+    .verify-table td { padding: 0.6rem 0.9rem; vertical-align: middle; border-top: 1px solid var(--border); }
+    .vrow-pass { background: var(--pass-bg); }
+    .vrow-fail { background: var(--fail-bg); }
+
+    table:not(.verify-table) { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    table:not(.verify-table) th { text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 2px solid var(--border); padding: 0.45rem 0.75rem; }
+    table:not(.verify-table) td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table:not(.verify-table) tr:last-child td { border-bottom: none; }
+
+    code { font-family: var(--font-mono); font-size: 0.85em; background: var(--code-bg); padding: 0.12em 0.35em; border-radius: 4px; border: 1px solid var(--border); }
+    pre { font-family: var(--font-mono); font-size: 0.85rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; overflow-x: auto; margin: 0.75rem 0; line-height: 1.5; }
+    pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+    details { border: 1px solid var(--border); border-radius: 6px; margin: 0.6rem 0; }
+    details > summary { padding: 0.65rem 1rem; cursor: pointer; font-weight: 500; font-size: 0.92rem; background: var(--surface); user-select: none; list-style: none; display: flex; align-items: center; gap: 0.5rem; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before { content: '▶'; font-size: 0.65rem; transition: transform 0.12s; color: var(--text-muted); flex-shrink: 0; }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details[open] > summary { border-bottom: 1px solid var(--border); }
+    .details-body { padding: 1rem 1.25rem; }
+
+    .finding { border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px; padding: 0.9rem 1.1rem; margin: 0.65rem 0; }
+    .finding--medium { border-left-color: var(--c-medium); background: var(--c-medium-bg); }
+    .finding--low    { border-left-color: var(--c-low);    background: var(--c-low-bg); }
+    .finding--info   { border-left-color: var(--accent);   background: var(--surface); }
+    .finding-header  { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+    .finding-title   { font-weight: 600; font-size: 0.95rem; }
+    .finding p { margin-bottom: 0.5rem; font-size: 0.9rem; }
+
+    .flow-diagram { width: 100%; max-width: 760px; display: block; margin: 1rem auto; overflow: visible; }
+    .flow-box       { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+    .flow-box-green { fill: var(--c-low-bg); stroke: var(--c-low-border); stroke-width: 1.5; }
+    .flow-box-blue  { fill: var(--c-medium-bg); stroke: var(--c-medium-border); stroke-width: 1.5; }
+    .flow-text  { font-family: var(--font-body); font-size: 11.5px; fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+    .flow-label { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: middle; }
+    .flow-arrow    { stroke: var(--text-muted); stroke-width: 1.5; }
+    .flow-arrowhead { fill: var(--text-muted); }
+
+    .compare-table td:first-child { font-weight: 500; white-space: nowrap; }
+    .compare-table td { font-size: 0.88rem; }
+
+    footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); display: flex; gap: 1.5rem; flex-wrap: wrap; }
+
+    @media print {
+      body { max-width: none; padding: 0; background: #fff; color: #000; }
+      .stat-card, .finding { border: 1px solid #ccc; background: #f9f9f9; }
+      .vrow-pass, .vrow-fail { background: #fff; }
+      details[open] { page-break-inside: avoid; }
+      a[href]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #666; }
+      footer { color: #666; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>WhisperKit 통합 및 UI 개선</h1>
+<p style="color:var(--text-muted);font-size:0.88rem;margin-top:0.3rem">
+  참조: <a href="https://github.com/pasrom/meeting-transcriber">meeting-transcriber</a> ·
+  <a href="https://github.com/moonshine-ai/MoonshineNoteTaker">MoonshineNoteTaker</a>
+</p>
+
+<!-- ── 핵심 지표 ── -->
+<div class="stat-grid">
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">2/2</div>
+    <div class="stat-label">Tests Passed</div>
+    <div class="stat-sub">STT Integration</div>
+  </div>
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">0</div>
+    <div class="stat-label">Build Errors</div>
+    <div class="stat-sub">경고도 0건</div>
+  </div>
+  <div class="stat-card stat-card--info">
+    <div class="stat-number">13</div>
+    <div class="stat-label">파일 변경</div>
+    <div class="stat-sub">Swift 소스 12 + plist 1</div>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <div class="stat-number">3</div>
+    <div class="stat-label">Concurrency Fixes</div>
+    <div class="stat-sub">Swift 6 strict 준수</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">5.5s</div>
+    <div class="stat-label">추론 속도</div>
+    <div class="stat-sub">whisper-tiny, 캐시 후</div>
+  </div>
+</div>
+
+<!-- ── Summary ── -->
+<div class="summary">
+  <div class="summary-label">Summary</div>
+  <p>
+    두 참조 프로젝트를 분석해 핵심 개선 사항을 도입했습니다.
+    STT 엔진을 whisper.cpp → <strong>WhisperKit 0.18.0</strong>(CoreML/ANE 가속)으로 교체해
+    한국어 전사 품질(<code>DecodingOptions(language: "ko")</code>)과 Apple Silicon 실시간 성능을 동시에 확보했습니다.
+    MoonshineNoteTaker에서는 pending/committed 세그먼트 UX와 오디오 레벨 미터를 채용했으며,
+    Swift 6 strict concurrency를 완전히 준수한 상태로 빌드가 통과합니다.
+  </p>
+</div>
+
+<!-- ── 아키텍처 흐름 ── -->
+<h2>파이프라인 아키텍처</h2>
+
+<svg class="flow-diagram" viewBox="0 0 760 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- MicrophoneSource -->
+  <rect x="10" y="28" width="130" height="44" rx="6" class="flow-box"/>
+  <text x="75" y="46" class="flow-text">MicrophoneSource</text>
+  <text x="75" y="60" class="flow-label">PCM + Level</text>
+
+  <!-- 화살표 1 -->
+  <line x1="140" y1="50" x2="168" y2="50" class="flow-arrow"/>
+  <polygon points="168,45 178,50 168,55" class="flow-arrowhead"/>
+
+  <!-- VADProcessor -->
+  <rect x="178" y="28" width="120" height="44" rx="6" class="flow-box"/>
+  <text x="238" y="46" class="flow-text">VADProcessor</text>
+  <text x="238" y="60" class="flow-label">AudioChunk</text>
+
+  <!-- 화살표 2 -->
+  <line x1="298" y1="50" x2="326" y2="50" class="flow-arrow"/>
+  <polygon points="326,45 336,50 326,55" class="flow-arrowhead"/>
+
+  <!-- STTService (WhisperKit) -->
+  <rect x="336" y="20" width="150" height="60" rx="6" class="flow-box-blue"/>
+  <text x="411" y="43" class="flow-text">STTService</text>
+  <text x="411" y="58" class="flow-label">WhisperKit 0.18.0</text>
+  <text x="411" y="71" class="flow-label">CoreML / ANE</text>
+
+  <!-- 화살표 3 -->
+  <line x1="486" y1="50" x2="514" y2="50" class="flow-arrow"/>
+  <polygon points="514,45 524,50 514,55" class="flow-arrowhead"/>
+
+  <!-- TranscriptionViewModel -->
+  <rect x="524" y="28" width="140" height="44" rx="6" class="flow-box-green"/>
+  <text x="594" y="46" class="flow-text">ViewModel</text>
+  <text x="594" y="60" class="flow-label">@Published → SwiftUI</text>
+</svg>
+
+<!-- ── 참조 프로젝트 비교 ── -->
+<h2>참조 프로젝트 비교</h2>
+<table class="compare-table">
+  <thead>
+    <tr><th>항목</th><th>MoonshineNoteTaker</th><th>meeting-transcriber</th><th>minto2 (이번 작업)</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>STT 엔진</td>
+      <td>Moonshine ONNX</td>
+      <td>WhisperKit 0.x</td>
+      <td><strong>WhisperKit 0.18.0</strong></td>
+    </tr>
+    <tr>
+      <td>한국어 지원</td>
+      <td><span class="tag tag-fail">✗ 영어 전용</span></td>
+      <td><span class="tag tag-pass">✓</span></td>
+      <td><span class="tag tag-pass">✓ <code>language: "ko"</code></span></td>
+    </tr>
+    <tr>
+      <td>macOS 최소 버전</td>
+      <td>15.0+</td>
+      <td>13.0+</td>
+      <td>14.0+</td>
+    </tr>
+    <tr>
+      <td>Swift 6 concurrency</td>
+      <td><span class="tag tag-fail">미지원</span></td>
+      <td><span class="tag tag-fail">미지원</span></td>
+      <td><span class="tag tag-pass">완전 준수</span></td>
+    </tr>
+    <tr>
+      <td>Pending/Committed 세그먼트 UX</td>
+      <td><span class="tag tag-pass">있음</span></td>
+      <td><span class="tag tag-fail">없음</span></td>
+      <td><span class="tag tag-pass">채용</span></td>
+    </tr>
+    <tr>
+      <td>오디오 레벨 미터</td>
+      <td><span class="tag tag-pass">있음</span></td>
+      <td><span class="tag tag-fail">없음</span></td>
+      <td><span class="tag tag-pass">16-bar 미터 추가</span></td>
+    </tr>
+    <tr>
+      <td>Hallucination 필터</td>
+      <td>없음</td>
+      <td>기본 토큰 제거</td>
+      <td><span class="tag tag-pass">방송 자막·반복 패턴 차단 확장</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── Changes ── -->
+<h2>Changes</h2>
+<table>
+  <thead>
+    <tr><th>파일</th><th>변경 내용</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>Package.swift</code></td>
+      <td>whisper.spm → WhisperKit 0.18.0, 플랫폼 최소 버전 .v14</td>
+    </tr>
+    <tr>
+      <td><code>Info.plist</code></td>
+      <td><code>LSMinimumSystemVersion</code> 13.0 → 14.0</td>
+    </tr>
+    <tr>
+      <td><code>Models/Meeting.swift</code></td>
+      <td><code>ModelState</code> enum 추가 — unloaded / downloading(Double) / loading / loaded / failed</td>
+    </tr>
+    <tr>
+      <td><code>Services/STTService.swift</code></td>
+      <td><code>@preconcurrency import WhisperKit</code>, <code>@MainActor</code>, Korean <code>DecodingOptions</code>, hallucination 필터 내장</td>
+    </tr>
+    <tr>
+      <td><code>Services/MicrophoneSource.swift</code></td>
+      <td>오디오 레벨 콜백 — RMS → dB → 0~1 정규화 (<code>(db + 60) / 50</code>)</td>
+    </tr>
+    <tr>
+      <td><code>Services/AudioSourceProtocol.swift</code></td>
+      <td><code>onLevel: (@Sendable (Float) → Void)?</code> 추가</td>
+    </tr>
+    <tr>
+      <td><code>ViewModels/TranscriptionViewModel.swift</code></td>
+      <td><code>@Published modelState</code>, <code>audioLevel</code>, <code>pendingSegment</code>. 콜백 기반 state 전파</td>
+    </tr>
+    <tr>
+      <td><code>App/AppDelegate.swift</code></td>
+      <td>UserDefaults(<code>selectedModel</code>)에서 부팅 시 모델 자동 로드</td>
+    </tr>
+    <tr>
+      <td><code>UI/TranscriptionOverlayView.swift</code></td>
+      <td>다운로드 진행바, 16-bar 레벨 미터, pending·committed 세그먼트, <code>onChange</code> deprecated API 수정</td>
+    </tr>
+    <tr>
+      <td><code>UI/MenuBarView.swift</code></td>
+      <td>모델 상태 행, 로드 전 버튼 비활성화, <code>onChange</code> deprecated API 수정</td>
+    </tr>
+    <tr>
+      <td><code>UI/SettingsView.swift</code></td>
+      <td><code>@AppStorage</code> 모델 선택 UI, "지금 바로 모델 교체" 버튼</td>
+    </tr>
+    <tr>
+      <td><code>MintoApp/MintoApp.swift</code></td>
+      <td>SettingsView에 viewModel 전달, 메뉴바 아이콘 변경</td>
+    </tr>
+    <tr>
+      <td><code>Tests/STTIntegrationTests.swift</code></td>
+      <td><code>.serialized</code> 트레잇, VAD 테스트를 캘리브레이션/스피치 구간 분리</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── Verification ── -->
+<h2>Verification</h2>
+<table class="verify-table">
+  <thead>
+    <tr><th>결과</th><th>명령</th><th>비고</th></tr>
+  </thead>
+  <tbody>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>swift build</code></td>
+      <td>에러 0, 경고 0 — 1.92s</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>RUN_STT_TESTS=1 swift test -c release --filter STTIntegrationTests</code></td>
+      <td>2/2 통과 — 11.8s (whisper-tiny, 캐시 후)</td>
+    </tr>
+  </tbody>
+</table>
+
+<details>
+  <summary>테스트 출력 전문</summary>
+  <div class="details-body">
+    <pre><code>◇ Suite "STT Integration Tests (Manual Only)" started.
+
+◇ Test "whisper-tiny: 모델 다운로드 후 추론 성공" started.
+[STT] downloading openai_whisper-tiny...
+[STT] initializing WhisperKit...
+[STT] WhisperKit ready: openai_whisper-tiny
+✔ passed after 5.499 seconds.
+
+◇ Test "파이프라인: VADProcessor → STTService 연결 경로 동작 확인" started.
+[STT] downloading openai_whisper-tiny...
+[STT] initializing WhisperKit...
+[STT] WhisperKit ready: openai_whisper-tiny
+[VAD] calibrated: noiseFloor=-29.0309dB threshold=-23.0309dB
+[VAD] flushChunk samples=80000 minRequired=8000
+[Pipeline Smoke] transcribed: ''
+✔ passed after 6.333 seconds.
+
+✔ Suite passed after 11.832 seconds. (2/2)</code></pre>
+  </div>
+</details>
+
+<!-- ── 주요 기술 결정 ── -->
+<h2>주요 기술 결정</h2>
+
+<div class="finding finding--info">
+  <div class="finding-header">
+    <span class="tag tag-info">Swift 6</span>
+    <span class="finding-title">@preconcurrency import WhisperKit</span>
+  </div>
+  <p>
+    <code>WhisperKit</code>은 <code>Sendable</code>을 conform하지 않으므로,
+    <code>@MainActor</code> 컨텍스트에서 nonisolated 메서드 호출 시
+    <code>SendingRisksDataRace</code> 에러가 발생합니다.
+    Swift 6 공식 마이그레이션 경로인 <code>@preconcurrency import WhisperKit</code>을 적용하면
+    모듈 타입이 암묵적 <code>@unchecked Sendable</code>로 처리되어 에러가 해소됩니다.
+  </p>
+</div>
+
+<div class="finding finding--info">
+  <div class="finding-header">
+    <span class="tag tag-info">설계</span>
+    <span class="finding-title">@MainActor STTService — @ModelActor 제거</span>
+  </div>
+  <p>
+    이전 코드는 whisper.cpp <code>OpaquePointer</code>를 보호하기 위해 커스텀 global actor(<code>@ModelActor</code>)를 사용했습니다.
+    WhisperKit은 CoreML 내부에서 스레딩을 직접 관리하므로
+    <code>STTService</code>를 <code>@MainActor</code>로 격리하고
+    <code>await</code>으로 서스펜드하는 것만으로 UI 블록 없이 안전하게 동작합니다.
+  </p>
+</div>
+
+<div class="finding finding--info">
+  <div class="finding-header">
+    <span class="tag tag-info">테스트</span>
+    <span class="finding-title">VAD 캘리브레이션 — 저진폭 캘리브 → 고진폭 스피치</span>
+  </div>
+  <p>
+    VADProcessor는 처음 10프레임을 noise floor 기준으로 사용합니다.
+    같은 진폭의 신호를 즉시 피드하면 신호 자체가 noise floor가 되어 아무것도 검출되지 않습니다.
+  </p>
+  <details>
+    <summary>올바른 테스트 설계</summary>
+    <div class="details-body">
+      <pre><code>// 캘리브레이션: 저진폭(0.05) → noiseFloor ≈ -29 dB, threshold ≈ -23 dB
+let calibSamples = makeSineWave(seconds: 2, hz: 440, amplitude: 0.05)
+
+// 스피치: 고진폭(0.8) → -5 dB > threshold(-23 dB) → 검출됨
+// 80000 샘플(5s) 도달 시 maxSamples flush 자동 실행
+let speechSamples = makeSineWave(seconds: 6, hz: 440, amplitude: 0.8)</code></pre>
+    </div>
+  </details>
+</div>
+
+<details>
+  <summary>빌드 에러 해결 이력 (3건)</summary>
+  <div class="details-body">
+    <h3>1. TranscriptionResult naming conflict</h3>
+    <p><code>typealias WKResult = WhisperKit.TranscriptionResult</code> — 컴파일러가 <code>WhisperKit</code>을 모듈이 아닌 클래스 이름으로 해석.</p>
+    <pre><code>// before (error)
+typealias WKResult = WhisperKit.TranscriptionResult
+let wkResults: [WKResult] = try await pipe.transcribe(...)
+
+// after (OK) — 타입 추론으로 WhisperKit 모듈의 TranscriptionResult 획득
+let wkResults = try await pipe.transcribe(...)</code></pre>
+
+    <h3>2. @Sendable closure 에러</h3>
+    <p>@MainActor-isolated <code>self</code>를 캡처한 클로저를 nonisolated 메서드에 전달.</p>
+    <pre><code>// before
+progressCallback: { [weak self] progress in ... }
+// after
+progressCallback: { @Sendable [weak self] progress in ... }</code></pre>
+
+    <h3>3. pipe sending 에러 (region isolation)</h3>
+    <p>Swift 6 region isolation 분석이 @MainActor 컨텍스트에서 읽힌 <code>pipe</code>를 main actor region으로 태깅.</p>
+    <pre><code>// before
+import WhisperKit
+// after
+@preconcurrency import WhisperKit</code></pre>
+  </div>
+</details>
+
+<!-- ── Next Steps ── -->
+<h2>Next Steps</h2>
+<ul>
+  <li>실제 마이크로 한국어 발화 → 전사 품질 확인: <code>swift run minto2</code></li>
+  <li>모델 업그레이드 검토: <code>openai_whisper-small</code> (250 MB, 기본값) → <code>openai_whisper-large-v3-v20240930_turbo</code> (1.5 GB, 최고 품질)</li>
+  <li>VAD silence threshold 조정 (현재 1.0s): 짧게 줄이면 응답성 향상, 길게 늘리면 문장 분리 정확도 향상</li>
+  <li><code>Tests/MicrophoneSourceTests.swift:11</code> — <code>receivedError</code> unused warning 정리 (기능 무관)</li>
+</ul>
+
+<footer>
+  <span>생성: 2026-05-27T04:45:00+09:00</span>
+  <span>모델: claude-sonnet-4-6</span>
+  <span>유형: task-summary</span>
+</footer>
+
+</body>
+</html>

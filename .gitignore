@@ -1,0 +1,12 @@
+.DS_Store
+/.build
+/DerivedData
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+# Model files are too large for git
+Resources/models/*.bin
+Resources/models/*.ggml
+# Xcode project (if generated)
+*.xcodeproj/project.xcworkspace/xcuserdata/
+sample/*.mp4
