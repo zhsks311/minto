@@ -65,8 +65,8 @@ struct STTIntegrationTests {
             vad.process(samples: Array(calibSamples[batchStart..<end]))
         }
 
-        // 스피치: 고진폭 신호로 threshold 초과 → 버퍼가 maxSamples(5s)에 달하면 자동 flush
-        let speechSamples = makeSineWave(seconds: 6, hz: 440, amplitude: 0.8)
+        // 스피치: 고진폭 신호로 threshold 초과 → 버퍼가 maxSamples(15s)에 달하면 자동 flush
+        let speechSamples = makeSineWave(seconds: 16, hz: 440, amplitude: 0.8)
         for batchStart in stride(from: 0, to: speechSamples.count, by: batchSize) {
             let end = min(batchStart + batchSize, speechSamples.count)
             vad.process(samples: Array(speechSamples[batchStart..<end]))
