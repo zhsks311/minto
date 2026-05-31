@@ -280,6 +280,68 @@ CER          : \(String(format: "%.1f%%", cer * 100))
         return Double(editDistance(ref, hyp)) / Double(ref.count)
     }
 
+    @Test("회의 맥락 유무 교정 비교 (Codex/Gemini)")
+    func correctWithMeetingContext() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1" else { return }
+
+        let mp4URL = Self.sampleDir.appendingPathComponent("you/audio/test.mp4")
+        guard FileManager.default.fileExists(atPath: mp4URL.path) else {
+            Issue.record("test.mp4 없음: \(mp4URL.path)")
+            return
+        }
+        guard CodexOAuthService.shared.isLoggedIn, GeminiOAuthService.shared.isLoggedIn else {
+            Issue.record("Codex/Gemini 둘 다 로그인 필요")
+            return
+        }
+
+        let service = STTService()
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        guard case .loaded = service.modelState else {
+            Issue.record("모델 로드 실패: \(service.modelState)")
+            return
+        }
+
+        let allSamples = try await extractPCM(from: mp4URL)
+        let firstChunk = Array(allSamples[0..<min(16000 * 30, allSamples.count)])
+        let raw = try await service.transcribe(pcmSamples: firstChunk).segment.text
+
+        // 회의 맥락 (sample = 쿠팡 청문회 뉴스)
+        let topic = "국회 쿠팡 물류센터 청문회 경제 뉴스 인터뷰"
+        let glossary = "쿠팡\n청문회\n상임위\n불출석 사유서"
+
+        let noCtx = CorrectionPrompt.build(topic: "", glossary: "", context: "", text: raw)
+        let withCtx = CorrectionPrompt.build(topic: topic, glossary: glossary, context: "", text: raw)
+
+        // 한 provider 실패(예: Gemini 429)가 나머지 결과를 가리지 않도록 각 호출을 독립적으로 감싼다.
+        func tryCorrect(_ svc: @escaping () async throws -> String) async -> String {
+            do { return try await svc() } catch { return "(실패: \(error.localizedDescription))" }
+        }
+        let codexNo = await tryCorrect { try await CodexOAuthService.shared.correct(instructions: noCtx.instructions, userContent: noCtx.userContent) }
+        let codexCtx = await tryCorrect { try await CodexOAuthService.shared.correct(instructions: withCtx.instructions, userContent: withCtx.userContent) }
+        let geminiNo = await tryCorrect { try await GeminiOAuthService.shared.correct(instructions: noCtx.instructions, userContent: noCtx.userContent) }
+        let geminiCtx = await tryCorrect { try await GeminiOAuthService.shared.correct(instructions: withCtx.instructions, userContent: withCtx.userContent) }
+
+        print("""
+
+        ===== 회의 맥락 유무 교정 비교 =====
+        [원본 전사]
+        \(raw)
+
+        [Codex · 맥락 없음]
+        \(codexNo)
+
+        [Codex · 맥락 있음]
+        \(codexCtx)
+
+        [Gemini · 맥락 없음]
+        \(geminiNo)
+
+        [Gemini · 맥락 있음]
+        \(geminiCtx)
+        ===================================
+        """)
+    }
+
     // MARK: - 오디오 → PCM 추출
     // MPEG-TS 파일이 .mp4 확장자로 저장된 경우 avconvert가 포맷을 잘못 인식합니다.
     // .ts 확장자로 복사 → avconvert(M4A 추출) → afconvert(WAV 변환) 파이프라인을 사용합니다.

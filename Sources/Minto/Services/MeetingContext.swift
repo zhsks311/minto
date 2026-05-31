@@ -28,6 +28,8 @@ public final class MeetingContext: ObservableObject {
     public func start(topic: String, glossary: String) {
         self.topic = topic
         self.glossary = glossary
+        let terms = glossary.split(whereSeparator: { $0.isNewline }).count
+        fputs("[Meeting] context set — topic: \"\(topic)\", glossary terms: \(terms)\n", stderr)
     }
 
     /// 맥락 초기화.
