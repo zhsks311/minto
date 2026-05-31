@@ -9,7 +9,7 @@ struct MintoApp: App {
         MenuBarExtra("Minto", systemImage: "waveform.circle.fill") {
             MenuBarView(
                 viewModel: appDelegate.viewModel,
-                onStartRecording: { appDelegate.floatingWindowManager.show() },
+                onRequestStart: { appDelegate.requestStartSession() },
                 onStopRecording: { appDelegate.floatingWindowManager.hide() },
                 onOpacityChange: appDelegate.floatingWindowManager.setOpacity
             )

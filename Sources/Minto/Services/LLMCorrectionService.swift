@@ -40,6 +40,15 @@ public final class LLMCorrectionService: ObservableObject {
         activeCorrections += 1
         defer { activeCorrections -= 1 }
 
+        // 회의 맥락 + 직전 발화 + 현재 인식을 한 곳에서 프롬프트로 조립 (provider 공통)
+        let meeting = MeetingContext.shared
+        let (instructions, userContent) = CorrectionPrompt.build(
+            topic: meeting.topic,
+            glossary: meeting.glossary,
+            context: context,
+            text: text
+        )
+
         fputs("[LLM] correcting via \(selectedProvider.rawValue): \"\(text)\"\n", stderr)
         do {
             let corrected: String
@@ -47,11 +56,11 @@ public final class LLMCorrectionService: ObservableObject {
             case .none:
                 return nil
             case .gemini:
-                corrected = try await GeminiOAuthService.shared.correct(text: text, context: context)
+                corrected = try await GeminiOAuthService.shared.correct(instructions: instructions, userContent: userContent)
             case .copilot:
-                corrected = try await CopilotOAuthService.shared.correct(text: text, context: context)
+                corrected = try await CopilotOAuthService.shared.correct(instructions: instructions, userContent: userContent)
             case .codex:
-                corrected = try await CodexOAuthService.shared.correct(text: text, context: context)
+                corrected = try await CodexOAuthService.shared.correct(instructions: instructions, userContent: userContent)
             }
             fputs("[LLM] corrected → \"\(corrected)\"\n", stderr)
             return corrected

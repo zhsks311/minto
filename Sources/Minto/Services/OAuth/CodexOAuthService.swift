@@ -97,7 +97,7 @@ public final class CodexOAuthService: ObservableObject {
 
     // MARK: - Correction API
 
-    public func correct(text: String, context: String) async throws -> String {
+    public func correct(instructions: String, userContent: String) async throws -> String {
         guard var creds = credentials else { throw CodexError.notLoggedIn }
         if creds.isExpired {
             creds = try await refreshToken(creds: creds)
@@ -116,12 +116,11 @@ public final class CodexOAuthService: ObservableObject {
             request.setValue(accountId, forHTTPHeaderField: "ChatGPT-Account-ID")
         }
 
-        let userContent = "직전 발화 컨텍스트: \(context)\n현재 인식 결과: \(text)"
         let body: [String: Any] = [
             "model": "gpt-5.4-mini",
             "stream": true,   // Codex 백엔드는 SSE 스트리밍을 강제
             "store": false,   // 서버측 대화 저장 비활성화를 강제
-            "instructions": correctionInstructions,  // Codex Responses API는 instructions 필수
+            "instructions": instructions,  // Codex Responses API는 instructions 필수
             "input": [["role": "user", "content": userContent]]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -320,17 +319,6 @@ public final class CodexOAuthService: ObservableObject {
         credentials = updated
         return updated
     }
-
-    private let correctionInstructions = """
-        당신은 한국어 음성 인식 결과를 교정하는 전문가입니다.
-        입력으로 직전 발화 컨텍스트와 현재 인식 결과가 주어집니다.
-
-        규칙:
-        - 한국어 띄어쓰기와 문장부호 교정
-        - 동음이의어 중 컨텍스트에 맞는 것으로 교정
-        - 내용을 추가하거나 삭제하지 말 것
-        - 교정된 텍스트만 출력 (설명 없이)
-        """
 }
 
 enum CodexError: Error, LocalizedError {

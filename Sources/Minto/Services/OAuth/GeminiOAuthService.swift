@@ -144,7 +144,7 @@ public final class GeminiOAuthService: NSObject {
 
     // MARK: - Correction API
 
-    public func correct(text: String, context: String) async throws -> String {
+    public func correct(instructions: String, userContent: String) async throws -> String {
         let token = try await validAccessToken()
         guard var creds = credentials else { throw GeminiOAuthError.notLoggedIn }
 
@@ -154,7 +154,8 @@ public final class GeminiOAuthService: NSObject {
             creds = credentials ?? creds
         }
 
-        let prompt = correctionPrompt(text: text, context: context)
+        // Gemini는 system role을 따로 쓰지 않으므로 instructions + userContent를 단일 user 메시지로 연결한다.
+        let prompt = instructions + "\n\n" + userContent
         let url = URL(string: "https://cloudcode-pa.googleapis.com/v1internal:generateContent")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -302,23 +303,6 @@ public final class GeminiOAuthService: NSObject {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
-    }
-
-    private func correctionPrompt(text: String, context: String) -> String {
-        """
-        당신은 한국어 음성 인식 결과를 교정하는 전문가입니다.
-
-        직전 발화 컨텍스트: \(context)
-        현재 인식 결과: \(text)
-
-        규칙:
-        - 한국어 띄어쓰기와 문장부호 교정
-        - 동음이의어 중 컨텍스트에 맞는 것으로 교정
-        - 내용을 추가하거나 삭제하지 말 것
-        - 교정된 텍스트만 출력 (설명 없이)
-
-        교정 결과:
-        """
     }
 }
 

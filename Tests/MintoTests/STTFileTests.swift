@@ -109,7 +109,8 @@ CER          : \(String(format: "%.1f%%", cer * 100))
             return
         }
 
-        let corrected = try await CodexOAuthService.shared.correct(text: raw, context: "")
+        let p = CorrectionPrompt.build(topic: "", glossary: "", context: "", text: raw)
+        let corrected = try await CodexOAuthService.shared.correct(instructions: p.instructions, userContent: p.userContent)
         print("""
 
 === Codex 교정 비교 ===
@@ -180,7 +181,8 @@ CER          : \(String(format: "%.1f%%", cer * 100))
             return
         }
 
-        let corrected = try await GeminiOAuthService.shared.correct(text: raw, context: "")
+        let p = CorrectionPrompt.build(topic: "", glossary: "", context: "", text: raw)
+        let corrected = try await GeminiOAuthService.shared.correct(instructions: p.instructions, userContent: p.userContent)
         print("""
 
 === Gemini 교정 비교 ===
@@ -190,6 +192,92 @@ CER          : \(String(format: "%.1f%%", cer * 100))
 """)
 
         #expect(!corrected.isEmpty, "교정본이 비어있지 않아야 합니다")
+    }
+
+    @Test("교정 품질 정량 비교: raw vs Codex vs Gemini (CER)")
+    func correctionQualityComparison() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1" else { return }
+
+        let mp4URL = Self.sampleDir.appendingPathComponent("you/audio/test.mp4")
+        let scriptURL = Self.sampleDir.appendingPathComponent("you/script/test.transcription.txt")
+        guard FileManager.default.fileExists(atPath: mp4URL.path) else {
+            Issue.record("test.mp4 없음: \(mp4URL.path)")
+            return
+        }
+        guard CodexOAuthService.shared.isLoggedIn, GeminiOAuthService.shared.isLoggedIn else {
+            Issue.record("Codex/Gemini 둘 다 로그인 필요")
+            return
+        }
+
+        let reference = try parseScriptText(from: scriptURL)
+
+        let service = STTService()
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        guard case .loaded = service.modelState else {
+            Issue.record("모델 로드 실패: \(service.modelState)")
+            return
+        }
+
+        let allSamples = try await extractPCM(from: mp4URL)
+        let chunkSize = 16000 * 30
+        let totalChunks = (allSamples.count + chunkSize - 1) / chunkSize
+        // API 비용/시간 보호: 최대 12청크(6분)까지만 평가하고, 초과분은 명시적으로 알린다.
+        let maxChunks = 12
+        let evalChunks = min(totalChunks, maxChunks)
+        if totalChunks > maxChunks {
+            print("[QualityTest] ⚠️ 전체 \(totalChunks)청크 중 앞 \(maxChunks)청크만 평가 (나머지 \(totalChunks - maxChunks)청크 생략)")
+        }
+
+        var raw = "", codex = "", gemini = ""
+        for idx in 0..<evalChunks {
+            let start = idx * chunkSize
+            let end = min(start + chunkSize, allSamples.count)
+            let chunkText = try await service.transcribe(pcmSamples: Array(allSamples[start..<end])).segment.text
+            if chunkText.isEmpty { continue }
+            raw += chunkText + " "
+
+            // 각 provider로 동일 청크 교정. 실패 시 원본 유지(실사용 동작과 동일).
+            let p = CorrectionPrompt.build(topic: "", glossary: "", context: "", text: chunkText)
+            let c = (try? await CodexOAuthService.shared.correct(instructions: p.instructions, userContent: p.userContent)) ?? chunkText
+            let g = (try? await GeminiOAuthService.shared.correct(instructions: p.instructions, userContent: p.userContent)) ?? chunkText
+            codex += c + " "
+            gemini += g + " "
+            print("[QualityTest] 청크 \(idx + 1)/\(evalChunks) 완료")
+        }
+
+        let report = """
+
+        ===== 교정 품질 정량 비교 (\(evalChunks)청크) =====
+        지표 1) 내용 CER  — 공백·문장부호 제거, 글자/동음이의어 정확도
+        지표 2) 포맷 CER  — 공백·문장부호 포함, 가독성 일치도
+        (낮을수록 reference에 가까움)
+
+        [내용 CER]
+          raw    : \(pct(characterErrorRate(reference: reference, hypothesis: raw)))
+          Codex  : \(pct(characterErrorRate(reference: reference, hypothesis: codex)))
+          Gemini : \(pct(characterErrorRate(reference: reference, hypothesis: gemini)))
+
+        [포맷 CER]
+          raw    : \(pct(formattedErrorRate(reference: reference, hypothesis: raw)))
+          Codex  : \(pct(formattedErrorRate(reference: reference, hypothesis: codex)))
+          Gemini : \(pct(formattedErrorRate(reference: reference, hypothesis: gemini)))
+        =============================================
+        """
+        print(report)
+    }
+
+    private func pct(_ v: Double) -> String { String(format: "%.2f%%", v * 100) }
+
+    /// 공백·문장부호를 유지한 채(런 공백만 단일화) 편집거리 기반 CER. 띄어쓰기·부호 개선을 반영한다.
+    private func formattedErrorRate(reference: String, hypothesis: String) -> Double {
+        let normalize: (String) -> [Character] = { s in
+            let collapsed = s.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+            return Array(collapsed)
+        }
+        let ref = normalize(reference)
+        let hyp = normalize(hypothesis)
+        guard !ref.isEmpty else { return hyp.isEmpty ? 0 : 1 }
+        return Double(editDistance(ref, hyp)) / Double(ref.count)
     }
 
     // MARK: - 오디오 → PCM 추출

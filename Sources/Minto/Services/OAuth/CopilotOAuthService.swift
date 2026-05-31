@@ -110,7 +110,7 @@ public final class CopilotOAuthService: ObservableObject {
 
     // MARK: - Correction API
 
-    public func correct(text: String, context: String) async throws -> String {
+    public func correct(instructions: String, userContent: String) async throws -> String {
         guard var creds = credentials else { throw CopilotError.notLoggedIn }
 
         if creds.isCopilotTokenExpired {
@@ -130,11 +130,14 @@ public final class CopilotOAuthService: ObservableObject {
         request.setValue("vscode-chat", forHTTPHeaderField: "Copilot-Integration-Id")
         request.setValue("conversation-edits", forHTTPHeaderField: "Openai-Intent")
 
-        let prompt = correctionPrompt(text: text, context: context)
+        // 교정 규칙(instructions)은 system 메시지로, 가변 입력(userContent)은 user 메시지로 분리.
         let body: [String: Any] = [
             "model": "gpt-4o",
-            "max_tokens": 200,
-            "messages": [["role": "user", "content": prompt]]
+            "max_tokens": 1024,
+            "messages": [
+                ["role": "system", "content": instructions],
+                ["role": "user", "content": userContent]
+            ]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -228,23 +231,6 @@ public final class CopilotOAuthService: ObservableObject {
         let (data, _) = try await URLSession.shared.data(for: request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         return json?["email"] as? String ?? json?["login"] as? String ?? ""
-    }
-
-    private func correctionPrompt(text: String, context: String) -> String {
-        """
-        당신은 한국어 음성 인식 결과를 교정하는 전문가입니다.
-
-        직전 발화 컨텍스트: \(context)
-        현재 인식 결과: \(text)
-
-        규칙:
-        - 한국어 띄어쓰기와 문장부호 교정
-        - 동음이의어 중 컨텍스트에 맞는 것으로 교정
-        - 내용을 추가하거나 삭제하지 말 것
-        - 교정된 텍스트만 출력 (설명 없이)
-
-        교정 결과:
-        """
     }
 }
 

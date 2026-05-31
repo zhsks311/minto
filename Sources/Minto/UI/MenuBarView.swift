@@ -2,7 +2,7 @@ import SwiftUI
 
 public struct MenuBarView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
-    public var onStartRecording: (() -> Void)?
+    public var onRequestStart: (() -> Void)?
     public var onStopRecording: (() -> Void)?
     public var onOpacityChange: ((Double) -> Void)?
 
@@ -10,12 +10,12 @@ public struct MenuBarView: View {
 
     public init(
         viewModel: TranscriptionViewModel,
-        onStartRecording: (() -> Void)? = nil,
+        onRequestStart: (() -> Void)? = nil,
         onStopRecording: (() -> Void)? = nil,
         onOpacityChange: ((Double) -> Void)? = nil
     ) {
         self.viewModel = viewModel
-        self.onStartRecording = onStartRecording
+        self.onRequestStart = onRequestStart
         self.onStopRecording = onStopRecording
         self.onOpacityChange = onOpacityChange
     }
@@ -108,8 +108,7 @@ public struct MenuBarView: View {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
             } else {
                 Button("녹음 시작") {
-                    viewModel.startRecording()
-                    onStartRecording?()
+                    onRequestStart?()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(!isModelReady)

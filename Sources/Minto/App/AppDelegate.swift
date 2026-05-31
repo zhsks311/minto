@@ -4,15 +4,31 @@ import SwiftUI
 public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, @unchecked Sendable {
     public let viewModel: TranscriptionViewModel
     public let floatingWindowManager: FloatingWindowManager
+    public let meetingSetupManager: MeetingSetupWindowManager
 
     override init() {
-        let (vm, manager) = MainActor.assumeIsolated {
+        let (vm, floatManager, setupManager) = MainActor.assumeIsolated {
             let vm = TranscriptionViewModel()
-            return (vm, FloatingWindowManager(viewModel: vm))
+            return (vm, FloatingWindowManager(viewModel: vm), MeetingSetupWindowManager())
         }
         viewModel = vm
-        floatingWindowManager = manager
+        floatingWindowManager = floatManager
+        meetingSetupManager = setupManager
         super.init()
+    }
+
+    /// "녹음 시작" → 회의 시작 시트를 띄우고, "시작" 시 회의 맥락 설정 후 실제 녹음을 시작한다.
+    @MainActor
+    public func requestStartSession() {
+        meetingSetupManager.show(
+            onStart: { [weak self] topic, glossary in
+                guard let self else { return }
+                MeetingContext.shared.start(topic: topic, glossary: glossary)
+                self.viewModel.startRecording()
+                self.floatingWindowManager.show()
+            },
+            onCancel: {}
+        )
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
