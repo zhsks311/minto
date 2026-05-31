@@ -121,6 +121,77 @@ CER          : \(String(format: "%.1f%%", cer * 100))
         #expect(!corrected.isEmpty, "교정본이 비어있지 않아야 합니다")
     }
 
+    @Test("Gemini loadCodeAssist 원본 응답 확인 (project/tier 진단)")
+    func geminiLoadCodeAssistProbe() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1" else { return }
+        guard GeminiOAuthService.shared.isLoggedIn else {
+            Issue.record("Gemini 미로그인")
+            return
+        }
+
+        let token = try await GeminiOAuthService.shared.validAccessToken()
+        let url = URL(string: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // gemini-cli가 보내는 metadata 형태로 요청
+        let body: [String: Any] = [
+            "metadata": ["ideType": "IDE_UNSPECIFIED", "platform": "PLATFORM_UNSPECIFIED", "pluginType": "GEMINI"]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let raw = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+        print("""
+
+=== loadCodeAssist HTTP \(status) ===
+\(raw)
+=====================================
+""")
+    }
+
+    @Test("sample 첫 청크 전사 → Gemini 교정 비교")
+    func transcribeThenCorrectGemini() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1" else { return }
+
+        let mp4URL = Self.sampleDir.appendingPathComponent("you/audio/test.mp4")
+        guard FileManager.default.fileExists(atPath: mp4URL.path) else {
+            Issue.record("test.mp4 없음: \(mp4URL.path)")
+            return
+        }
+
+        let service = STTService()
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        guard case .loaded = service.modelState else {
+            Issue.record("모델 로드 실패: \(service.modelState)")
+            return
+        }
+
+        let allSamples = try await extractPCM(from: mp4URL)
+        let chunkSize = 16000 * 30
+        let firstChunk = Array(allSamples[0..<min(chunkSize, allSamples.count)])
+        let raw = try await service.transcribe(pcmSamples: firstChunk).segment.text
+        print("[CorrectionTest] 원본 전사:\n\(raw)")
+
+        guard GeminiOAuthService.shared.isLoggedIn else {
+            Issue.record("Gemini 미로그인 — 앱에서 먼저 로그인 필요")
+            return
+        }
+
+        let corrected = try await GeminiOAuthService.shared.correct(text: raw, context: "")
+        print("""
+
+=== Gemini 교정 비교 ===
+원본  : \(raw)
+교정본: \(corrected)
+========================
+""")
+
+        #expect(!corrected.isEmpty, "교정본이 비어있지 않아야 합니다")
+    }
+
     // MARK: - 오디오 → PCM 추출
     // MPEG-TS 파일이 .mp4 확장자로 저장된 경우 avconvert가 포맷을 잘못 인식합니다.
     // .ts 확장자로 복사 → avconvert(M4A 추출) → afconvert(WAV 변환) 파이프라인을 사용합니다.
