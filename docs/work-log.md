@@ -17,6 +17,7 @@
 
 ## 남은 과제
 
-- [ ] **GitHub Copilot** 로그인 + 교정 검증 (Codex/Gemini는 검증 완료, Copilot 미검증)
+- [x] OAuth 3종 검증: **Codex ✅ / Gemini ✅ / Copilot ⚠️ 코드 정상이나 계정에 Copilot 구독 없어 404** (구독 시 재시도하면 동작, `noSubscription` 에러로 안내)
 - [ ] `VADProcessorTests` 기존 실패 수정 (`maxChunkDuration` 5s↔15s 불일치, 이번 작업과 무관한 선재 실패)
 - [ ] 교정 품질 튜닝 — 과교정 방지 효과를 실제 회의 음원에서 재측정
+- [ ] 회의 시작 시트 UI 흐름 직접 확인 (헤드리스 불가, `[Meeting]` 로그로 입력 캡처는 검증 가능)
