@@ -25,6 +25,30 @@ public struct TranscriptionState: Sendable {
         }
     }
 
+    /// 여러 연속 segment를 교정된 단일 segment로 병합한다.
+    /// (창 단위 배치 교정용 — 첫 segment의 id·timestamp를 유지하고 duration은 합산)
+    /// ids는 committedSegments에 연속으로 존재한다고 가정한다. 일부가 없으면 있는 것만 병합하며,
+    /// 하나도 없으면 no-op.
+    public mutating func replaceRange(ids: [UUID], correctedText: String) {
+        let idSet = Set(ids)
+        guard let firstIdx = committedSegments.firstIndex(where: { idSet.contains($0.id) }) else {
+            return
+        }
+        let members = committedSegments.filter { idSet.contains($0.id) }
+        guard let first = members.first else {
+            return
+        }
+        let totalDuration = members.reduce(0) { $0 + $1.duration }
+        let merged = Segment(
+            id: first.id,
+            text: correctedText,
+            timestamp: first.timestamp,
+            duration: totalDuration
+        )
+        committedSegments.removeAll { idSet.contains($0.id) }
+        committedSegments.insert(merged, at: firstIdx)
+    }
+
     /// LLM 교정 결과로 특정 segment의 텍스트를 교체한다.
     public mutating func updateSegmentText(id: UUID, newText: String) {
         guard let idx = committedSegments.firstIndex(where: { $0.id == id }) else { return }

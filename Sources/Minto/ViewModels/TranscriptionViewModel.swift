@@ -28,6 +28,12 @@ public final class TranscriptionViewModel: ObservableObject {
     private var state = TranscriptionState()
     private var recordingStartDate: Date?
 
+    // 창 단위 배치 교정: 미교정 구간을 모았다가 누적 길이가 window에 도달하면
+    // 한 번에 교정 후 하나의 문단으로 병합한다. (구간간 일관성·교정 품질·호출 수 개선)
+    private static let correctionWindowSeconds: TimeInterval = 20
+    private var pendingCorrectionIds: [UUID] = []
+    private var pendingCorrectionDuration: TimeInterval = 0
+
     // MARK: - Init
 
     public init() {
@@ -119,17 +125,14 @@ public final class TranscriptionViewModel: ObservableObject {
                     state.advanceWindow(newResult: result)
                     committedSegments = state.committedSegments
 
-                    // LLM 비동기 교정: 원본 즉시 표시 후 교정본으로 조용히 교체
-                    if let lastSeg = state.committedSegments.last {
-                        let segId = lastSeg.id
-                        let original = lastSeg.text
-                        let context = state.recentCommittedText
-                        Task { @MainActor [weak self] in
-                            guard let self else { return }
-                            guard let corrected = await llmService.correct(text: original, context: context),
-                                  corrected != original else { return }
-                            self.state.updateSegmentText(id: segId, newText: corrected)
-                            self.committedSegments = self.state.committedSegments
+                    // 창 단위 배치 교정: 원본은 즉시 표시하고, 누적 길이가 window에
+                    // 도달하면 그 구간들을 한 번에 교정해 하나의 문단으로 병합한다.
+                    // (advanceWindow가 dedup으로 skip하면 마지막 id가 바뀌지 않으므로 추가하지 않음)
+                    if state.committedSegments.last?.id == result.segment.id {
+                        pendingCorrectionIds.append(result.segment.id)
+                        pendingCorrectionDuration += result.segment.duration
+                        if pendingCorrectionDuration >= Self.correctionWindowSeconds {
+                            flushCorrectionBatch()
                         }
                     }
                 } catch {
@@ -151,6 +154,8 @@ public final class TranscriptionViewModel: ObservableObject {
     }
 
     public func stopRecording() {
+        // 마지막 창(window 미달분)도 교정·병합되도록 flush
+        flushCorrectionBatch()
         audioSource.stop()
         chunkContinuation?.finish()
         transcriptionTask?.cancel()
@@ -167,6 +172,30 @@ public final class TranscriptionViewModel: ObservableObject {
         committedSegments = []
         pendingSegment = nil
         state = TranscriptionState()
+        pendingCorrectionIds = []
+        pendingCorrectionDuration = 0
+    }
+
+    /// 누적된 미교정 구간을 한 번에 교정해 하나의 문단으로 병합한다.
+    /// 원본은 이미 표시돼 있으므로 fail-soft: 실패하면 병합하지 않고 원본을 유지한다.
+    private func flushCorrectionBatch() {
+        guard !pendingCorrectionIds.isEmpty else { return }
+        let ids = pendingCorrectionIds
+        pendingCorrectionIds = []
+        pendingCorrectionDuration = 0
+
+        let segmentsToCorrect = state.committedSegments.filter { ids.contains($0.id) }
+        guard !segmentsToCorrect.isEmpty else { return }
+        let original = segmentsToCorrect.map(\.text).joined(separator: " ")
+        let context = state.recentCommittedText
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let corrected = await self.llmService.correct(text: original, context: context),
+                  !corrected.isEmpty else { return }
+            self.state.replaceRange(ids: ids, correctedText: corrected)
+            self.committedSegments = self.state.committedSegments
+        }
     }
 
     public func enqueueChunk(_ chunk: AudioChunk) {
