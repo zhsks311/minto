@@ -6,10 +6,13 @@ public final class VADProcessor: @unchecked Sendable {
 
     public static let silenceDurationThreshold: TimeInterval = 1.5
     public static let maxChunkDuration: TimeInterval = 15.0
+    /// ramp-up: 녹음 시작 직후 첫 청크는 더 짧게 끊어 초반 응답 지연을 줄인다.
+    public static let firstChunkMaxDuration: TimeInterval = 5.0
     public static let sampleRate: Double = 16000
     public static let minSpeechDuration: TimeInterval = 0.5
 
     private static let maxSamples: Int = Int(maxChunkDuration * sampleRate)
+    private static let firstChunkMaxSamples: Int = Int(firstChunkMaxDuration * sampleRate)
     private static let minSpeechSamples: Int = Int(minSpeechDuration * sampleRate)
     private static let silenceSampleThreshold: Int = Int(silenceDurationThreshold * sampleRate)
 
@@ -37,6 +40,8 @@ public final class VADProcessor: @unchecked Sendable {
     private var isCalibrating = true
     private var adaptiveThresholdDB: Float = -40
     private var lastPreviewTime: Date = .distantPast
+    /// 이번 녹음에서 방출한 청크 수 — 0이면 ramp-up(짧은 첫 청크) 적용
+    private var emittedChunkCount: Int = 0
 
     // MARK: - Init
 
@@ -47,6 +52,18 @@ public final class VADProcessor: @unchecked Sendable {
     public func process(samples: [Float]) {
         queue.async { [weak self] in
             self?.processInternal(samples: samples)
+        }
+    }
+
+    /// 새 녹음 시작 시 호출 — 버퍼와 ramp-up 카운터를 초기화한다.
+    /// calibration 상태(noise floor)는 의도적으로 보존한다.
+    public func reset() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.buffer = []
+            self.silenceSampleCount = 0
+            self.emittedChunkCount = 0
+            self.lastPreviewTime = .distantPast
         }
     }
 
@@ -74,13 +91,16 @@ public final class VADProcessor: @unchecked Sendable {
             silenceSampleCount += samples.count
             if silenceSampleCount >= VADProcessor.silenceSampleThreshold && !buffer.isEmpty {
                 let trailingSilence = Double(silenceSampleCount) / VADProcessor.sampleRate
-                flushChunk(trailingSilence: trailingSilence)
+                flushChunk(trailingSilence: trailingSilence, forced: false)
             }
         } else {
             silenceSampleCount = 0
             buffer.append(contentsOf: samples)
-            if buffer.count >= VADProcessor.maxSamples {
-                flushChunk(trailingSilence: 0)
+            let chunkCap = emittedChunkCount == 0
+                ? VADProcessor.firstChunkMaxSamples
+                : VADProcessor.maxSamples
+            if buffer.count >= chunkCap {
+                flushChunk(trailingSilence: 0, forced: true)
             } else if buffer.count >= VADProcessor.minPreviewSamples {
                 let now = Date()
                 if now.timeIntervalSince(lastPreviewTime) >= VADProcessor.previewInterval {
@@ -99,7 +119,7 @@ public final class VADProcessor: @unchecked Sendable {
         }
     }
 
-    private func flushChunk(trailingSilence: TimeInterval) {
+    private func flushChunk(trailingSilence: TimeInterval, forced: Bool) {
         fputs("[VAD] flushChunk samples=\(buffer.count) minRequired=\(VADProcessor.minSpeechSamples)\n", stderr)
         guard buffer.count >= VADProcessor.minSpeechSamples else {
             buffer = []
@@ -118,6 +138,11 @@ public final class VADProcessor: @unchecked Sendable {
         buffer = []
         silenceSampleCount = 0
         lastPreviewTime = .distantPast
+        // ramp-up은 "연속 발화의 첫 강제 분할"을 짧게 하려는 것이므로,
+        // 침묵으로 자연 종료된 짧은 청크는 카운터를 소진하지 않는다.
+        if forced {
+            emittedChunkCount += 1
+        }
 
         DispatchQueue.main.async { [weak self] in
             self?.onChunk?(chunk)

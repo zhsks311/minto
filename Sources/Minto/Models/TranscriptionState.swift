@@ -59,9 +59,4 @@ public struct TranscriptionState: Sendable {
     public var recentCommittedText: String {
         committedSegments.suffix(3).map(\.text).joined(separator: " ")
     }
-
-    /// Overlay 표시용: 최신 10 committed
-    public var displaySegments: [Segment] {
-        Array(committedSegments.suffix(10))
-    }
 }

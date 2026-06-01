@@ -62,6 +62,7 @@ public final class TranscriptionViewModel: ObservableObject {
     public func startRecording() {
         guard !isRecording else { return }
         errorMessage = nil
+        vadProcessor.reset()
 
         // VADProcessor → 최종 청크만 스트림으로, 프리뷰는 별도 cancel-and-replace Task
         vadProcessor.onChunk = { [weak self] chunk in
@@ -116,7 +117,7 @@ public final class TranscriptionViewModel: ObservableObject {
                     pendingSegment = nil
                     guard !result.segment.text.isEmpty else { continue }
                     state.advanceWindow(newResult: result)
-                    committedSegments = state.displaySegments
+                    committedSegments = state.committedSegments
 
                     // LLM 비동기 교정: 원본 즉시 표시 후 교정본으로 조용히 교체
                     if let lastSeg = state.committedSegments.last {
@@ -128,7 +129,7 @@ public final class TranscriptionViewModel: ObservableObject {
                             guard let corrected = await llmService.correct(text: original, context: context),
                                   corrected != original else { return }
                             self.state.updateSegmentText(id: segId, newText: corrected)
-                            self.committedSegments = self.state.displaySegments
+                            self.committedSegments = self.state.committedSegments
                         }
                     }
                 } catch {
