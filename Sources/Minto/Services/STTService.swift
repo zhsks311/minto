@@ -85,43 +85,62 @@ public final class STTService {
             noSpeechThreshold: 0.80   // g2 350샘플 실험: 0.80 최적 (CER 5.7%)
         )
 
-        let wkResults = try await pipe.transcribe(
-            audioArray: samples,
-            decodeOptions: options
-        )
+        // 세그먼트에서 텍스트만 모은다.
+        // - noSpeechProb 사후필터는 두지 않는다(의도): WhisperKit가 디코딩 시 noSpeechThreshold
+        //   (0.80)로 무음을 이미 skip하고, avgLogProb가 logProbThreshold(-1.0)보다 높으면 "확신"이
+        //   무음 판정을 덮어쓴다(SegmentSeeker). 0.6 재검은 그 튜닝을 무효화한다.
+        // - avgLogprob/compressionRatio는 할루시네이션 가드. WhisperKit는 이 둘을 fallback 트리거로만
+        //   쓰고(버리지 않음) best-effort를 반환하므로, 그 반복/환각 잔재를 앱이 최종 차단한다.
+        // - recoveryMode면 avgLogprob 가드를 건너뛴다(저신뢰 복구 텍스트를 살리려고). 단 compressionRatio
+        //   가드는 유지해 반복/영어 환각 루프는 계속 막는다.
+        func extractText(decodeOptions: DecodingOptions, recoveryMode: Bool) async throws -> String {
+            let wkResults = try await pipe.transcribe(audioArray: samples, decodeOptions: decodeOptions)
+            var fullText = ""
+            for result in wkResults {
+                for seg in result.segments {
+                    if !recoveryMode {
+                        guard seg.avgLogprob > -1.0 else {
+                            fputs("[STT] skip: avgLogprob=\(String(format:"%.2f", seg.avgLogprob))\n", stderr)
+                            continue
+                        }
+                    }
+                    guard seg.compressionRatio < 2.4 else {
+                        fputs("[STT] skip: compressionRatio=\(String(format:"%.2f", seg.compressionRatio))\n", stderr)
+                        continue
+                    }
+                    let text = Self.stripWhisperTokens(seg.text).trimmingCharacters(in: .whitespaces)
+                    guard !text.isEmpty else { continue }
+                    // [MUSIC], [BLANK_AUDIO], (웃음) 등 Whisper 메타 태그
+                    guard !text.hasPrefix("["), !text.hasPrefix("(") else { continue }
+                    guard !Self.isKnownHallucination(text) else { continue }
+                    fullText += text
+                }
+            }
+            return fullText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
-        var fullText = ""
-        for result in wkResults {
-            for seg in result.segments {
-                // noSpeechProb 사후필터는 두지 않는다(의도). WhisperKit가 디코딩 시
-                // noSpeechThreshold(0.80)로 무음 세그먼트를 이미 skip하며, avgLogProb가
-                // logProbThreshold(-1.0)보다 높으면 "확신"이 무음 판정을 덮어쓴다
-                // (SegmentSeeker). 여기서 0.6으로 재검하면 그 튜닝을 무효화하고, WhisperKit가
-                // 살린 확신 있는 발화(noSpeechProb 0.6~0.8 구간)까지 버린다.
-                //
-                // 반면 avgLogprob/compressionRatio는 의도적 할루시네이션 가드로 유지한다.
-                // WhisperKit는 이 둘을 "버리는" 게 아니라 temperature fallback 트리거로만 쓰고
-                // (DecodingFallback), 5회 fallback 후에도 저품질이면 best-effort로 반환한다.
-                // 그 반복/환각 잔재를 앱이 최종 차단한다. g2 350샘플에서 0회 발동(깨끗한 발화는
-                // 안 버림) — 단 실제 발화를 드물게 버릴 잔여 위험은 있다.
-                guard seg.avgLogprob > -1.0 else {
-                    fputs("[STT] skip: avgLogprob=\(String(format:"%.2f", seg.avgLogprob))\n", stderr)
-                    continue
-                }
-                guard seg.compressionRatio < 2.4 else {
-                    fputs("[STT] skip: compressionRatio=\(String(format:"%.2f", seg.compressionRatio))\n", stderr)
-                    continue
-                }
-                let text = Self.stripWhisperTokens(seg.text).trimmingCharacters(in: .whitespaces)
-                guard !text.isEmpty else { continue }
-                // [MUSIC], [BLANK_AUDIO], (웃음) 등 Whisper 메타 태그
-                guard !text.hasPrefix("["), !text.hasPrefix("(") else { continue }
-                guard !Self.isKnownHallucination(text) else { continue }
-                fullText += text
+        var trimmed = try await extractText(decodeOptions: options, recoveryMode: false)
+
+        // 빈 출력 복구(2-pass). 진단: 저신뢰 발화 클립은 logProbThreshold(-1.0)가 결과를 "실패"로
+        // 플래그 → temperature가 1.0까지 fallback → 모델이 즉시 <|endoftext|>를 뱉어 빈 출력이 된다
+        // (RMS는 정상 발화 수준, 무음 아님). 빈 출력일 때만 logProbThreshold를 꺼 한 번 더 디코딩하면
+        // 저신뢰라도 부분 텍스트를 건진다(CER상 빈 출력 100%보다 낫다). 깨끗한 발화는 1패스에서 비지
+        // 않으므로 이 경로를 타지 않아 품질 회귀가 없다.
+        if trimmed.isEmpty {
+            let recoveryOptions = DecodingOptions(
+                language: "ko",
+                wordTimestamps: false,
+                suppressBlank: true,
+                logProbThreshold: nil,   // 저신뢰 결과를 fallback으로 버리지 않음
+                noSpeechThreshold: 0.80
+            )
+            let recovered = try await extractText(decodeOptions: recoveryOptions, recoveryMode: true)
+            if !recovered.isEmpty {
+                fputs("[STT] recovered empty output via logProb-relaxed retry (\(recovered.count) chars)\n", stderr)
+                trimmed = recovered
             }
         }
 
-        let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         let segment = Segment(
             text: trimmed,
             timestamp: Date(),
