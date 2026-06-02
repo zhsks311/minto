@@ -92,6 +92,12 @@ struct MeetingCorpusTests {
         var totalDistance = 0
         var totalRefLen = 0
         var windowCount = 0
+        var emptyCount = 0
+        // 전역 CER용: 모든 창의 hyp/ref를 이어붙인다. 창 경계를 가로지르는 매칭이
+        // 허용돼, 자막 타이밍 드리프트로 구절이 옆 창으로 밀린 경우를 흡수한다.
+        // (per-window micro-average는 그런 경우 양쪽 창을 모두 깎아 dissimilarity를 부풀린다.)
+        var allRefText = ""
+        var allHypText = ""
         for (index, window) in targetWindows.enumerated() {
             let startSample = max(0, Int(window.start * Double(Self.sampleRate)))
             let endSample = min(samples.count, Int(window.end * Double(Self.sampleRate)))
@@ -103,6 +109,11 @@ struct MeetingCorpusTests {
             totalDistance += stats.distance
             totalRefLen += stats.refLen
             windowCount += 1
+            if result.segment.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                emptyCount += 1
+            }
+            allRefText += window.text + " "
+            allHypText += result.segment.text + " "
             let windowCER = stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0
 
             print(String(format: "[Meeting] #%03d %6.1f–%6.1fs CER %.1f%%", index, window.start, window.end, windowCER * 100))
@@ -118,13 +129,16 @@ struct MeetingCorpusTests {
         }
 
         let microCER = Double(totalDistance) / Double(totalRefLen)
+        let globalStats = Self.cerStats(reference: allRefText, hypothesis: allHypText)
+        let globalCER = globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0
         print("""
         ────────────────────────────────────────
-        창 수             : \(windowCount)
-        micro-average CER : \(String(format: "%.1f%%", microCER * 100)) (편집거리 \(totalDistance) / 참조 \(totalRefLen)자)
+        창 수             : \(windowCount) (빈 출력 \(emptyCount)개)
+        per-window  CER   : \(String(format: "%.1f%%", microCER * 100)) (Σ편집거리 \(totalDistance) / 참조 \(totalRefLen)자)
+        global(전체) CER  : \(String(format: "%.1f%%", globalCER * 100)) (전체 이어붙여 1회 정렬)  → 유사도 \(String(format: "%.1f%%", (1 - globalCER) * 100))
         ========================================
-        ※ 방송 자막은 표시 타이밍이 느슨하고 비verbatim(속기 편집)이라 절대 CER에는 환원
-          불가능한 바닥이 있다. 이 수치는 동일 오디오에서 설정 A/B의 *상대* 비교용이다.
+        ※ global이 per-window보다 낮으면 그 차이는 창 경계 드리프트(측정 아티팩트)다.
+          방송 자막은 비verbatim이라 남는 CER에도 줄일 수 없는 바닥이 있다.
 
         """)
 
