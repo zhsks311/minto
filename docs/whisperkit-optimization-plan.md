@@ -20,7 +20,9 @@
   - 기본 전사 CER: `RUN_STT_TESTS=1 swift test -c release --filter STTFileTests`
   - raw vs 교정 비교: `RUN_CORRECTION_TEST=1 swift test --filter STTFileTests`
   - 대량(g2): `RUN_STT_TESTS=1 swift test -c release --filter STTG2Tests`
+  - **회의(국회 영상회의록)**: `RUN_STT_TESTS=1 swift test -c release --filter MeetingCorpusTests` (env: MEETING_WINDOW_SEC/MEETING_MAX_WINDOWS/MEETING_DEBUG). `sample/meeting/`(gitignore, 비상업·재배포금지)에 16kHz WAV+SMI 자막. **micro-average CER, 상대 A/B 전용**(방송자막 비verbatim이라 절대값 무의미·g2와 비교 금지).
 - 각 tier 전후 동일 명령으로 측정, 표로 누적.
+- **코퍼스 선택**: 품질 보존형 변경(prompt/suppressBlank/할루시네이션)은 g2(깨끗한 낭독)에선 발동조차 안 함 → **회의 코퍼스로 측정**. g2는 일반 STT 품질 회귀 감시용.
 
 ## 후보 기능 (WhisperKit DecodingOptions / API)
 
@@ -75,6 +77,20 @@
 - **2차 시도(special token 필터 추가, WhisperKit CLI 정석 패턴)도 100% CER** → 필터는 원인 아님. 빈 출력 + `[STT] skip` 로그 없음 = whisper가 prompt 조건에서 0 세그먼트 반환(degenerate).
 - **측정 노이즈 발견(중요)**: prompt 없음 CER이 실행마다 9.44% / 19.09% / 16.3%로 출렁 → **단일 샘플(sample/you) 측정은 1~3% 차이를 신뢰할 수 없다.** 이후 모든 일반-품질 판정은 **g2 다수 샘플**로 한다.
 - **판정: T1 보류(deferred)**. 2회 실패 + 증거 약함(n≈1) + 측정 노이즈. 코드 3파일 `5c4356e`로 복원(미커밋 폐기). 재개 시 WhisperKit prompt+turbo 모델 상호작용을 별도 심층 조사 필요.
+
+### T1 재시도 결과 (회의 코퍼스, 2026-06-03): 차단 확정 → 종료
+
+국회 회의 코퍼스 + micro-average 하니스로 promptTokens를 정밀 재검(STTService `promptText`→`tokenizer.encode(" "+text).filter{<specialTokenBegin}`, WhisperKitCLI 정석):
+
+| 조건 | prompt micro-CER | 비고 |
+|------|------|------|
+| 59토큰 회의 prompt | **100%(전 창 빈 출력)** | base는 동일 클립 정상(9~17%) |
+| 2토큰 prompt("회의") | **100%** | → 길이 무관 |
+| prompt + `withoutTimestamps:true` | **100%** | → timestamp 규칙 경로 무관 |
+
+- **확정**: `promptTokens`는 이 스택(WhisperKit + large-v3-**turbo**)에서 길이·timestamp 모드와 **무관하게 빈 출력**. 인코딩 정상(토큰 생성됨)·prepend 정상(소스 확인)·CLI 정석 패턴 → **사용법 오류 아님, 디코딩 레벨 차단**. (비-turbo 모델 미검증이라 "turbo 탓"으로 단정은 보류.)
+- **판정: T1 종료**. 도메인 용어는 후처리 **LLM 교정 레이어**(`a29fa2f`, 회의 맥락)에 위임. 단 *인식 불가능하게 뭉개진 고유명사*는 prompt-priming만 살릴 수 있어 후처리가 완전 대체는 아님 — 전문용어 많은 회의에서 재검토 가치(그땐 비-turbo 모델로 차단 우회 시도).
+- production 무변경(promptText 배선 되돌림). 차단 재현 절차는 위 표로 보존.
 
 ### T4 결과: 채택 (suppressBlank=true), supressTokens·windowClipTime 기본 유지
 
