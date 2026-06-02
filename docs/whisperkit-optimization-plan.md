@@ -65,6 +65,7 @@
 | T1 A/B | topic+glossary prompt on | **100.00%** | — | ❌ **깨짐(전 구간 빈 출력)** |
 | T2 전 | (5c4356e+T1복원) g2 350샘플, 사후필터 3종 | **6.2%** | — | skip 0회(전 필터) |
 | T2 후 | `noSpeechProb<0.6` 제거 | **6.4%** | — | ✅ 채택. Δ0.2%·skip 0회 = WhisperKit 비결정성 노이즈 |
+| T4 | `suppressBlank: true` | **6.1%** | — | ✅ 채택. skip 0회, 6.1~6.4% 노이즈 한 구름(S000012가 2.8↔4.7 왕복) |
 
 ### T1 결과: 보류 (naive prompt 주입 실패)
 
@@ -74,6 +75,21 @@
 - **2차 시도(special token 필터 추가, WhisperKit CLI 정석 패턴)도 100% CER** → 필터는 원인 아님. 빈 출력 + `[STT] skip` 로그 없음 = whisper가 prompt 조건에서 0 세그먼트 반환(degenerate).
 - **측정 노이즈 발견(중요)**: prompt 없음 CER이 실행마다 9.44% / 19.09% / 16.3%로 출렁 → **단일 샘플(sample/you) 측정은 1~3% 차이를 신뢰할 수 없다.** 이후 모든 일반-품질 판정은 **g2 다수 샘플**로 한다.
 - **판정: T1 보류(deferred)**. 2회 실패 + 증거 약함(n≈1) + 측정 노이즈. 코드 3파일 `5c4356e`로 복원(미커밋 폐기). 재개 시 WhisperKit prompt+turbo 모델 상호작용을 별도 심층 조사 필요.
+
+### T4 결과: 채택 (suppressBlank=true), supressTokens·windowClipTime 기본 유지
+
+**SDK ground truth** (LogitsFilter.swift / TextDecoder.swift:1058):
+- `suppressBlank`(기본 false→**true**): `SuppressBlankFilter`가 **윈도우 첫 토큰 위치**(`tokens.count==sampleBegin`)에서만 공백·EOT를 `-inf`로 막는다. OpenAI Whisper는 기본 true. 발화 있는 청크의 빈 출력을 줄이며, 첫 위치 한정이라 부작용 최대 토큰 1개. 순수 무음 청크는 에너지 사전필터(-50dB)가 이미 차단 → 위험 낮음.
+- `supressTokens`(기본 [] 유지): WhisperKit가 `nonSpeechTokens()` 기본 구현 안 함(TODO). 올바른 토큰 ID 직접 주입은 모델/토크나이저 의존적 → **위험>이득, 의도적 미설정**.
+- `windowClipTime`(기본 1.0 유지): 청크 내 seek 동작. VAD로 청크를 직접 끊는 우리 파이프라인엔 영향 적음 → 미변경.
+
+**측정**: g2 350샘플 CER **6.1%**(T2전 6.2 / T2후 6.4 사이, 노이즈 한 구름). `[STT] skip` 0회, suppressBlank도 g2 무발동(깨끗한 발화는 첫 토큰이 공백일 일 없음). **no-regression 확정, 이득은 g2 측정 불가** — 조용한 발화 시작·VAD로 잘린 부분 청크에서만 발현하므로 **라이브 녹음으로만 검증 가능**.
+
+### T3 결과: 보류 (소비자 없음 — 거부 아님, deferred-pending-consumer)
+
+- **거짓 전제 발견**: T3 가설 "병합 문단 타임스탬프 정밀도 회복"은 성립 안 함. `STTService`는 WhisperKit의 `seg.start`/`seg.end`(오디오 상대 초)를 **버리고** `Segment(timestamp: Date(), duration: samples.count/16000)`로 **벽시계**를 쓴다. UI(`formatTimestamp`)·`Report`·`ReportService`·`replaceRange` 병합 모두 이 벽시계 Date를 읽는다 → 회복할 오디오-상대 정밀도가 애초에 없다.
+- `wordTimestamps:true`는 디코딩 후 forced-alignment 패스라 **텍스트 무변(CER 0 영향)**, 단어별 타이밍을 줄 뿐인데 **소비자가 없다** → compute 비용만 추가. 컨벤션 "speculative feature 금지" 위반.
+- **조치**: 활성화하지 않음. **재개 조건**: 제품 비전 #3(과거 회의 열람/export·오디오 동기 재생)이 들어오면 그때 `seg.start`/`seg.end` 소비자가 생기므로 wordTimestamps 재검토.
 
 ### T2 결과: 채택 (noSpeechProb 사후필터 제거)
 

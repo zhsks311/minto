@@ -73,6 +73,15 @@ public final class STTService {
         let options = DecodingOptions(
             language: "ko",
             wordTimestamps: false,
+            // 윈도우 첫 토큰 위치에서 공백·EOT를 억제(OpenAI Whisper 기본값과 일치).
+            // 발화가 있는 청크가 빈 출력으로 끝나는 경우를 줄인다. 첫 위치에만 적용되므로
+            // 부작용은 최대 토큰 1개이며, 순수 무음 청크는 위 에너지 사전필터(-50dB)가
+            // 이미 걸러 할루시네이션 위험이 낮다.
+            suppressBlank: true,
+            // supressTokens(비발화 토큰 억제)·windowClipTime은 기본값을 의도적으로 유지한다.
+            // WhisperKit가 nonSpeechTokens 기본 구현을 하지 않아(TODO) 올바른 토큰 ID를 직접
+            // 넣는 것은 모델/토크나이저 의존적이라 위험 > 이득. windowClipTime은 청크 내 seek
+            // 동작이라 VAD로 청크를 직접 끊는 이 파이프라인엔 영향이 적다.
             noSpeechThreshold: 0.80   // g2 350샘플 실험: 0.80 최적 (CER 5.7%)
         )
 
