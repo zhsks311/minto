@@ -68,6 +68,7 @@
 | T2 전 | (5c4356e+T1복원) g2 350샘플, 사후필터 3종 | **6.2%** | — | skip 0회(전 필터) |
 | T2 후 | `noSpeechProb<0.6` 제거 | **6.4%** | — | ✅ 채택. Δ0.2%·skip 0회 = WhisperKit 비결정성 노이즈 |
 | T4 | `suppressBlank: true` | **6.1%** | — | ✅ 채택. skip 0회, 6.1~6.4% 노이즈 한 구름(S000012가 2.8↔4.7 왕복) |
+| T7 | 빈출력 2-pass 복구 (`aba96cb`) | g2 **5.7%** | 행안위 global 42.6→**31.1%** | ✅ 채택. 빈출력 15→1, g2 무회귀(복구 0회), 영어환각 0 |
 
 ### T1 결과: 보류 (naive prompt 주입 실패)
 
@@ -77,6 +78,14 @@
 - **2차 시도(special token 필터 추가, WhisperKit CLI 정석 패턴)도 100% CER** → 필터는 원인 아님. 빈 출력 + `[STT] skip` 로그 없음 = whisper가 prompt 조건에서 0 세그먼트 반환(degenerate).
 - **측정 노이즈 발견(중요)**: prompt 없음 CER이 실행마다 9.44% / 19.09% / 16.3%로 출렁 → **단일 샘플(sample/you) 측정은 1~3% 차이를 신뢰할 수 없다.** 이후 모든 일반-품질 판정은 **g2 다수 샘플**로 한다.
 - **판정: T1 보류(deferred)**. 2회 실패 + 증거 약함(n≈1) + 측정 노이즈. 코드 3파일 `5c4356e`로 복원(미커밋 폐기). 재개 시 WhisperKit prompt+turbo 모델 상호작용을 별도 심층 조사 필요.
+
+### T7 결과: 채택 (빈출력 2-pass 복구) — 회의 코퍼스 최대 성과
+
+**진단** (`WhisperEmptyClipDiagnosticsTests`, CPU-only verbose): 회의 음원의 ~25% 창(행안위 15/60)이 발화가 있는데도(RMS −25dB, 정상 발화 수준) **빈 출력**. 내 사후필터 무관(skip 0). 세그먼트 dump로 원인 확정: 저신뢰 클립 → `logProbThreshold(−1.0)`가 실패 플래그 → temperature fallback이 1.0까지 escalation → 모델이 즉시 `<|endoftext|>`(빈 출력). 변이 실험: `tempFallback0`은 good 클립까지 빈출력(fallback 필수), `logProbNil`은 텍스트 복구하나 깨끗한 발화 악화+영어 환각 위험 → **전역 완화는 부적합**.
+
+**해법** (`aba96cb`, STTService 2-pass): 1패스는 그대로. 결과가 **빈 출력일 때만** `logProbThreshold=nil`로 1회 재디코딩 + 그 패스에선 avgLogprob 사후필터를 건너뜀(저신뢰 텍스트 보존). compressionRatio 가드는 양 패스 유지 → 영어/반복 환각 차단. 깨끗한 발화는 1패스에서 안 비므로 복구 경로 미진입 → **g2 무회귀 구조적 보장**.
+
+**검증**: g2 **5.7%**(복구 0회, ~6% 무회귀), 행안위 빈출력 15→1·global CER 42.6→31.1%(유사도 57.4→68.9%)·영어환각 0. 단 회의 global 절대값은 ANE 비결정성으로 런마다 흔들림(31~39%) → 견고한 win은 **빈 창 제거**. (Codex 2회 위임은 진단 하니스만 기여하고 미수렴, 고아 프로세스로 동시편집 race 유발 → broker 종료 후 직접 구현·검증.)
 
 ### T1 재시도 결과 (회의 코퍼스, 2026-06-03): 차단 확정 → 종료
 
