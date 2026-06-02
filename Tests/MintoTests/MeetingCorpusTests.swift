@@ -29,8 +29,14 @@ struct MeetingCorpusTests {
             .appendingPathComponent("sample/meeting/raw")
     }()
 
-    private static let audioURL = rawDir.appendingPathComponent("haengan_20260526_full.wav")
-    private static let smiURL = rawDir.appendingPathComponent("haengan_20260526_smi.json")
+    // 측정 대상 파일명. 기본은 행안위 회의, MEETING_WAV/MEETING_SMI로 다른 회의 지정 가능
+    // (sample/fetch-assembly-meeting.sh가 만든 다른 파일명을 코드 수정 없이 측정).
+    private static var audioURL: URL {
+        rawDir.appendingPathComponent(ProcessInfo.processInfo.environment["MEETING_WAV"] ?? "haengan_20260526_full.wav")
+    }
+    private static var smiURL: URL {
+        rawDir.appendingPathComponent(ProcessInfo.processInfo.environment["MEETING_SMI"] ?? "haengan_20260526_smi.json")
+    }
 
     private static let model = "openai_whisper-large-v3-v20240930_turbo"
     private static let sampleRate = 16_000
