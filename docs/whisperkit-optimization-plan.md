@@ -63,6 +63,8 @@
 | baseline | (5c4356e) sample/you, 30s청크, prompt無 | **16.3%** | — | 기준점 |
 | T1 A/B | prompt 없음 (동일 하니스) | 19.09% | — | A/B 기준 |
 | T1 A/B | topic+glossary prompt on | **100.00%** | — | ❌ **깨짐(전 구간 빈 출력)** |
+| T2 전 | (5c4356e+T1복원) g2 350샘플, 사후필터 3종 | **6.2%** | — | skip 0회(전 필터) |
+| T2 후 | `noSpeechProb<0.6` 제거 | **6.4%** | — | ✅ 채택. Δ0.2%·skip 0회 = WhisperKit 비결정성 노이즈 |
 
 ### T1 결과: 보류 (naive prompt 주입 실패)
 
@@ -73,9 +75,16 @@
 - **측정 노이즈 발견(중요)**: prompt 없음 CER이 실행마다 9.44% / 19.09% / 16.3%로 출렁 → **단일 샘플(sample/you) 측정은 1~3% 차이를 신뢰할 수 없다.** 이후 모든 일반-품질 판정은 **g2 다수 샘플**로 한다.
 - **판정: T1 보류(deferred)**. 2회 실패 + 증거 약함(n≈1) + 측정 노이즈. 코드 3파일 `5c4356e`로 복원(미커밋 폐기). 재개 시 WhisperKit prompt+turbo 모델 상호작용을 별도 심층 조사 필요.
 
-### T2 진행 (다음)
+### T2 결과: 채택 (noSpeechProb 사후필터 제거)
 
-WhisperKit temperature fallback ↔ STTService 사후필터 중복. **구체적 결함 후보 발견**:
-- `DecodingOptions(noSpeechThreshold: 0.80)`로 디코딩하는데, 사후필터는 `seg.noSpeechProb < 0.6`로 거름 → **임계 불일치(0.80 vs 0.6)**. noSpeechProb 0.6~0.8 구간 세그먼트를 WhisperKit은 살리는데 앱이 버림(발화 유실 가능).
-- compressionRatio(2.4)·avgLogprob(-1.0)도 WhisperKit이 fallback에 쓰는 임계를 앱이 사후 중복 적용 → WhisperKit 최선 결과를 또 버릴 수 있음.
-- 측정: **g2**로 필터 정렬/제거 전후 CER + 세그먼트 유지율 비교.
+**SDK ground truth로 확인한 WhisperKit 내부 동작** (두 단계):
+1. **Fallback 결정** (`DecodingFallback.init`, Models.swift:377): 재디코딩 트리거용. `noSpeechProb > threshold`면 fallback **안 함**("silence" 수용), compressionRatio/avgLogProb는 fallback 트리거.
+2. **세그먼트 skip** (`SegmentSeeker`, line 58-75): 디코딩+fallback 후 최종 drop. `noSpeechProb > 0.80` **AND** `avgLogProb ≤ -1.0`일 때만(확신이 무음을 덮어씀).
+
+→ WhisperKit는 compressionRatio/avgLogProb를 **버리는 데 쓰지 않고** fallback 트리거로만 쓴다. 5회 fallback 후 best-effort 반환.
+
+**측정 기반 결정** (CER 노이즈 회피 위해 `[STT] skip:` 로그 카운트로 판정):
+- 세 사후필터(`noSpeechProb<0.6`, `avgLogprob>-1.0`, `compressionRatio<2.4`) **모두 g2 350샘플에서 0회 발동**.
+- **`noSpeechProb<0.6` 제거**: WhisperKit가 디코딩 시 0.80+confidence-override로 이미 무음 skip. 사후 0.6 재검은 그 튜닝을 무효화하고 확신 있는 발화(noSpeechProb 0.6~0.8)까지 버림. "0.80으로 정렬"은 confidence-override가 없어 같은 버그의 약한 버전 → **완전 제거**가 유일한 일관 해.
+- **`avgLogprob`/`compressionRatio` 유지**: g2 0회 발동 = 깨끗한 발화 안 버림. WhisperKit가 안 거르는 **추가 정책(할루시네이션 억제)** 이므로 의도적 가드로 유지+주석. 잔여 발화손실 위험 명시.
+- **CER 6.2%→6.4% = 노이즈**: skip 0회였으므로 제거한 분기는 출력에 무영향(논리적 no-op). Δ0.2%는 WhisperKit ANE 비결정성. **이득은 g2로 측정 불가**(noSpeechProb 0.6~0.8 구간이 깨끗한 낭독엔 없음) → real 회의 음성에서만 발현.

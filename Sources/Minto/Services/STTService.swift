@@ -84,11 +84,17 @@ public final class STTService {
         var fullText = ""
         for result in wkResults {
             for seg in result.segments {
-                // Whisper 자체 품질 지표 기반 필터 (OpenAI 원본 임계값)
-                guard seg.noSpeechProb < 0.6 else {
-                    fputs("[STT] skip: noSpeech=\(String(format:"%.2f", seg.noSpeechProb))\n", stderr)
-                    continue
-                }
+                // noSpeechProb 사후필터는 두지 않는다(의도). WhisperKit가 디코딩 시
+                // noSpeechThreshold(0.80)로 무음 세그먼트를 이미 skip하며, avgLogProb가
+                // logProbThreshold(-1.0)보다 높으면 "확신"이 무음 판정을 덮어쓴다
+                // (SegmentSeeker). 여기서 0.6으로 재검하면 그 튜닝을 무효화하고, WhisperKit가
+                // 살린 확신 있는 발화(noSpeechProb 0.6~0.8 구간)까지 버린다.
+                //
+                // 반면 avgLogprob/compressionRatio는 의도적 할루시네이션 가드로 유지한다.
+                // WhisperKit는 이 둘을 "버리는" 게 아니라 temperature fallback 트리거로만 쓰고
+                // (DecodingFallback), 5회 fallback 후에도 저품질이면 best-effort로 반환한다.
+                // 그 반복/환각 잔재를 앱이 최종 차단한다. g2 350샘플에서 0회 발동(깨끗한 발화는
+                // 안 버림) — 단 실제 발화를 드물게 버릴 잔여 위험은 있다.
                 guard seg.avgLogprob > -1.0 else {
                     fputs("[STT] skip: avgLogprob=\(String(format:"%.2f", seg.avgLogprob))\n", stderr)
                     continue
