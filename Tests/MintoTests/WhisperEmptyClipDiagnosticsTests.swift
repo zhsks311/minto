@@ -16,6 +16,8 @@ struct WhisperEmptyClipDiagnosticsTests {
     private static let sampleRate = 16_000
     private static let clips = [
         Clip(label: "good-009.7-025.6", start: 9.7, end: 25.6),
+        Clip(label: "nonspeech-recess-120-180", start: 120, end: 180),   // 정회(-45dB), "감사합니다" 날조
+        Clip(label: "nonspeech-crowd-180-187", start: 180, end: 187),    // 군중소음(-24.8dB) 날조
         Clip(label: "empty-096.8-104.4", start: 96.8, end: 104.4),
         Clip(label: "empty-366.3-385.2", start: 366.3, end: 385.2),
         Clip(label: "empty-399.7-422.7", start: 399.7, end: 422.7),
