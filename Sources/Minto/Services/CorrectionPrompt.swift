@@ -14,8 +14,10 @@ public enum CorrectionPrompt {
     ///   - glossary: 고유명사·전문용어 목록, 줄 단위 (비면 생략)
     ///   - context: 직전 발화 윈도우 (음성 맥락)
     ///   - text: 현재 인식 결과 (교정 대상)
+    ///   - summary: 지금까지의 회의 누적 요약 (비면 생략). abstractive라 verbatim 에코 위험이 없어
+    ///     직전 맥락(context)과 함께 전역 맥락을 보강한다.
     /// - Returns: (instructions, userContent)
-    public static func build(topic: String, glossary: String, context: String, text: String) -> (instructions: String, userContent: String) {
+    public static func build(topic: String, glossary: String, context: String, text: String, summary: String = "") -> (instructions: String, userContent: String) {
         // instructions에는 '고정 정책'만 둔다. 회의 주제·용어집은 사용자 입력이므로
         // instructions(정책 권한)가 아니라 userContent에 '참고 데이터'로 넣어 정책 약화를 막는다.
         let instructions = """
@@ -37,6 +39,10 @@ public enum CorrectionPrompt {
         let meetingBlock = meetingContextBlock(topic: topic, glossary: glossary)
         if !meetingBlock.isEmpty {
             userContent += meetingBlock + "\n\n"
+        }
+        let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSummary.isEmpty {
+            userContent += "현재까지의 회의 요약(참고용): \(trimmedSummary)\n\n"
         }
         userContent += """
         직전 발화 맥락: \(context)

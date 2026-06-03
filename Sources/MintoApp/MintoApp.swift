@@ -10,7 +10,7 @@ struct MintoApp: App {
             MenuBarView(
                 viewModel: appDelegate.viewModel,
                 onRequestStart: { appDelegate.requestStartSession() },
-                onStopRecording: { appDelegate.floatingWindowManager.hide() },
+                onStopRecording: { appDelegate.handleStopRecording() },
                 onOpacityChange: appDelegate.floatingWindowManager.setOpacity
             )
         }

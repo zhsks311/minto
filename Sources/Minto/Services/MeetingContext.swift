@@ -18,16 +18,24 @@ public final class MeetingContext: ObservableObject {
     /// 고유명사·전문용어 목록 (줄 단위).
     @Published public var glossary: String = ""
 
+    /// 회의 진행 중 누적되는 요약(증분 갱신). 교정 context로도 쓰이고, 종료 시 최종 요약의 입력이 된다.
+    @Published public var runningSummary: String = ""
+
+    /// 회의 종료 시 정제된 최종 요약(사용자에게 표시).
+    @Published public var finalSummary: String = ""
+
     /// 교정에 쓸 맥락이 하나라도 있는지.
     public var hasContext: Bool {
         !topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !glossary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// 새 회의 세션 시작 시 호출. 지정값으로 교체한다.
+    /// 새 회의 세션 시작 시 호출. 지정값으로 교체하고 이전 회의의 요약은 비운다(세션 간 누수 방지).
     public func start(topic: String, glossary: String) {
         self.topic = topic
         self.glossary = glossary
+        self.runningSummary = ""
+        self.finalSummary = ""
         let terms = glossary.split(whereSeparator: { $0.isNewline }).count
         fputs("[Meeting] context set — topic: \"\(topic)\", glossary terms: \(terms)\n", stderr)
     }
@@ -36,5 +44,7 @@ public final class MeetingContext: ObservableObject {
     public func clear() {
         topic = ""
         glossary = ""
+        runningSummary = ""
+        finalSummary = ""
     }
 }

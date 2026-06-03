@@ -37,11 +37,15 @@ public final class TranscriptionViewModel: ObservableObject {
     // TranscriptionState가 100개 초과 시 committedSegments를 evict(.transcriptionNeedsFlush 후 비움)하는데,
     // 그 전에 교정을 끝내지 않으면 미교정 원본이 그대로 보고서에 남는다(SMELL-2). 캡(100)보다 충분히 낮게.
     private static let correctionSafetyFlushCount = 80
+    // 교정 프롬프트에 넘길 직전 verbatim 청크 수(#2). 전역 맥락은 회의 요약이 담당하므로 5개면 충분.
+    private static let correctionContextSegments = 5
     private var pendingCorrectionIds: [UUID] = []
     private var pendingCorrectionDuration: TimeInterval = 0
     // 교정 Task 체인: 직전 교정 완료를 기다린 뒤 다음 교정을 반영해 replaceRange 순서를 보장하고
     // (동시 완료 시 역순 병합 방지), 마지막 배치 교정이 레이스로 누락되지 않게 한다(SMELL-3).
     private var correctionTask: Task<Void, Never>?
+    // 진행 중 증분 요약 Task. drop-if-running(진행 중이면 이번 배치 skip)으로 호출·종료지연을 바운드한다.
+    private var summaryTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -185,6 +189,11 @@ public final class TranscriptionViewModel: ObservableObject {
         state = TranscriptionState()
         pendingCorrectionIds = []
         pendingCorrectionDuration = 0
+        // 이전 세션의 교정·요약 Task가 새 세션 상태에 새지 않도록 취소.
+        correctionTask?.cancel()
+        correctionTask = nil
+        summaryTask?.cancel()
+        summaryTask = nil
     }
 
     /// 누적된 미교정 구간을 한 번에 교정해 하나의 문단으로 병합한다.
@@ -199,7 +208,8 @@ public final class TranscriptionViewModel: ObservableObject {
         guard !segmentsToCorrect.isEmpty else { return }
         let original = segmentsToCorrect.map(\.text).joined(separator: " ")
         // 교정 대상 배치 "이전" 텍스트만 맥락으로 넘긴다(배치와 겹치면 LLM이 그 문장을 출력에 에코함, BUG-1).
-        let context = state.precedingText(beforeIds: ids)
+        // 청크 수는 #2에 따라 상향(전역 맥락은 회의 요약이 담당).
+        let context = state.precedingText(beforeIds: ids, maxSegments: Self.correctionContextSegments)
 
         // 직전 교정 완료를 기다린 뒤 반영 → replaceRange 순서 보장 + 마지막 배치 누락 방지(SMELL-3).
         let previous = correctionTask
@@ -210,7 +220,24 @@ public final class TranscriptionViewModel: ObservableObject {
                   !corrected.isEmpty else { return }
             self.state.replaceRange(ids: ids, correctedText: corrected)
             self.committedSegments = self.state.committedSegments
+
+            // 교정본으로 증분 요약 갱신. drop-if-running: 진행 중이면 이번 배치는 건너뛴다
+            // (요약 호출 누적·종료 지연 방지). 누락분은 runningSummary 누적본 + 종료 시 최종 요약이 보완.
+            if self.summaryTask == nil {
+                self.summaryTask = Task { @MainActor [weak self] in
+                    defer { self?.summaryTask = nil }
+                    await SummaryService.shared.generateIncremental(correctedBatch: corrected)
+                }
+            }
         }
+    }
+
+    /// 회의 종료 시 호출. 마지막 교정 완료를 기다린 뒤(SMELL-3) 남은 전사로 최종 요약을 생성해 반환한다.
+    /// fail-soft: 요약 생성 실패 시 nil(또는 마지막 누적 요약 폴백은 SummaryService가 처리).
+    public func finalizeMeeting() async -> String? {
+        await correctionTask?.value
+        let tail = committedSegments.map(\.text).joined(separator: "\n")
+        return await SummaryService.shared.generateFinal(tailText: tail)
     }
 
     public func enqueueChunk(_ chunk: AudioChunk) {

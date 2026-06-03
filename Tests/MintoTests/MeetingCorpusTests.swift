@@ -338,6 +338,61 @@ struct MeetingCorpusTests {
         text.filter { !$0.isWhitespace && !$0.isPunctuation }.count
     }
 
+    /// 회의 요약 기능 end-to-end 스모크: 실제 코퍼스 구간을 증분 요약 → 최종 요약까지 돌려
+    /// 요약이 (1) 생성되는지 (2) 전사에 없는 내용을 날조하지 않는지 눈으로 점검한다.
+    /// 측정이 아니라 동작·날조 점검용이므로 결과를 print하고 생성 성공만 확인한다.
+    /// 실행: RUN_STT_TESTS=1 RUN_CORRECTION_TEST=1 RUN_SUMMARY_TEST=1 swift test -c release \
+    ///       --filter MeetingCorpusTests/summaryEndToEndProbe
+    @Test("회의 요약 end-to-end 스모크 (Codex)")
+    func summaryEndToEndProbe() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1",
+              ProcessInfo.processInfo.environment["RUN_SUMMARY_TEST"] == "1" else { return }
+        guard FileManager.default.fileExists(atPath: Self.audioURL.path),
+              FileManager.default.fileExists(atPath: Self.smiURL.path) else { return }
+        guard CodexOAuthService.shared.isLoggedIn else {
+            Issue.record("Codex 미로그인"); return
+        }
+
+        // provider/맥락 세팅 — 테스트 후 provider 원복.
+        let savedProvider = LLMCorrectionService.shared.selectedProvider
+        LLMCorrectionService.shared.selectedProvider = .codex
+        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
+        MeetingContext.shared.start(topic: "국회 행정안전위원회 전체회의", glossary: "행정안전부\n위원장\n간사\n의사일정")
+        MeetingContext.shared.runningSummary = ""
+        MeetingContext.shared.finalSummary = ""
+        defer { MeetingContext.shared.clear() }
+
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let windows = Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds)
+        let probeWindows = Array(windows.prefix(8))
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+
+        let service = STTService()
+        await service.loadModel(variant: Self.model)
+        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
+
+        print("\n=== 회의 요약 end-to-end 스모크 (\(probeWindows.count)창) ===")
+        for (index, window) in probeWindows.enumerated() {
+            let s = max(0, Int(window.start * Double(Self.sampleRate)))
+            let e = min(samples.count, Int(window.end * Double(Self.sampleRate)))
+            guard e > s else { continue }
+            let raw = try await service.transcribe(pcmSamples: Array(samples[s..<e])).segment.text
+            guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            _ = await SummaryService.shared.generateIncremental(correctedBatch: raw)
+            print("[Summary] #\(index) 후 누적 요약 길이=\(MeetingContext.shared.runningSummary.count)")
+        }
+
+        let final = await SummaryService.shared.generateFinal(tailText: "")
+        print("""
+        ──────────── 최종 요약 ────────────
+        \(final ?? "(생성 실패)")
+        ────────────────────────────────────
+        ※ 위 요약이 전사에 없는 사실을 지어냈는지 눈으로 점검(날조 회귀 가드).
+        """)
+        #expect(final != nil, "요약이 생성되어야 한다")
+    }
+
     // MARK: - SMI 파싱
 
     private struct SMIDocument: Decodable {

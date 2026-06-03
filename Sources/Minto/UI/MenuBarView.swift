@@ -102,7 +102,7 @@ public struct MenuBarView: View {
         Group {
             if viewModel.isRecording {
                 Button("녹음 종료") {
-                    viewModel.stopRecording()
+                    // 종료·요약 생성·보고서 마감 전 과정을 AppDelegate가 오케스트레이션한다.
                     onStopRecording?()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
