@@ -31,8 +31,15 @@ public final class TranscriptionViewModel: ObservableObject {
     // 창 단위 배치 교정: 미교정 구간을 모았다가 누적 길이가 window에 도달하면
     // 한 번에 교정 후 하나의 문단으로 병합한다. (구간간 일관성·교정 품질·호출 수 개선)
     private static let correctionWindowSeconds: TimeInterval = 20
+    // committedSegments가 이 개수에 이르면 듀레이션 미달이라도 교정을 flush한다.
+    // TranscriptionState가 100개 초과 시 committedSegments를 evict(.transcriptionNeedsFlush 후 비움)하는데,
+    // 그 전에 교정을 끝내지 않으면 미교정 원본이 그대로 보고서에 남는다(SMELL-2). 캡(100)보다 충분히 낮게.
+    private static let correctionSafetyFlushCount = 80
     private var pendingCorrectionIds: [UUID] = []
     private var pendingCorrectionDuration: TimeInterval = 0
+    // 교정 Task 체인: 직전 교정 완료를 기다린 뒤 다음 교정을 반영해 replaceRange 순서를 보장하고
+    // (동시 완료 시 역순 병합 방지), 마지막 배치 교정이 레이스로 누락되지 않게 한다(SMELL-3).
+    private var correctionTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -131,7 +138,9 @@ public final class TranscriptionViewModel: ObservableObject {
                     if state.committedSegments.last?.id == result.segment.id {
                         pendingCorrectionIds.append(result.segment.id)
                         pendingCorrectionDuration += result.segment.duration
-                        if pendingCorrectionDuration >= Self.correctionWindowSeconds {
+                        // 듀레이션 도달, 또는 evict 캡에 근접하면(미교정 원본이 보고서에 남는 것 방지) flush.
+                        if pendingCorrectionDuration >= Self.correctionWindowSeconds
+                            || state.committedSegments.count >= Self.correctionSafetyFlushCount {
                             flushCorrectionBatch()
                         }
                     }
@@ -187,9 +196,13 @@ public final class TranscriptionViewModel: ObservableObject {
         let segmentsToCorrect = state.committedSegments.filter { ids.contains($0.id) }
         guard !segmentsToCorrect.isEmpty else { return }
         let original = segmentsToCorrect.map(\.text).joined(separator: " ")
-        let context = state.recentCommittedText
+        // 교정 대상 배치 "이전" 텍스트만 맥락으로 넘긴다(배치와 겹치면 LLM이 그 문장을 출력에 에코함, BUG-1).
+        let context = state.precedingText(beforeIds: ids)
 
-        Task { @MainActor [weak self] in
+        // 직전 교정 완료를 기다린 뒤 반영 → replaceRange 순서 보장 + 마지막 배치 누락 방지(SMELL-3).
+        let previous = correctionTask
+        correctionTask = Task { @MainActor [weak self] in
+            await previous?.value
             guard let self else { return }
             guard let corrected = await self.llmService.correct(text: original, context: context),
                   !corrected.isEmpty else { return }

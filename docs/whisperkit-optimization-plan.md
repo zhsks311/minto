@@ -177,3 +177,14 @@ T7 검증 중 발견한 **선재 phantom**(정회 −45dB → "감사합니다",
 **production severity (호출자 추적 결과)**: `TranscriptionViewModel.flushCorrectionBatch`가 `LLMCorrectionService.correct(text:context:)`를 **비어있지 않은 context(`state.recentCommittedText` = 최근 3 segment)**로 호출한다. 트리거는 `pendingCorrectionDuration >= 20s`(보통 한 문단 = #20류 길이) + `stopRecording()`의 꼬리 flush(짧은 조각 = #8류 가능). → **맥락-에코/절-창작 날조는 test-only가 아니라 라이브 회의록에 들어갈 수 있는 결함.** 다만 발생률은 간헐적.
 
 - **후속 후보(미실행, 사용자 판단 필요)**: 짧은 raw에 대한 맥락-에코 가드 — (a) 짧은 입력엔 context 미주입, (b) 프롬프트에 "직전 맥락을 출력에 포함 금지·길이 보존" 강화, (c) corrected 길이 ≫ raw(짧을 때)면 교정 폐기·raw 유지. **이는 production `CorrectionPrompt`/교정 경로 변경이라 측정과 별개 작업** → 사용자 승인 후 진행.
+
+#### 수정 적용 (2026-06-03): 교정 경로 4건 — BUG-1·(b)·SMELL-2·SMELL-3
+
+측정이 발굴한 결함을 교정 경로에서 수정. STT 디코드 경로는 미변경(g2 게이트 무관).
+
+- **BUG-1 (context 오버랩) — 결정론적 수정·단위검증 완료.** `flushCorrectionBatch`가 `state.recentCommittedText`(committedSegments 맨 끝 3개)를 context로 넘겨, 지금 교정 중인 배치 텍스트와 **겹쳐서** LLM이 그 문장을 출력에 에코하기 쉬웠다. `TranscriptionState.precedingText(beforeIds:)` 신규 — 배치 **이전** 텍스트만 반환(겹침 0). `TranscriptionStateTests` 2개로 확정.
+- **(b) instructions 강화 — 적용, 효과는 확률적.** `CorrectionPrompt`에 "직전 맥락을 출력에 옮겨 적지 마라" + "현재 인식 결과에 없는 문장을 지어내지 마라·짧으면 짧게·길이 늘리지 마라" 명문화. `CorrectionPromptTests` 무회귀.
+- **SMELL-2 (100캡 경계 미교정) — 수정.** committedSegments가 evict 캡(100)에 근접(`correctionSafetyFlushCount=80`)하면 듀레이션 미달이라도 안전 flush → 미교정 원본이 보고서에 남는 것 방지.
+- **SMELL-3 (교정 순서·드롭 레이스) — 수정.** 교정 Task를 체이닝(`await previous?.value`)해 직렬화 → replaceRange 역순 병합·마지막 배치 누락 방지. (즉시 앱 종료 중 진행분 유실은 잔여, 저severity.)
+
+**검증(정직)**: BUG-1=결정론적 확정. (b)=post-fix 25창 재측정에서 insertion flag 0·맥락-에코 없음·clean 델타 −0.5pp(touch 5.0%)이나, 그 run의 STT raw에 #8 트리거(2자 단독 창)가 ANE 변동으로 **미재현** → "(b)가 #8을 막았다"는 단정 보류(한 run≠증명, pre-fix run2도 insertion 0이었음). SMELL-2/3=로직 수정, 직접 단위테스트는 없음. **(b)가 부족하면 구조 가드(c, 길이 기반 폐기)가 다음 후보** — 결정론적이라 확률적 (b)를 보완.

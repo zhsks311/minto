@@ -83,4 +83,18 @@ public struct TranscriptionState: Sendable {
     public var recentCommittedText: String {
         committedSegments.suffix(3).map(\.text).joined(separator: " ")
     }
+
+    /// 교정 배치(`ids`) **바로 앞**의 최근 `maxSegments`개 텍스트(교정 context 전용).
+    ///
+    /// `recentCommittedText`(맨 끝 3개)와 달리, 지금 교정 중인 배치와 **겹치지 않는** 직전 텍스트를
+    /// 돌려준다. 배치 텍스트가 context로도 같이 들어가면 LLM이 그 문장을 출력에 그대로 에코·중복하기
+    /// 쉬운데(교정 날조의 한 원인), 배치 이전 구간만 주면 그 표면을 없앤다.
+    /// 배치를 못 찾으면(이미 교정·병합돼 id가 사라진 경우) 맨 끝 `maxSegments`개로 폴백한다.
+    public func precedingText(beforeIds ids: [UUID], maxSegments: Int = 3) -> String {
+        let idSet = Set(ids)
+        guard let cutoff = committedSegments.firstIndex(where: { idSet.contains($0.id) }) else {
+            return committedSegments.suffix(maxSegments).map(\.text).joined(separator: " ")
+        }
+        return committedSegments[..<cutoff].suffix(maxSegments).map(\.text).joined(separator: " ")
+    }
 }

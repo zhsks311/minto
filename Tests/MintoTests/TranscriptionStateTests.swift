@@ -108,4 +108,26 @@ struct TranscriptionStateTests {
         // 직접 커밋: 5개 모두 committed, 최근 3개 = three four five
         #expect(state.recentCommittedText == "three four five")
     }
+
+    @Test("precedingText: 교정 배치 이전 텍스트만, 배치와 겹치지 않는다(BUG-1)")
+    func precedingTextExcludesBatch() {
+        var state = TranscriptionState()
+        for text in ["one", "two", "three", "four", "five"] {
+            state.advanceWindow(newResult: makeResult(text: text))
+        }
+        let committed = state.committedSegments      // one two three four five
+        let batchIds = [committed[3].id, committed[4].id]  // four, five = 교정 대상
+        // 배치(four,five) 바로 앞 최근 3개 = one two three. 배치 텍스트(four/five)는 절대 포함 안 됨.
+        #expect(state.precedingText(beforeIds: batchIds) == "one two three")
+    }
+
+    @Test("precedingText: 배치를 못 찾으면 최근 maxSegments개로 폴백")
+    func precedingTextFallsBackWhenIdsAbsent() {
+        var state = TranscriptionState()
+        for text in ["a", "b", "c", "d"] {
+            state.advanceWindow(newResult: makeResult(text: text))
+        }
+        // 이미 교정·병합돼 id가 사라진 경우 → 맨 끝 3개로 폴백
+        #expect(state.precedingText(beforeIds: [UUID()]) == "b c d")
+    }
 }
