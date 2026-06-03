@@ -7,6 +7,12 @@ import AppKit
 private let kClientID = "app_EMoamEEZ73f0CkXaXp7hrann"
 private let kKeychainKey = "codex"
 
+// 교정 모델: 유료(plus/pro/team/…)는 상위 모델, 무료/미상 tier는 경량 기본.
+// 무료 계정은 상위 모델 ID가 막혀(4xx) 교정을 통째로 잃을 수 있으므로 보수적으로 기본 모델을 쓰고,
+// 유료라도 상위 모델 호출이 실패하면 correct()가 기본 모델로 1회 폴백한다(아래).
+private let kCorrectionModelDefault = "gpt-5.4-mini"
+private let kCorrectionModelPaid = "gpt-5.4"
+
 // MARK: - Token Model
 
 struct CodexCredentials: Codable {
@@ -103,6 +109,30 @@ public final class CodexOAuthService: ObservableObject {
             creds = try await refreshToken(creds: creds)
         }
 
+        // tier(plan)에 따라 모델 결정. 유료 상위 모델이 거부/오류면 기본(mini)로 1회 폴백해
+        // "상위 모델 ID가 틀려서 교정을 통째로 잃는" 일을 막는다. 429(rate limit)는 mini도
+        // 동일하게 막힐 가능성이 커 폴백하지 않고 그대로 던진다(무한 시도 방지).
+        let plan = chatGPTPlanType(from: creds.accessToken)
+        let primaryModel = correctionModel(for: plan)
+        do {
+            return try await performCorrection(model: primaryModel, instructions: instructions, userContent: userContent, creds: creds)
+        } catch let error as CodexError where primaryModel != kCorrectionModelDefault && error.isModelFallbackable {
+            fputs("[Codex] model '\(primaryModel)' 실패(plan=\(plan ?? "?"), \(error)) → '\(kCorrectionModelDefault)'로 폴백\n", stderr)
+            return try await performCorrection(model: kCorrectionModelDefault, instructions: instructions, userContent: userContent, creds: creds)
+        }
+    }
+
+    /// 무료(free)·plan 미상은 경량 기본, 그 외(plus/pro/team/enterprise/기타 유료)는 상위 모델.
+    func correctionModel(for plan: String?) -> String {
+        switch plan?.lowercased() {
+        case .none, .some(""), .some("free"), .some("chatgptfree"):
+            return kCorrectionModelDefault
+        default:
+            return kCorrectionModelPaid
+        }
+    }
+
+    private func performCorrection(model: String, instructions: String, userContent: String, creds: CodexCredentials) async throws -> String {
         // base_url(.../codex) + "/responses" — codex-rs CLI와 동일 경로 (/v1 없음)
         let url = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
         var request = URLRequest(url: url)
@@ -117,7 +147,7 @@ public final class CodexOAuthService: ObservableObject {
         }
 
         let body: [String: Any] = [
-            "model": "gpt-5.4-mini",
+            "model": model,
             "stream": true,   // Codex 백엔드는 SSE 스트리밍을 강제
             "store": false,   // 서버측 대화 저장 비활성화를 강제
             "instructions": instructions,  // Codex Responses API는 instructions 필수
@@ -133,8 +163,16 @@ public final class CodexOAuthService: ObservableObject {
                 errData.append(byte)
                 if errData.count >= 800 { break }
             }
-            fputs("[Codex] correct HTTP \(status): \(String(data: errData, encoding: .utf8) ?? "")\n", stderr)
-            throw CodexError.badResponse
+            fputs("[Codex] correct HTTP \(status) (model=\(model)): \(String(data: errData, encoding: .utf8) ?? "")\n", stderr)
+            // 무료 tier·미인가·모델 미허용은 4xx로 온다(상위 모델→mini 폴백 대상). 429는 rate limit(폴백 무의미).
+            switch status {
+            case 429:
+                throw CodexError.rateLimited
+            case 400, 401, 403, 404:
+                throw CodexError.notEntitled
+            default:
+                throw CodexError.badResponse
+            }
         }
 
         // SSE 스트림에서 response.output_text.delta 이벤트의 delta를 누적한다 (reasoning delta는 제외)
@@ -248,6 +286,23 @@ public final class CodexOAuthService: ObservableObject {
         return accountId
     }
 
+    /// access token(JWT)의 `chatgpt_plan_type` 클레임을 추출한다(free/plus/pro/team/enterprise 등).
+    /// 무료/유료 구분에 쓴다. 클레임이 없으면 nil → correctionModel이 보수적 기본 모델을 택한다.
+    func chatGPTPlanType(from accessToken: String) -> String? {
+        let parts = accessToken.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var payload = String(parts[1])
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)  // base64url 패딩
+        guard let data = Data(base64Encoded: payload
+                .replacingOccurrences(of: "-", with: "+")
+                .replacingOccurrences(of: "_", with: "/")),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let auth = json["https://api.openai.com/auth"] as? [String: Any],
+              let plan = auth["chatgpt_plan_type"] as? String
+        else { return nil }
+        return plan
+    }
+
     private func pollForAuthCode(
         deviceAuthId: String,
         userCode: String,
@@ -322,13 +377,24 @@ public final class CodexOAuthService: ObservableObject {
 }
 
 enum CodexError: Error, LocalizedError {
-    case notLoggedIn, badResponse, timeout
+    case notLoggedIn, badResponse, timeout, notEntitled, rateLimited
 
     var errorDescription: String? {
         switch self {
         case .notLoggedIn: return "OpenAI Codex 로그인 필요"
         case .badResponse: return "Codex API 응답 파싱 실패"
         case .timeout: return "인증 시간 초과 — 다시 시도하세요"
+        case .notEntitled: return "현재 OpenAI 플랜에서 이 모델을 쓸 수 없습니다"
+        case .rateLimited: return "OpenAI 호출 한도 초과 — 잠시 후 다시 시도하세요"
+        }
+    }
+
+    /// 상위 모델 호출 실패 시 기본(mini) 모델로 폴백해도 되는 오류인지.
+    /// rate limit(429)은 mini도 동일하게 막힐 가능성이 커 폴백 대상이 아니다.
+    var isModelFallbackable: Bool {
+        switch self {
+        case .notEntitled, .badResponse: return true
+        case .rateLimited, .notLoggedIn, .timeout: return false
         }
     }
 }

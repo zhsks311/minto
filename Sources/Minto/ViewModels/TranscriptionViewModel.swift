@@ -30,7 +30,9 @@ public final class TranscriptionViewModel: ObservableObject {
 
     // 창 단위 배치 교정: 미교정 구간을 모았다가 누적 길이가 window에 도달하면
     // 한 번에 교정 후 하나의 문단으로 병합한다. (구간간 일관성·교정 품질·호출 수 개선)
-    private static let correctionWindowSeconds: TimeInterval = 20
+    // 30초: 배치당 문맥을 넓혀 교정 품질↑, LLM 호출·요약 cadence↓. 원본은 즉시 표시되므로
+    // 교정본이 덮이는 지연만 늘 뿐 체감 영향은 작다(#3).
+    private static let correctionWindowSeconds: TimeInterval = 30
     // committedSegments가 이 개수에 이르면 듀레이션 미달이라도 교정을 flush한다.
     // TranscriptionState가 100개 초과 시 committedSegments를 evict(.transcriptionNeedsFlush 후 비움)하는데,
     // 그 전에 교정을 끝내지 않으면 미교정 원본이 그대로 보고서에 남는다(SMELL-2). 캡(100)보다 충분히 낮게.
