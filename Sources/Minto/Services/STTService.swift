@@ -122,6 +122,19 @@ public final class STTService {
         }
 
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 저에너지(-40dB 미만) + 짧은 출력(≤10자)은 비발화 phantom("감사합니다" 등) 가능성이 높아
+        // 버린다. 진단: 정회 웅성거림(-45dB)이 noSpeechProb=0·avgLogprob≈0의 "고신뢰" phantom으로
+        // 새는데, 메트릭 가드(noSpeech/avgLogprob/compressionRatio)로는 못 잡고 이 에너지+길이
+        // 휴리스틱만 잡는다. 실제 발화는 대개 -40dB 이상이라 손실이 적다(아주 조용한 짧은 발화는
+        // 드물게 누락될 수 있으나, 회의록에 "안 한 말"이 적히는 것보다 낫다). 시끄러운 구간의 잡음
+        // 섞인 실제 발화는 -40dB 이상이라 이 필터에 걸리지 않는다.
+        if dbLevel < -40, !trimmed.isEmpty, trimmed.count <= 10 {
+            fputs("[STT] skip (low-energy short phantom \(String(format:"%.1f", dbLevel))dB '\(trimmed)')\n", stderr)
+            let seg = Segment(text: "", timestamp: Date(), duration: Double(samples.count) / 16000.0)
+            return TranscriptionResult(segment: seg, isFinal: true)
+        }
+
         let segment = Segment(
             text: trimmed,
             timestamp: Date(),
