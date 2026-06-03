@@ -41,6 +41,11 @@ public final class SummaryService: ObservableObject {
     /// LLM 최종 호출이 실패하면 마지막 runningSummary를 최종으로 사용한다(있으면).
     public func generateFinal(tailText: String) async -> String? {
         let meeting = MeetingContext.shared
+        // 빈 회의(누적 요약·tail 모두 없음)는 요약할 내용이 없으므로 LLM을 호출하지 않는다.
+        let hasContent = !meeting.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !tailText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasContent else { return nil }
+
         let prompt = SummaryPrompt.buildFinal(
             topic: meeting.topic,
             glossary: meeting.glossary,
