@@ -86,7 +86,8 @@ public struct MeetingSummaryView: View {
             case .result(let r): resultView(r)
             }
         }
-        .frame(width: 540, height: 680)
+        // 고정 크기 대신 컨테이너를 채운다(종료 후 창=고정 윈도우, 회의 목록 상세=가변 패널 모두 대응).
+        .frame(minWidth: 420, maxWidth: .infinity, minHeight: 480, maxHeight: .infinity)
     }
 
     // MARK: - States

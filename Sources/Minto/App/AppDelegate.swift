@@ -7,6 +7,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     public let meetingSetupManager: MeetingSetupWindowManager
     public let summaryWindowManager: MeetingSummaryWindowManager
     public let reportService = ReportService()
+    /// 회의 목록·상세 메인 윈도우. "새 회의 시작"은 기존 시작 흐름을 탄다.
+    @MainActor public lazy var mainWindowManager = MainWindowManager(
+        onNewMeeting: { [weak self] in self?.requestStartSession() }
+    )
 
     override init() {
         let (vm, floatManager, setupManager, summaryManager) = MainActor.assumeIsolated {
@@ -113,6 +117,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         Task {
             await viewModel.loadModel(variant: savedVariant)
         }
+        // 런치 시 회의 목록 메인 윈도우를 띄워 저장된 회의를 바로 볼 수 있게 한다.
+        mainWindowManager.show()
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -11,7 +11,8 @@ struct MintoApp: App {
                 viewModel: appDelegate.viewModel,
                 onRequestStart: { appDelegate.requestStartSession() },
                 onStopRecording: { appDelegate.handleStopRecording() },
-                onOpacityChange: appDelegate.floatingWindowManager.setOpacity
+                onOpacityChange: appDelegate.floatingWindowManager.setOpacity,
+                onOpenLibrary: { appDelegate.mainWindowManager.show() }
             )
         }
         .menuBarExtraStyle(.window)

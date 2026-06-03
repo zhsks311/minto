@@ -5,6 +5,7 @@ public struct MenuBarView: View {
     public var onRequestStart: (() -> Void)?
     public var onStopRecording: (() -> Void)?
     public var onOpacityChange: ((Double) -> Void)?
+    public var onOpenLibrary: (() -> Void)?
 
     @State private var opacity: Double = 1.0
 
@@ -12,12 +13,14 @@ public struct MenuBarView: View {
         viewModel: TranscriptionViewModel,
         onRequestStart: (() -> Void)? = nil,
         onStopRecording: (() -> Void)? = nil,
-        onOpacityChange: ((Double) -> Void)? = nil
+        onOpacityChange: ((Double) -> Void)? = nil,
+        onOpenLibrary: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self.onRequestStart = onRequestStart
         self.onStopRecording = onStopRecording
         self.onOpacityChange = onOpacityChange
+        self.onOpenLibrary = onOpenLibrary
     }
 
     public var body: some View {
@@ -28,6 +31,7 @@ public struct MenuBarView: View {
             if viewModel.isRecording && !viewModel.allText.isEmpty {
                 copyButton
             }
+            Button("회의 목록 열기") { onOpenLibrary?() }
             Divider()
             opacitySlider
             Divider()
