@@ -32,6 +32,18 @@ public final class CopilotOAuthService: ObservableObject {
     public static let shared = CopilotOAuthService()
     private init() {}
 
+    /// 설정에서 고른 모델 키 + 목록. 미설정이면 기본 상수.
+    public static let modelDefaultsKey = "copilotModel"
+    public static let availableModels: [(id: String, label: String)] = [
+        ("gpt-4o", "gpt-4o"),
+        ("gpt-4.1", "gpt-4.1"),
+        ("claude-sonnet-4-5", "claude-sonnet-4.5"),
+    ]
+    static var selectedModel: String {
+        let v = UserDefaults.standard.string(forKey: modelDefaultsKey) ?? ""
+        return v.isEmpty ? kCopilotModel : v
+    }
+
     // 진행 중인 Device Code 흐름 상태
     @Published public var deviceCode: String = ""
     @Published public var isPolling: Bool = false
@@ -137,7 +149,7 @@ public final class CopilotOAuthService: ObservableObject {
 
         // 교정 규칙(instructions)은 system 메시지로, 가변 입력(userContent)은 user 메시지로 분리.
         let body: [String: Any] = [
-            "model": kCopilotModel,
+            "model": Self.selectedModel,
             "max_tokens": kCopilotMaxTokens,
             "messages": [
                 ["role": "system", "content": instructions],

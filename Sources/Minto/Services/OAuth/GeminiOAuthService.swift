@@ -61,6 +61,17 @@ public final class GeminiOAuthService: NSObject {
     public static let shared = GeminiOAuthService()
     private override init() {}
 
+    /// 설정에서 고른 모델 키 + 목록(설정 UI·서비스 공용). 미설정이면 기본 상수.
+    public static let modelDefaultsKey = "geminiModel"
+    public static let availableModels: [(id: String, label: String)] = [
+        ("gemini-2.5-flash", "2.5-flash · 빠름"),
+        ("gemini-2.5-pro", "2.5-pro · 고품질"),
+    ]
+    static var selectedModel: String {
+        let v = UserDefaults.standard.string(forKey: modelDefaultsKey) ?? ""
+        return v.isEmpty ? kGeminiModel : v
+    }
+
     // MARK: - Persisted state
 
     // 메모리 캐시: 바깥 Optional이 "아직 로드 안 함" 여부, 안쪽이 실제 자격증명.
@@ -171,7 +182,7 @@ public final class GeminiOAuthService: NSObject {
 
         let body: [String: Any] = [
             "project": creds.projectId,
-            "model": kGeminiModel,
+            "model": Self.selectedModel,
             "user_prompt_id": UUID().uuidString,
             "request": [
                 "contents": [["role": "user", "parts": [["text": prompt]]]],

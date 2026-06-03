@@ -4,6 +4,11 @@ public struct SettingsView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
     @AppStorage("selectedModel") private var selectedModel = "openai_whisper-large-v3-v20240930_turbo"
 
+    // 교정 provider별 모델 선택(서비스가 같은 UserDefaults 키를 읽는다).
+    @AppStorage("codexModel") private var codexModel = "auto"
+    @AppStorage("geminiModel") private var geminiModel = "gemini-2.5-flash"
+    @AppStorage("copilotModel") private var copilotModel = "gpt-4o"
+
     // LLM 교정 서비스 관찰
     @ObservedObject private var llmService = LLMCorrectionService.shared
     @ObservedObject private var copilot = CopilotOAuthService.shared
@@ -67,6 +72,20 @@ public struct SettingsView: View {
                             .foregroundColor(.red)
                     }
                 }
+            }
+
+            Section("교정 모델 (공급자별)") {
+                Picker("OpenAI Codex", selection: $codexModel) {
+                    ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
+                }
+                Picker("Gemini", selection: $geminiModel) {
+                    ForEach(GeminiOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
+                }
+                Picker("GitHub Copilot", selection: $copilotModel) {
+                    ForEach(CopilotOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
+                }
+                Text("선택한 공급자(LLM 교정)에 적용됩니다. Codex의 ‘자동’은 플랜(무료/유료)에 맞춰 선택합니다.")
+                    .font(.caption).foregroundColor(.secondary)
             }
 
             Section("현재 상태") {

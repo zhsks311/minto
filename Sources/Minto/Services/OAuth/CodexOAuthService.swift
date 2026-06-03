@@ -122,8 +122,23 @@ public final class CodexOAuthService: ObservableObject {
         }
     }
 
-    /// 무료(free)·plan 미상은 경량 기본, 그 외(plus/pro/team/enterprise/기타 유료)는 상위 모델.
+    /// 설정에서 고른 모델 키(설정 UI·서비스 공용).
+    public static let modelDefaultsKey = "codexModel"
+
+    /// 설정 Picker용 모델 목록. "auto"는 플랜(tier)에 맞춰 자동 선택.
+    public static let availableModels: [(id: String, label: String)] = [
+        ("auto", "자동 (플랜에 맞춤)"),
+        ("gpt-5.4-mini", "gpt-5.4-mini · 빠름"),
+        ("gpt-5.4", "gpt-5.4 · 고품질"),
+    ]
+
+    /// 사용할 교정 모델. 설정에서 명시 선택했으면 그 값, "auto"/미설정이면 plan(tier)에 맞춘다.
+    /// 무료(free)·미상 → 경량 기본, 유료(plus/pro/team/…) → 상위.
     func correctionModel(for plan: String?) -> String {
+        let chosen = UserDefaults.standard.string(forKey: Self.modelDefaultsKey) ?? "auto"
+        if chosen != "auto", !chosen.isEmpty {
+            return chosen
+        }
         switch plan?.lowercased() {
         case .none, .some(""), .some("free"), .some("chatgptfree"):
             return kCorrectionModelDefault
