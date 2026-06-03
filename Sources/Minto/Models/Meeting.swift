@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Segment: Identifiable, Sendable, Hashable {
+public struct Segment: Identifiable, Sendable, Hashable, Codable {
     public let id: UUID
     public let text: String
     public let timestamp: Date

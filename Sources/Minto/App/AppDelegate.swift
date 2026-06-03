@@ -56,38 +56,34 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             self.reportService.appendSummarySection(summary?.markdown() ?? "")
             self.reportService.finalizeReport()
 
-            if let summary {
-                let result = Self.buildResult(
-                    summary: summary,
-                    segments: segments,
-                    topic: MeetingContext.shared.topic,
-                    duration: self.viewModel.recordingDuration
-                )
-                self.summaryWindowManager.showResult(result)
-            } else {
+            // 회의 기록을 영속화(요약이 없어도 전사가 있으면 저장 → 나중에 열람). 빈 회의는 store가 skip.
+            let record = Self.makeRecord(
+                summary: summary ?? MeetingSummary(),
+                segments: segments,
+                topic: MeetingContext.shared.topic,
+                duration: self.viewModel.recordingDuration
+            )
+            MeetingStore.shared.save(record)
+
+            if record.isEmpty {
                 self.summaryWindowManager.showFailed()
+            } else {
+                self.summaryWindowManager.showResult(MeetingResult.from(record))
             }
             MeetingContext.shared.clear()
         }
     }
 
-    /// 전사 세그먼트 + 구조화 요약 → 결과 화면 데이터. 타임스탬프는 첫 발화 기준 상대 MM:SS.
+    /// 전사 세그먼트 + 구조화 요약 → 저장용 MeetingRecord. 제목·길이를 해소한다.
     @MainActor
-    private static func buildResult(summary: MeetingSummary, segments: [Segment], topic: String, duration: TimeInterval) -> MeetingResult {
+    static func makeRecord(summary: MeetingSummary, segments: [Segment], topic: String, duration: TimeInterval) -> MeetingRecord {
         let title: String = {
             let t = summary.title.trimmingCharacters(in: .whitespacesAndNewlines)
             if !t.isEmpty { return t }
             let topicTrimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
             return topicTrimmed.isEmpty ? "회의 결과" : topicTrimmed
         }()
-
         let start = segments.first?.timestamp ?? Date()
-        let lines = segments.map { seg in
-            MeetingResult.TranscriptLine(
-                time: Self.mmss(seg.timestamp.timeIntervalSince(start)),
-                text: seg.text
-            )
-        }
         // 회의 길이는 segment 타임스탬프로 계산(recordingDuration은 종료 시점에 0으로 들어올 수 있음).
         let meetingSeconds: TimeInterval
         if let first = segments.first, let last = segments.last {
@@ -95,19 +91,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         } else {
             meetingSeconds = duration
         }
-        let meta = "저장됨 · \(Self.durationText(meetingSeconds)) · 구간 \(segments.count)개"
-        return MeetingResult(title: title, metaText: meta, summary: summary, transcript: lines)
-    }
-
-    private static func mmss(_ seconds: TimeInterval) -> String {
-        let s = max(0, Int(seconds.rounded()))
-        return String(format: "%02d:%02d", s / 60, s % 60)
-    }
-
-    private static func durationText(_ seconds: TimeInterval) -> String {
-        let total = max(0, Int(seconds.rounded()))
-        let m = total / 60, s = total % 60
-        return m > 0 ? "\(m)분 \(s)초" : "\(s)초"
+        return MeetingRecord(
+            title: title,
+            startedAt: start,
+            durationSeconds: meetingSeconds,
+            topic: topic,
+            summary: summary,
+            transcript: segments
+        )
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {

@@ -327,3 +327,15 @@ public struct MeetingSummaryView: View {
         NSPasteboard.general.setString(r.summary.markdown(), forType: .string)
     }
 }
+
+extension MeetingResult {
+    /// 저장된 회의 기록 → 결과 화면 데이터. 종료 직후와 목록 상세가 같은 렌더를 쓰도록 통일.
+    public static func from(_ record: MeetingRecord) -> MeetingResult {
+        let start = record.transcript.first?.timestamp ?? record.startedAt
+        let lines = record.transcript.map { seg in
+            let s = max(0, Int(seg.timestamp.timeIntervalSince(start).rounded()))
+            return TranscriptLine(time: String(format: "%02d:%02d", s / 60, s % 60), text: seg.text)
+        }
+        return MeetingResult(title: record.title, metaText: record.subtitle, summary: record.summary, transcript: lines)
+    }
+}
