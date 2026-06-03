@@ -179,6 +179,165 @@ struct MeetingCorpusTests {
         }
     }
 
+    /// LLM 후교정 레이어가 전사 품질에 실제로 기여하는지 측정한다(raw vs 교정후 global CER 델타).
+    ///
+    /// 신뢰성의 전제(advisor): **창마다 STT는 한 번만 돌리고 그 raw를 그대로 교정에 넣는다.**
+    /// 그래야 ANE 비결정성(±8pp)·방송자막 비verbatim 바닥(~40%)이 raw·corrected 양쪽에 똑같이
+    /// 박혀 *델타에서 상쇄*된다. 재전사하면 상쇄가 깨져 절대 CER만큼 무의미해진다.
+    ///
+    /// 함정(T7 재발 주의): 교정 LLM이 없던 내용을 그럴듯하게 *추가(insertion)*하면 verbose한
+    /// 자막과 우연히 맞아 CER이 거짓으로 내려갈 수 있다. 그래서 델타 숫자만 보지 않고
+    /// touch rate(교정이 실제로 바꾼 정도)와 길이 증가·변경 diff를 함께 찍어 "수정"인지
+    /// "추가"인지 눈으로 확인한다.
+    ///
+    /// 해석 비대칭: CER↓ = 진짜 이득. 평평/소폭↑ = 애매(보수 corrector는 실제 발화에 가까워질수록
+    /// 패러프레이즈된 자막과 멀어져 이득이 구조적으로 과소계상됨). touch rate가 낮은데 델타≈0이면
+    /// "교정 무용"이 아니라 "여기선 안전하게 무해"로 읽는다.
+    ///
+    /// 실행: RUN_STT_TESTS=1 RUN_CORRECTION_TEST=1 swift test -c release \
+    ///       --filter MeetingCorpusTests/correctionContributionCER
+    ///   (Codex Pro 주력 — Gemini는 429. 앱에서 Codex 로그인 선행 필요. env로 창 수·맥락 조절:
+    ///    MEETING_CORR_WINDOWS=25, MEETING_TOPIC, MEETING_GLOSSARY(줄 단위))
+    @Test("회의 코퍼스 교정 레이어 기여도 (raw vs Codex 교정 CER 델타)")
+    func correctionContributionCER() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1" else { return }
+
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: Self.audioURL.path),
+              fileManager.fileExists(atPath: Self.smiURL.path) else {
+            print("[Meeting] 자료 없음 — skip")
+            return
+        }
+        guard CodexOAuthService.shared.isLoggedIn else {
+            Issue.record("Codex 미로그인 — 앱에서 먼저 로그인 필요")
+            return
+        }
+
+        // 비용 보호: 교정은 API 호출이라 기본 25창만(일반 측정 60창과 별도 env).
+        let corrWindows = ProcessInfo.processInfo.environment["MEETING_CORR_WINDOWS"].flatMap(Int.init) ?? 25
+        // 회의 맥락(행안위 기본, env override). 고정값은 절차·부처 용어만 — 특정 발언/이름을 날조하지 않는다.
+        let topic = ProcessInfo.processInfo.environment["MEETING_TOPIC"]
+            ?? "국회 행정안전위원회 전체회의 (행정안전부 소관 안건 심사·질의)"
+        let glossary = ProcessInfo.processInfo.environment["MEETING_GLOSSARY"]
+            ?? "행정안전부\n위원장\n간사\n의사일정\n안건\n정회\n속개\n의결\n출석"
+
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let windows = Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds)
+        let targetWindows = Array(windows.prefix(corrWindows))
+        guard !targetWindows.isEmpty else { Issue.record("병합된 창이 없습니다"); return }
+
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+        let service = STTService()
+        await service.loadModel(variant: Self.model)
+        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패: \(service.modelState)"); return }
+
+        print("\n=== 교정 기여도 측정 [\(Self.model) → Codex] (window=\(Self.windowSeconds)s, \(targetWindows.count)/\(windows.count)창) ===")
+
+        var allRefText = ""
+        var allRawText = ""
+        var allCorrText = ""
+        var allCorrCleanText = ""   // 탈오염본: 추가 의심(insertion) 창은 교정 대신 raw로 되돌려 누적
+        var nonEmptyWindows = 0     // 교정 대상이 된 비어있지 않은 raw 창
+        var touchedWindows = 0      // 교정이 실제로 글자를 바꾼 창
+        var touchDistance = 0       // Σ editDistance(raw, corrected) — 변경의 총량
+        var touchedRawLen = 0       // 변경된 창의 raw 글자수(touch rate 분모)
+        var fallbackCount = 0       // 교정 API 실패로 raw를 그대로 쓴 창(델타를 조용히 0으로 만드는 원인 → 명시 집계)
+        var insertionFlags = 0      // 교정본이 raw보다 크게 길어진 창(추가=게이밍 의심)
+        var prevRaw = ""            // 직전 발화 맥락(프로덕션과 동일하게 이전 창 raw를 넘김)
+
+        for (index, window) in targetWindows.enumerated() {
+            let startSample = max(0, Int(window.start * Double(Self.sampleRate)))
+            let endSample = min(samples.count, Int(window.end * Double(Self.sampleRate)))
+            guard endSample > startSample else { continue }
+
+            // STT는 창당 1회만. 이 raw를 교정 입력으로 재사용해야 델타에서 노이즈가 상쇄된다.
+            let raw = try await service.transcribe(pcmSamples: Array(samples[startSample..<endSample])).segment.text
+            var corrected = raw
+            var isInsertion = false
+
+            if !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                nonEmptyWindows += 1
+                let prompt = CorrectionPrompt.build(topic: topic, glossary: glossary, context: prevRaw, text: raw)
+                do {
+                    corrected = try await CodexOAuthService.shared.correct(instructions: prompt.instructions, userContent: prompt.userContent)
+                } catch {
+                    fallbackCount += 1
+                    corrected = raw  // 폴백(=델타 기여 0). 무용이 아니라 "측정 못한 창"으로 따로 센다.
+                    print("[Corr] #\(index) 교정 실패(폴백): \(error.localizedDescription)")
+                }
+                if corrected != raw {
+                    let stats = Self.cerStats(reference: raw, hypothesis: corrected)
+                    touchedWindows += 1
+                    touchDistance += stats.distance
+                    touchedRawLen += stats.refLen
+                    let rawLen = Self.strippedCount(raw)
+                    let corrLen = Self.strippedCount(corrected)
+                    // 교정본이 raw보다 20%+ 길면 "수정"이 아니라 "추가" 의심(T7식 CER 게이밍 신호).
+                    if rawLen > 0, Double(corrLen) > Double(rawLen) * 1.2 {
+                        insertionFlags += 1
+                        isInsertion = true
+                    }
+                    print("[Corr] #\(index) (raw \(rawLen)→corr \(corrLen)자, 편집 \(stats.distance))\(isInsertion ? " ⚠️추가의심" : "")")
+                    print("    RAW : \(raw.prefix(120))")
+                    print("    CORR: \(corrected.prefix(120))")
+                }
+            }
+
+            allRefText += window.text + " "
+            allRawText += raw + " "
+            allCorrText += corrected + " "
+            // 탈오염본: 추가 의심 창은 교정의 날조가 CER을 거짓으로 흔들므로 raw로 되돌려 누적.
+            allCorrCleanText += (isInsertion ? raw : corrected) + " "
+            prevRaw = raw
+        }
+
+        let rawStats = Self.cerStats(reference: allRefText, hypothesis: allRawText)
+        let corrStats = Self.cerStats(reference: allRefText, hypothesis: allCorrText)
+        let cleanStats = Self.cerStats(reference: allRefText, hypothesis: allCorrCleanText)
+        let rawCER = rawStats.refLen > 0 ? Double(rawStats.distance) / Double(rawStats.refLen) : 0
+        let corrCER = corrStats.refLen > 0 ? Double(corrStats.distance) / Double(corrStats.refLen) : 0
+        let cleanCER = cleanStats.refLen > 0 ? Double(cleanStats.distance) / Double(cleanStats.refLen) : 0
+        let deltaPP = (corrCER - rawCER) * 100        // 음수 = 개선 (날조 포함)
+        let cleanDeltaPP = (cleanCER - rawCER) * 100  // 음수 = 개선 (추가 의심 창 제외한 substantive 이득)
+        let touchRate = touchedRawLen > 0 ? Double(touchDistance) / Double(touchedRawLen) : 0
+
+        // verdict는 자신의 insertion 신호를 무시하면 안 된다(추가가 있는데 "진짜 이득"을 찍는 T7식 자기기만 방지).
+        // substantive 이득 판정은 날조를 뺀 cleanDelta로 한다.
+        let verdict: String
+        if insertionFlags > 0 {
+            verdict = "⚠️ 추가 의심 \(insertionFlags)창(날조 가능) — raw 델타 \(String(format: "%+.1fpp", deltaPP))엔 거짓 이득 섞임. 날조 제외 델타 \(String(format: "%+.1fpp", cleanDeltaPP))가 substantive 판정값."
+        } else if cleanDeltaPP < -1.0 {
+            verdict = "교정이 자막 기준 CER을 낮춤 → 진짜 이득(추가 없음, touch rate로 확인)"
+        } else if cleanDeltaPP > 1.0 {
+            verdict = "교정 후 CER 상승 → ⚠️ 과교정 또는 자막과의 거리 증가. diff 확인 필수"
+        } else {
+            verdict = "델타≈0 → 애매: touch rate 낮으면 '무해', 높으면 '자막 비verbatim에 가려진 이득' 가능"
+        }
+
+        print("""
+        ────────────────────────────────────────
+        창 수            : \(targetWindows.count) (비어있지 않은 raw \(nonEmptyWindows), 교정이 바꾼 창 \(touchedWindows), 폴백 \(fallbackCount))
+        global raw  CER  : \(String(format: "%.1f%%", rawCER * 100))
+        global corr CER  : \(String(format: "%.1f%%", corrCER * 100))
+        델타(corr-raw)   : \(String(format: "%+.1fpp", deltaPP)) (음수=개선, 날조 포함)
+        ── 날조 탈오염(추가 의심 \(insertionFlags)창을 raw로 되돌림) ──
+        global clean CER : \(String(format: "%.1f%%", cleanCER * 100))
+        델타(clean-raw)  : \(String(format: "%+.1fpp", cleanDeltaPP)) (음수=개선, substantive 이득)
+        touch rate       : \(String(format: "%.1f%%", touchRate * 100)) (변경 창 raw 대비 편집 비율)
+        ========================================
+        해석: \(verdict)
+        ※ 폴백 \(fallbackCount)창은 corrected=raw라 델타에 0 기여 — 교정 효과가 아니라 측정 누락이다.
+          절대 CER은 무시. raw→corr 델타만 신뢰(같은 raw를 공유해 노이즈 상쇄).
+
+        """)
+    }
+
+    /// 공백·문장부호 제거 후 글자 수(insertion 판정용).
+    private static func strippedCount(_ text: String) -> Int {
+        text.filter { !$0.isWhitespace && !$0.isPunctuation }.count
+    }
+
     // MARK: - SMI 파싱
 
     private struct SMIDocument: Decodable {

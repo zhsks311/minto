@@ -151,3 +151,29 @@ T7 검증 중 발견한 **선재 phantom**(정회 −45dB → "감사합니다",
 - **`noSpeechProb<0.6` 제거**: WhisperKit가 디코딩 시 0.80+confidence-override로 이미 무음 skip. 사후 0.6 재검은 그 튜닝을 무효화하고 확신 있는 발화(noSpeechProb 0.6~0.8)까지 버림. "0.80으로 정렬"은 confidence-override가 없어 같은 버그의 약한 버전 → **완전 제거**가 유일한 일관 해.
 - **`avgLogprob`/`compressionRatio` 유지**: g2 0회 발동 = 깨끗한 발화 안 버림. WhisperKit가 안 거르는 **추가 정책(할루시네이션 억제)** 이므로 의도적 가드로 유지+주석. 잔여 발화손실 위험 명시.
 - **CER 6.2%→6.4% = 노이즈**: skip 0회였으므로 제거한 분기는 출력에 무영향(논리적 no-op). Δ0.2%는 WhisperKit ANE 비결정성. **이득은 g2로 측정 불가**(noSpeechProb 0.6~0.8 구간이 깨끗한 낭독엔 없음) → real 회의 음성에서만 발현.
+
+### 교정 레이어 기여도 측정 (2026-06-03): 유익하나 짧은 조각 날조 위험 확인
+
+회의 코퍼스로 **raw STT vs Codex 교정후 global CER 델타**를 처음 측정(`MeetingCorpusTests/correctionContributionCER`, `RUN_STT_TESTS=1 RUN_CORRECTION_TEST=1`, 25창). 신뢰 전제: **창당 STT 1회 → 그 raw를 교정 입력 재사용**(ANE 노이즈·비verbatim 자막 바닥이 양쪽에 동일하게 박혀 *델타에서 상쇄*; advisor 확인 — 이 상쇄 덕에 델타는 run-to-run ±8pp 노이즈로 깎이지 **않는다**). 절대 CER은 여전히 무의미, raw→corr 델타만 신뢰. 가드 3종: touch rate / insertion flag(corr 길이 > raw×1.2) / per-window diff. **탈오염 델타**(insertion 의심 창을 raw로 되돌린 clean CER)를 별도 산출해 날조가 거짓 이득을 만드는 T7식 게이밍을 분리.
+
+| 지표 | run 1 | run 2 |
+|------|------|------|
+| global raw CER | 51.4% | 58.8% |
+| global corr CER | 48.5% | 57.8% |
+| 델타(corr−raw, 날조 포함) | −2.9pp | −1.0pp |
+| **탈오염 델타(clean−raw, substantive)** | (run1 미산출) | **−1.0pp** |
+| touch rate | 13.7% | 4.6% |
+| 추가 의심 창(insertion flag) | **2** | **0** |
+| 폴백 | 0 | 0 |
+
+- **substantive 이득은 작지만 양수(~ −1 ~ −2pp clean)**. 대부분 띄어쓰기·문장부호 정리 + 일부 동음이의어/오인식 맥락 복원: "지리 시간→질의 시간", "현안지리→현안질의", "상징→상정", "간사관→간사 간", "의사진의 일정→의사일정", "베일을→회의를". 보수적 corrector가 의도대로 동작하는 부분.
+- **간헐적 날조(T7과 동일 메커니즘, run마다 출몰)** — run1에서 가드가 2건 포착:
+  - **#8 (raw 2→corr 20자)**: RAW "오늘" → CORR가 **직전 창(#7) 텍스트를 그대로 에코**. 짧은 조각+context 주면 교정기가 맥락을 출력에 토함 → 명백한 날조. (run2엔 raw가 달라 미출현.)
+  - **#20 (raw 101→corr 104자)**: 앞부분 "보임 대신"→"의사 진행에 들어가도록 하겠습니다."로 절 창작.
+- **오교정도 관측** — run2 #16 "그 종이는 떼기로 했습니다"→"폐기로"(peel≠discard, 의미 변경). 교정기는 진짜 오류를 고치기도 하지만 가끔 해친다(양날).
+- **run 간 변동의 정체**: STT raw 자체가 ANE 비결정성으로 run마다 달라(예: "베일을"이 run1엔 유지/run2엔 "회의를"로 교정), 어떤 창이 날조·오교정을 트리거할지도 흔들린다. 델타는 *한 run 안*에선 깨끗하나 절대값은 run 간 흔들림.
+- **방법론 검증**: 가드가 없었으면 run1 −2.9pp를 "순이득"으로 오독했을 것(CER이 세 번째로 오도하려던 것을 차단). verdict 로직도 `insertionFlags>0`이면 "진짜 이득"을 못 찍게 수정.
+
+**production severity (호출자 추적 결과)**: `TranscriptionViewModel.flushCorrectionBatch`가 `LLMCorrectionService.correct(text:context:)`를 **비어있지 않은 context(`state.recentCommittedText` = 최근 3 segment)**로 호출한다. 트리거는 `pendingCorrectionDuration >= 20s`(보통 한 문단 = #20류 길이) + `stopRecording()`의 꼬리 flush(짧은 조각 = #8류 가능). → **맥락-에코/절-창작 날조는 test-only가 아니라 라이브 회의록에 들어갈 수 있는 결함.** 다만 발생률은 간헐적.
+
+- **후속 후보(미실행, 사용자 판단 필요)**: 짧은 raw에 대한 맥락-에코 가드 — (a) 짧은 입력엔 context 미주입, (b) 프롬프트에 "직전 맥락을 출력에 포함 금지·길이 보존" 강화, (c) corrected 길이 ≫ raw(짧을 때)면 교정 폐기·raw 유지. **이는 production `CorrectionPrompt`/교정 경로 변경이라 측정과 별개 작업** → 사용자 승인 후 진행.
