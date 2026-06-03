@@ -95,7 +95,12 @@ public struct MeetingSummary: Codable, Sendable, Equatable {
         let q = leadQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         let a = leadAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty { lines.append("> \(q)") }
-        if !a.isEmpty { lines.append("**\(a)**"); lines.append("") }
+        if !a.isEmpty {
+            // 다단(개행 포함) 텍스트를 **…**로 감싸면 CommonMark에서 강조가 안 되고 별표 리터럴이 노출된다
+            // (평문 폴백 경로). 단일 줄일 때만 bold.
+            lines.append(a.contains("\n") ? a : "**\(a)**")
+            lines.append("")
+        }
         for section in sections {
             let t = section.title.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !t.isEmpty || !section.points.isEmpty else { continue }

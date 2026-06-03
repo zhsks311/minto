@@ -16,7 +16,10 @@ public struct TranscriptionState: Sendable {
 
         committedSegments.append(newResult.segment)
 
-        if committedSegments.count > 100 {
+        // evict 캡: 이전에는 100이라 긴 회의에서 committedSegments가 비워져 저장 record의 transcript
+        // 앞부분이 유실됐다(코드리뷰 HIGH). 캡을 현실적으로 도달 불가한 값으로 올려 데이터 손실을
+        // 없애고, 폭주(수천 구간) 시에만 보호 발동. 메모리는 수 MB 수준으로 허용.
+        if committedSegments.count > Self.maxRetainedSegments {
             NotificationCenter.default.post(
                 name: .transcriptionNeedsFlush,
                 object: committedSegments
@@ -24,6 +27,9 @@ public struct TranscriptionState: Sendable {
             committedSegments.removeAll()
         }
     }
+
+    /// committedSegments 보존 상한(runaway 보호). 정상 회의(수 시간, 수천 구간 미만)는 도달하지 않는다.
+    static let maxRetainedSegments = 5000
 
     /// 여러 연속 segment를 교정된 단일 segment로 병합한다.
     /// (창 단위 배치 교정용 — 첫 segment의 id·timestamp를 유지하고 duration은 합산)

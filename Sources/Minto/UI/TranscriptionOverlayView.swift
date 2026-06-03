@@ -22,7 +22,8 @@ public struct TranscriptionOverlayView: View {
             Divider()
             footerView
         }
-        .frame(width: 420, height: showRelated ? 660 : 520)
+        // 창 높이는 고정 — 관련 패널은 transcript 영역을 나눠 쓴다(NSPanel 리사이즈 불필요, 잘림 방지).
+        .frame(width: 420, height: 520)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.25), radius: 20, x: 0, y: 8)

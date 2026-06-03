@@ -157,14 +157,19 @@ public struct MeetingSummaryView: View {
 
     private func tabButton(_ title: String, _ t: Tab) -> some View {
         let active = tab == t
-        return Text(title)
-            .font(.system(size: 13, weight: active ? .heavy : .bold))
-            .foregroundColor(active ? RC.accentText : RC.tabInactiveText)
-            .frame(maxWidth: .infinity).frame(height: 30)
-            .background(active ? RC.accent : RC.tabBg)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .contentShape(Rectangle())
-            .onTapGesture { tab = t }
+        // Button으로 구현(VoiceOver 버튼 트레이트 + Space/Return 활성화). onTapGesture는 접근성 미지원.
+        return Button { tab = t } label: {
+            Text(title)
+                .font(.system(size: 13, weight: active ? .heavy : .bold))
+                .foregroundColor(active ? RC.accentText : RC.tabInactiveText)
+                .frame(maxWidth: .infinity).frame(height: 30)
+                .background(active ? RC.accent : RC.tabBg)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(active ? [.isSelected] : [])
     }
 
     // MARK: - Digest (계층형 요약)

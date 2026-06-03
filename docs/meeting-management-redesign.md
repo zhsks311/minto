@@ -50,3 +50,24 @@
 - push 보류, 커밋 Co-Authored-By 금지, 한국어 응답, surgical, sample/ gitignore.
 - 키체인 접근 테스트는 `./scripts/dev.sh test`로(adhoc 재프롬프트 방지). 앱 실행은 `./scripts/dev.sh run`.
 - 병렬은 worktree 격리 또는 비충돌 파일만. codex 위임 후 고아 프로세스 확인.
+
+## P8 리뷰 결과 (병렬 code-reviewer 3개 — 영속화·UI·서비스)
+
+### 수정 완료
+- **[HIGH] 긴 회의 transcript 유실**: TranscriptionState evict 캡 100→5000(maxRetainedSegments). 현실적 회의에서 committedSegments가 비워지지 않아 저장 record 전사 완전. 테스트 갱신.
+- **[HIGH] 관련 패널 창 잘림**: 오버레이 창 높이 고정(520) — 패널이 transcript 영역을 나눠 씀(NSPanel 리사이즈 불필요).
+- **[MEDIUM] 저장 실패 미반영**: handleStopRecording이 save() Bool 확인 → 실패 시 showFailed.
+- **[MEDIUM] 탭 접근성**: MeetingSummaryView 탭을 onTapGesture→Button(VoiceOver/키보드).
+- **[MEDIUM] buildFinal transcript 무제한**: 24000자 상한 + "이후 생략" 표기(context 초과·JSON 잘림 방지).
+- **[MEDIUM] .plain 폴백 다단 bold 깨짐**: markdown()이 개행 포함 시 ** 미적용.
+- **[MEDIUM] 미검증 Gemini pro 노출**: availableModels에서 제거(thinkingBudget 거부 시 무음 실패 위험).
+- **[LOW] 결과 창 닫힘 후 결과 유실**: showResult/showFailed가 window nil이면 재생성.
+- **[LOW] 메인 윈도우 위치**: setFrameUsingName 복원, 없을 때만 center().
+- **[LOW] export 파일명**: dot-only·길이(80자) 제한.
+
+### 보류(다음 이터레이션 — 현 규모에선 영향 작음)
+- MeetingStore reload/save가 @MainActor 동기 IO + 전체 transcript 로드 → 대량 라이브러리에서 메인 블록. 메타-only 목록 + 백그라운드 IO로 분리 필요.
+- MeetingRecord/Segment Codable에 schemaVersion + 마이그레이션(현재 신규 필드는 Optional/기본값 규칙으로 대응).
+- Gemini instructions/data role 미분리(systemInstruction) — jailbreak 내성 강화.
+- Gemini/Copilot 요약 출력 토큰 캡(1024) — 긴 계층 JSON 잘림 가능(Codex는 uncapped라 주력 경로 무관).
+- OAuth form 파라미터 percent-encoding(latent), Copilot pollForToken 타임아웃, Gemini @State→ObservableObject, detectedKeywords 캐싱.

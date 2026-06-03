@@ -29,8 +29,8 @@ struct TranscriptionStateTests {
         }
     }
 
-    @Test("101번째 advanceWindow: flush 알림 발생 + 배열 초기화")
-    func advanceWindowFlushesAt101() async {
+    @Test("101구간: evict 없이 전부 유지(저장 record 전사 유실 방지)")
+    func advanceWindowRetainsBeyond100() async {
         var state = TranscriptionState()
         nonisolated(unsafe) var flushed = false
 
@@ -41,15 +41,15 @@ struct TranscriptionStateTests {
         ) { _ in flushed = true }
         defer { NotificationCenter.default.removeObserver(observer) }
 
-        // 직접 커밋: 101번 호출 → 101번째에서 flush
+        // 101번 커밋 — 과거엔 100 초과 시 evict(removeAll)됐으나, 이제 캡(5000)이라 전부 유지.
         for i in 0..<101 {
             state.advanceWindow(newResult: makeResult(text: "s\(i)"))
         }
 
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        #expect(flushed, "Should post transcriptionNeedsFlush notification")
-        #expect(state.committedSegments.count < 100, "Buffer should be cleared after flush")
+        #expect(!flushed, "5000 미만에서는 flush(evict)되지 않아야 함")
+        #expect(state.committedSegments.count == 101, "101구간이 유실 없이 모두 유지되어야 함")
     }
 
     @Test("replaceRange: 연속 구간을 교정본 1개로 병합")

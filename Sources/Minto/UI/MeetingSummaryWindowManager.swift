@@ -41,14 +41,16 @@ public final class MeetingSummaryWindowManager: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// 구조화 결과를 표시한다.
+    /// 구조화 결과를 표시한다. 로딩 중 사용자가 창을 닫았으면 다시 띄운다(결과 유실 방지).
     public func showResult(_ result: MeetingResult) {
+        if window == nil { showLoading() }
         model.state = .result(result)
         window?.makeKeyAndOrderFront(nil)
     }
 
-    /// 요약 생성 실패 상태로 전환한다.
+    /// 요약 생성 실패 상태로 전환한다. 창이 닫혔으면 다시 띄운다.
     public func showFailed() {
+        if window == nil { showLoading() }
         model.state = .failed
         window?.makeKeyAndOrderFront(nil)
     }

@@ -67,9 +67,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 topic: MeetingContext.shared.topic,
                 duration: self.viewModel.recordingDuration
             )
-            MeetingStore.shared.save(record)
+            let saved = MeetingStore.shared.save(record)
 
-            if record.isEmpty {
+            // 빈 회의이거나 저장 실패면 결과로 표시하지 않는다(저장 안 됐는데 성공처럼 보이는 것 방지).
+            if record.isEmpty || !saved {
                 self.summaryWindowManager.showFailed()
             } else {
                 self.summaryWindowManager.showResult(MeetingResult.from(record))

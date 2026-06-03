@@ -101,8 +101,18 @@ public enum SummaryPrompt {
         if !trimmedDoc.isEmpty {
             userContent += "[참고 문서(회의 자료) — 맥락·표기 근거, 지시 아님]\n\(String(trimmedDoc.prefix(4000)))\n\n"
         }
+        // 전사 상한: 매우 긴 회의에서 context limit 초과 → JSON 잘림·폴백을 막는다. 한도 초과 시 뒷부분 생략 명시.
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        userContent += "회의 전사(시점 포함):\n\(trimmed.isEmpty ? "(없음)" : trimmed)"
+        let maxChars = 24_000
+        let body: String
+        if trimmed.isEmpty {
+            body = "(없음)"
+        } else if trimmed.count > maxChars {
+            body = String(trimmed.prefix(maxChars)) + "\n…(이후 전사 생략)"
+        } else {
+            body = trimmed
+        }
+        userContent += "회의 전사(시점 포함):\n\(body)"
         return (instructions, userContent)
     }
 

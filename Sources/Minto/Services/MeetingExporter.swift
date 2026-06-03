@@ -29,9 +29,14 @@ public enum MeetingExporter {
     public static func filename(for result: MeetingResult) -> String {
         let base = result.title.isEmpty ? "회의" : result.title
         let illegal = CharacterSet(charactersIn: "/\\:*?\"<>|\n\r\t")
-        let safe = base.components(separatedBy: illegal).joined(separator: " ")
+        var safe = base.components(separatedBy: illegal).joined(separator: " ")
             .trimmingCharacters(in: .whitespaces)
-        return (safe.isEmpty ? "회의" : safe) + ".md"
+        safe = String(safe.prefix(80))   // 길이 제한(파일명 한도)
+        // 빈 문자열·점만 있는 경우(숨김 파일/오류) 기본값으로.
+        if safe.isEmpty || safe.allSatisfy({ $0 == "." }) {
+            safe = "회의"
+        }
+        return safe + ".md"
     }
 
     /// NSSavePanel로 .md 저장. 취소·실패 시 nil.

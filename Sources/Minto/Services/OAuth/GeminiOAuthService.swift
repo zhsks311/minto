@@ -63,9 +63,10 @@ public final class GeminiOAuthService: NSObject {
 
     /// 설정에서 고른 모델 키 + 목록(설정 UI·서비스 공용). 미설정이면 기본 상수.
     public static let modelDefaultsKey = "geminiModel"
+    // gemini-2.5-pro는 thinkingConfig(thinkingBudget:0) 동작이 달라 검증 전엔 노출하지 않는다
+    // (잘못 노출 시 pro가 해당 파라미터를 거부 → badResponse → 교정·요약 무음 실패). 검증 후 추가.
     public static let availableModels: [(id: String, label: String)] = [
         ("gemini-2.5-flash", "2.5-flash · 빠름"),
-        ("gemini-2.5-pro", "2.5-pro · 고품질"),
     ]
     static var selectedModel: String {
         let v = UserDefaults.standard.string(forKey: modelDefaultsKey) ?? ""

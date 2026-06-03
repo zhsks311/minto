@@ -30,8 +30,11 @@ public final class MainWindowManager: NSObject, NSWindowDelegate {
         window.contentViewController = NSHostingController(rootView: view)
         window.isReleasedWhenClosed = false
         window.delegate = self
+        // 저장된 프레임이 있으면 복원, 없을 때만 중앙 정렬(center가 복원 위치를 덮어쓰지 않게).
         window.setFrameAutosaveName("MintoMainWindow")
-        window.center()
+        if !window.setFrameUsingName("MintoMainWindow") {
+            window.center()
+        }
 
         self.window = window
         window.makeKeyAndOrderFront(nil)
