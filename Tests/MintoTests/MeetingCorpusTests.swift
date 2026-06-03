@@ -146,6 +146,39 @@ struct MeetingCorpusTests {
         #expect(microCER < 0.80, "micro-CER sanity bound 초과: \(String(format: "%.1f%%", microCER * 100))")
     }
 
+    /// 비발화/저신뢰 구간을 프로덕션 경로로 전사해 "환각 날조가 없는지" 점검한다(회귀 가드).
+    /// 배경: logProbThreshold/avgLogprob 가드를 풀어 빈 출력을 강제 복구하려던 2-pass 시도는
+    /// 정회 웅성거림에서 "감사합니다" phantom, 한국어 클립에서 영어를 날조해 폐기했다(빈 출력이
+    /// 정직한 동작). 이 구간들은 모두 빈 출력이어야 한다 — 텍스트가 나오면 날조 회귀 신호.
+    /// 실행: RUN_STT_TESTS=1 MEETING_SPAN_PROBE=1 swift test -c release --filter MeetingCorpusTests
+    @Test("비발화 환각 회귀 가드")
+    func nonSpeechFabricationProbe() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["MEETING_SPAN_PROBE"] == "1" else { return }
+        guard FileManager.default.fileExists(atPath: Self.audioURL.path) else { return }
+
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+        let service = STTService()
+        await service.loadModel(variant: Self.model)
+        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
+
+        // haengan_20260526 기준. 모두 빈 출력이 정상(발화-빈출력 클립도 단일 패스에선 비어야 정상).
+        let spans: [(String, Double, Double)] = [
+            ("정회 한복판(비발화 -45dB)", 120, 180),
+            ("정회 끝(비발화 -24.8dB)", 180, 187),
+            ("저신뢰 발화#1", 96.8, 104.4),
+            ("저신뢰 발화#2", 330.2, 333.2),
+        ]
+        print("\n=== 비발화 환각 회귀 가드 (프로덕션 경로) ===")
+        for (label, start, end) in spans {
+            let s = max(0, Int(start * Double(Self.sampleRate)))
+            let e = min(samples.count, Int(end * Double(Self.sampleRate)))
+            guard e > s else { continue }
+            let text = try await service.transcribe(pcmSamples: Array(samples[s..<e])).segment.text
+            print("[Probe] \(label) [\(start)-\(end)] → \(text.isEmpty ? "(빈 출력 ✓)" : "'\(text.prefix(90))' ⚠️ 날조?")")
+        }
+    }
+
     // MARK: - SMI 파싱
 
     private struct SMIDocument: Decodable {
