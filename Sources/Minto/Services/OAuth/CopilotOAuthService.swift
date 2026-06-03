@@ -6,6 +6,11 @@ import AppKit
 private let kClientID = "Ov23li8tweQw6odWQebz"
 private let kKeychainKey = "copilot"
 
+// 교정/요약 모델·출력 한도. 모델 상향 시 여기만 바꾼다. 단 Copilot은 구독이 없으면 404(noSubscription)라
+// 이 계정에서 검증 불가 → 상위 모델로의 변경은 구독 계정 검증 후. max_tokens는 긴 요약 잘림 시 상향.
+private let kCopilotModel = "gpt-4o"
+private let kCopilotMaxTokens = 1024
+
 // MARK: - Token Model
 
 struct CopilotCredentials: Codable {
@@ -132,8 +137,8 @@ public final class CopilotOAuthService: ObservableObject {
 
         // 교정 규칙(instructions)은 system 메시지로, 가변 입력(userContent)은 user 메시지로 분리.
         let body: [String: Any] = [
-            "model": "gpt-4o",
-            "max_tokens": 1024,
+            "model": kCopilotModel,
+            "max_tokens": kCopilotMaxTokens,
             "messages": [
                 ["role": "system", "content": instructions],
                 ["role": "user", "content": userContent]

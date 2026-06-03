@@ -14,6 +14,12 @@ private let kRedirectPath = "/oauth2callback"
 private let kScopes = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
 private let kKeychainKey = "gemini"
 
+// 교정/요약 모델·출력 한도. 모델 상향 시 여기만 바꾼다. 단 Gemini는 무료 등급에서 반복 호출 시 429
+// 한도가 잦고, 상위 모델(gemini-2.5-pro)은 thinkingBudget 동작이 달라 검증이 필요 → 상향은 보류.
+// max_tokens는 긴 요약 잘림 시 상향. (thinking 모델이라 thinkingBudget=0으로 사고 토큰 소비를 막음.)
+private let kGeminiModel = "gemini-2.5-flash"
+private let kGeminiMaxOutputTokens = 1024
+
 // MARK: - Token Model
 
 struct GeminiCredentials: Codable {
@@ -165,14 +171,14 @@ public final class GeminiOAuthService: NSObject {
 
         let body: [String: Any] = [
             "project": creds.projectId,
-            "model": "gemini-2.5-flash",
+            "model": kGeminiModel,
             "user_prompt_id": UUID().uuidString,
             "request": [
                 "contents": [["role": "user", "parts": [["text": prompt]]]],
                 // gemini-2.5-flash는 thinking 모델이라 사고에 출력 토큰을 소비한다.
                 // 교정은 추론이 거의 불필요하므로 thinking을 끄고(=0) 출력 한도를 넉넉히 둔다.
                 "generationConfig": [
-                    "maxOutputTokens": 1024,
+                    "maxOutputTokens": kGeminiMaxOutputTokens,
                     "temperature": 0.1,
                     "thinkingConfig": ["thinkingBudget": 0]
                 ]

@@ -188,3 +188,16 @@ T7 검증 중 발견한 **선재 phantom**(정회 −45dB → "감사합니다",
 - **SMELL-3 (교정 순서·드롭 레이스) — 수정.** 교정 Task를 체이닝(`await previous?.value`)해 직렬화 → replaceRange 역순 병합·마지막 배치 누락 방지. (즉시 앱 종료 중 진행분 유실은 잔여, 저severity.)
 
 **검증(정직)**: BUG-1=결정론적 확정. (b)=post-fix 25창 재측정에서 insertion flag 0·맥락-에코 없음·clean 델타 −0.5pp(touch 5.0%)이나, 그 run의 STT raw에 #8 트리거(2자 단독 창)가 ANE 변동으로 **미재현** → "(b)가 #8을 막았다"는 단정 보류(한 run≠증명, pre-fix run2도 insertion 0이었음). SMELL-2/3=로직 수정, 직접 단위테스트는 없음. **(b)가 부족하면 구조 가드(c, 길이 기반 폐기)가 다음 후보** — 결정론적이라 확률적 (b)를 보완.
+
+#### 추가 레버 #2·#3·#4·#6 + 측정 (2026-06-04)
+
+사용자 요청으로 4개 레버 구현. 커밋 `9836da0`(교정 결함 4건)·`d0897a2`(#3·#4)·`2947a96`/`094d33f`(#2·#6) 이후 항목별 검증.
+
+- **#4 모델 tier-aware(완료·검증)**: Codex JWT `chatgpt_plan_type`로 free→`gpt-5.4-mini`/유료→`gpt-5.4` 분기. pro 계정에서 gpt-5.4 HTTP 200 실작동. 상위 모델 실패 시 mini 1회 폴백(`performCorrection` 분리), 4xx→notEntitled·429→rateLimited. `CodexTierTests`로 분기 단위검증. Gemini/Copilot은 모델 상수화만(값 미변경) — 검증 불가(Gemini 429·Copilot 무구독)라 상향 보류.
+- **#3(완료)**: correctionWindowSeconds 30.
+- **#2 요약-as-context 효과(측정·중립)**: `summaryContextContributionCER`(요약 유무 A/B, 같은 raw). 15창에서 요약이 교정을 바꾼 건 3창뿐, 델타 **+0.5pp**(노이즈 내 ≈ 중립). → **회의 초반엔 요약-context의 교정 이득 미입증**(local context로 충분). 긴 회의 후반은 미측정. 요약의 검증된 가치는 #6(사용자용 요약), 매 교정에 요약 주입은 토큰 비용 대비 교정 이득 marginal — 트레이드오프.
+- **(b) #8 에코 차단(완료·확정)**: `contextEchoSuppression`로 #8 시나리오(text="오늘"+직전맥락) 강제 재현 → 3/3회 "오늘" 그대로(에코 0). 직전 세션 "미확정"이 **확정**으로. (b) instructions + BUG-1 + gpt-5.4의 합작.
+- **#6 요약(완료)**: end-to-end 스모크에서 전사 기반 요약·뭉갠 구간 "확인되지 않음" 표기로 날조 없음. provider none/빈 회의 fail-soft는 `SummaryServiceTests`로 단위검증.
+- **max_tokens 검증**: Codex(주력) uncapped→잘림 없음(스모크 완본). Gemini/Copilot 1024캡이나 현재 사용 불가라 실질 영향 미미.
+- **Pencil(보고만)**: 리디자인 보드(`.cline/worktrees/08088/.../minto-meeting-assistant-redesign.pen`)의 result-screen이 이미 Summary+Action items+Transcript/Decisions 탭+Copy/New meeting로 설계됨. 현 SwiftUI 요약 창은 그 기능적 부분집합. 전체 구현은 별도 워크트리 병렬 작업과 충돌 위험 + 큰 신규기능이라 미진행(사용자 결정 사항).
+- **라이브 검증 한계**: evict·provider none은 자동 테스트로 커버. 실제 mic 녹음·긴 회의 종단 플로우는 앱 실행 필요(수동, 사용자).

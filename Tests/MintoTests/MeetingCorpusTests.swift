@@ -338,6 +338,82 @@ struct MeetingCorpusTests {
         text.filter { !$0.isWhitespace && !$0.isPunctuation }.count
     }
 
+    /// 요약-as-context가 교정 품질에 주는 효과를 측정한다(항목1).
+    /// 깨끗한 A/B: 창마다 raw를 1회 전사 → 같은 raw를 (요약 없이) vs (누적 요약 context로) 교정 →
+    /// 두 corrected의 자막 global CER 델타. 같은 raw를 공유하므로 ANE 노이즈·자막 바닥이 상쇄되고
+    /// 델타 = 요약 context의 순효과. Codex(uncapped)로 측정해 max_tokens와 무관.
+    /// 실행: RUN_STT_TESTS=1 RUN_CORRECTION_TEST=1 RUN_SUMMARY_TEST=1 swift test -c release \
+    ///       --filter MeetingCorpusTests/summaryContextContributionCER
+    @Test("요약-as-context 교정 기여 측정 (요약 유무 A/B)")
+    func summaryContextContributionCER() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1",
+              ProcessInfo.processInfo.environment["RUN_SUMMARY_TEST"] == "1" else { return }
+        guard FileManager.default.fileExists(atPath: Self.audioURL.path),
+              FileManager.default.fileExists(atPath: Self.smiURL.path) else { return }
+        guard CodexOAuthService.shared.isLoggedIn else { Issue.record("Codex 미로그인"); return }
+
+        let savedProvider = LLMCorrectionService.shared.selectedProvider
+        LLMCorrectionService.shared.selectedProvider = .codex
+        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
+        let topic = "국회 행정안전위원회 전체회의 (행정안전부 소관 안건 심사·질의)"
+        let glossary = "행정안전부\n위원장\n간사\n의사일정\n안건\n정회\n속개"
+        MeetingContext.shared.start(topic: topic, glossary: glossary)  // runningSummary 리셋됨
+        defer { MeetingContext.shared.clear() }
+
+        let corrWindows = ProcessInfo.processInfo.environment["MEETING_CORR_WINDOWS"].flatMap(Int.init) ?? 15
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let windows = Array(Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds).prefix(corrWindows))
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+
+        let service = STTService()
+        await service.loadModel(variant: Self.model)
+        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
+
+        print("\n=== 요약-as-context 교정 기여 측정 (\(windows.count)창, Codex) ===")
+        var allRef = "", allNoSummary = "", allWithSummary = ""
+        var prevContext = ""
+        var changedBySummary = 0   // 요약 유무로 교정 결과가 달라진 창 수
+        for (index, window) in windows.enumerated() {
+            let s = max(0, Int(window.start * Double(Self.sampleRate)))
+            let e = min(samples.count, Int(window.end * Double(Self.sampleRate)))
+            guard e > s else { continue }
+            let raw = try await service.transcribe(pcmSamples: Array(samples[s..<e])).segment.text
+            guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                allRef += window.text + " "; allNoSummary += " "; allWithSummary += " "
+                continue
+            }
+            let summarySoFar = MeetingContext.shared.runningSummary   // 직전 창들까지 반영
+            // 같은 raw로 요약 없이 / 요약 context로 교정 (동일 직전맥락).
+            let p0 = CorrectionPrompt.build(topic: topic, glossary: glossary, context: prevContext, text: raw, summary: "")
+            let p1 = CorrectionPrompt.build(topic: topic, glossary: glossary, context: prevContext, text: raw, summary: summarySoFar)
+            let corr0 = (try? await CodexOAuthService.shared.correct(instructions: p0.instructions, userContent: p0.userContent)) ?? raw
+            let corr1 = (try? await CodexOAuthService.shared.correct(instructions: p1.instructions, userContent: p1.userContent)) ?? raw
+            if corr0 != corr1 { changedBySummary += 1 }
+            allRef += window.text + " "
+            allNoSummary += corr0 + " "
+            allWithSummary += corr1 + " "
+            prevContext = corr1
+            // 이 창을 누적 요약에 반영(다음 창의 summarySoFar에 들어감).
+            _ = await SummaryService.shared.generateIncremental(correctedBatch: corr1)
+        }
+
+        let noSumCER = Double(Self.cerStats(reference: allRef, hypothesis: allNoSummary).distance) / Double(max(1, Self.cerStats(reference: allRef, hypothesis: allNoSummary).refLen))
+        let withSumCER = Double(Self.cerStats(reference: allRef, hypothesis: allWithSummary).distance) / Double(max(1, Self.cerStats(reference: allRef, hypothesis: allWithSummary).refLen))
+        let deltaPP = (withSumCER - noSumCER) * 100
+        print("""
+        ────────────────────────────────────────
+        창 수                  : \(windows.count) (요약으로 결과 달라진 창 \(changedBySummary))
+        global CER (요약 없이)  : \(String(format: "%.1f%%", noSumCER * 100))
+        global CER (요약 context): \(String(format: "%.1f%%", withSumCER * 100))
+        델타(요약 - 무요약)     : \(String(format: "%+.1fpp", deltaPP)) (음수=요약이 교정 개선)
+        ========================================
+        ※ 같은 raw 공유라 노이즈 상쇄 — 델타가 요약 context의 순효과. 절대값 무시.
+          changedBySummary가 0이면 요약이 교정에 영향을 안 준 것(이 코퍼스 구간 한정).
+
+        """)
+    }
+
     /// 회의 요약 기능 end-to-end 스모크: 실제 코퍼스 구간을 증분 요약 → 최종 요약까지 돌려
     /// 요약이 (1) 생성되는지 (2) 전사에 없는 내용을 날조하지 않는지 눈으로 점검한다.
     /// 측정이 아니라 동작·날조 점검용이므로 결과를 print하고 생성 성공만 확인한다.

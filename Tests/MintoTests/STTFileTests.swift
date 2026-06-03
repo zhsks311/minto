@@ -342,6 +342,30 @@ CER          : \(String(format: "%.1f%%", cer * 100))
         """)
     }
 
+    @Test("(b) 맥락-에코 차단: 짧은 입력에 직전 맥락을 출력에 토하지 않는다 (#8 회귀)")
+    func contextEchoSuppression() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1" else { return }
+        guard CodexOAuthService.shared.isLoggedIn else { Issue.record("Codex 미로그인"); return }
+
+        // #8 재현 시나리오: 직전 창이 "조용히 해 주십시오..."였고 현재 인식이 2자 "오늘"인 상황.
+        // 과거 mini는 "오늘" → 직전 맥락 통째 에코로 회의록을 날조했다. (b) instructions("직전 맥락을
+        // 출력에 옮겨 적지 마라")가 이를 막는지 확률적으로(3회) 확인한다.
+        let context = "조용히 해 주십시오. 조용히 해 주십시오, 의원님들."
+        let shortText = "오늘"
+        let runs = 3
+        var echoed = 0
+        for i in 0..<runs {
+            let p = CorrectionPrompt.build(topic: "국회 행정안전위원회", glossary: "", context: context, text: shortText)
+            let corrected = (try? await CodexOAuthService.shared.correct(instructions: p.instructions, userContent: p.userContent)) ?? ""
+            let echoedContext = corrected.contains("조용히 해 주십시오")
+            let blewUp = corrected.count > shortText.count + 8   // 짧은 입력 대비 비정상 확장(에코 신호)
+            if echoedContext || blewUp { echoed += 1 }
+            print("[EchoProbe] run \(i + 1): '\(corrected)' (echo=\(echoedContext), len=\(corrected.count))")
+        }
+        print("[EchoProbe] \(runs)회 중 에코/확장 \(echoed)회")
+        #expect(echoed == 0, "(b) 프롬프트가 맥락 에코를 막아야 함 — \(echoed)/\(runs)회 발생")
+    }
+
     // MARK: - 오디오 → PCM 추출
     // MPEG-TS 파일이 .mp4 확장자로 저장된 경우 avconvert가 포맷을 잘못 인식합니다.
     // .ts 확장자로 복사 → avconvert(M4A 추출) → afconvert(WAV 변환) 파이프라인을 사용합니다.
