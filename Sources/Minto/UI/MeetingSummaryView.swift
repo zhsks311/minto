@@ -290,10 +290,11 @@ public struct MeetingSummaryView: View {
 
     private func controls(_ r: MeetingResult) -> some View {
         HStack(spacing: 10) {
-            Button { copy(r) } label: {
+            // 주: Markdown 내보내기(Notion/Confluence 친화)
+            Button { MeetingExporter.save(r) } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "doc.on.doc").font(.system(size: 13))
-                    Text("요약 복사").font(.system(size: 14, weight: .heavy))
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 13))
+                    Text("내보내기 (.md)").font(.system(size: 14, weight: .heavy))
                 }
                 .foregroundColor(RC.accentText)
                 .frame(maxWidth: .infinity).frame(height: 44)
@@ -301,16 +302,24 @@ public struct MeetingSummaryView: View {
             }
             .buttonStyle(.plain)
 
-            Button { onClose() } label: {
-                Text("닫기").font(.system(size: 14, weight: .bold))
-                    .foregroundColor(RC.secondaryBtnText)
-                    .frame(width: 120).frame(height: 44)
-                    .background(RC.secondaryBtn)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(RC.secondaryBtnBorder, lineWidth: 1))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-            .buttonStyle(.plain)
+            secondaryButton(icon: "doc.on.doc", label: "복사") { copy(r) }
+            secondaryButton(label: "닫기") { onClose() }
         }
+    }
+
+    private func secondaryButton(icon: String? = nil, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon { Image(systemName: icon).font(.system(size: 12)) }
+                Text(label).font(.system(size: 13, weight: .bold))
+            }
+            .foregroundColor(RC.secondaryBtnText)
+            .padding(.horizontal, 14).frame(height: 44)
+            .background(RC.secondaryBtn)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(RC.secondaryBtnBorder, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Helpers
