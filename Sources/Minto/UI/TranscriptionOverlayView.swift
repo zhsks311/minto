@@ -4,6 +4,7 @@ import AppKit
 public struct TranscriptionOverlayView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
     @ObservedObject private var llmService = LLMCorrectionService.shared
+    @State private var showRelated = false
 
     public init(viewModel: TranscriptionViewModel) {
         self.viewModel = viewModel
@@ -14,10 +15,14 @@ public struct TranscriptionOverlayView: View {
             headerView
             Divider()
             mainContentView
+            if showRelated {
+                Divider()
+                relatedInfoPanel
+            }
             Divider()
             footerView
         }
-        .frame(width: 420, height: 520)
+        .frame(width: 420, height: showRelated ? 660 : 520)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.25), radius: 20, x: 0, y: 8)
@@ -43,6 +48,14 @@ public struct TranscriptionOverlayView: View {
             }
 
             Spacer()
+
+            Button { showRelated.toggle() } label: {
+                Image(systemName: showRelated ? "lightbulb.fill" : "lightbulb")
+                    .font(.system(size: 12))
+                    .foregroundColor(showRelated ? .yellow : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("전사 기반 관련 정보 (위키·Notion·Confluence)")
 
             if llmService.activeCorrections > 0 {
                 HStack(spacing: 3) {
@@ -287,6 +300,60 @@ public struct TranscriptionOverlayView: View {
                 .modifier(PulsingOpacityModifier())
         }
         .padding(.vertical, 1)
+    }
+
+    // MARK: - Related info (전사 기반 위키·Notion·Confluence — 연동 예정 스텁)
+
+    private var relatedInfoPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles.rectangle.stack").font(.system(size: 11)).foregroundColor(.yellow)
+                Text("관련 정보").font(.system(size: 12, weight: .bold))
+                Spacer()
+                Text("연동 준비 중").font(.system(size: 9)).foregroundColor(.secondary)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
+            }
+            let kws = detectedKeywords()
+            if kws.isEmpty {
+                Text("전사가 쌓이면 감지된 주제로 위키·Notion·Confluence를 조회해 정리해 드릴 예정입니다.")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("감지된 주제").font(.system(size: 10, weight: .medium)).foregroundColor(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(kws, id: \.self) { kw in
+                            Text("#\(kw)").font(.system(size: 11)).foregroundColor(.primary.opacity(0.8))
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
+                        }
+                    }
+                }
+                Text("이 주제로 위키·Notion·Confluence를 조회해 정리해 드릴 예정입니다.")
+                    .font(.system(size: 10)).foregroundColor(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(height: 120, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 최근 전사에서 감지한 주제 후보(naive: 3자 이상 토큰). 실제 조회는 후속 MCP 연동 시.
+    private func detectedKeywords() -> [String] {
+        let recent = viewModel.committedSegments.suffix(4).map(\.text).joined(separator: " ")
+        let separators = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
+        var seen = Set<String>()
+        var out: [String] = []
+        for token in recent.components(separatedBy: separators) {
+            let w = token.trimmingCharacters(in: .whitespaces)
+            guard w.count >= 3, !seen.contains(w) else { continue }
+            seen.insert(w)
+            out.append(w)
+            if out.count >= 8 { break }
+        }
+        return out
     }
 
     // MARK: - Footer
