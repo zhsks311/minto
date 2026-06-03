@@ -24,12 +24,12 @@ public final class MeetingSummaryWindowManager: NSObject, NSWindowDelegate {
 
         let view = MeetingSummaryView(model: model, onClose: { [weak self] in self?.close() })
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 512, height: 640),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.title = "회의 요약"
+        window.title = "회의 결과"
         window.contentViewController = NSHostingController(rootView: view)
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -41,13 +41,15 @@ public final class MeetingSummaryWindowManager: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// 최종 요약을 표시한다. nil/빈 문자열이면 실패 상태로 전환한다.
-    public func showResult(summary: String?) {
-        if let summary, !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            model.state = .result(summary)
-        } else {
-            model.state = .failed
-        }
+    /// 구조화 결과를 표시한다.
+    public func showResult(_ result: MeetingResult) {
+        model.state = .result(result)
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// 요약 생성 실패 상태로 전환한다.
+    public func showFailed() {
+        model.state = .failed
         window?.makeKeyAndOrderFront(nil)
     }
 

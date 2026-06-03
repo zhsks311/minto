@@ -1,22 +1,76 @@
 import SwiftUI
 import AppKit
 
-/// 종료 후 요약 창의 상태. 윈도우 매니저가 보유·변경하고 뷰가 관찰한다(로딩→결과 비동기 전환).
+private extension Color {
+    /// #RRGGBB hex → Color.
+    init(hex: String) {
+        let s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        var v: UInt64 = 0
+        Scanner(string: s).scanHexInt64(&v)
+        self.init(.sRGB,
+                  red: Double((v >> 16) & 0xFF) / 255,
+                  green: Double((v >> 8) & 0xFF) / 255,
+                  blue: Double(v & 0xFF) / 255,
+                  opacity: 1)
+    }
+}
+
+/// 결과 화면 색 토큰(Lilys식 다크 리포트).
+private enum RC {
+    static let bg = Color(hex: "#101312")
+    static let card = Color(hex: "#171B19")
+    static let cardBorder = Color(hex: "#2D342F")
+    static let subtleBorder = Color(hex: "#252B28")
+    static let heading = Color(hex: "#F4F1EA")
+    static let kicker = Color(hex: "#7F8A83")
+    static let meta = Color(hex: "#A2ADA6")
+    static let cardTitle = Color(hex: "#E7EEE8")
+    static let body = Color(hex: "#C7D0C9")
+    static let bodyAlt = Color(hex: "#DDE5DF")
+    static let time = Color(hex: "#9AD7B2")
+    static let bullet = Color(hex: "#7F8A83")
+    static let accent = Color(hex: "#E8F0EA")
+    static let accentText = Color(hex: "#111513")
+    static let tabBg = Color(hex: "#151917")
+    static let tabInactiveText = Color(hex: "#8D9891")
+    static let secondaryBtn = Color(hex: "#1A1F1C")
+    static let secondaryBtnBorder = Color(hex: "#303832")
+    static let secondaryBtnText = Color(hex: "#D6DDD7")
+}
+
+/// 결과 화면 데이터(계층형 요약 + 시점 전사 + 메타).
+public struct MeetingResult: Sendable {
+    public let title: String
+    public let metaText: String
+    public let summary: MeetingSummary
+    public let transcript: [TranscriptLine]
+
+    public struct TranscriptLine: Sendable, Identifiable {
+        public let id = UUID()
+        public let time: String
+        public let text: String
+        public init(time: String, text: String) { self.time = time; self.text = text }
+    }
+
+    public init(title: String, metaText: String, summary: MeetingSummary, transcript: [TranscriptLine]) {
+        self.title = title; self.metaText = metaText; self.summary = summary; self.transcript = transcript
+    }
+}
+
 @MainActor
 public final class MeetingSummaryModel: ObservableObject {
-    public enum State {
-        case loading
-        case result(String)
-        case failed
-    }
+    public enum State { case loading, result(MeetingResult), failed }
     @Published public var state: State = .loading
     public init() {}
 }
 
-/// 회의 종료 후 최종 요약을 보여주는 뷰. `MeetingSetupView`와 동일한 톤(여백·타이틀·버튼 스타일).
+/// 회의 종료 후 결과 화면(Lilys "자세한 리포트" 스타일: 리드 Q&A → 목차 → 번호 섹션(시점·중첩 불릿) → 키워드).
 public struct MeetingSummaryView: View {
     @ObservedObject private var model: MeetingSummaryModel
     private let onClose: () -> Void
+    @State private var tab: Tab = .summary
+
+    private enum Tab { case summary, transcript }
 
     public init(model: MeetingSummaryModel, onClose: @escaping () -> Void) {
         self.model = model
@@ -24,65 +78,252 @@ public struct MeetingSummaryView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("회의 요약")
-                .font(.title3.weight(.bold))
-
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            HStack {
-                if case .result(let text) = model.state {
-                    Button("복사") { copyToPasteboard(text) }
-                }
-                Spacer()
-                Button("닫기") { onClose() }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+        ZStack {
+            RC.bg.ignoresSafeArea()
+            switch model.state {
+            case .loading: loadingView
+            case .failed: failedView
+            case .result(let r): resultView(r)
             }
         }
-        .padding(20)
-        .frame(width: 480, height: 520)
+        .frame(width: 540, height: 680)
     }
+
+    // MARK: - States
+
+    private var loadingView: some View {
+        VStack(spacing: 12) {
+            ProgressView().controlSize(.large)
+            Text("회의 요약을 생성하는 중...").font(.system(size: 13)).foregroundColor(RC.meta)
+        }
+    }
+
+    private var failedView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle").foregroundColor(RC.meta)
+            Text("요약을 생성하지 못했습니다.").font(.system(size: 14, weight: .semibold)).foregroundColor(RC.body)
+            Text("교정/요약 provider가 선택·로그인되어 있는지 확인하세요.")
+                .font(.system(size: 11)).foregroundColor(RC.meta).multilineTextAlignment(.center)
+            Button("닫기") { onClose() }.padding(.top, 8)
+        }
+        .padding(24)
+    }
+
+    private func resultView(_ r: MeetingResult) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 14) {
+                header(r)
+                tabs
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 14)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if tab == .summary { digest(r.summary) } else { transcriptList(r.transcript) }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+            }
+
+            Divider().overlay(RC.subtleBorder)
+            controls(r).padding(.horizontal, 24).padding(.vertical, 14)
+        }
+    }
+
+    // MARK: - Header / tabs
+
+    private func header(_ r: MeetingResult) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("MEETING REPORT").font(.system(size: 12, weight: .bold)).foregroundColor(RC.kicker)
+            Text(r.title).font(.system(size: 25, weight: .bold)).foregroundColor(RC.heading)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(r.metaText).font(.system(size: 13)).foregroundColor(RC.meta)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var tabs: some View {
+        HStack(spacing: 6) {
+            tabButton("요약", .summary)
+            tabButton("전사", .transcript)
+        }
+        .padding(4).background(RC.tabBg)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(RC.subtleBorder, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func tabButton(_ title: String, _ t: Tab) -> some View {
+        let active = tab == t
+        return Text(title)
+            .font(.system(size: 13, weight: active ? .heavy : .bold))
+            .foregroundColor(active ? RC.accentText : RC.tabInactiveText)
+            .frame(maxWidth: .infinity).frame(height: 30)
+            .background(active ? RC.accent : RC.tabBg)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+            .onTapGesture { tab = t }
+    }
+
+    // MARK: - Digest (계층형 요약)
 
     @ViewBuilder
-    private var content: some View {
-        switch model.state {
-        case .loading:
-            VStack(spacing: 10) {
-                ProgressView()
-                Text("회의 요약을 생성하는 중...")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+    private func digest(_ s: MeetingSummary) -> some View {
+        leadCard(s)
+        if s.sections.count > 1 { tableOfContents(s.sections) }
+        ForEach(Array(s.sections.enumerated()), id: \.offset) { _, section in
+            sectionView(section)
+        }
+        if !s.keywords.isEmpty { keywordsRow(s.keywords) }
+    }
+
+    private func leadCard(_ s: MeetingSummary) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !s.leadQuestion.trimmingCharacters(in: .whitespaces).isEmpty {
+                Text(s.leadQuestion).font(.system(size: 14, weight: .semibold)).foregroundColor(RC.meta)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        case .result(let text):
-            ScrollView {
-                Text(text)
-                    .font(.body)
-                    .textSelection(.enabled)
+            if !s.leadAnswer.trimmingCharacters(in: .whitespaces).isEmpty {
+                md(s.leadAnswer).font(.system(size: 16, weight: .medium)).foregroundColor(RC.bodyAlt)
+                    .lineSpacing(5).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RC.card)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(RC.cardBorder, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func tableOfContents(_ sections: [MeetingSummary.Section]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("목차").font(.system(size: 13, weight: .heavy)).foregroundColor(RC.cardTitle)
+            ForEach(Array(sections.enumerated()), id: \.offset) { _, s in
+                Text(s.title).font(.system(size: 13)).foregroundColor(RC.meta)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-            )
-        case .failed:
-            VStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundColor(.secondary)
-                Text("요약을 생성하지 못했습니다.")
-                    .font(.subheadline)
-                Text("교정/요약 provider가 선택·로그인되어 있는지 확인하거나 잠시 후 다시 시도하세요.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func sectionView(_ section: MeetingSummary.Section) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(section.title).font(.system(size: 16, weight: .bold)).foregroundColor(RC.heading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !section.time.isEmpty {
+                    Text(section.time).font(.system(size: 11, weight: .bold)).foregroundColor(RC.time)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(RC.tabBg).clipShape(Capsule())
+                }
+                Spacer(minLength: 0)
+            }
+            ForEach(Array(section.points.enumerated()), id: \.offset) { _, point in
+                VStack(alignment: .leading, spacing: 5) {
+                    if !point.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("•").font(.system(size: 13, weight: .bold)).foregroundColor(RC.bullet)
+                            md(point.text).font(.system(size: 14)).foregroundColor(RC.bodyAlt)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    ForEach(Array(point.subPoints.enumerated()), id: \.offset) { _, sub in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("–").font(.system(size: 13)).foregroundColor(RC.bullet)
+                            md(sub).font(.system(size: 13)).foregroundColor(RC.body)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.leading, 16)
+                    }
+                }
+            }
+        }
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RC.card)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(RC.cardBorder, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func keywordsRow(_ keywords: [String]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(keywords.enumerated()), id: \.offset) { _, kw in
+                    Text("#\(kw)").font(.system(size: 11, weight: .medium)).foregroundColor(RC.meta)
+                        .lineLimit(1).fixedSize()
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(RC.card).clipShape(Capsule())
+                }
             }
         }
     }
 
-    private func copyToPasteboard(_ text: String) {
+    // MARK: - Transcript
+
+    @ViewBuilder
+    private func transcriptList(_ lines: [MeetingResult.TranscriptLine]) -> some View {
+        if lines.isEmpty {
+            Text("전사 내용이 없습니다.").font(.system(size: 13)).foregroundColor(RC.meta)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(lines) { line in
+                    HStack(alignment: .top, spacing: 12) {
+                        Text(line.time).font(.system(size: 12, weight: .bold)).foregroundColor(RC.time)
+                            .frame(width: 44, alignment: .leading)
+                        Text(line.text).font(.system(size: 13)).foregroundColor(RC.bodyAlt)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RC.card)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(RC.cardBorder, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // MARK: - Controls
+
+    private func controls(_ r: MeetingResult) -> some View {
+        HStack(spacing: 10) {
+            Button { copy(r) } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.on.doc").font(.system(size: 13))
+                    Text("요약 복사").font(.system(size: 14, weight: .heavy))
+                }
+                .foregroundColor(RC.accentText)
+                .frame(maxWidth: .infinity).frame(height: 44)
+                .background(RC.accent).clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+
+            Button { onClose() } label: {
+                Text("닫기").font(.system(size: 14, weight: .bold))
+                    .foregroundColor(RC.secondaryBtnText)
+                    .frame(width: 120).frame(height: 44)
+                    .background(RC.secondaryBtn)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(RC.secondaryBtnBorder, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Helpers
+
+    /// **굵게** 등 인라인 마크다운을 렌더한다.
+    private func md(_ s: String) -> Text {
+        if let attr = try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            return Text(attr)
+        }
+        return Text(s)
+    }
+
+    private func copy(_ r: MeetingResult) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        NSPasteboard.general.setString(r.summary.markdown(), forType: .string)
     }
 }

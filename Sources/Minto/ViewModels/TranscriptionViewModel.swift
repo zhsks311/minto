@@ -234,10 +234,15 @@ public final class TranscriptionViewModel: ObservableObject {
 
     /// 회의 종료 시 호출. 마지막 교정 완료를 기다린 뒤(SMELL-3) 남은 전사로 최종 요약을 생성해 반환한다.
     /// fail-soft: 요약 생성 실패 시 nil(또는 마지막 누적 요약 폴백은 SummaryService가 처리).
-    public func finalizeMeeting() async -> String? {
+    public func finalizeMeeting() async -> MeetingSummary? {
         await correctionTask?.value
-        let tail = committedSegments.map(\.text).joined(separator: "\n")
-        return await SummaryService.shared.generateFinal(tailText: tail)
+        // 시점 포함 전사(첫 발화 기준 상대 [MM:SS])를 만들어 넘긴다 → LLM이 섹션 time을 실제 시점에서 고른다.
+        let start = committedSegments.first?.timestamp ?? Date()
+        let transcript = committedSegments.map { seg -> String in
+            let s = max(0, Int(seg.timestamp.timeIntervalSince(start).rounded()))
+            return String(format: "[%02d:%02d] %@", s / 60, s % 60, seg.text)
+        }.joined(separator: "\n")
+        return await SummaryService.shared.generateFinal(transcript: transcript)
     }
 
     public func enqueueChunk(_ chunk: AudioChunk) {

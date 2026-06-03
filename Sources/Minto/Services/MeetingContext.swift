@@ -21,8 +21,8 @@ public final class MeetingContext: ObservableObject {
     /// 회의 진행 중 누적되는 요약(증분 갱신). 교정 context로도 쓰이고, 종료 시 최종 요약의 입력이 된다.
     @Published public var runningSummary: String = ""
 
-    /// 회의 종료 시 정제된 최종 요약(사용자에게 표시).
-    @Published public var finalSummary: String = ""
+    /// 회의 종료 시 정제된 **구조화** 최종 요약(사용자에게 표시).
+    @Published public var finalSummary: MeetingSummary?
 
     /// 교정에 쓸 맥락이 하나라도 있는지.
     public var hasContext: Bool {
@@ -35,7 +35,7 @@ public final class MeetingContext: ObservableObject {
         self.topic = topic
         self.glossary = glossary
         self.runningSummary = ""
-        self.finalSummary = ""
+        self.finalSummary = nil
         let terms = glossary.split(whereSeparator: { $0.isNewline }).count
         fputs("[Meeting] context set — topic: \"\(topic)\", glossary terms: \(terms)\n", stderr)
     }
@@ -45,6 +45,6 @@ public final class MeetingContext: ObservableObject {
         topic = ""
         glossary = ""
         runningSummary = ""
-        finalSummary = ""
+        finalSummary = nil
     }
 }

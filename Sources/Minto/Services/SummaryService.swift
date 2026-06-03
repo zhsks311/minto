@@ -37,30 +37,46 @@ public final class SummaryService: ObservableObject {
         return summary
     }
 
-    /// 종료 시 최종 요약. 성공 시 `MeetingContext.finalSummary`를 갱신하고 반환한다.
-    /// LLM 최종 호출이 실패하면 마지막 runningSummary를 최종으로 사용한다(있으면).
-    public func generateFinal(tailText: String) async -> String? {
+    /// 종료 시 **구조화 최종 요약**(JSON 파싱 → MeetingSummary). 성공 시 `MeetingContext.finalSummary`를 갱신.
+    /// LLM 실패/파싱 실패 시: 평문 폴백(마지막 runningSummary 또는 raw 텍스트). 모두 비면 nil.
+    public func generateFinal(transcript: String) async -> MeetingSummary? {
         let meeting = MeetingContext.shared
-        // 빈 회의(누적 요약·tail 모두 없음)는 요약할 내용이 없으므로 LLM을 호출하지 않는다.
-        let hasContent = !meeting.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !tailText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard hasContent else { return nil }
+        // 빈 회의(전사 없음)는 요약할 내용이 없으므로 LLM을 호출하지 않는다.
+        guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
 
         let prompt = SummaryPrompt.buildFinal(
             topic: meeting.topic,
             glossary: meeting.glossary,
-            runningSummary: meeting.runningSummary,
-            tailText: tailText
+            transcript: transcript
         )
-        if let summary = await dispatch(prompt) {
+
+        if let raw = await dispatch(prompt) {
+            // JSON 파싱 시도 → 실패하면 raw를 평문 요약으로 감싼다(빈 화면 방지).
+            let summary = Self.parseStructured(raw) ?? .plain(raw)
             meeting.finalSummary = summary
             return summary
         }
-        // 최종 LLM 실패 → 마지막 증분 요약으로 폴백(빈 요약이면 nil).
+        // 최종 LLM 호출 실패 → 마지막 증분 요약을 평문 폴백(빈 요약이면 nil).
         let fallback = meeting.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !fallback.isEmpty else { return nil }
-        meeting.finalSummary = fallback
-        return fallback
+        let summary = MeetingSummary.plain(fallback)
+        meeting.finalSummary = summary
+        return summary
+    }
+
+    /// LLM 응답에서 JSON 객체를 추출해 MeetingSummary로 디코딩한다.
+    /// 코드펜스(```json)·앞뒤 설명이 섞여 와도 첫 '{'~마지막 '}' 구간만 잘라 파싱한다.
+    /// 의미 있는 내용이 없으면(isEmpty) nil → 호출부가 평문 폴백.
+    static func parseStructured(_ raw: String) -> MeetingSummary? {
+        guard let start = raw.firstIndex(of: "{"), let end = raw.lastIndex(of: "}"), start < end else {
+            return nil
+        }
+        let jsonSlice = raw[start...end]
+        guard let data = String(jsonSlice).data(using: .utf8),
+              let summary = try? JSONDecoder().decode(MeetingSummary.self, from: data),
+              !summary.isEmpty
+        else { return nil }
+        return summary
     }
 
     /// provider 분기 — `LLMCorrectionService.selectedProvider`를 재사용. 실패·none·빈 응답이면 nil.

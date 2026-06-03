@@ -104,6 +104,25 @@ public final class ReportService: @unchecked Sendable {
         }
     }
 
+    /// 보고서 끝에 회의 요약 섹션을 markdown으로 덧붙인다(전사 라인과 달리 타임스탬프 접두어 없이).
+    /// 빈 요약이면 아무것도 쓰지 않는다. handleStopRecording과 통합 테스트가 공유한다.
+    public func appendSummarySection(_ summary: String) {
+        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self, let handle = self.fileHandle else { return }
+            let block = "\n\n---\n## 회의 요약\n\n\(trimmed)\n"
+            guard let data = block.data(using: .utf8) else { return }
+            do {
+                try handle.write(contentsOf: data)
+            } catch {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onError?(error)
+                }
+            }
+        }
+    }
+
     public func finalizeReport() {
         if let observer = flushObserver {
             NotificationCenter.default.removeObserver(observer)

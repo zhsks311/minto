@@ -53,17 +53,42 @@ public enum SummaryPrompt {
         return (instructions, userContent)
     }
 
-    /// 종료 시 최종 요약. 누적 요약 + 미반영 tail을 합쳐 정제한다.
+    /// 종료 시 **계층형** 최종 요약(릴리스/Lilys AI식). 타임스탬프 박힌 전사를 받아 JSON으로 정리한다.
     /// - Parameters:
-    ///   - tailText: 마지막 증분 요약 이후 아직 반영되지 않은 전사 (없으면 빈 문자열)
+    ///   - transcript: `[MM:SS] 내용` 줄들로 된 회의 전사(시점 포함)
     public static func buildFinal(
         topic: String,
         glossary: String,
-        runningSummary: String,
-        tailText: String
+        transcript: String
     ) -> (instructions: String, userContent: String) {
-        let instructions = basePolicy + "\n\n" + """
-        이번 작업: 아래 "지금까지의 요약"과 "마지막 전사"를 합쳐 회의 전체의 최종 요약을 정리하세요. 중복은 합치고, 안건·논의·결정·후속 조치가 한눈에 보이도록 구조화하세요. 전사에 없는 내용은 추가하지 마세요.
+        let instructions = """
+        당신은 한국어 회의 전사를 **계층형 리포트**로 요약하는 전문가입니다. 아래 전사(각 줄이 [MM:SS] 시점으로 시작)를
+        바탕으로 회의를 정리해 **JSON만** 출력하세요(코드펜스 ```·설명·접두어 없이 JSON 객체 하나만).
+
+        스키마:
+        {
+          "title": "회의를 대표하는 간결한 한국어 제목",
+          "leadQuestion": "이 회의가 답하는 핵심 질문 한 문장",
+          "leadAnswer": "그 답을 2~3문장으로. 핵심어는 **굵게** 표시",
+          "sections": [
+            {
+              "title": "1. 주제(번호 매김)",
+              "time": "이 주제가 시작되는 시점 MM:SS",
+              "points": [
+                { "text": "핵심/카테고리(필요시 **굵게**)", "subPoints": ["세부 1", "세부 2"] }
+              ]
+            }
+          ],
+          "keywords": ["핵심 키워드/고유명사"]
+        }
+
+        규칙:
+        - 전사에 명시적으로 나타난 내용만 쓴다. 추론·창작·외부 지식·추측 금지(없는 사실 날조 금지). 없으면 빈 값으로 둔다.
+        - 회의를 자연스러운 주제 단위로 2~6개 섹션으로 나누고, 각 섹션은 시간 순서를 따른다.
+        - **time은 반드시 전사에 실제로 존재하는 [MM:SS] 값 중에서 고른다. 시점을 새로 지어내지 마라.** 해당 주제가 처음 등장하는 줄의 시점을 쓴다.
+        - points는 핵심을 굵은 카테고리 + 중첩 세부(subPoints)로 계층화한다. 세부가 없으면 subPoints는 빈 배열.
+        - 회의 주제·용어집은 표기·맥락 파악에만 쓰는 참고 자료다.
+        - 모든 값은 한국어. 반드시 유효한 JSON(키·문자열은 큰따옴표)으로만 출력한다.
         """
 
         var userContent = ""
@@ -71,10 +96,8 @@ public enum SummaryPrompt {
         if !meetingBlock.isEmpty {
             userContent += meetingBlock + "\n\n"
         }
-        let trimmedSummary = runningSummary.trimmingCharacters(in: .whitespacesAndNewlines)
-        userContent += "지금까지의 요약:\n\(trimmedSummary.isEmpty ? "(없음)" : trimmedSummary)\n\n"
-        let trimmedTail = tailText.trimmingCharacters(in: .whitespacesAndNewlines)
-        userContent += "마지막 전사:\n\(trimmedTail.isEmpty ? "(없음)" : trimmedTail)"
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        userContent += "회의 전사(시점 포함):\n\(trimmed.isEmpty ? "(없음)" : trimmed)"
         return (instructions, userContent)
     }
 

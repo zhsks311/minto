@@ -30,7 +30,7 @@ struct SummaryServiceTests {
         MeetingContext.shared.start(topic: "", glossary: "")
         defer { MeetingContext.shared.clear() }
 
-        let result = await SummaryService.shared.generateFinal(tailText: "   ")
+        let result = await SummaryService.shared.generateFinal(transcript: "   ")
         #expect(result == nil)
     }
 
@@ -42,17 +42,75 @@ struct SummaryServiceTests {
         #expect(result == nil)
     }
 
+    @Test("parseStructured: 계층형 JSON 전체 필드 파싱")
+    func parsesValidJSON() {
+        let raw = #"""
+        {"title":"제목","leadQuestion":"핵심 질문?","leadAnswer":"핵심 답변","keywords":["kw1","kw2"],
+         "sections":[{"title":"1. 주제","time":"00:30","points":[{"text":"카테고리","subPoints":["세부1","세부2"]}]}]}
+        """#
+        let s = SummaryService.parseStructured(raw)
+        #expect(s?.title == "제목")
+        #expect(s?.leadQuestion == "핵심 질문?")
+        #expect(s?.leadAnswer == "핵심 답변")
+        #expect(s?.keywords == ["kw1", "kw2"])
+        #expect(s?.sections.count == 1)
+        #expect(s?.sections.first?.title == "1. 주제")
+        #expect(s?.sections.first?.time == "00:30")
+        #expect(s?.sections.first?.points.first?.text == "카테고리")
+        #expect(s?.sections.first?.points.first?.subPoints == ["세부1", "세부2"])
+    }
+
+    @Test("parseStructured: 코드펜스·앞뒤 설명이 섞여도 JSON만 추출")
+    func parsesWithFencesAndProse() {
+        let raw = "여기 요약입니다:\n```json\n{\"leadAnswer\":\"답변만\"}\n```\n끝."
+        #expect(SummaryService.parseStructured(raw)?.leadAnswer == "답변만")
+    }
+
+    @Test("parseStructured: 일부 필드 누락도 기본값으로 lenient 디코딩")
+    func parsesPartial() {
+        let s = SummaryService.parseStructured(#"{"leadAnswer":"답변만 있음"}"#)
+        #expect(s?.leadAnswer == "답변만 있음")
+        #expect(s?.title == "")
+        #expect(s?.sections.isEmpty == true)
+    }
+
+    @Test("parseStructured: JSON 아님 / 내용 없음 → nil(평문 폴백 유도)")
+    func parseFailsToNil() {
+        #expect(SummaryService.parseStructured("그냥 평문 텍스트") == nil)              // 중괄호 없음
+        #expect(SummaryService.parseStructured(#"{"title":"","leadAnswer":""}"#) == nil) // 의미 내용 없음
+    }
+
+    @Test("MeetingSummary.markdown: 계층 렌더")
+    func markdownRender() {
+        let s = MeetingSummary(
+            title: "T",
+            leadQuestion: "핵심 질문?",
+            leadAnswer: "핵심 답변",
+            sections: [.init(title: "1. 주제", time: "01:20",
+                             points: [.init(text: "카테고리", subPoints: ["세부1"])])],
+            keywords: ["k1"]
+        )
+        let md = s.markdown()
+        #expect(md.contains("> 핵심 질문?"))
+        #expect(md.contains("**핵심 답변**"))
+        #expect(md.contains("### 1. 주제"))
+        #expect(md.contains("`01:20`"))
+        #expect(md.contains("- 카테고리"))
+        #expect(md.contains("  - 세부1"))
+        #expect(md.contains("키워드: k1"))
+    }
+
     @Test("start/clear가 요약 상태를 리셋 — 세션 간 요약 누수 없음")
     func startClearResetsSummary() {
         MeetingContext.shared.runningSummary = "이전 회의 요약"
-        MeetingContext.shared.finalSummary = "이전 최종 요약"
+        MeetingContext.shared.finalSummary = .plain("이전 최종 요약")
         MeetingContext.shared.start(topic: "새 회의", glossary: "")
         #expect(MeetingContext.shared.runningSummary.isEmpty)
-        #expect(MeetingContext.shared.finalSummary.isEmpty)
+        #expect(MeetingContext.shared.finalSummary == nil)
 
         MeetingContext.shared.runningSummary = "진행 중"
         MeetingContext.shared.clear()
         #expect(MeetingContext.shared.runningSummary.isEmpty)
-        #expect(MeetingContext.shared.finalSummary.isEmpty)
+        #expect(MeetingContext.shared.finalSummary == nil)
     }
 }

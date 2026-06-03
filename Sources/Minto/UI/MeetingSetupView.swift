@@ -25,7 +25,7 @@ public struct MeetingSetupView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("회의 주제")
                     .font(.subheadline.weight(.medium))
-                TextField("예: 쿠팡 청문회 관련 경제 뉴스 인터뷰", text: $topic)
+                TextField("예: 탕수육 부먹 vs 찍먹 끝장 토론회", text: $topic)
                     .textFieldStyle(.roundedBorder)
             }
 

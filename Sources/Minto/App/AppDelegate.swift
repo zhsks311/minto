@@ -46,26 +46,68 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         Task { @MainActor [weak self] in
             guard let self else { return }
             let summary = await self.viewModel.finalizeMeeting()
+            let segments = self.viewModel.committedSegments
 
             // 메모리에 남은 tail 세그먼트를 보고서에 기록. evict된 배치는 이미 .transcriptionNeedsFlush로
             // 기록됐으므로 중복되지 않는다(짧은 회의는 미evict라 전량이 여기서 기록됨).
-            for segment in self.viewModel.committedSegments {
+            for segment in segments {
                 self.reportService.appendSegment(segment)
             }
-            // 보고서 끝에 요약 섹션 추가.
-            if let summary, !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                let summarySegment = Segment(
-                    text: "\n\n---\n## 회의 요약\n\n\(summary)",
-                    timestamp: Date(),
-                    duration: 0
-                )
-                self.reportService.appendSegment(summarySegment)
-            }
+            self.reportService.appendSummarySection(summary?.markdown() ?? "")
             self.reportService.finalizeReport()
 
-            self.summaryWindowManager.showResult(summary: summary)
+            if let summary {
+                let result = Self.buildResult(
+                    summary: summary,
+                    segments: segments,
+                    topic: MeetingContext.shared.topic,
+                    duration: self.viewModel.recordingDuration
+                )
+                self.summaryWindowManager.showResult(result)
+            } else {
+                self.summaryWindowManager.showFailed()
+            }
             MeetingContext.shared.clear()
         }
+    }
+
+    /// 전사 세그먼트 + 구조화 요약 → 결과 화면 데이터. 타임스탬프는 첫 발화 기준 상대 MM:SS.
+    @MainActor
+    private static func buildResult(summary: MeetingSummary, segments: [Segment], topic: String, duration: TimeInterval) -> MeetingResult {
+        let title: String = {
+            let t = summary.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { return t }
+            let topicTrimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
+            return topicTrimmed.isEmpty ? "회의 결과" : topicTrimmed
+        }()
+
+        let start = segments.first?.timestamp ?? Date()
+        let lines = segments.map { seg in
+            MeetingResult.TranscriptLine(
+                time: Self.mmss(seg.timestamp.timeIntervalSince(start)),
+                text: seg.text
+            )
+        }
+        // 회의 길이는 segment 타임스탬프로 계산(recordingDuration은 종료 시점에 0으로 들어올 수 있음).
+        let meetingSeconds: TimeInterval
+        if let first = segments.first, let last = segments.last {
+            meetingSeconds = max(duration, last.timestamp.timeIntervalSince(first.timestamp) + last.duration)
+        } else {
+            meetingSeconds = duration
+        }
+        let meta = "저장됨 · \(Self.durationText(meetingSeconds)) · 구간 \(segments.count)개"
+        return MeetingResult(title: title, metaText: meta, summary: summary, transcript: lines)
+    }
+
+    private static func mmss(_ seconds: TimeInterval) -> String {
+        let s = max(0, Int(seconds.rounded()))
+        return String(format: "%02d:%02d", s / 60, s % 60)
+    }
+
+    private static func durationText(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        let m = total / 60, s = total % 60
+        return m > 0 ? "\(m)분 \(s)초" : "\(s)초"
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {

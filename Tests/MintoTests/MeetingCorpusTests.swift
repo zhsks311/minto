@@ -436,7 +436,7 @@ struct MeetingCorpusTests {
         defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
         MeetingContext.shared.start(topic: "국회 행정안전위원회 전체회의", glossary: "행정안전부\n위원장\n간사\n의사일정")
         MeetingContext.shared.runningSummary = ""
-        MeetingContext.shared.finalSummary = ""
+        MeetingContext.shared.finalSummary = nil
         defer { MeetingContext.shared.clear() }
 
         let captions = try Self.parseSMI(from: Self.smiURL)
@@ -449,6 +449,7 @@ struct MeetingCorpusTests {
         guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
 
         print("\n=== 회의 요약 end-to-end 스모크 (\(probeWindows.count)창) ===")
+        var transcriptLines: [String] = []
         for (index, window) in probeWindows.enumerated() {
             let s = max(0, Int(window.start * Double(Self.sampleRate)))
             let e = min(samples.count, Int(window.end * Double(Self.sampleRate)))
@@ -456,17 +457,94 @@ struct MeetingCorpusTests {
             let raw = try await service.transcribe(pcmSamples: Array(samples[s..<e])).segment.text
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
             _ = await SummaryService.shared.generateIncremental(correctedBatch: raw)
+            let t = Int(window.start)
+            transcriptLines.append(String(format: "[%02d:%02d] %@", t / 60, t % 60, raw))
             print("[Summary] #\(index) 후 누적 요약 길이=\(MeetingContext.shared.runningSummary.count)")
         }
 
-        let final = await SummaryService.shared.generateFinal(tailText: "")
+        let final = await SummaryService.shared.generateFinal(transcript: transcriptLines.joined(separator: "\n"))
         print("""
-        ──────────── 최종 요약 ────────────
-        \(final ?? "(생성 실패)")
+        ──────────── 최종 요약(구조화 → markdown) ────────────
+        \(final?.markdown() ?? "(생성 실패)")
         ────────────────────────────────────
         ※ 위 요약이 전사에 없는 사실을 지어냈는지 눈으로 점검(날조 회귀 가드).
         """)
         #expect(final != nil, "요약이 생성되어야 한다")
+    }
+
+    /// sample 회의 음원으로 **전사→교정(요약 context 주입)→증분 요약→최종 요약→보고서 파일**까지
+    /// 실제 컴포넌트를 흘려 end-to-end를 검증한다. mic 캡처(MicrophoneSource)와 요약 창(NSWindow)을
+    /// 제외한 전 경로를 sample 음원으로 대체 — 사용자의 라이브 mic 검증 전 프록시.
+    /// AppDelegate.handleStopRecording과 동일한 보고서 조립(appendSegment + appendSummarySection)을 쓴다.
+    /// 실행: RUN_STT_TESTS=1 RUN_CORRECTION_TEST=1 RUN_SUMMARY_TEST=1 swift test -c release \
+    ///       --filter MeetingCorpusTests/meetingEndToEndReport
+    @Test("sample 회의 음원 end-to-end: 전사→교정→요약→보고서 파일")
+    func meetingEndToEndReport() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_CORRECTION_TEST"] == "1",
+              ProcessInfo.processInfo.environment["RUN_SUMMARY_TEST"] == "1" else { return }
+        guard FileManager.default.fileExists(atPath: Self.audioURL.path),
+              FileManager.default.fileExists(atPath: Self.smiURL.path) else { return }
+        guard CodexOAuthService.shared.isLoggedIn else { Issue.record("Codex 미로그인"); return }
+
+        let savedProvider = LLMCorrectionService.shared.selectedProvider
+        LLMCorrectionService.shared.selectedProvider = .codex
+        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
+        MeetingContext.shared.start(topic: "국회 행정안전위원회 전체회의", glossary: "행정안전부\n위원장\n간사\n의사일정")
+        defer { MeetingContext.shared.clear() }
+
+        // 보고서 파일 경로를 결정적으로 만들기 위해 고정 시각 사용(ReportService 파일명 규칙 동일).
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd HH-mm"
+        let reportPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Documents/Minto/\(fmt.string(from: startedAt)).md")
+
+        let report = ReportService()
+        report.startNewReport(startedAt: startedAt)
+
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let windows = Array(Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds).prefix(6))
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+
+        let service = STTService()
+        await service.loadModel(variant: Self.model)
+        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
+        let llm = LLMCorrectionService.shared
+
+        var transcriptCount = 0
+        var prevContext = ""
+        var transcriptLines: [String] = []
+        for window in windows {
+            let s = max(0, Int(window.start * Double(Self.sampleRate)))
+            let e = min(samples.count, Int(window.end * Double(Self.sampleRate)))
+            guard e > s else { continue }
+            let raw = try await service.transcribe(pcmSamples: Array(samples[s..<e])).segment.text
+            guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            // 프로덕션 교정 경로(요약 context 주입 포함). 실패 시 원본 유지.
+            let corrected = await llm.correct(text: raw, context: prevContext) ?? raw
+            report.appendSegment(Segment(text: corrected, timestamp: startedAt, duration: window.end - window.start))
+            transcriptCount += 1
+            _ = await SummaryService.shared.generateIncremental(correctedBatch: corrected)
+            let t = Int(window.start)
+            transcriptLines.append(String(format: "[%02d:%02d] %@", t / 60, t % 60, corrected))
+            prevContext = corrected
+        }
+        let finalSummary = await SummaryService.shared.generateFinal(transcript: transcriptLines.joined(separator: "\n"))
+        report.appendSummarySection(finalSummary?.markdown() ?? "")
+        report.finalizeReport()  // queue.sync — 앞선 async write가 모두 flush된 뒤 닫힘(파일 완성 보장)
+
+        // 보고서 파일 검증.
+        let content = (try? String(contentsOf: reportPath, encoding: .utf8)) ?? ""
+        print("""
+        ──────────── 보고서 파일 (\(reportPath.lastPathComponent)) ────────────
+        \(content.prefix(1500))
+        ────────────────────────────────────────
+        경로: \(reportPath.path)
+        """)
+        #expect(transcriptCount > 0, "전사 라인이 보고서에 기록되어야 함")
+        #expect(content.contains("## 회의 요약"), "보고서에 요약 섹션이 있어야 함")
+        #expect(content.contains("["), "전사 라인(타임스탬프)이 있어야 함")
     }
 
     // MARK: - SMI 파싱

@@ -49,17 +49,18 @@ struct SummaryPromptTests {
         #expect(!p.userContent.contains("아직 없음"))
     }
 
-    @Test("final: tail이 비면 '(없음)', 누적 요약은 포함")
-    func finalEmptyTail() {
+    @Test("final: 전사가 userContent에, 계층 JSON 스키마 + anti-날조 지시")
+    func finalTranscriptAndSchema() {
         let p = SummaryPrompt.buildFinal(
             topic: "",
             glossary: "",
-            runningSummary: "전체 논의 요약",
-            tailText: ""
+            transcript: "[00:00] 안녕하세요 회의를 시작합니다"
         )
-        #expect(p.userContent.contains("전체 논의 요약"))
-        #expect(p.userContent.contains("(없음)"))
-        #expect(p.instructions.contains("최종 요약"))
+        #expect(p.userContent.contains("[00:00] 안녕하세요 회의를 시작합니다"))
+        #expect(p.instructions.contains("JSON"))
+        #expect(p.instructions.contains("sections"))
+        #expect(p.instructions.contains("leadAnswer"))
+        #expect(p.instructions.contains("날조 금지"))
     }
 
     @Test("주제·용어집이 있으면 userContent의 회의 맥락 블록에 들어간다")
@@ -67,8 +68,7 @@ struct SummaryPromptTests {
         let p = SummaryPrompt.buildFinal(
             topic: "쿠팡 청문회",
             glossary: "불출석 사유서\n상임위",
-            runningSummary: "요약",
-            tailText: "마지막 발언"
+            transcript: "[00:05] 마지막 발언"
         )
         #expect(p.userContent.contains("참고용 회의 맥락"))
         #expect(p.userContent.contains("쿠팡 청문회"))
