@@ -28,9 +28,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     @MainActor
     public func requestStartSession() {
         meetingSetupManager.show(
-            onStart: { [weak self] topic, glossary in
+            onStart: { [weak self] topic, glossary, document in
                 guard let self else { return }
-                MeetingContext.shared.start(topic: topic, glossary: glossary)
+                MeetingContext.shared.start(topic: topic, glossary: glossary, document: document)
                 self.reportService.startNewReport(startedAt: Date())
                 self.viewModel.startRecording()
                 self.floatingWindowManager.show()

@@ -47,7 +47,8 @@ public final class SummaryService: ObservableObject {
         let prompt = SummaryPrompt.buildFinal(
             topic: meeting.topic,
             glossary: meeting.glossary,
-            transcript: transcript
+            transcript: transcript,
+            document: meeting.document
         )
 
         if let raw = await dispatch(prompt) {

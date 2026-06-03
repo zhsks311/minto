@@ -47,7 +47,8 @@ public final class LLMCorrectionService: ObservableObject {
             glossary: meeting.glossary,
             context: context,
             text: text,
-            summary: meeting.runningSummary
+            summary: meeting.runningSummary,
+            document: meeting.document
         )
 
         fputs("[LLM] correcting via \(selectedProvider.rawValue): \"\(text)\"\n", stderr)

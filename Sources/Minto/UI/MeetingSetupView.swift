@@ -5,12 +5,13 @@ import SwiftUI
 public struct MeetingSetupView: View {
     @State private var topic: String = ""
     @State private var glossary: String = ""
+    @State private var document: String = ""
 
-    private let onStart: (String, String) -> Void
+    private let onStart: (String, String, String) -> Void
     private let onCancel: () -> Void
 
     public init(
-        onStart: @escaping (String, String) -> Void,
+        onStart: @escaping (String, String, String) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.onStart = onStart
@@ -44,11 +45,26 @@ public struct MeetingSetupView: View {
                     )
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("회의 자료·안건 (선택)")
+                    .font(.subheadline.weight(.medium))
+                Text("안건·문서를 붙여넣으면 전사·요약 품질이 올라갑니다")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                TextEditor(text: $document)
+                    .font(.body)
+                    .frame(height: 120)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+            }
+
             HStack {
                 Spacer()
                 Button("취소") { onCancel() }
                     .keyboardShortcut(.cancelAction)
-                Button("시작") { onStart(topic, glossary) }
+                Button("시작") { onStart(topic, glossary, document) }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
             }
