@@ -47,6 +47,9 @@ public struct TranscriptionOverlayView: View {
                 if showRelated {
                     Divider()
                     relatedInfoPanel
+                } else if shouldShowRelatedSuggestion {
+                    Divider()
+                    relatedSuggestionRow
                 }
                 Divider()
                 footerView
@@ -474,6 +477,55 @@ public struct TranscriptionOverlayView: View {
         }
         .buttonStyle(.plain)
         .help(doc.url)
+    }
+
+    private var shouldShowRelatedSuggestion: Bool {
+        guard !viewModel.isPermissionDenied, !isModelLoading else { return false }
+        guard notionMCP.isConfigured || confluence.isConfigured else { return false }
+        return !relatedSearchQuery().isEmpty || !relatedInfo.results.isEmpty || relatedInfo.statusMessage != nil
+    }
+
+    private var relatedSuggestionRow: some View {
+        let query = relatedSearchQuery()
+        let hasResults = !relatedInfo.results.isEmpty
+        return HStack(spacing: 10) {
+            Image(systemName: "sparkles.rectangle.stack")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.yellow)
+                .frame(width: 22, height: 22)
+                .background(Color.yellow.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hasResults ? "관련 문서를 찾았어요" : "관련 문서를 찾아볼까요?")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.primary)
+                Text(hasResults ? "\(relatedInfo.results.count)개 결과를 접어뒀어요" : "회의 흐름을 방해하지 않게 작게 보여드릴게요")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            if relatedInfo.isSearching {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button(hasResults ? "보기" : "조회") {
+                    if hasResults {
+                        showRelated = true
+                    } else {
+                        Task { await relatedInfo.search(query: query) }
+                    }
+                }
+                .font(.system(size: 11, weight: .semibold))
+                .buttonStyle(.borderless)
+                .disabled(query.isEmpty && !hasResults)
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 54)
     }
 
     /// 최근 전사 원문을 우선 검색한다. 짧은 한국어 명사구(`컬리 용어 모음집`)가

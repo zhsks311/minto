@@ -43,6 +43,9 @@ public struct SettingsView: View {
 
     public var body: some View {
         Form {
+            searchReadinessSection
+            sourceConnectionsSection
+
             Section("음성 인식 모델") {
                 ForEach(availableModels, id: \.id) { model in
                     modelRow(model)
@@ -97,72 +100,6 @@ public struct SettingsView: View {
                     .font(.caption).foregroundColor(.secondary)
             }
 
-            Section("외부 연동 (Notion · Confluence)") {
-                integrationStatusRow(title: "Notion", connected: notionMCP.isConnected)
-                if notionMCP.isConnected {
-                    Button("연결 해제") {
-                        notionMCP.disconnect()
-                        notionConnectError = nil
-                    }
-                    .foregroundColor(.red)
-                    Text("‘연결 해제’는 이 기기의 토큰만 지웁니다. 권한을 완전히 회수하려면 Notion 설정 › 연결된 앱에서 해제하세요.")
-                        .font(.caption).foregroundColor(.secondary)
-                } else if notionConnectLoading {
-                    HStack {
-                        ProgressView().scaleEffect(0.8)
-                        Text("연결 중…").font(.callout).foregroundColor(.secondary)
-                    }
-                } else {
-                    Button("Notion 연결 (OAuth)") {
-                        notionConnectError = nil
-                        notionConnectLoading = true
-                        Task {
-                            do {
-                                try await NotionMCPService.shared.connect()
-                            } catch is CancellationError {
-                                // 사용자 취소 — 조용히 처리
-                            } catch {
-                                // 내부 엔드포인트·파라미터가 섞일 수 있는 상세는 stderr로만, UI엔 일반 문구.
-                                let message = (error as? LocalizedError)?.errorDescription
-                                    ?? error.localizedDescription
-                                FileHandle.standardError.write(Data("[NotionMCP] 연결 실패(type=\(String(describing: type(of: error))), message=\(message))\n".utf8))
-                                notionConnectError = "연결에 실패했습니다. 다시 시도해 주세요."
-                            }
-                            notionConnectLoading = false
-                        }
-                    }
-                }
-                if let err = notionConnectError {
-                    Text(err).font(.caption).foregroundColor(.red)
-                }
-                Text("’Notion 연결’ 을 누르면 브라우저에서 Notion 계정으로 로그인합니다. 인증 후 이 앱에 Notion 검색 권한이 부여됩니다.")
-                    .font(.caption).foregroundColor(.secondary)
-
-                Divider()
-
-                integrationStatusRow(title: "Confluence", connected: confluence.isConfigured)
-                TextField("사이트 URL (https://회사.atlassian.net)", text: $confluenceBaseURL)
-                    .textContentType(.URL)
-                TextField("이메일", text: $confluenceEmail)
-                SecureField("API token", text: $confluenceTokenInput)
-                HStack {
-                    Button("저장") {
-                        confluence.setAPIToken(confluenceTokenInput)
-                        confluenceTokenInput = ""
-                    }
-                    .disabled(confluenceTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                    if confluence.isConfigured {
-                        Button("연동 해제") {
-                            confluence.setAPIToken("")
-                            confluenceEmail = ""
-                            confluenceBaseURL = ""
-                        }.foregroundColor(.red)
-                    }
-                }
-                Text("id.atlassian.com 의 ‘API tokens’에서 토큰을 발급하세요. 인증은 이메일+토큰(Basic) 방식입니다.")
-                    .font(.caption).foregroundColor(.secondary)
-            }
-
             Section("현재 상태") {
                 LabeledContent("로드된 모델", value: viewModel.modelVariantName)
                 LabeledContent("모델 상태", value: modelStateDescription)
@@ -176,6 +113,127 @@ public struct SettingsView: View {
     }
 
     // MARK: - Integration Section Rows
+
+    private var searchReadinessSection: some View {
+        Section("검색 준비도") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(searchReadinessTitle)
+                            .font(.headline)
+                        Text(searchReadinessMessage)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text("\(searchReadinessScore)%")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                }
+                ProgressView(value: Double(searchReadinessScore), total: 100)
+                Label(nextSearchSetupAction, systemImage: searchReadinessScore == 100 ? "checkmark.circle.fill" : "arrow.down.circle")
+                    .font(.caption)
+                    .foregroundColor(searchReadinessScore == 100 ? .green : .secondary)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var sourceConnectionsSection: some View {
+        Section("검색 소스") {
+            integrationStatusRow(title: "Notion", connected: notionMCP.isConnected)
+            if notionMCP.isConnected {
+                Button("연결 해제") {
+                    notionMCP.disconnect()
+                    notionConnectError = nil
+                }
+                .foregroundColor(.red)
+                Text("‘연결 해제’는 이 기기의 토큰만 지웁니다. 권한을 완전히 회수하려면 Notion 설정 › 연결된 앱에서 해제하세요.")
+                    .font(.caption).foregroundColor(.secondary)
+            } else if notionConnectLoading {
+                HStack {
+                    ProgressView().scaleEffect(0.8)
+                    Text("연결 중…").font(.callout).foregroundColor(.secondary)
+                }
+            } else {
+                Button("Notion 연결") {
+                    notionConnectError = nil
+                    notionConnectLoading = true
+                    Task {
+                        do {
+                            try await NotionMCPService.shared.connect()
+                        } catch is CancellationError {
+                            // 사용자 취소 — 조용히 처리
+                        } catch {
+                            // 내부 엔드포인트·파라미터가 섞일 수 있는 상세는 stderr로만, UI엔 일반 문구.
+                            let message = (error as? LocalizedError)?.errorDescription
+                                ?? error.localizedDescription
+                            FileHandle.standardError.write(Data("[NotionMCP] 연결 실패(type=\(String(describing: type(of: error))), message=\(message))\n".utf8))
+                            notionConnectError = "연결에 실패했습니다. 다시 시도해 주세요."
+                        }
+                        notionConnectLoading = false
+                    }
+                }
+            }
+            if let err = notionConnectError {
+                Text(err).font(.caption).foregroundColor(.red)
+            }
+            Text("Notion을 연결하면 회의 중 감지된 주제로 문서를 찾을 수 있습니다.")
+                .font(.caption).foregroundColor(.secondary)
+
+            Divider()
+
+            integrationStatusRow(title: "Confluence", connected: confluence.isConfigured)
+            TextField("사이트 URL (https://회사.atlassian.net)", text: $confluenceBaseURL)
+                .textContentType(.URL)
+            TextField("이메일", text: $confluenceEmail)
+            SecureField("API token", text: $confluenceTokenInput)
+            HStack {
+                Button("저장") {
+                    confluence.setAPIToken(confluenceTokenInput)
+                    confluenceTokenInput = ""
+                }
+                .disabled(confluenceTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                if confluence.isConfigured {
+                    Button("연동 해제") {
+                        confluence.setAPIToken("")
+                        confluenceEmail = ""
+                        confluenceBaseURL = ""
+                    }.foregroundColor(.red)
+                }
+            }
+            Text("id.atlassian.com의 API tokens에서 토큰을 발급하세요.")
+                .font(.caption).foregroundColor(.secondary)
+        }
+    }
+
+    private var connectedSearchSourceCount: Int {
+        (notionMCP.isConnected ? 1 : 0) + (confluence.isConfigured ? 1 : 0)
+    }
+
+    private var searchReadinessScore: Int {
+        40 + connectedSearchSourceCount * 30
+    }
+
+    private var searchReadinessTitle: String {
+        searchReadinessScore == 100 ? "외부 문서 검색까지 준비됐어요" : "기본 회의 검색은 바로 쓸 수 있어요"
+    }
+
+    private var searchReadinessMessage: String {
+        switch connectedSearchSourceCount {
+        case 0:
+            return "저장된 회의는 검색됩니다. Notion이나 Confluence를 연결하면 문서까지 함께 찾습니다."
+        case 1:
+            return "연결된 소스 1개와 저장된 회의를 함께 검색할 수 있습니다."
+        default:
+            return "Notion과 Confluence가 모두 연결되어 회의 중 문서 추천도 사용할 수 있습니다."
+        }
+    }
+
+    private var nextSearchSetupAction: String {
+        if searchReadinessScore == 100 { return "추가 설정 없이 사용할 수 있습니다" }
+        if !notionMCP.isConnected { return "다음 단계: Notion 연결" }
+        return "다음 단계: Confluence 연결"
+    }
 
     private func integrationStatusRow(title: String, connected: Bool) -> some View {
         HStack(spacing: 6) {
