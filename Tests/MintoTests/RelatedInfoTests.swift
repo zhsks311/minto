@@ -2,63 +2,104 @@ import Testing
 @testable import MintoCore
 import Foundation
 
-@Suite("Notion 검색 응답 파싱")
-struct NotionParseTests {
+/// notion-search MCP 응답 파싱 테스트.
+///
+/// 실제 서버 응답 포맷은 라이브로 확인되지 않았으므로, 가정된 포맷과 폴백 경로를 모두 검증한다.
+/// - 가정 A: JSON {"results":[{"title":"...", "url":"..."}]} 형태
+/// - 가정 B: JSON 파싱 실패 시 notion.so URL 정규식 폴백
+@Suite("NotionMCPService 검색 응답 파싱")
+struct NotionMCPParseTests {
 
-    @Test("정상 응답 → 제목·URL 추출")
-    func parsesValidResults() throws {
+    // MARK: - JSON 포맷 파싱
+
+    @Test("JSON 포맷 A: results 배열에서 title·url 추출")
+    func parsesJSONResults() throws {
         let json = """
         {
           "results": [
-            {
-              "url": "https://www.notion.so/abc",
-              "properties": {
-                "Name": { "type": "title", "title": [
-                  { "plain_text": "회의 " }, { "plain_text": "준비 문서" }
-                ] }
-              }
-            }
+            { "title": "회의 준비 문서", "url": "https://www.notion.so/abc" },
+            { "title": "설계 리뷰", "url": "https://www.notion.so/def" }
           ]
         }
         """
-        let docs = NotionService.parse(Data(json.utf8), limit: 5)
-        #expect(docs.count == 1)
+        let docs = NotionMCPService.parseSearchResults(json, limit: 5)
+        #expect(docs.count == 2)
         #expect(docs[0].source == .notion)
         #expect(docs[0].title == "회의 준비 문서")
         #expect(docs[0].url == "https://www.notion.so/abc")
+        #expect(docs[1].title == "설계 리뷰")
     }
 
-    @Test("URL 없는 항목은 건너뛴다")
-    func skipsResultsWithoutURL() throws {
+    @Test("JSON: url 없는 항목은 건너뛴다")
+    func jsonSkipsResultsWithoutURL() throws {
         let json = """
-        { "results": [ { "url": "", "properties": {} } ] }
+        { "results": [ { "title": "제목만" }, { "title": "있음", "url": "https://www.notion.so/x" } ] }
         """
-        let docs = NotionService.parse(Data(json.utf8), limit: 5)
-        #expect(docs.isEmpty)
+        let docs = NotionMCPService.parseSearchResults(json, limit: 5)
+        #expect(docs.count == 1)
+        #expect(docs[0].url == "https://www.notion.so/x")
     }
 
-    @Test("title 속성 없으면 (제목 없음)")
-    func fallbackTitle() throws {
+    @Test("JSON: title 없으면 (제목 없음)")
+    func jsonFallbackTitle() throws {
         let json = """
-        { "results": [ { "url": "https://n.so/x", "properties": {} } ] }
+        { "results": [ { "url": "https://www.notion.so/abc" } ] }
         """
-        let docs = NotionService.parse(Data(json.utf8), limit: 5)
+        let docs = NotionMCPService.parseSearchResults(json, limit: 5)
         #expect(docs.count == 1)
         #expect(docs[0].title == "(제목 없음)")
     }
 
-    @Test("limit 초과분은 잘린다")
-    func respectsLimit() throws {
-        let items = (0..<10).map { #"{ "url": "https://n.so/\#($0)", "properties": {} }"# }.joined(separator: ",")
-        let docs = NotionService.parse(Data("{ \"results\": [\(items)] }".utf8), limit: 3)
+    @Test("JSON: limit 초과분은 잘린다")
+    func jsonRespectsLimit() throws {
+        let items = (0..<10).map { #"{"title":"페이지\#($0)","url":"https://www.notion.so/\#($0)"}"# }.joined(separator: ",")
+        let docs = NotionMCPService.parseSearchResults("{\"results\":[\(items)]}", limit: 3)
         #expect(docs.count == 3)
     }
 
-    @Test("깨진 JSON·빈 데이터 → 빈 배열")
-    func malformedReturnsEmpty() throws {
-        #expect(NotionService.parse(Data("not json".utf8), limit: 5).isEmpty)
-        #expect(NotionService.parse(Data(), limit: 5).isEmpty)
-        #expect(NotionService.parse(Data("{}".utf8), limit: 5).isEmpty)
+    // MARK: - URL 정규식 폴백
+
+    @Test("폴백: 깨진 JSON에서 notion.so URL 추출")
+    func regexFallbackFromBrokenJSON() throws {
+        let text = "관련 문서: https://www.notion.so/Meeting-Notes-abc123\n참고: https://www.notion.so/Design-def456"
+        let docs = NotionMCPService.parseSearchResults(text, limit: 5)
+        #expect(docs.count == 2)
+        #expect(docs[0].url == "https://www.notion.so/Meeting-Notes-abc123")
+        #expect(docs[0].source == .notion)
+    }
+
+    @Test("폴백: URL 끝의 구두점은 제거된다")
+    func regexFallbackTrimsTrailingPunctuation() throws {
+        let text = "참고 문서: https://www.notion.so/Design-abc123. 그리고 (https://www.notion.so/Plan-def456)"
+        let docs = NotionMCPService.parseSearchResults(text, limit: 5)
+        #expect(docs.count == 2)
+        #expect(docs[0].url == "https://www.notion.so/Design-abc123")
+        #expect(docs[1].url == "https://www.notion.so/Plan-def456")
+    }
+
+    @Test("폴백: limit 제한 적용")
+    func regexFallbackRespectsLimit() throws {
+        let lines = (0..<10).map { "항목 https://www.notion.so/page-\($0)" }.joined(separator: "\n")
+        let docs = NotionMCPService.parseSearchResults(lines, limit: 3)
+        #expect(docs.count == 3)
+    }
+
+    // MARK: - 공통 엣지 케이스
+
+    @Test("빈 입력 → 빈 배열")
+    func emptyInputReturnsEmpty() throws {
+        #expect(NotionMCPService.parseSearchResults("", limit: 5).isEmpty)
+    }
+
+    @Test("JSON이지만 results 없음 → 정규식 폴백 시도 후 빈 배열")
+    func emptyResultsJSONReturnsEmpty() throws {
+        #expect(NotionMCPService.parseSearchResults("{}", limit: 5).isEmpty)
+        #expect(NotionMCPService.parseSearchResults("{\"results\":[]}", limit: 5).isEmpty)
+    }
+
+    @Test("notion.so URL이 없는 평문 → 빈 배열")
+    func plainTextWithoutURLReturnsEmpty() throws {
+        #expect(NotionMCPService.parseSearchResults("관련 문서가 없습니다.", limit: 5).isEmpty)
     }
 }
 

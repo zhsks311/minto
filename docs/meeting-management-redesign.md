@@ -65,6 +65,27 @@
 - **[LOW] 메인 윈도우 위치**: setFrameUsingName 복원, 없을 때만 center().
 - **[LOW] export 파일명**: dot-only·길이(80자) 제한.
 
+## 외부 연동 (관련 정보 조회) — 2026-06-04
+
+사용자 결정: Notion=개인 계정 → MCP-OAuth("로그인 한 번"), Confluence=회사(kurlycorp) 계정 → token 방식 유지.
+근거: 회사 Confluence는 Atlassian Rovo MCP가 조직 admin 도메인 허용목록에 막힐 위험이 커서, 직접 REST + API token이 더 안정적(admin 비의존). 개인 Notion은 admin 허용목록이 없어 MCP-OAuth가 깔끔.
+
+### 구현
+- **Confluence**: `ConfluenceService`(직접 REST `/wiki/rest/api/search`, Basic 인증, site URL/email/token). DCR/admin 무관.
+- **Notion**: `NotionMCPService` — 공식 Swift MCP SDK(`modelcontextprotocol/swift-sdk` 0.12.1)로 `mcp.notion.com/mcp`에 OAuth 2.1(DCR+PKCE+공개클라이언트 none) 연결. `OAuthBrowserDelegate`(ASWebAuthenticationSession, 커스텀 스킴 `minto2://oauth/callback`, Info.plist 등록 불필요), `KeychainTokenStorage`(OAuthAccessToken JSON → Keychain "notion-mcp", clientID 포함 영속 → 재인증 불필요). `notion-search` 호출 → 방어적 파싱(JSON 우선 + notion.so URL 정규식 폴백).
+- 검증: `curl`로 Notion `/register` DCR이 루프백·커스텀 스킴 모두 수용 + `token_endpoint_auth_methods_supported`에 `none` 확인(secret 불필요).
+
+### 리뷰 반영(병렬 code-reviewer)
+- [HIGH] search() 중 무인 브라우저 팝업 → 검색 경로는 `interactive:false`(delegate nil)로 대화형 인증 차단, `connect()`만 브라우저 허용.
+- [MEDIUM] 정규식 URL 꼬리 구두점 제거, `connect()`가 `notion-search` 도구 존재 검증, disconnect 완전회수 안내 문구(Notion 설정 직접 해제).
+- [LOW] Task 취소 시 세션 정리(withTaskCancellationHandler), 연결 에러 UI 일반화(상세는 stderr), init 임시 인스턴스 제거.
+
+### MCP-OAuth 보류(다음 이터레이션)
+- **연결 풀링**: search()마다 OAuthAuthorizer/transport 신규 생성 → metadata discovery HTTP 왕복 반복. on-demand라 영향 작아 보류. live client 재사용 패턴 검토.
+- **server-side revoke**: disconnect()가 Keychain만 삭제(RFC 7009 revoke 미호출). revocation_endpoint(`/token`) 존재하므로 best-effort revoke 추가 가능.
+- **KeychainService.save Bool 반환**: save 실패 묵살 → isConnected 오진단 가능(공유 코드라 보류).
+- **라이브 미검증**: notion-search 실제 응답 포맷(parseSearchResults 가정), OAuth 브라우저 흐름은 사용자 라이브 테스트 필요.
+
 ### 보류(다음 이터레이션 — 현 규모에선 영향 작음)
 - MeetingStore reload/save가 @MainActor 동기 IO + 전체 transcript 로드 → 대량 라이브러리에서 메인 블록. 메타-only 목록 + 백그라운드 IO로 분리 필요.
 - MeetingRecord/Segment Codable에 schemaVersion + 마이그레이션(현재 신규 필드는 Optional/기본값 규칙으로 대응).

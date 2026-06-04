@@ -20,13 +20,13 @@ public struct SettingsView: View {
     @State private var isLoginLoading = false
     @State private var loginError: String? = nil
 
-    // 외부 연동(Notion·Confluence). URL/email은 서비스가 읽는 UserDefaults 키와 동일하게 바인딩,
-    // 비밀인 토큰만 SecureField → Keychain 저장.
-    @ObservedObject private var notion = NotionService.shared
+    // 외부 연동(Notion MCP OAuth·Confluence token).
+    @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
     @AppStorage(ConfluenceService.baseURLKey) private var confluenceBaseURL = ""
     @AppStorage(ConfluenceService.emailKey) private var confluenceEmail = ""
-    @State private var notionTokenInput = ""
+    @State private var notionConnectLoading = false
+    @State private var notionConnectError: String? = nil
     @State private var confluenceTokenInput = ""
 
     private let availableModels: [(id: String, label: String, note: String)] = [
@@ -98,19 +98,42 @@ public struct SettingsView: View {
             }
 
             Section("외부 연동 (Notion · Confluence)") {
-                integrationStatusRow(title: "Notion", connected: notion.isConfigured)
-                SecureField("Notion integration token (ntn_… / secret_…)", text: $notionTokenInput)
-                HStack {
-                    Button("저장") {
-                        notion.setToken(notionTokenInput)
-                        notionTokenInput = ""
+                integrationStatusRow(title: "Notion", connected: notionMCP.isConnected)
+                if notionMCP.isConnected {
+                    Button("연결 해제") {
+                        notionMCP.disconnect()
+                        notionConnectError = nil
                     }
-                    .disabled(notionTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                    if notion.isConfigured {
-                        Button("연동 해제") { notion.setToken("") }.foregroundColor(.red)
+                    .foregroundColor(.red)
+                    Text("‘연결 해제’는 이 기기의 토큰만 지웁니다. 권한을 완전히 회수하려면 Notion 설정 › 연결된 앱에서 해제하세요.")
+                        .font(.caption).foregroundColor(.secondary)
+                } else if notionConnectLoading {
+                    HStack {
+                        ProgressView().scaleEffect(0.8)
+                        Text("연결 중…").font(.callout).foregroundColor(.secondary)
+                    }
+                } else {
+                    Button("Notion 연결 (OAuth)") {
+                        notionConnectError = nil
+                        notionConnectLoading = true
+                        Task {
+                            do {
+                                try await NotionMCPService.shared.connect()
+                            } catch is CancellationError {
+                                // 사용자 취소 — 조용히 처리
+                            } catch {
+                                // 내부 엔드포인트·파라미터가 섞일 수 있는 상세는 stderr로만, UI엔 일반 문구.
+                                FileHandle.standardError.write(Data("[NotionMCP] 연결 실패(type=\(String(describing: type(of: error))))\n".utf8))
+                                notionConnectError = "연결에 실패했습니다. 다시 시도해 주세요."
+                            }
+                            notionConnectLoading = false
+                        }
                     }
                 }
-                Text("notion.so/my-integrations 에서 integration을 만들고, 조회할 페이지를 그 integration에 ‘연결(공유)’하세요. 공유된 페이지만 검색됩니다.")
+                if let err = notionConnectError {
+                    Text(err).font(.caption).foregroundColor(.red)
+                }
+                Text("’Notion 연결’ 을 누르면 브라우저에서 Notion 계정으로 로그인합니다. 인증 후 이 앱에 Notion 검색 권한이 부여됩니다.")
                     .font(.caption).foregroundColor(.secondary)
 
                 Divider()
