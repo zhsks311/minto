@@ -1,39 +1,76 @@
 import SwiftUI
 import AppKit
 
+private enum OverlayLayout {
+    static let outerPadding: CGFloat = 12
+    static let expandedContentWidth: CGFloat = 420
+    static let expandedContentHeight: CGFloat = 520
+    static let collapsedContentWidth: CGFloat = 280
+    static let collapsedContentHeight: CGFloat = 40
+}
+
 public struct TranscriptionOverlayView: View {
+    public static let expandedWindowSize = NSSize(
+        width: OverlayLayout.expandedContentWidth + OverlayLayout.outerPadding * 2,
+        height: OverlayLayout.expandedContentHeight + OverlayLayout.outerPadding * 2
+    )
+    public static let collapsedWindowSize = NSSize(
+        width: OverlayLayout.collapsedContentWidth + OverlayLayout.outerPadding * 2,
+        height: OverlayLayout.collapsedContentHeight + OverlayLayout.outerPadding * 2
+    )
+
     @ObservedObject public var viewModel: TranscriptionViewModel
     @ObservedObject private var llmService = LLMCorrectionService.shared
     @ObservedObject private var relatedInfo = RelatedInfoService.shared
     @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
     @State private var showRelated = false
+    @State private var isCollapsed = false
+    private let onCollapseChange: (Bool) -> Void
 
-    public init(viewModel: TranscriptionViewModel) {
+    public init(
+        viewModel: TranscriptionViewModel,
+        onCollapseChange: @escaping (Bool) -> Void = { _ in }
+    ) {
         self.viewModel = viewModel
+        self.onCollapseChange = onCollapseChange
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            headerView
-            Divider()
-            mainContentView
-            if showRelated {
+            if isCollapsed {
+                collapsedHeaderView
+            } else {
+                headerView
                 Divider()
-                relatedInfoPanel
+                mainContentView
+                if showRelated {
+                    Divider()
+                    relatedInfoPanel
+                }
+                Divider()
+                footerView
             }
-            Divider()
-            footerView
         }
-        // 창 높이는 고정 — 관련 패널은 transcript 영역을 나눠 쓴다(NSPanel 리사이즈 불필요, 잘림 방지).
-        .frame(width: 420, height: 520)
+        // 접힘 상태에서는 NSPanel도 함께 줄여 회의 화면을 덜 가린다.
+        .frame(width: overlayContentSize.width, height: overlayContentSize.height)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.25), radius: 20, x: 0, y: 8)
-        .padding(12)
+        .padding(OverlayLayout.outerPadding)
+        .animation(.easeInOut(duration: 0.18), value: isCollapsed)
+        .onChange(of: isCollapsed) { _, collapsed in
+            onCollapseChange(collapsed)
+        }
     }
 
     // MARK: - Header
+
+    private var overlayContentSize: CGSize {
+        isCollapsed
+            ? CGSize(width: OverlayLayout.collapsedContentWidth, height: OverlayLayout.collapsedContentHeight)
+            : CGSize(width: OverlayLayout.expandedContentWidth, height: OverlayLayout.expandedContentHeight)
+    }
 
     private var headerView: some View {
         HStack(spacing: 8) {
@@ -52,6 +89,14 @@ public struct TranscriptionOverlayView: View {
             }
 
             Spacer()
+
+            Button { setCollapsed(true) } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("오버레이 접기")
 
             Button { showRelated.toggle() } label: {
                 Image(systemName: showRelated ? "lightbulb.fill" : "lightbulb")
@@ -80,6 +125,38 @@ public struct TranscriptionOverlayView: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 40)
+    }
+
+    private var collapsedHeaderView: some View {
+        HStack(spacing: 10) {
+            recordingDotView
+
+            Text(viewModel.isRecording ? formatDuration(viewModel.recordingDuration) : "대기 중")
+                .font(.system(.caption, design: viewModel.isRecording ? .monospaced : .default))
+                .monospacedDigit()
+                .foregroundColor(.primary)
+                .animation(nil, value: viewModel.recordingDuration)
+
+            audioLevelMeter
+
+            Spacer(minLength: 0)
+
+            Button { setCollapsed(false) } label: {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("오버레이 펼치기")
+        }
+        .padding(.horizontal, 14)
+        .frame(height: OverlayLayout.collapsedContentHeight)
+    }
+
+    private func setCollapsed(_ collapsed: Bool) {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isCollapsed = collapsed
+        }
     }
 
     private var recordingDotView: some View {

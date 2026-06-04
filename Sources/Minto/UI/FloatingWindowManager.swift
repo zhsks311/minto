@@ -26,7 +26,14 @@ public final class FloatingWindowManager {
             panel.isMovableByWindowBackground = true
 
             let hostingController = NSHostingController(
-                rootView: TranscriptionOverlayView(viewModel: viewModel)
+                rootView: TranscriptionOverlayView(viewModel: viewModel) { [weak panel] collapsed in
+                    Self.resize(
+                        panel,
+                        to: collapsed
+                            ? TranscriptionOverlayView.collapsedWindowSize
+                            : TranscriptionOverlayView.expandedWindowSize
+                    )
+                }
             )
             panel.contentViewController = hostingController
 
@@ -48,14 +55,26 @@ public final class FloatingWindowManager {
 
     private func initialFrame() -> NSRect {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let windowWidth: CGFloat = 444  // view 420 + padding 12*2
-        let windowHeight: CGFloat = 544 // view 520 + padding 12*2
+        let windowSize = TranscriptionOverlayView.expandedWindowSize
         let margin: CGFloat = 20
         return NSRect(
-            x: screenFrame.maxX - windowWidth - margin,
+            x: screenFrame.maxX - windowSize.width - margin,
             y: screenFrame.minY + margin,
-            width: windowWidth,
-            height: windowHeight
+            width: windowSize.width,
+            height: windowSize.height
         )
+    }
+
+    private static func resize(_ panel: NSPanel?, to size: NSSize) {
+        guard let panel else { return }
+
+        let currentFrame = panel.frame
+        let nextFrame = NSRect(
+            x: currentFrame.maxX - size.width,
+            y: currentFrame.maxY - size.height,
+            width: size.width,
+            height: size.height
+        )
+        panel.setFrame(nextFrame, display: true, animate: true)
     }
 }
