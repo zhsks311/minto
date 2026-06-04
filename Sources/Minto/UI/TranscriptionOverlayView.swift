@@ -5,6 +5,8 @@ public struct TranscriptionOverlayView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
     @ObservedObject private var llmService = LLMCorrectionService.shared
     @ObservedObject private var relatedInfo = RelatedInfoService.shared
+    @ObservedObject private var notionMCP = NotionMCPService.shared
+    @ObservedObject private var confluence = ConfluenceService.shared
     @State private var showRelated = false
 
     public init(viewModel: TranscriptionViewModel) {
@@ -308,6 +310,8 @@ public struct TranscriptionOverlayView: View {
 
     private var relatedInfoPanel: some View {
         let keywords = detectedKeywords()
+        let query = relatedSearchQuery()
+        let isRelatedInfoConfigured = notionMCP.isConfigured || confluence.isConfigured
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles.rectangle.stack").font(.system(size: 11)).foregroundColor(.yellow)
@@ -317,14 +321,13 @@ public struct TranscriptionOverlayView: View {
                     ProgressView().controlSize(.small)
                 } else {
                     Button {
-                        let query = keywords.prefix(5).joined(separator: " ")
                         Task { await relatedInfo.search(query: query) }
                     } label: {
                         Label("조회", systemImage: "magnifyingglass").font(.system(size: 10))
                     }
                     .buttonStyle(.borderless)
-                    .disabled(keywords.isEmpty || !relatedInfo.isAnyConfigured || relatedInfo.isSearching)
-                    .help(relatedInfo.isAnyConfigured ? "감지된 주제로 Notion·Confluence 검색" : "설정에서 Notion/Confluence를 먼저 연동하세요")
+                    .disabled(query.isEmpty || !isRelatedInfoConfigured || relatedInfo.isSearching)
+                    .help(isRelatedInfoConfigured ? "감지된 주제로 Notion·Confluence 검색" : "설정에서 Notion/Confluence를 먼저 연동하세요")
                 }
             }
 
@@ -350,7 +353,7 @@ public struct TranscriptionOverlayView: View {
 
     @ViewBuilder
     private var relatedResultsSection: some View {
-        if !relatedInfo.isAnyConfigured {
+        if !(notionMCP.isConfigured || confluence.isConfigured) {
             Text("설정에서 Notion 또는 Confluence를 연동하면 감지된 주제로 문서를 찾아 드립니다.")
                 .font(.system(size: 10)).foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -396,7 +399,23 @@ public struct TranscriptionOverlayView: View {
         .help(doc.url)
     }
 
-    /// 최근 전사에서 감지한 주제 후보(naive: 3자 이상 토큰). 실제 조회는 후속 MCP 연동 시.
+    /// 최근 전사 원문을 우선 검색한다. 짧은 한국어 명사구(`컬리 용어 모음집`)가
+    /// 토큰 필터에서 `모음집`만 남아 검색 품질이 떨어지는 문제를 피하기 위해서다.
+    private func relatedSearchQuery() -> String {
+        let recent = viewModel.committedSegments.suffix(4).map(\.text).joined(separator: " ")
+        let normalized = recent
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "" }
+
+        if normalized.count <= 120 { return normalized }
+        return String(normalized.suffix(120))
+    }
+
+    /// 최근 전사에서 감지한 주제 후보. 한국어 업무 용어는 2글자 명사도 많아
+    /// Hangul/CJK 토큰은 2글자부터 표시한다(`컬리`, `용어` 등).
     private func detectedKeywords() -> [String] {
         let recent = viewModel.committedSegments.suffix(4).map(\.text).joined(separator: " ")
         let separators = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
@@ -404,12 +423,19 @@ public struct TranscriptionOverlayView: View {
         var out: [String] = []
         for token in recent.components(separatedBy: separators) {
             let w = token.trimmingCharacters(in: .whitespaces)
-            guard w.count >= 3, !seen.contains(w) else { continue }
+            guard isRelatedKeyword(w), !seen.contains(w) else { continue }
             seen.insert(w)
             out.append(w)
             if out.count >= 8 { break }
         }
         return out
+    }
+
+    private func isRelatedKeyword(_ word: String) -> Bool {
+        if word.count >= 3 { return true }
+        return word.count >= 2 && word.unicodeScalars.contains { scalar in
+            (0xAC00...0xD7A3).contains(Int(scalar.value)) || (0x4E00...0x9FFF).contains(Int(scalar.value))
+        }
     }
 
     // MARK: - Footer

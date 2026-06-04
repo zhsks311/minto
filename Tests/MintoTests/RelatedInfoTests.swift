@@ -101,6 +101,30 @@ struct NotionMCPParseTests {
     func plainTextWithoutURLReturnsEmpty() throws {
         #expect(NotionMCPService.parseSearchResults("관련 문서가 없습니다.", limit: 5).isEmpty)
     }
+
+    @Test("fetch 본문: 마크다운·URL 줄을 정리해 짧은 snippet 생성")
+    func fetchedTextBecomesSnippet() throws {
+        let text = """
+        # 컬리 용어 모음집
+        https://www.notion.so/abc
+        - FBK는 Fulfillment by Kurly를 의미한다.
+        [원문 링크](https://example.com)
+        """
+        let snippet = NotionMCPService.snippet(fromFetchedText: text)
+        #expect(snippet == "컬리 용어 모음집 FBK는 Fulfillment by Kurly를 의미한다.")
+    }
+
+    @Test("fetch 본문: 빈 텍스트는 nil")
+    func emptyFetchedTextHasNoSnippet() throws {
+        #expect(NotionMCPService.snippet(fromFetchedText: " \n https://www.notion.so/x \n ") == nil)
+    }
+
+    @Test("fetch 본문: 긴 텍스트는 제한 길이로 자른다")
+    func longFetchedTextIsTruncated() throws {
+        let text = String(repeating: "가", count: 20)
+        let snippet = NotionMCPService.snippet(fromFetchedText: text, maxLength: 5)
+        #expect(snippet == "가가가가가...")
+    }
 }
 
 @Suite("Confluence 검색 응답 파싱")

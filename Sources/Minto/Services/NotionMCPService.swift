@@ -13,9 +13,10 @@ public final class NotionMCPService: ObservableObject {
     // MARK: - 상수
 
     private static let endpoint = URL(string: "https://mcp.notion.com/mcp")!
-    private static let redirectURI = URL(string: "minto2://oauth/callback")!
+    private static let redirectURI = URL(string: "http://127.0.0.1:53682/callback")!
     private static let keychainKey = "notion-mcp"
     private static let searchToolName = "notion-search"
+    private static let fetchToolName = "notion-fetch"
 
     // MARK: - 상태
 
@@ -65,10 +66,13 @@ public final class NotionMCPService: ObservableObject {
     public func connect() async throws {
         let client = try await makeConnectedClient(interactive: true)
         defer { Task { await client.disconnect() } }
-        // 연결 검증 + notion-search 도구가 실제로 노출되는지 확인(권한 축소·스펙 변경 조기 감지).
+        // 연결 검증 + 필요한 read 도구가 실제로 노출되는지 확인(권한 축소·스펙 변경 조기 감지).
         let toolList = try await client.listTools()
         guard toolList.tools.contains(where: { $0.name == Self.searchToolName }) else {
             throw NotionMCPError.searchToolUnavailable
+        }
+        guard toolList.tools.contains(where: { $0.name == Self.fetchToolName }) else {
+            throw NotionMCPError.fetchToolUnavailable
         }
         isConnected = tokenStorage.load() != nil
     }
@@ -104,13 +108,64 @@ public final class NotionMCPService: ObservableObject {
                 return nil
             }.joined(separator: "\n")
 
-            return Self.parseSearchResults(combinedText, limit: limit)
+            let docs = Self.parseSearchResults(combinedText, limit: limit)
+            return await Self.attachFetchedSnippets(to: docs, client: client)
         } catch {
             // 쿼리·토큰 유출 방지: 타입 이름만 기록
             let typeName = String(describing: type(of: error))
             FileHandle.standardError.write(Data("[NotionMCP] 검색 오류(type=\(typeName))\n".utf8))
             return []
         }
+    }
+
+    private static func attachFetchedSnippets(to docs: [RelatedDoc], client: Client) async -> [RelatedDoc] {
+        var enriched: [RelatedDoc] = []
+        for doc in docs {
+            guard let fetchedText = await fetchText(for: doc.url, client: client),
+                  let snippet = snippet(fromFetchedText: fetchedText)
+            else {
+                enriched.append(doc)
+                continue
+            }
+            enriched.append(RelatedDoc(source: doc.source, title: doc.title, snippet: snippet, url: doc.url))
+        }
+        return enriched
+    }
+
+    private static func fetchText(for url: String, client: Client) async -> String? {
+        let argumentSets: [[String: Value]] = [
+            ["url": .string(url)],
+            ["id": .string(url)]
+        ]
+
+        for arguments in argumentSets {
+            do {
+                let result = try await client.callTool(name: fetchToolName, arguments: arguments)
+                guard result.isError != true else { continue }
+                let text = text(from: result.content)
+                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return text
+                }
+            } catch {
+                continue
+            }
+        }
+        return nil
+    }
+
+    nonisolated private static func text(from content: [Tool.Content]) -> String {
+        content.compactMap { item -> String? in
+            switch item {
+            case let .text(text, _, _):
+                return text
+            case let .resource(resource, _, _):
+                return resource.text
+            case let .resourceLink(_, _, title, description, _, _):
+                return [title, description].compactMap { $0 }.joined(separator: "\n")
+            case .image, .audio:
+                return nil
+            }
+        }.joined(separator: "\n")
     }
 
     // MARK: - 파싱 (테스트 대상)
@@ -180,17 +235,46 @@ public final class NotionMCPService: ObservableObject {
         }
         return docs
     }
+
+    nonisolated public static func snippet(fromFetchedText text: String, maxLength: Int = 180) -> String? {
+        let stripped = text
+            .components(separatedBy: .newlines)
+            .map { line in
+                line
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "#>*-` "))
+            }
+            .filter { line in
+                !line.isEmpty
+                    && !line.hasPrefix("http://")
+                    && !line.hasPrefix("https://")
+                    && !line.hasPrefix("{")
+                    && !line.hasPrefix("}")
+            }
+            .joined(separator: " ")
+            .replacingOccurrences(of: #"!\[[^\]]*\]\([^)]+\)"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\[[^\]]+\]\([^)]+\)"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !stripped.isEmpty else { return nil }
+        if stripped.count <= maxLength { return stripped }
+        return String(stripped.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
+    }
 }
 
 // MARK: - 에러 타입
 
 enum NotionMCPError: Error, LocalizedError {
     case searchToolUnavailable
+    case fetchToolUnavailable
 
     var errorDescription: String? {
         switch self {
         case .searchToolUnavailable:
             return "이 Notion 연결에서 검색 도구를 사용할 수 없습니다."
+        case .fetchToolUnavailable:
+            return "이 Notion 연결에서 문서 가져오기 도구를 사용할 수 없습니다."
         }
     }
 }

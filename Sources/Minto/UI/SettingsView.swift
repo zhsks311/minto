@@ -123,7 +123,9 @@ public struct SettingsView: View {
                                 // 사용자 취소 — 조용히 처리
                             } catch {
                                 // 내부 엔드포인트·파라미터가 섞일 수 있는 상세는 stderr로만, UI엔 일반 문구.
-                                FileHandle.standardError.write(Data("[NotionMCP] 연결 실패(type=\(String(describing: type(of: error))))\n".utf8))
+                                let message = (error as? LocalizedError)?.errorDescription
+                                    ?? error.localizedDescription
+                                FileHandle.standardError.write(Data("[NotionMCP] 연결 실패(type=\(String(describing: type(of: error))), message=\(message))\n".utf8))
                                 notionConnectError = "연결에 실패했습니다. 다시 시도해 주세요."
                             }
                             notionConnectLoading = false
