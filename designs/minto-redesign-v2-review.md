@@ -7,6 +7,7 @@
   - `designs/minto-redesign-v2-export/Eld39.png`
   - `designs/minto-redesign-v2-export/Dkbi5.png`
   - `designs/minto-redesign-v2-export/FfpXZ.png`
+  - `designs/minto-redesign-v2-export/Z8KYiT.png`
   - `designs/minto-redesign-v2-export/d1x2w.png`
 - Pencil layout check: `No layout problems.`
 - External references:
@@ -21,6 +22,7 @@
 - Default library screen now focuses on recent meetings and one selected preview.
 - Search results screen is separate and focuses on answering the active query.
 - Live overlay focuses on transcription, with related documents collapsed.
+- Collapsed live overlay focuses only on recording status.
 
 ### Minimum Features
 - Pass with one caveat.
@@ -35,6 +37,7 @@
 - Search state: `이 회의 열기`.
 - Meeting start: `녹음 시작`.
 - Live overlay: `보기` for related documents.
+- Collapsed live overlay: expand button only.
 - Settings: `Confluence 연결하기`.
 
 ### Context Based
@@ -81,6 +84,14 @@
 - Related documents no longer compete with transcription.
 - Transcript takes the dominant space.
 - The collapsed related-document row keeps the feature discoverable.
+- A fully collapsed overlay state is now represented. It hides transcript text and leaves only recording status, timer, audio input, and expand action.
+
+### Feature importance audit
+- Reliable capture is the highest-priority function. The design now keeps recording status visible even when collapsed.
+- Search/review is the highest-priority post-meeting function. It remains isolated in the main/search screens rather than competing inside the live overlay.
+- Export is useful but lower priority than finding and understanding the meeting. It stays available in detail but is not the primary screen message.
+- Glossary/document context improves quality, but it is optional. Keeping it expandable preserves simplicity.
+- Provider/model/integration settings are support flows. The readiness-first settings screen is appropriate, but the app should avoid surfacing provider details during normal meeting use.
 
 ### Settings
 - Stronger than v1.
@@ -99,3 +110,4 @@
 - Real search ranking is not designed here; the UI assumes a "best match" explanation can be produced.
 - Keyboard navigation and VoiceOver states need implementation review.
 - The existing `.pen` CLI save behavior produced a 0-byte file in this environment; PNG exports are the reliable design artifacts for now.
+- The collapsed overlay should be tested during screen sharing because hiding transcript text is a privacy and distraction-reduction requirement, not only a visual preference.

@@ -73,10 +73,12 @@
 - Keep default state quiet:
   - Timer, model state, transcript, audio meter only.
   - Related documents collapsed into a small suggestion bar.
+  - Entire overlay can collapse into a compact status pill when the user wants the least distraction.
   - Expand related documents only when the user chooses it.
 - Avoid:
   - Large panel consuming transcript space by default.
   - Requiring the user to understand Notion/Confluence during a meeting.
+  - Showing transcript text when the overlay is collapsed, to reduce screen-sharing and meeting-distraction risk.
 
 ### 6. Settings/search readiness
 - Primary question: "What do I need to connect for search to work?"
@@ -93,6 +95,7 @@
   - Main library search state.
   - Meeting start sheet.
   - Live overlay default + related suggestion.
+  - Live overlay fully collapsed state.
   - Settings/search readiness.
 - Self-review report:
   - One-thing check.
@@ -106,5 +109,21 @@
 - Default main screen exposes fewer concepts than v1.
 - Search state is visibly different from default state.
 - Live overlay gives more space to transcription than related documents.
+- Collapsed live overlay hides transcript text and leaves only recording status, timer, audio meter, and expand action.
 - Settings tells the user the next setup action without reading every row.
 - Korean UI copy is shorter and more conversational than v1.
+
+## Feature priority review
+- Priority 1: Reliable meeting capture.
+  - UI must always expose recording state, elapsed time, and audio input.
+  - Collapsed overlay supports this priority with the least screen coverage.
+- Priority 2: Fast meeting recall.
+  - Search remains the main window's primary interaction.
+  - Default home should avoid permanent advanced filters until a query exists.
+- Priority 3: Review and export.
+  - Summary, transcript evidence, and markdown export stay close together in detail.
+  - Export should remain secondary to review, not compete with search.
+- Priority 4: Better context through documents and glossary.
+  - These are valuable but optional. They should stay expandable in meeting setup.
+- Priority 5: Provider/model/integration setup.
+  - These are configuration and recovery flows. Settings should show the next missing action first.
