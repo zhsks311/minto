@@ -82,6 +82,8 @@ public final class TranscriptionViewModel: ObservableObject {
         guard !isRecording else { return }
         errorMessage = nil
         vadProcessor.reset()
+        // 이전 회의의 관련 문서 조회 결과가 새 회의에 남지 않도록 초기화.
+        RelatedInfoService.shared.clear()
 
         // VADProcessor → 최종 청크만 스트림으로, 프리뷰는 별도 cancel-and-replace Task
         vadProcessor.onChunk = { [weak self] chunk in

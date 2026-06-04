@@ -20,6 +20,15 @@ public struct SettingsView: View {
     @State private var isLoginLoading = false
     @State private var loginError: String? = nil
 
+    // 외부 연동(Notion·Confluence). URL/email은 서비스가 읽는 UserDefaults 키와 동일하게 바인딩,
+    // 비밀인 토큰만 SecureField → Keychain 저장.
+    @ObservedObject private var notion = NotionService.shared
+    @ObservedObject private var confluence = ConfluenceService.shared
+    @AppStorage(ConfluenceService.baseURLKey) private var confluenceBaseURL = ""
+    @AppStorage(ConfluenceService.emailKey) private var confluenceEmail = ""
+    @State private var notionTokenInput = ""
+    @State private var confluenceTokenInput = ""
+
     private let availableModels: [(id: String, label: String, note: String)] = [
         ("openai_whisper-tiny",   "tiny",   "~75MB · 빠름, 정확도 낮음"),
         ("openai_whisper-base",   "base",   "~145MB · 균형"),
@@ -88,6 +97,47 @@ public struct SettingsView: View {
                     .font(.caption).foregroundColor(.secondary)
             }
 
+            Section("외부 연동 (Notion · Confluence)") {
+                integrationStatusRow(title: "Notion", connected: notion.isConfigured)
+                SecureField("Notion integration token (ntn_… / secret_…)", text: $notionTokenInput)
+                HStack {
+                    Button("저장") {
+                        notion.setToken(notionTokenInput)
+                        notionTokenInput = ""
+                    }
+                    .disabled(notionTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if notion.isConfigured {
+                        Button("연동 해제") { notion.setToken("") }.foregroundColor(.red)
+                    }
+                }
+                Text("notion.so/my-integrations 에서 integration을 만들고, 조회할 페이지를 그 integration에 ‘연결(공유)’하세요. 공유된 페이지만 검색됩니다.")
+                    .font(.caption).foregroundColor(.secondary)
+
+                Divider()
+
+                integrationStatusRow(title: "Confluence", connected: confluence.isConfigured)
+                TextField("사이트 URL (https://회사.atlassian.net)", text: $confluenceBaseURL)
+                    .textContentType(.URL)
+                TextField("이메일", text: $confluenceEmail)
+                SecureField("API token", text: $confluenceTokenInput)
+                HStack {
+                    Button("저장") {
+                        confluence.setAPIToken(confluenceTokenInput)
+                        confluenceTokenInput = ""
+                    }
+                    .disabled(confluenceTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if confluence.isConfigured {
+                        Button("연동 해제") {
+                            confluence.setAPIToken("")
+                            confluenceEmail = ""
+                            confluenceBaseURL = ""
+                        }.foregroundColor(.red)
+                    }
+                }
+                Text("id.atlassian.com 의 ‘API tokens’에서 토큰을 발급하세요. 인증은 이메일+토큰(Basic) 방식입니다.")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+
             Section("현재 상태") {
                 LabeledContent("로드된 모델", value: viewModel.modelVariantName)
                 LabeledContent("모델 상태", value: modelStateDescription)
@@ -98,6 +148,21 @@ public struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 440, height: 520)
+    }
+
+    // MARK: - Integration Section Rows
+
+    private func integrationStatusRow(title: String, connected: Bool) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(connected ? Color.green : Color.secondary.opacity(0.4))
+                .frame(width: 7, height: 7)
+            Text(title).font(.callout)
+            Spacer()
+            Text(connected ? "연동됨" : "미연동")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
     }
 
     // MARK: - LLM Section Rows

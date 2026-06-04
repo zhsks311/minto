@@ -4,6 +4,7 @@ import AppKit
 public struct TranscriptionOverlayView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
     @ObservedObject private var llmService = LLMCorrectionService.shared
+    @ObservedObject private var relatedInfo = RelatedInfoService.shared
     @State private var showRelated = false
 
     public init(viewModel: TranscriptionViewModel) {
@@ -303,42 +304,96 @@ public struct TranscriptionOverlayView: View {
         .padding(.vertical, 1)
     }
 
-    // MARK: - Related info (전사 기반 위키·Notion·Confluence — 연동 예정 스텁)
+    // MARK: - Related info (전사 기반 Notion·Confluence 조회)
 
     private var relatedInfoPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let keywords = detectedKeywords()
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles.rectangle.stack").font(.system(size: 11)).foregroundColor(.yellow)
                 Text("관련 정보").font(.system(size: 12, weight: .bold))
                 Spacer()
-                Text("연동 준비 중").font(.system(size: 9)).foregroundColor(.secondary)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
+                if relatedInfo.isSearching {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button {
+                        let query = keywords.prefix(5).joined(separator: " ")
+                        Task { await relatedInfo.search(query: query) }
+                    } label: {
+                        Label("조회", systemImage: "magnifyingglass").font(.system(size: 10))
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(keywords.isEmpty || !relatedInfo.isAnyConfigured || relatedInfo.isSearching)
+                    .help(relatedInfo.isAnyConfigured ? "감지된 주제로 Notion·Confluence 검색" : "설정에서 Notion/Confluence를 먼저 연동하세요")
+                }
             }
-            let kws = detectedKeywords()
-            if kws.isEmpty {
-                Text("전사가 쌓이면 감지된 주제로 위키·Notion·Confluence를 조회해 정리해 드릴 예정입니다.")
-                    .font(.system(size: 11)).foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("감지된 주제").font(.system(size: 10, weight: .medium)).foregroundColor(.secondary)
+
+            if !keywords.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        ForEach(kws, id: \.self) { kw in
-                            Text("#\(kw)").font(.system(size: 11)).foregroundColor(.primary.opacity(0.8))
+                        ForEach(keywords, id: \.self) { keyword in
+                            Text("#\(keyword)").font(.system(size: 11)).foregroundColor(.primary.opacity(0.8))
                                 .padding(.horizontal, 8).padding(.vertical, 3)
                                 .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
                         }
                     }
                 }
-                Text("이 주제로 위키·Notion·Confluence를 조회해 정리해 드릴 예정입니다.")
-                    .font(.system(size: 10)).foregroundColor(.secondary)
             }
+
+            relatedResultsSection
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
-        .frame(height: 120, alignment: .top)
+        .frame(maxHeight: 240, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var relatedResultsSection: some View {
+        if !relatedInfo.isAnyConfigured {
+            Text("설정에서 Notion 또는 Confluence를 연동하면 감지된 주제로 문서를 찾아 드립니다.")
+                .font(.system(size: 10)).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if !relatedInfo.results.isEmpty {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(relatedInfo.results) { doc in
+                        relatedDocRow(doc)
+                    }
+                }
+            }
+        } else if let message = relatedInfo.statusMessage {
+            Text(message).font(.system(size: 10)).foregroundColor(.secondary)
+        } else {
+            Text("‘조회’를 누르면 감지된 주제로 Notion·Confluence를 검색합니다.")
+                .font(.system(size: 10)).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func relatedDocRow(_ doc: RelatedDoc) -> some View {
+        Button {
+            if let url = URL(string: doc.url) { NSWorkspace.shared.open(url) }
+        } label: {
+            HStack(alignment: .top, spacing: 6) {
+                Text(doc.source == .notion ? "N" : "C")
+                    .font(.system(size: 9, weight: .bold))
+                    .frame(width: 16, height: 16)
+                    .background((doc.source == .notion ? Color.primary : Color.blue).opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(doc.title).font(.system(size: 11, weight: .medium)).foregroundColor(.primary).lineLimit(1)
+                    if !doc.snippet.isEmpty {
+                        Text(doc.snippet).font(.system(size: 9)).foregroundColor(.secondary).lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right.square").font(.system(size: 9)).foregroundColor(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(doc.url)
     }
 
     /// 최근 전사에서 감지한 주제 후보(naive: 3자 이상 토큰). 실제 조회는 후속 MCP 연동 시.
