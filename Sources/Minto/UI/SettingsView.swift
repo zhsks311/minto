@@ -59,6 +59,20 @@ public struct SettingsView: View {
                     }
                 }
                 .disabled(isModelBusy)
+                if isModelFailed {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("모델 파일이 손상되었거나 권한 문제로 열리지 않습니다.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Button("캐시 정리 후 모델 다시 받기") {
+                            Task {
+                                await viewModel.recoverModelCacheAndReload(variant: selectedModel)
+                            }
+                        }
+                        .disabled(isModelBusy)
+                    }
+                    .padding(.vertical, 4)
+                }
             }
 
             Section("오버레이") {
@@ -448,6 +462,11 @@ public struct SettingsView: View {
         case .downloading, .loading: return true
         default: return false
         }
+    }
+
+    private var isModelFailed: Bool {
+        if case .failed = viewModel.modelState { return true }
+        return false
     }
 
     private var modelStateDescription: String {

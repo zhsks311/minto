@@ -76,6 +76,14 @@ public final class TranscriptionViewModel: ObservableObject {
         }
     }
 
+    public func recoverModelCacheAndReload(variant: String = "openai_whisper-large-v3-v20240930_turbo") async {
+        errorMessage = nil
+        await sttService.recoverModelCacheAndReload(variant: variant)
+        if case .failed(let msg) = sttService.modelState {
+            errorMessage = "모델 복구 실패: \(msg)"
+        }
+    }
+
     // MARK: - Recording control
 
     public func startRecording() {

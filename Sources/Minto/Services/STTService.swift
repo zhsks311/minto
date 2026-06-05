@@ -50,6 +50,91 @@ public final class STTService {
         }
     }
 
+    /// User-triggered recovery path for corrupted Hugging Face/WhisperKit cache metadata.
+    /// It removes only the selected model's cached folder and per-file download metadata,
+    /// then runs the normal download/load flow again.
+    public func recoverModelCacheAndReload(variant: String = "openai_whisper-large-v3-v20240930_turbo") async {
+        modelVariant = variant
+        pipe = nil
+        updateState(.loading)
+
+        do {
+            let removed = try await Self.removeCachedModelFiles(for: variant)
+            if removed.isEmpty {
+                fputs("[STT] recovery: no cached model files found for \(variant)\n", stderr)
+            } else {
+                fputs("[STT] recovery: removed \(removed.count) cached path(s) for \(variant)\n", stderr)
+            }
+            await loadModel(variant: variant)
+        } catch {
+            let message = "모델 캐시 정리에 실패했습니다: \(error.localizedDescription)"
+            updateState(.failed(message))
+            fputs("[STT] recovery error: \(error)\n", stderr)
+        }
+    }
+
+    nonisolated static func modelCacheCandidateURLs(for variant: String, repoRoot: URL? = nil) -> [URL] {
+        let trimmed = variant.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let root: URL
+        if let repoRoot {
+            root = repoRoot
+        } else {
+            guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                return []
+            }
+            root = documents
+                .appendingPathComponent("huggingface", isDirectory: true)
+                .appendingPathComponent("models", isDirectory: true)
+                .appendingPathComponent("argmaxinc", isDirectory: true)
+                .appendingPathComponent("whisperkit-coreml", isDirectory: true)
+        }
+
+        let downloadRoot = root
+            .appendingPathComponent(".cache", isDirectory: true)
+            .appendingPathComponent("huggingface", isDirectory: true)
+            .appendingPathComponent("download", isDirectory: true)
+
+        let candidates = matchingChildren(in: root, variant: trimmed)
+            + matchingChildren(in: downloadRoot, variant: trimmed)
+
+        var seen = Set<String>()
+        return candidates.filter { seen.insert($0.path).inserted }
+    }
+
+    nonisolated private static func removeCachedModelFiles(for variant: String) async throws -> [String] {
+        try await Task.detached(priority: .userInitiated) {
+            let candidates = modelCacheCandidateURLs(for: variant)
+            let fileManager = FileManager.default
+            var removed: [String] = []
+
+            for url in candidates {
+                guard fileManager.fileExists(atPath: url.path) else { continue }
+                try fileManager.removeItem(at: url)
+                removed.append(url.path)
+            }
+
+            return removed
+        }.value
+    }
+
+    nonisolated private static func matchingChildren(in root: URL, variant: String) -> [URL] {
+        let fileManager = FileManager.default
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return urls.filter { url in
+            let name = url.lastPathComponent
+            return name == variant || name.contains(variant)
+        }
+    }
+
     // MARK: - Transcription
 
     public func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult {
