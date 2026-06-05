@@ -12,7 +12,7 @@ struct WhisperEmptyClipDiagnosticsTests {
         let end: Double
     }
 
-    private static let model = "openai_whisper-large-v3-v20240930_turbo"
+    private static let model = "openai_whisper-large-v3-v20240930_626MB"
     private static let sampleRate = 16_000
     private static let clips = [
         Clip(label: "good-009.7-025.6", start: 9.7, end: 25.6),

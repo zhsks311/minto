@@ -11,7 +11,7 @@ struct ModelCacheRecoveryTests {
             .appendingPathComponent("minto-model-cache-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let variant = "openai_whisper-large-v3-v20240930_turbo"
+        let variant = "openai_whisper-large-v3-v20240930_626MB"
         let downloadRoot = root
             .appendingPathComponent(".cache", isDirectory: true)
             .appendingPathComponent("huggingface", isDirectory: true)

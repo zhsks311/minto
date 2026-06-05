@@ -68,7 +68,7 @@ public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Model loading
 
-    public func loadModel(variant: String = "openai_whisper-large-v3-v20240930_turbo") async {
+    public func loadModel(variant: String = "openai_whisper-large-v3-v20240930_626MB") async {
         await sttService.loadModel(variant: variant)
         // onModelStateChange가 .failed로 설정했을 수 있으므로 에러 메시지 동기화
         if case .failed(let msg) = sttService.modelState {
@@ -76,7 +76,7 @@ public final class TranscriptionViewModel: ObservableObject {
         }
     }
 
-    public func recoverModelCacheAndReload(variant: String = "openai_whisper-large-v3-v20240930_turbo") async {
+    public func recoverModelCacheAndReload(variant: String = "openai_whisper-large-v3-v20240930_626MB") async {
         errorMessage = nil
         await sttService.recoverModelCacheAndReload(variant: variant)
         if case .failed(let msg) = sttService.modelState {

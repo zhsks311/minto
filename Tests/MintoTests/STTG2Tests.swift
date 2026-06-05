@@ -16,7 +16,7 @@ struct STTG2Tests {
             .appendingPathComponent("sample")
     }()
 
-    private static let model = "openai_whisper-large-v3-v20240930_turbo"
+    private static let model = "openai_whisper-large-v3-v20240930_626MB"
     private static let maxFilesPerSession = 50
 
     private static let sessions = [

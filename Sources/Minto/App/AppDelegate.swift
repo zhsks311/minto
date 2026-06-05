@@ -108,10 +108,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        // UserDefaults에서 저장된 모델 선택 읽기 (구버전 초소형 모델 → turbo 마이그레이션)
-        let defaultModel = "openai_whisper-large-v3-v20240930_turbo"
+        // UserDefaults에서 저장된 모델 선택 읽기 (구버전 모델 → 정확도 우선 모델 마이그레이션)
+        let defaultModel = "openai_whisper-large-v3-v20240930_626MB"
         var savedVariant = UserDefaults.standard.string(forKey: "selectedModel") ?? defaultModel
-        if ["openai_whisper-tiny", "openai_whisper-base"].contains(savedVariant) {
+        if [
+            "openai_whisper-tiny",
+            "openai_whisper-base",
+            "openai_whisper-large-v3-v20240930_turbo",
+            "openai_whisper-large-v3-v20240930_turbo_632MB",
+        ].contains(savedVariant) {
             savedVariant = defaultModel
             UserDefaults.standard.set(defaultModel, forKey: "selectedModel")
         }

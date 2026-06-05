@@ -35,7 +35,7 @@ struct STTFileTests {
         print("[FileTest] 참조 텍스트 글자 수: \(referenceText.filter { !$0.isWhitespace }.count)")
 
         let service = STTService()
-        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_626MB")
         guard case .loaded = service.modelState else {
             Issue.record("모델 로드 실패: \(service.modelState)")
             return
@@ -91,7 +91,7 @@ CER          : \(String(format: "%.1f%%", cer * 100))
         }
 
         let service = STTService()
-        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_626MB")
         guard case .loaded = service.modelState else {
             Issue.record("모델 로드 실패: \(service.modelState)")
             return
@@ -164,7 +164,7 @@ CER          : \(String(format: "%.1f%%", cer * 100))
         }
 
         let service = STTService()
-        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_626MB")
         guard case .loaded = service.modelState else {
             Issue.record("모델 로드 실패: \(service.modelState)")
             return
@@ -212,7 +212,7 @@ CER          : \(String(format: "%.1f%%", cer * 100))
         let reference = try parseScriptText(from: scriptURL)
 
         let service = STTService()
-        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_626MB")
         guard case .loaded = service.modelState else {
             Issue.record("모델 로드 실패: \(service.modelState)")
             return
@@ -295,7 +295,7 @@ CER          : \(String(format: "%.1f%%", cer * 100))
         }
 
         let service = STTService()
-        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_turbo")
+        await service.loadModel(variant: "openai_whisper-large-v3-v20240930_626MB")
         guard case .loaded = service.modelState else {
             Issue.record("모델 로드 실패: \(service.modelState)")
             return

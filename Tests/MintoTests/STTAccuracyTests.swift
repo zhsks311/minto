@@ -8,7 +8,7 @@ import Foundation
 @Suite("STT Accuracy Tests (Manual Only)", .serialized)
 struct STTAccuracyTests {
 
-    private static let model = "openai_whisper-large-v3-v20240930_turbo"
+    private static let model = "openai_whisper-large-v3-v20240930_626MB"
 
     private static let testPhrases: [String] = [
         // 기본 인사·상황
