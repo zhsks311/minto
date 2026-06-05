@@ -30,11 +30,13 @@ public struct SettingsView: View {
     @State private var confluenceTokenInput = ""
 
     private let availableModels: [(id: String, label: String, note: String)] = [
-        ("openai_whisper-tiny",   "tiny",   "~75MB · 빠름, 정확도 낮음"),
-        ("openai_whisper-base",   "base",   "~145MB · 균형"),
-        ("openai_whisper-small",  "small",  "~250MB · 기본"),
-        ("openai_whisper-medium", "medium", "~770MB · 높은 정확도"),
-        ("openai_whisper-large-v3-v20240930_turbo", "large-turbo", "~810MB · 한국어 권장 ★"),
+        ("openai_whisper-small", "small", "~250MB · 장점: 빠름 · 단점: 정확도 보통"),
+        ("openai_whisper-medium", "medium", "~770MB · 장점: 정확도 높음 · 단점: 느림"),
+        ("openai_whisper-large-v3-v20240930_turbo", "large-turbo", "~810MB · 장점: 한국어 회의 권장 · 단점: 용량 큼"),
+    ]
+    private let deprecatedModelIDs = [
+        "openai_whisper-tiny",
+        "openai_whisper-base",
     ]
 
     public init(viewModel: TranscriptionViewModel) {
@@ -124,6 +126,9 @@ public struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 440, height: 520)
+        .onAppear {
+            normalizeSelectedModelIfNeeded()
+        }
     }
 
     // MARK: - Integration Section Rows
@@ -467,6 +472,12 @@ public struct SettingsView: View {
     private var isModelFailed: Bool {
         if case .failed = viewModel.modelState { return true }
         return false
+    }
+
+    private func normalizeSelectedModelIfNeeded() {
+        if deprecatedModelIDs.contains(selectedModel) {
+            selectedModel = "openai_whisper-large-v3-v20240930_turbo"
+        }
     }
 
     private var modelStateDescription: String {
