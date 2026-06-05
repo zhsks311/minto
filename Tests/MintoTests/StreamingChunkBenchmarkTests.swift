@@ -1,0 +1,318 @@
+import Foundation
+import Testing
+@testable import MintoCore
+
+@MainActor
+@Suite("Streaming Chunk Benchmark (Manual Only)", .serialized)
+struct StreamingChunkBenchmarkTests {
+    private static let sampleRate = 16_000
+
+    private static var rawDir: URL {
+        if let value = ProcessInfo.processInfo.environment["MEETING_RAW_DIR"], !value.isEmpty {
+            return URL(fileURLWithPath: value)
+        }
+        return URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("sample/meeting/raw")
+    }
+
+    private static var audioURL: URL {
+        rawDir.appendingPathComponent(ProcessInfo.processInfo.environment["MEETING_WAV"] ?? "haengan_20260526_full.wav")
+    }
+
+    private static var smiURL: URL {
+        rawDir.appendingPathComponent(ProcessInfo.processInfo.environment["MEETING_SMI"] ?? "haengan_20260526_smi.json")
+    }
+
+    private static var model: String {
+        ProcessInfo.processInfo.environment["STT_MODEL"] ?? "openai_whisper-large-v3-v20240930_626MB"
+    }
+
+    private static var maxSeconds: Double {
+        positiveDoubleEnv("STREAM_MAX_SECONDS", default: 120.0)
+    }
+
+    private static var previewStepSeconds: Double {
+        positiveDoubleEnv("STREAM_PREVIEW_STEP_SEC", default: 1.0)
+    }
+
+    private static var previewContextSeconds: Double {
+        positiveDoubleEnv("STREAM_PREVIEW_CONTEXT_SEC", default: 8.0)
+    }
+
+    private static var finalWindowSeconds: Double {
+        positiveDoubleEnv("STREAM_FINAL_WINDOW_SEC", default: 5.0)
+    }
+
+    @Test("rolling preview/final chunk CER and latency metrics")
+    func rollingPreviewFinalBenchmark() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_STREAMING_BENCH"] == "1" else {
+            return
+        }
+
+        guard FileManager.default.fileExists(atPath: Self.audioURL.path),
+              FileManager.default.fileExists(atPath: Self.smiURL.path) else {
+            print("[StreamingBench] 자료 없음 - skip (\(Self.audioURL.path), \(Self.smiURL.path))")
+            return
+        }
+
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+        let totalSeconds = min(Double(samples.count) / Double(Self.sampleRate), Self.maxSeconds)
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let reference = Self.referenceText(captions: captions, start: 0, end: totalSeconds)
+
+        let service = STTService()
+        await service.loadModel(variant: Self.model)
+        guard case .loaded = service.modelState else {
+            Issue.record("모델 로드 실패: \(service.modelState)")
+            return
+        }
+
+        var previewEvents = 0
+        var previewNonEmpty = 0
+        var previewRevisions = 0
+        var previewEditDistanceTotal = 0
+        var firstPreviewAt: Double?
+        var lastPreviewText = ""
+        var lastPreviewForFinal = ""
+        var previewRTFs: [Double] = []
+
+        var finalEvents = 0
+        var emptyFinals = 0
+        var finalRTFs: [Double] = []
+        var allFinalText = ""
+        var lastPreviewFinalDistanceTotal = 0
+
+        var t = Self.previewStepSeconds
+        while t <= totalSeconds {
+            let contextStart = max(0, t - Self.previewContextSeconds)
+            let clip = Self.slice(samples, start: contextStart, end: t)
+            let measured = try await Self.transcribeMeasured(service: service, samples: clip)
+            previewEvents += 1
+            previewRTFs.append(measured.rtf)
+
+            let text = measured.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                previewNonEmpty += 1
+                if firstPreviewAt == nil {
+                    firstPreviewAt = t
+                }
+                if !lastPreviewText.isEmpty, text != lastPreviewText {
+                    previewRevisions += 1
+                    previewEditDistanceTotal += Self.editDistance(Array(lastPreviewText), Array(text))
+                }
+                lastPreviewText = text
+                lastPreviewForFinal = text
+            }
+
+            if t.truncatingRemainder(dividingBy: Self.finalWindowSeconds) < Self.previewStepSeconds {
+                let finalStart = max(0, t - Self.finalWindowSeconds)
+                let finalClip = Self.slice(samples, start: finalStart, end: t)
+                let finalMeasured = try await Self.transcribeMeasured(service: service, samples: finalClip)
+                let finalText = finalMeasured.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                finalEvents += 1
+                finalRTFs.append(finalMeasured.rtf)
+                if finalText.isEmpty {
+                    emptyFinals += 1
+                }
+                if !lastPreviewForFinal.isEmpty || !finalText.isEmpty {
+                    lastPreviewFinalDistanceTotal += Self.editDistance(Array(lastPreviewForFinal), Array(finalText))
+                }
+                allFinalText += finalText + " "
+                lastPreviewForFinal = ""
+            }
+
+            t += Self.previewStepSeconds
+        }
+
+        let stats = Self.cerStats(reference: reference, hypothesis: allFinalText)
+        let globalCER = stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0
+        let avgPreviewRevisionDistance = previewRevisions > 0
+            ? Double(previewEditDistanceTotal) / Double(previewRevisions)
+            : 0
+
+        print("""
+
+        === Streaming Chunk Benchmark [\(Self.model)] ===
+        audio                  : \(Self.audioURL.lastPathComponent)
+        seconds                : \(String(format: "%.1f", totalSeconds))
+        preview step/context   : \(String(format: "%.1f", Self.previewStepSeconds))s / \(String(format: "%.1f", Self.previewContextSeconds))s
+        final window           : \(String(format: "%.1f", Self.finalWindowSeconds))s
+        preview events         : \(previewEvents) (non-empty \(previewNonEmpty))
+        preview revisions      : \(previewRevisions) (avg edit \(String(format: "%.1f", avgPreviewRevisionDistance)))
+        first preview latency  : \(String(format: "%.1f", firstPreviewAt ?? -1))s audio-time
+        final events           : \(finalEvents) (empty \(emptyFinals))
+        preview RTF p50/p95    : \(String(format: "%.2f", Self.percentile(previewRTFs, 0.50))) / \(String(format: "%.2f", Self.percentile(previewRTFs, 0.95)))
+        final RTF p50/p95      : \(String(format: "%.2f", Self.percentile(finalRTFs, 0.50))) / \(String(format: "%.2f", Self.percentile(finalRTFs, 0.95)))
+        last-preview final edit: \(lastPreviewFinalDistanceTotal)
+        global CER             : \(String(format: "%.1f%%", globalCER * 100)) (distance \(stats.distance) / ref \(stats.refLen))
+        ================================
+
+        """)
+
+        #expect(stats.refLen > 0, "streaming benchmark reference should not be empty")
+    }
+
+    private static func transcribeMeasured(service: STTService, samples: [Float]) async throws -> (text: String, rtf: Double) {
+        let startedAt = Date()
+        let result = try await service.transcribe(pcmSamples: samples)
+        let elapsed = max(0.001, Date().timeIntervalSince(startedAt))
+        let audioDuration = max(0.001, Double(samples.count) / Double(sampleRate))
+        return (result.segment.text, elapsed / audioDuration)
+    }
+
+    private static func positiveDoubleEnv(_ key: String, default defaultValue: Double) -> Double {
+        guard let rawValue = ProcessInfo.processInfo.environment[key],
+              let value = Double(rawValue),
+              value > 0 else {
+            return defaultValue
+        }
+        return value
+    }
+
+    private static func slice(_ samples: [Float], start: Double, end: Double) -> [Float] {
+        let startSample = max(0, Int(start * Double(sampleRate)))
+        let endSample = min(samples.count, Int(end * Double(sampleRate)))
+        guard endSample > startSample else { return [] }
+        return Array(samples[startSample..<endSample])
+    }
+
+    private static func percentile(_ values: [Double], _ p: Double) -> Double {
+        guard !values.isEmpty else { return 0 }
+        let sorted = values.sorted()
+        let index = min(sorted.count - 1, max(0, Int((Double(sorted.count - 1) * p).rounded())))
+        return sorted[index]
+    }
+
+    private struct SMIDocument: Decodable {
+        let smiList: [Caption]
+    }
+
+    private struct Caption: Decodable {
+        let start: Double
+        let end: Double
+        let cc: String
+    }
+
+    private static func parseSMI(from url: URL) throws -> [Caption] {
+        let data = try Data(contentsOf: url)
+        let doc = try JSONDecoder().decode(SMIDocument.self, from: data)
+        return doc.smiList
+            .filter { !$0.cc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .sorted { $0.start < $1.start }
+    }
+
+    private static func referenceText(captions: [Caption], start: Double, end: Double) -> String {
+        captions
+            .filter { $0.end >= start && $0.start <= end }
+            .map { $0.cc.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .joined(separator: " ")
+    }
+
+    private static func readWAVSamples(from url: URL) throws -> [Float] {
+        let data = try Data(contentsOf: url)
+        guard data.count >= 12,
+              String(data: data[0..<4], encoding: .ascii) == "RIFF",
+              String(data: data[8..<12], encoding: .ascii) == "WAVE" else {
+            throw NSError(domain: "StreamingBench", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "WAV RIFF header missing: \(url.path)"
+            ])
+        }
+
+        var audioFormat: UInt16?
+        var channelCount: UInt16?
+        var sampleRate: UInt32?
+        var bitsPerSample: UInt16?
+        var dataRange: Range<Int>?
+        var offset = 12
+
+        while offset + 8 <= data.count {
+            let chunkID = String(data: data[offset..<offset + 4], encoding: .ascii) ?? ""
+            let chunkSize = Int(readUInt32LE(data, offset + 4))
+            let chunkStart = offset + 8
+            let chunkEnd = min(chunkStart + chunkSize, data.count)
+
+            if chunkID == "fmt ", chunkStart + 16 <= chunkEnd {
+                audioFormat = readUInt16LE(data, chunkStart)
+                channelCount = readUInt16LE(data, chunkStart + 2)
+                sampleRate = readUInt32LE(data, chunkStart + 4)
+                bitsPerSample = readUInt16LE(data, chunkStart + 14)
+            } else if chunkID == "data" {
+                dataRange = chunkStart..<chunkEnd
+            }
+
+            offset = chunkEnd + (chunkSize % 2)
+        }
+
+        guard channelCount == 1, sampleRate == 16_000 else {
+            throw NSError(domain: "StreamingBench", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "WAV must be 16kHz mono: \(url.path)"
+            ])
+        }
+        guard let audioFormat, let bitsPerSample, let dataRange else {
+            throw NSError(domain: "StreamingBench", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "WAV fmt/data chunk missing: \(url.path)"
+            ])
+        }
+
+        switch (audioFormat, bitsPerSample) {
+        case (1, 16):
+            return stride(from: dataRange.lowerBound, to: dataRange.upperBound - 1, by: 2).map { index in
+                let sample = Int16(bitPattern: readUInt16LE(data, index))
+                return max(-1.0, Float(sample) / 32768.0)
+            }
+        case (3, 32):
+            return stride(from: dataRange.lowerBound, to: dataRange.upperBound - 3, by: 4).map { index in
+                Float(bitPattern: readUInt32LE(data, index))
+            }
+        default:
+            throw NSError(domain: "StreamingBench", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: "Unsupported WAV format: format=\(audioFormat), bits=\(bitsPerSample)"
+            ])
+        }
+    }
+
+    private static func readUInt16LE(_ data: Data, _ offset: Int) -> UInt16 {
+        UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+    }
+
+    private static func readUInt32LE(_ data: Data, _ offset: Int) -> UInt32 {
+        UInt32(data[offset])
+            | (UInt32(data[offset + 1]) << 8)
+            | (UInt32(data[offset + 2]) << 16)
+            | (UInt32(data[offset + 3]) << 24)
+    }
+
+    private static func cerStats(reference: String, hypothesis: String) -> (distance: Int, refLen: Int) {
+        let strip: (String) -> [Character] = { text in
+            Array(text.filter { !$0.isWhitespace && !$0.isPunctuation })
+        }
+        let ref = strip(reference)
+        let hyp = strip(hypothesis)
+        return (editDistance(ref, hyp), ref.count)
+    }
+
+    private static func editDistance<T: Equatable>(_ a: [T], _ b: [T]) -> Int {
+        let m = a.count
+        let n = b.count
+        if m == 0 { return n }
+        if n == 0 { return m }
+
+        var dp = Array(0...n)
+        for i in 1...m {
+            var prev = dp[0]
+            dp[0] = i
+            for j in 1...n {
+                let tmp = dp[j]
+                dp[j] = a[i - 1] == b[j - 1]
+                    ? prev
+                    : Swift.min(prev, Swift.min(dp[j], dp[j - 1])) + 1
+                prev = tmp
+            }
+        }
+        return dp[n]
+    }
+}
