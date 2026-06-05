@@ -4,6 +4,7 @@
 *.xcuserstate
 xcuserdata/
 .swiftpm/
+__pycache__/
 # Model files are too large for git
 Resources/models/*.bin
 Resources/models/*.ggml

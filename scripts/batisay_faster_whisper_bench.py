@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 from faster_whisper import WhisperModel
-from huggingface_hub import snapshot_download
+from huggingface_hub import list_repo_files, snapshot_download
 
 
 SAMPLE_RATE = 16000
@@ -41,9 +41,18 @@ def resolve_model_path(args):
             raise FileNotFoundError(f"--model-path does not exist: {model_path}")
         return model_path
 
+    repo_files = list_repo_files(args.repo_id)
+    ct2_files = [path for path in repo_files if path.startswith("ct2/")]
+    if not ct2_files:
+        preview = ", ".join(repo_files[:20])
+        raise FileNotFoundError(
+            f"{args.repo_id} currently exposes no ct2/ files via huggingface_hub. "
+            f"Visible files: {preview}. Provide --model-path if you have a local CT2 export."
+        )
+
     snapshot = snapshot_download(
         repo_id=args.repo_id,
-        allow_patterns=["ct2/*"],
+        allow_patterns=["ct2/**"],
         local_dir=args.download_root,
     )
     model_path = Path(snapshot) / "ct2"
