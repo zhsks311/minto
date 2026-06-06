@@ -7,7 +7,7 @@ Find a free or local-first Korean STT path for meeting transcription. Paid cloud
 ## Current decision
 
 - Try Apple SpeechAnalyzer first on supported macOS because the current local probe now resolves `ko-KR` to `ko_KR` and the 120s meeting CER is best.
-- Keep WhisperKit `openai_whisper-large-v3-v20240930_626MB` as the fallback/default for older macOS and the current app path.
+- Keep the current app path on WhisperKit `openai_whisper-large-v3-v20240930_turbo` after live-check rollback; retain the 626MB result rows as measured PoC baselines.
 - Keep MLX Nemotron as a research candidate because the 120s CER is better than WhisperKit, but integration requires a Python/MLX sidecar or a larger native port.
 - Keep sherpa-onnx Korean Zipformer as a latency-first experimental path only.
 - Revisit BatiSay only when downloadable CT2/GGML/CoreML/MLX files or a local export are available.
@@ -19,7 +19,7 @@ Find a free or local-first Korean STT path for meeting transcription. Paid cloud
 | Apple SpeechAnalyzer final | measured | `12.3%` | RTF `0.006` | first integration PoC, gated by macOS support |
 | MLX Nemotron 8-bit offline | measured | `16.4%` | RTF `0.030` | research candidate |
 | MLX Nemotron bf16 offline | measured | `16.4%` | RTF `0.036` | research candidate |
-| WhisperKit large-v3 626MB rolling preview/final | measured | `25.1%` | preview RTF p50/p95 `0.12 / 0.14`, final RTF p50/p95 `0.17 / 0.19` | fallback/default |
+| WhisperKit large-v3 626MB rolling preview/final | measured | `25.1%` | preview RTF p50/p95 `0.12 / 0.14`, final RTF p50/p95 `0.17 / 0.19` | measured baseline |
 | sherpa-onnx Korean Zipformer chunk 16 | measured | `27.5%` | RTF `0.040`, first partial `8.32s` | latency experiment |
 | sherpa-onnx Korean Zipformer chunk 32 | measured | `27.2%` | RTF `0.031`, first partial `8.96s` | latency experiment |
 | sherpa-onnx Korean Zipformer chunk 64 | measured | `26.3%` | RTF `0.025`, first partial `10.24s` | latency experiment |

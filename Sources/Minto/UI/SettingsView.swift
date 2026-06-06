@@ -2,7 +2,7 @@ import SwiftUI
 
 public struct SettingsView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
-    @AppStorage("selectedModel") private var selectedModel = "openai_whisper-large-v3-v20240930_626MB"
+    @AppStorage("selectedModel") private var selectedModel = "openai_whisper-large-v3-v20240930_turbo"
 
     // 교정 provider별 모델 선택(서비스가 같은 UserDefaults 키를 읽는다).
     @AppStorage("codexModel") private var codexModel = "auto"
@@ -32,12 +32,12 @@ public struct SettingsView: View {
     private let availableModels: [(id: String, label: String, note: String)] = [
         ("openai_whisper-small", "small", "~250MB · 장점: 빠름 · 단점: 정확도 보통"),
         ("openai_whisper-medium", "medium", "~770MB · 장점: 정확도 높음 · 단점: 느림"),
-        ("openai_whisper-large-v3-v20240930_626MB", "large-v3", "~626MB · 장점: 회의 정확도 우선 · 단점: 로딩 부담"),
+        ("openai_whisper-large-v3-v20240930_turbo", "large-turbo", "~810MB · 장점: 한국어 회의 권장 · 단점: 용량 큼"),
     ]
     private let deprecatedModelIDs = [
         "openai_whisper-tiny",
         "openai_whisper-base",
-        "openai_whisper-large-v3-v20240930_turbo",
+        "openai_whisper-large-v3-v20240930_626MB",
         "openai_whisper-large-v3-v20240930_turbo_632MB",
     ]
 
@@ -478,7 +478,7 @@ public struct SettingsView: View {
 
     private func normalizeSelectedModelIfNeeded() {
         if deprecatedModelIDs.contains(selectedModel) {
-            selectedModel = "openai_whisper-large-v3-v20240930_626MB"
+            selectedModel = "openai_whisper-large-v3-v20240930_turbo"
         }
     }
 

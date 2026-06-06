@@ -18,7 +18,7 @@
 | Apple SpeechAnalyzer final | measured | `12.3%` | `0.006` | native API, but preview assembly needs work | first integration PoC |
 | MLX Nemotron bf16 offline | measured | `16.4%` | `0.036` | `stream_generate` exists | research candidate |
 | MLX Nemotron 8-bit offline | measured | `16.4%` | `0.030` | not yet stream-measured | research candidate |
-| WhisperKit large-v3 626MB rolling | measured | `25.1%` | final p50/p95 `0.17 / 0.19` | current app path | fallback/default for older macOS |
+| WhisperKit large-v3 626MB rolling | measured | `25.1%` | final p50/p95 `0.17 / 0.19` | measured WhisperKit path | PoC baseline |
 | sherpa-onnx Zipformer chunk 64 | measured | `26.3%` | `0.023` | true streaming, first partial `10.24s` | latency experiment only |
 | sherpa-onnx Zipformer chunk 32 | measured | `27.2%` | `0.028` | true streaming, first partial `8.96s` | not default |
 | sherpa-onnx Zipformer chunk 16 | measured | `27.5%` | `0.040` | true streaming, first partial `8.32s` | not default |

@@ -38,7 +38,7 @@ struct MeetingCorpusTests {
         rawDir.appendingPathComponent(ProcessInfo.processInfo.environment["MEETING_SMI"] ?? "haengan_20260526_smi.json")
     }
 
-    private static let model = "openai_whisper-large-v3-v20240930_626MB"
+    private static let model = "openai_whisper-large-v3-v20240930_turbo"
     private static let sampleRate = 16_000
 
     /// 연속 자막을 이 길이(초)에 도달할 때까지 병합해 한 창으로 만든다.

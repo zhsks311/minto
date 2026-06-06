@@ -7,7 +7,7 @@
 ## Tracks
 
 - Benchmark harness: 모든 후보가 같은 sample/meeting, sample/you 기준으로 CER, RTF, latency, partial revision을 출력한다.
-- Korean final STT: `openai_whisper-large-v3-v20240930_626MB`를 기준선으로 두고 BatiSay 계열은 외부 runner 또는 변환 모델로 비교한다.
+- Korean final STT: 앱 기본값은 `openai_whisper-large-v3-v20240930_turbo`로 두고, `openai_whisper-large-v3-v20240930_626MB`는 PoC 측정 기준선으로 비교한다.
 - Streaming preview: 현재 WhisperKit rolling preview/final 구조를 먼저 계측하고, Apple SpeechAnalyzer와 sherpa-onnx는 별도 worktree에서 PoC한다.
 
 ## Acceptance

@@ -27,7 +27,7 @@ struct StreamingChunkBenchmarkTests {
     }
 
     private static var model: String {
-        ProcessInfo.processInfo.environment["STT_MODEL"] ?? "openai_whisper-large-v3-v20240930_626MB"
+        ProcessInfo.processInfo.environment["STT_MODEL"] ?? "openai_whisper-large-v3-v20240930_turbo"
     }
 
     private static var maxSeconds: Double {

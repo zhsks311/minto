@@ -9,7 +9,7 @@ public final class STTService {
     // MARK: - Public state
 
     public private(set) var modelState: ModelState = .unloaded
-    public private(set) var modelVariant: String = "openai_whisper-large-v3-v20240930_626MB"
+    public private(set) var modelVariant: String = "openai_whisper-large-v3-v20240930_turbo"
 
     // ViewModel이 modelState 변화를 @Published 없이 수신하는 콜백
     var onModelStateChange: ((ModelState) -> Void)?
@@ -22,7 +22,7 @@ public final class STTService {
 
     // MARK: - Model loading
 
-    public func loadModel(variant: String = "openai_whisper-large-v3-v20240930_626MB") async {
+    public func loadModel(variant: String = "openai_whisper-large-v3-v20240930_turbo") async {
         modelVariant = variant
         fputs("[STT] downloading \(variant)...\n", stderr)
         updateState(.downloading(0))
@@ -53,7 +53,7 @@ public final class STTService {
     /// User-triggered recovery path for corrupted Hugging Face/WhisperKit cache metadata.
     /// It removes only the selected model's cached folder and per-file download metadata,
     /// then runs the normal download/load flow again.
-    public func recoverModelCacheAndReload(variant: String = "openai_whisper-large-v3-v20240930_626MB") async {
+    public func recoverModelCacheAndReload(variant: String = "openai_whisper-large-v3-v20240930_turbo") async {
         modelVariant = variant
         pipe = nil
         updateState(.loading)
