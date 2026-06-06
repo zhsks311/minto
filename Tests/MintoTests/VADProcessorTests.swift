@@ -162,4 +162,39 @@ struct VADProcessorTests {
             #expect(first.durationSeconds <= 5.1, "Post-reset first chunk should ramp up at ~5s")
         }
     }
+
+    @Test("flushPending: 종료 시 0.8초 발화를 최종 청크로 반환")
+    func flushPendingReturnsBufferedSpeechAtStop() async throws {
+        let vad = VADProcessor()
+        nonisolated(unsafe) var emittedChunks: [AudioChunk] = []
+        vad.onChunk = { emittedChunks.append($0) }
+
+        calibrate(vad)
+        vad.process(samples: [Float](repeating: 0.5, count: 12_800))  // 0.8s speech
+
+        let chunk = await vad.flushPending()
+
+        #expect(chunk != nil, "0.8s speech should be drained at stop")
+        #expect(chunk?.durationSeconds ?? 0 >= 0.79)
+        #expect(chunk?.durationSeconds ?? 0 <= 0.81)
+        #expect(emittedChunks.isEmpty, "flushPending should return the chunk without calling onChunk")
+
+        let secondDrain = await vad.flushPending()
+        #expect(secondDrain == nil, "flushPending should clear the buffer after returning it")
+    }
+
+    @Test("flushPending: 0.5초 미만 발화는 보수적으로 폐기")
+    func flushPendingDropsTooShortSpeech() async throws {
+        let vad = VADProcessor()
+        nonisolated(unsafe) var emittedChunks: [AudioChunk] = []
+        vad.onChunk = { emittedChunks.append($0) }
+
+        calibrate(vad)
+        vad.process(samples: [Float](repeating: 0.5, count: 6_400))  // 0.4s speech
+
+        let chunk = await vad.flushPending()
+
+        #expect(chunk == nil, "speech shorter than minSpeechDuration should not be drained")
+        #expect(emittedChunks.isEmpty, "too-short flush should not emit through onChunk")
+    }
 }

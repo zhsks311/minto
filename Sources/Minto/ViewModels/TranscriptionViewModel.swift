@@ -142,9 +142,15 @@ public final class TranscriptionViewModel: ObservableObject {
                 do {
                     let result = try await sttService.transcribe(pcmSamples: chunk.samples)
                     fputs("[VM] STT final result: '\(result.segment.text)'\n", stderr)
-                    // transcribe 완료 후에 pending 초기화 → 깜박임 없음
+                    guard !result.segment.text.isEmpty else {
+                        if pendingSegment != nil {
+                            fputs("[VM] STT final empty; keeping pending preview until next update\n", stderr)
+                        }
+                        continue
+                    }
+                    // final 결과가 확정된 뒤에만 pending을 지운다. final이 빈 출력이면
+                    // preview가 즉시 사라지는 대신 다음 preview/final/clear까지 미확정 상태로 둔다.
                     pendingSegment = nil
-                    guard !result.segment.text.isEmpty else { continue }
                     state.advanceWindow(newResult: result)
                     committedSegments = state.committedSegments
 
@@ -179,18 +185,38 @@ public final class TranscriptionViewModel: ObservableObject {
     }
 
     public func stopRecording() {
-        // 마지막 창(window 미달분)도 교정·병합되도록 flush
-        flushCorrectionBatch()
+        Task { @MainActor [weak self] in
+            await self?.stopRecordingAndDrain()
+        }
+    }
+
+    /// 녹음 종료 시 VAD 잔여 버퍼를 최종 청크로 흘려보낸 뒤 전사 Task가 끝날 때까지 기다린다.
+    public func stopRecordingAndDrain() async {
+        let finalRecordingDuration = recordingStartDate.map { Date().timeIntervalSince($0) } ?? recordingDuration
+
         audioSource.stop()
-        chunkContinuation?.finish()
-        transcriptionTask?.cancel()
-        previewTask?.cancel()
-        chunkContinuation = nil
-        transcriptionTask = nil
-        previewTask = nil
         isRecording = false
         audioLevel = 0
         stopTimer()
+        recordingDuration = finalRecordingDuration
+
+        previewTask?.cancel()
+        previewTask = nil
+
+        // MicrophoneSource는 audio tap에서 DispatchQueue.main.async로 buffer를 넘긴다.
+        // stop 직전에 이미 main queue에 올라온 마지막 buffer가 VAD queue에 들어간 뒤 drain한다.
+        await waitForMainQueueTurn()
+        if let finalChunk = await vadProcessor.flushPending() {
+            enqueueChunk(finalChunk)
+        }
+
+        chunkContinuation?.finish()
+        await transcriptionTask?.value
+
+        // 마지막 창(window 미달분)도 교정·병합되도록 flush
+        flushCorrectionBatch()
+        chunkContinuation = nil
+        transcriptionTask = nil
     }
 
     public func clearTranscript() {
@@ -257,6 +283,14 @@ public final class TranscriptionViewModel: ObservableObject {
 
     public func enqueueChunk(_ chunk: AudioChunk) {
         chunkContinuation?.yield(chunk)
+    }
+
+    private func waitForMainQueueTurn() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                continuation.resume()
+            }
+        }
     }
 
     // MARK: - Timer

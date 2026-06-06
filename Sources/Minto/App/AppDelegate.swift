@@ -43,22 +43,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     /// → 보고서에 tail·요약 기록 후 마감 → 요약 표시 → 회의 맥락 초기화.
     @MainActor
     public func handleStopRecording() {
-        viewModel.stopRecording()
         floatingWindowManager.hide()
         summaryWindowManager.showLoading()
 
         Task { @MainActor [weak self] in
             guard let self else { return }
+            await self.viewModel.stopRecordingAndDrain()
             let summary = await self.viewModel.finalizeMeeting()
             let segments = self.viewModel.committedSegments
-
-            // 메모리에 남은 tail 세그먼트를 보고서에 기록. evict된 배치는 이미 .transcriptionNeedsFlush로
-            // 기록됐으므로 중복되지 않는다(짧은 회의는 미evict라 전량이 여기서 기록됨).
-            for segment in segments {
-                self.reportService.appendSegment(segment)
-            }
-            self.reportService.appendSummarySection(summary?.markdown() ?? "")
-            self.reportService.finalizeReport()
 
             // 회의 기록을 영속화(요약이 없어도 전사가 있으면 저장 → 나중에 열람). 빈 회의는 store가 skip.
             let record = Self.makeRecord(
@@ -67,6 +59,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 topic: MeetingContext.shared.topic,
                 duration: self.viewModel.recordingDuration
             )
+
+            // 메모리에 남은 tail 세그먼트를 보고서에 기록. evict된 배치는 이미 .transcriptionNeedsFlush로
+            // 기록됐으므로 중복되지 않는다(짧은 회의는 미evict라 전량이 여기서 기록됨).
+            // 저장 record와 같은 normalized transcript를 써서 보고서도 chunk 단위로 보이지 않게 한다.
+            for segment in record.transcript {
+                self.reportService.appendSegment(segment)
+            }
+            self.reportService.appendSummarySection(summary?.markdown() ?? "")
+            self.reportService.finalizeReport()
+
             let saved = MeetingStore.shared.save(record)
 
             // 빈 회의이거나 저장 실패면 결과로 표시하지 않는다(저장 안 됐는데 성공처럼 보이는 것 방지).
@@ -82,16 +84,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     /// 전사 세그먼트 + 구조화 요약 → 저장용 MeetingRecord. 제목·길이를 해소한다.
     @MainActor
     static func makeRecord(summary: MeetingSummary, segments: [Segment], topic: String, duration: TimeInterval) -> MeetingRecord {
+        let transcript = TranscriptNormalizer.normalize(segments)
         let title: String = {
             let t = summary.title.trimmingCharacters(in: .whitespacesAndNewlines)
             if !t.isEmpty { return t }
             let topicTrimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
             return topicTrimmed.isEmpty ? "회의 결과" : topicTrimmed
         }()
-        let start = segments.first?.timestamp ?? Date()
+        let start = transcript.first?.timestamp ?? Date()
         // 회의 길이는 segment 타임스탬프로 계산(recordingDuration은 종료 시점에 0으로 들어올 수 있음).
         let meetingSeconds: TimeInterval
-        if let first = segments.first, let last = segments.last {
+        if let first = transcript.first, let last = transcript.last {
             meetingSeconds = max(duration, last.timestamp.timeIntervalSince(first.timestamp) + last.duration)
         } else {
             meetingSeconds = duration
@@ -102,7 +105,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             durationSeconds: meetingSeconds,
             topic: topic,
             summary: summary,
-            transcript: segments
+            transcript: transcript
         )
     }
 

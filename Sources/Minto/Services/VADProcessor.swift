@@ -55,6 +55,20 @@ public final class VADProcessor: @unchecked Sendable {
         }
     }
 
+    /// 녹음 종료 시 남아 있는 발화 버퍼를 최종 청크로 꺼낸다.
+    /// `onChunk`를 호출하지 않으므로 종료 경로에서 중복 enqueue race 없이 직접 처리할 수 있다.
+    public func flushPending() async -> AudioChunk? {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: self.drainBufferedChunk(trailingSilence: 0, forced: false))
+            }
+        }
+    }
+
     /// 새 녹음 시작 시 호출 — 버퍼와 ramp-up 카운터를 초기화한다.
     /// calibration 상태(noise floor)는 의도적으로 보존한다.
     public func reset() {
@@ -121,10 +135,18 @@ public final class VADProcessor: @unchecked Sendable {
 
     private func flushChunk(trailingSilence: TimeInterval, forced: Bool) {
         fputs("[VAD] flushChunk samples=\(buffer.count) minRequired=\(VADProcessor.minSpeechSamples)\n", stderr)
+        guard let chunk = drainBufferedChunk(trailingSilence: trailingSilence, forced: forced) else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.onChunk?(chunk)
+        }
+    }
+
+    private func drainBufferedChunk(trailingSilence: TimeInterval, forced: Bool) -> AudioChunk? {
         guard buffer.count >= VADProcessor.minSpeechSamples else {
             buffer = []
             silenceSampleCount = 0
-            return
+            return nil
         }
 
         let samples = buffer
@@ -143,10 +165,7 @@ public final class VADProcessor: @unchecked Sendable {
         if forced {
             emittedChunkCount += 1
         }
-
-        DispatchQueue.main.async { [weak self] in
-            self?.onChunk?(chunk)
-        }
+        return chunk
     }
 
     private func computeEnergyDB(samples: [Float]) -> Float {

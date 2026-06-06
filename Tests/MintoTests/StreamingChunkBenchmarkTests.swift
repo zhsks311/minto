@@ -156,6 +156,85 @@ struct StreamingChunkBenchmarkTests {
         #expect(stats.refLen > 0, "streaming benchmark reference should not be empty")
     }
 
+    @Test("sample transcript raw chunks vs normalized blocks A/B")
+    func transcriptNormalizerABBenchmark() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_TRANSCRIPT_AB"] == "1" else {
+            return
+        }
+
+        guard FileManager.default.fileExists(atPath: Self.audioURL.path),
+              FileManager.default.fileExists(atPath: Self.smiURL.path) else {
+            print("[TranscriptAB] 자료 없음 - skip (\(Self.audioURL.path), \(Self.smiURL.path))")
+            return
+        }
+
+        let windowSeconds = Self.positiveDoubleEnv("TRANSCRIPT_AB_WINDOW_SEC", default: 15.0)
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+        let totalSeconds = min(Double(samples.count) / Double(Self.sampleRate), Self.maxSeconds)
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let reference = Self.referenceText(captions: captions, start: 0, end: totalSeconds)
+
+        let service = STTService()
+        await service.loadModel(variant: Self.model)
+        guard case .loaded = service.modelState else {
+            Issue.record("모델 로드 실패: \(service.modelState)")
+            return
+        }
+
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        var rawSegments: [Segment] = []
+        var t = 0.0
+        while t < totalSeconds {
+            let end = min(totalSeconds, t + windowSeconds)
+            let clip = Self.slice(samples, start: t, end: end)
+            let measured = try await Self.transcribeMeasured(service: service, samples: clip)
+            let text = measured.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            if !text.isEmpty {
+                rawSegments.append(Segment(
+                    text: text,
+                    timestamp: startedAt.addingTimeInterval(t),
+                    duration: end - t
+                ))
+            }
+            t = end
+        }
+
+        let normalizedSegments = TranscriptNormalizer.normalize(rawSegments)
+        let rawText = rawSegments.map(\.text).joined(separator: " ")
+        let normalizedText = normalizedSegments.map(\.text).joined(separator: " ")
+        let rawStats = Self.cerStats(reference: reference, hypothesis: rawText)
+        let normalizedStats = Self.cerStats(reference: reference, hypothesis: normalizedText)
+        let rawCER = rawStats.refLen > 0 ? Double(rawStats.distance) / Double(rawStats.refLen) : 0
+        let normalizedCER = normalizedStats.refLen > 0
+            ? Double(normalizedStats.distance) / Double(normalizedStats.refLen)
+            : 0
+        let rawDangling = rawSegments.filter { TranscriptNormalizer.isLikelyIncompleteEnding($0.text) }.count
+        let normalizedDangling = normalizedSegments.filter { TranscriptNormalizer.isLikelyIncompleteEnding($0.text) }.count
+
+        print("""
+
+        === Transcript Normalizer A/B [\(Self.model)] ===
+        audio                  : \(Self.audioURL.lastPathComponent)
+        seconds                : \(String(format: "%.1f", totalSeconds))
+        raw window             : \(String(format: "%.1f", windowSeconds))s
+        raw segments           : \(rawSegments.count) (dangling endings \(rawDangling))
+        normalized segments    : \(normalizedSegments.count) (dangling endings \(normalizedDangling))
+        segment reduction      : \(rawSegments.count - normalizedSegments.count)
+        raw global CER         : \(String(format: "%.1f%%", rawCER * 100)) (distance \(rawStats.distance) / ref \(rawStats.refLen))
+        normalized global CER  : \(String(format: "%.1f%%", normalizedCER * 100)) (distance \(normalizedStats.distance) / ref \(normalizedStats.refLen))
+        raw preview            : \(rawSegments.prefix(3).map(\.text).joined(separator: " / ").prefix(260))
+        normalized preview     : \(normalizedSegments.prefix(3).map(\.text).joined(separator: " / ").prefix(260))
+        ================================
+        ※ 같은 STT 결과를 재배열하므로 CER 변화는 없어야 한다. 이 A/B는 정확도보다 저장 transcript 가독성 지표다.
+
+        """)
+
+        #expect(rawStats.refLen > 0, "transcript A/B reference should not be empty")
+        #expect(normalizedSegments.count <= rawSegments.count)
+        #expect(rawStats.distance == normalizedStats.distance, "normalization should not alter transcript characters")
+    }
+
     private static func transcribeMeasured(service: STTService, samples: [Float]) async throws -> (text: String, rtf: Double) {
         let startedAt = Date()
         let result = try await service.transcribe(pcmSamples: samples)

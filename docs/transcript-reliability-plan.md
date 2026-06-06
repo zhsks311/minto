@@ -248,3 +248,26 @@ Verification:
 6. Run build and full tests.
 7. Perform manual live recording checks.
 8. Decide whether Phase 3 raw transcript persistence is needed.
+
+## Execution update — 2026-06-06
+
+- Implemented Phase 1 stop-time drain:
+  - `VADProcessor.flushPending()` returns buffered speech at stop without `onChunk` double emission.
+  - `TranscriptionViewModel.stopRecordingAndDrain()` stops audio, drains pending VAD speech, finishes the final transcription stream, then flushes correction.
+  - `AppDelegate.handleStopRecording()` awaits the drain path before summary/save.
+- Implemented disappearing-preview mitigation:
+  - Final empty STT results no longer clear an existing `pendingSegment`.
+  - Preview text is still not committed as final transcript.
+- Implemented Phase 2 readable transcript blocks:
+  - `TranscriptNormalizer` conservatively merges adjacent chunk-looking fragments such as particle/connective endings.
+  - Saved records and reports use the normalized transcript from `AppDelegate.makeRecord`.
+- Verification completed:
+  - `swift build --build-tests --disable-sandbox`
+  - `swift test --disable-sandbox`
+  - sample A/B with `haengan_20260526_full.wav`, first 120 seconds, 15-second raw windows:
+    - raw segments: 8, dangling endings: 1
+    - normalized segments: 7, dangling endings: 0
+    - raw/global CER and normalized/global CER both 22.5%
+- Remaining follow-up:
+  - Manual live recording check is still needed for actual microphone UX.
+  - Phase 3 raw transcript persistence remains deferred until search/export quality needs it.
