@@ -603,8 +603,11 @@ public struct MeetingLibraryView: View {
                 .frame(height: 28)
                 .background(active ? LibraryPalette.elevated : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(active ? [.isSelected] : [])
     }
 
     private func whyThisResult(_ record: MeetingRecord) -> some View {
