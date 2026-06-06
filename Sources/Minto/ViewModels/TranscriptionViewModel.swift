@@ -14,6 +14,7 @@ public final class TranscriptionViewModel: ObservableObject {
     @Published public var modelState: ModelState = .unloaded
     @Published public var recordingDuration: TimeInterval = 0
     @Published public var audioLevel: Float = 0
+    @Published public var isFinalizingMeeting: Bool = false
 
     // MARK: - Private
 
@@ -89,6 +90,7 @@ public final class TranscriptionViewModel: ObservableObject {
     public func startRecording() {
         guard !isRecording else { return }
         errorMessage = nil
+        isFinalizingMeeting = false
         vadProcessor.reset()
         // 이전 회의의 관련 문서 조회 결과가 새 회의에 남지 않도록 초기화.
         RelatedInfoService.shared.clear()
@@ -230,6 +232,7 @@ public final class TranscriptionViewModel: ObservableObject {
         correctionTask = nil
         summaryTask?.cancel()
         summaryTask = nil
+        isFinalizingMeeting = false
     }
 
     /// 누적된 미교정 구간을 한 번에 교정해 하나의 문단으로 병합한다.

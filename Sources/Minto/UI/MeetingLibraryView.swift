@@ -18,13 +18,30 @@ private struct MeetingSearchMatch {
 /// v2는 검색을 첫 화면의 중심 작업으로 두고, 상세 리포트 전체보다 빠른 회고/탐색에 집중한다.
 public struct MeetingLibraryView: View {
     @ObservedObject private var store: MeetingStore
+    @ObservedObject private var viewModel: TranscriptionViewModel
+    @ObservedObject private var summaryService = SummaryService.shared
     @State private var selectedID: UUID?
     @State private var searchText = ""
+    @State private var showingLiveMeeting = false
+    @State private var detailTab: DetailTab = .summary
     private let onNewMeeting: () -> Void
+    private let onShowOverlay: () -> Void
 
-    public init(store: MeetingStore, onNewMeeting: @escaping () -> Void) {
+    private enum DetailTab {
+        case summary
+        case transcript
+    }
+
+    public init(
+        store: MeetingStore,
+        viewModel: TranscriptionViewModel,
+        onNewMeeting: @escaping () -> Void,
+        onShowOverlay: @escaping () -> Void
+    ) {
         self.store = store
+        self.viewModel = viewModel
         self.onNewMeeting = onNewMeeting
+        self.onShowOverlay = onShowOverlay
     }
 
     public var body: some View {
@@ -35,9 +52,28 @@ public struct MeetingLibraryView: View {
         }
         .background(LibraryPalette.background)
         .frame(minWidth: 900, minHeight: 600)
-        .onAppear { selectFirstAvailableIfNeeded() }
+        .onAppear {
+            if hasLiveMeeting {
+                showingLiveMeeting = true
+            }
+            selectFirstAvailableIfNeeded()
+        }
         .onChange(of: store.meetings) { _, _ in selectFirstAvailableIfNeeded() }
         .onChange(of: searchText) { _, _ in selectFirstAvailableIfNeeded(preferFirstResult: true) }
+        .onChange(of: viewModel.isRecording) { _, isRecording in
+            showingLiveMeeting = isRecording || viewModel.isFinalizingMeeting
+            if !showingLiveMeeting {
+                selectFirstAvailableIfNeeded(preferFirstResult: true)
+            }
+        }
+        .onChange(of: viewModel.isFinalizingMeeting) { _, isFinalizing in
+            if isFinalizing {
+                showingLiveMeeting = true
+            } else if !viewModel.isRecording {
+                showingLiveMeeting = false
+                selectFirstAvailableIfNeeded(preferFirstResult: true)
+            }
+        }
     }
 
     // MARK: - Header
@@ -121,9 +157,13 @@ public struct MeetingLibraryView: View {
                     .foregroundColor(.secondary)
             }
 
-            if store.meetings.isEmpty {
+            if hasLiveMeeting {
+                liveMeetingRow
+            }
+
+            if store.meetings.isEmpty && !hasLiveMeeting {
                 emptyState
-            } else if displayedMeetings.isEmpty {
+            } else if isSearching && displayedMeetings.isEmpty {
                 noSearchResults
             } else {
                 ScrollView {
@@ -143,7 +183,9 @@ public struct MeetingLibraryView: View {
 
     private var detailColumn: some View {
         Group {
-            if let record = selectedRecord {
+            if showingLiveMeeting, hasLiveMeeting {
+                liveMeetingDetail
+            } else if let record = selectedRecord {
                 meetingPreview(record)
             } else {
                 VStack(spacing: 10) {
@@ -157,6 +199,7 @@ public struct MeetingLibraryView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .textSelection(.enabled)
     }
 
     // MARK: - Left column blocks
@@ -256,6 +299,57 @@ public struct MeetingLibraryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var liveMeetingRow: some View {
+        let selected = showingLiveMeeting
+        return HStack(alignment: .top, spacing: 8) {
+            Button {
+                showingLiveMeeting = true
+            } label: {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(liveTitle)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(viewModel.isFinalizingMeeting ? "정리 중" : "녹음 중")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(viewModel.isFinalizingMeeting ? .orange : .red)
+                    }
+
+                    Text(liveSubtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+
+                    Text(livePrimaryText)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Button { onShowOverlay() } label: {
+                Image(systemName: "rectangle.on.rectangle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.borderless)
+            .help("전사 오버레이 열기")
+            .disabled(!viewModel.isRecording)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(selected ? LibraryPalette.accentSoft : LibraryPalette.elevated)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(selected ? Color.accentColor.opacity(0.45) : LibraryPalette.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
     private func meetingRow(_ record: MeetingRecord) -> some View {
         let selected = selectedID == record.id
         let match = primaryMatch(for: record)
@@ -294,7 +388,7 @@ public struct MeetingLibraryView: View {
                             .lineLimit(2)
                     }
                 } else if !record.summary.leadAnswer.isEmpty {
-                    Text(record.summary.leadAnswer)
+                    markdownText(record.summary.leadAnswer)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .lineLimit(2)
@@ -322,6 +416,107 @@ public struct MeetingLibraryView: View {
 
     // MARK: - Detail preview
 
+    private var liveMeetingDetail: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(liveTitle)
+                                .font(.system(size: 26, weight: .bold))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(liveSubtitle)
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            if summaryService.activeGenerations > 0 {
+                                Label("현재 요약 갱신 중", systemImage: "arrow.triangle.2.circlepath")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Button { onShowOverlay() } label: {
+                            Label("오버레이", systemImage: "rectangle.on.rectangle")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!viewModel.isRecording)
+                    }
+
+                    detailTabs
+                    HStack(spacing: 8) {
+                        Button { copyLiveSummary() } label: {
+                            Label("요약 복사", systemImage: "doc.on.doc")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(liveRunningSummary.isEmpty)
+
+                        Button { copyLiveTranscript() } label: {
+                            Label("전사 복사", systemImage: "text.quote")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(liveSegments.isEmpty)
+                    }
+                }
+                .padding(18)
+                .background(LibraryPalette.elevated)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                if detailTab == .summary {
+                    liveSummarySection
+                    liveTranscriptSnippet
+                } else {
+                    transcriptBlock(liveSegments, emptyText: "아직 전사된 내용이 없습니다.")
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(LibraryPalette.background)
+    }
+
+    private var liveSummarySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("현재까지 요약", systemImage: "list.bullet.rectangle")
+            if liveRunningSummary.isEmpty {
+                Text("요약은 전사가 충분히 쌓이면 자동으로 갱신됩니다.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            } else {
+                markdownText(liveRunningSummary)
+                    .font(.system(size: 15))
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(18)
+        .background(LibraryPalette.elevated)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var liveTranscriptSnippet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("최근 전사", systemImage: "text.quote")
+            let recent = liveSegments.suffix(6)
+            if recent.isEmpty {
+                Text("녹음이 시작되면 여기에 전사가 쌓입니다.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(Array(recent.enumerated()), id: \.element.id) { _, segment in
+                    Text(segment.text)
+                        .font(.system(size: 13))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(18)
+        .background(LibraryPalette.elevated)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
     private func meetingPreview(_ record: MeetingRecord) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -331,9 +526,12 @@ public struct MeetingLibraryView: View {
                     whyThisResult(record)
                 }
 
-                leadSummary(record)
-                sectionPreview(record.summary.sections)
-                transcriptPreview(record)
+                if detailTab == .summary {
+                    leadSummary(record)
+                    meetingNotes(record.summary.sections)
+                } else {
+                    transcriptBlock(record.transcript, emptyText: "전사 내용이 없습니다.", record: record)
+                }
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -366,8 +564,8 @@ public struct MeetingLibraryView: View {
             }
 
             HStack(spacing: 8) {
-                Button { copySummary(record) } label: {
-                    Label("요약 복사", systemImage: "doc.on.doc")
+                Button { copyFullMeeting(record) } label: {
+                    Label("전체 복사", systemImage: "doc.on.doc")
                 }
                 .buttonStyle(.borderedProminent)
                 Button { copyTranscript(record) } label: {
@@ -376,11 +574,37 @@ public struct MeetingLibraryView: View {
                 .buttonStyle(.bordered)
                 .disabled(record.transcript.isEmpty)
             }
+            detailTabs
         }
         .padding(18)
         .background(LibraryPalette.elevated)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var detailTabs: some View {
+        HStack(spacing: 6) {
+            detailTabButton("요약", .summary)
+            detailTabButton("전사", .transcript)
+        }
+        .padding(4)
+        .background(Color.secondary.opacity(0.08))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func detailTabButton(_ title: String, _ tab: DetailTab) -> some View {
+        let active = detailTab == tab
+        return Button { detailTab = tab } label: {
+            Text(title)
+                .font(.system(size: 13, weight: active ? .bold : .semibold))
+                .foregroundColor(active ? .primary : .secondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 28)
+                .background(active ? LibraryPalette.elevated : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
     }
 
     private func whyThisResult(_ record: MeetingRecord) -> some View {
@@ -429,7 +653,7 @@ public struct MeetingLibraryView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !summary.leadAnswer.isEmpty {
-                    Text(summary.leadAnswer)
+                    markdownText(summary.leadAnswer)
                         .font(.system(size: 15))
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
@@ -458,26 +682,46 @@ public struct MeetingLibraryView: View {
     }
 
     @ViewBuilder
-    private func sectionPreview(_ sections: [MeetingSummary.Section]) -> some View {
+    private func meetingNotes(_ sections: [MeetingSummary.Section]) -> some View {
         if !sections.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("주요 흐름", systemImage: "point.3.connected.trianglepath.dotted")
-                ForEach(Array(sections.prefix(3).enumerated()), id: \.offset) { _, section in
-                    VStack(alignment: .leading, spacing: 5) {
+                sectionTitle("회의 내용 정리", systemImage: "doc.text")
+                ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 8) {
                             Text(section.title.isEmpty ? "섹션" : section.title)
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(size: 14, weight: .bold))
                             if !section.time.isEmpty {
                                 Text(section.time)
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(.secondary)
                             }
                         }
-                        if let firstPoint = section.points.first?.text, !firstPoint.isEmpty {
-                            Text(firstPoint)
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                                .lineLimit(2)
+                        ForEach(Array(section.points.enumerated()), id: \.offset) { _, point in
+                            VStack(alignment: .leading, spacing: 4) {
+                                if !point.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Text("•")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(.secondary)
+                                        markdownText(point.text)
+                                            .font(.system(size: 13))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                ForEach(Array(point.subPoints.enumerated()), id: \.offset) { _, subPoint in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Text("–")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                        markdownText(subPoint)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .padding(.leading, 18)
+                                }
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -490,17 +734,21 @@ public struct MeetingLibraryView: View {
         }
     }
 
-    private func transcriptPreview(_ record: MeetingRecord) -> some View {
+    private func transcriptBlock(
+        _ segments: [Segment],
+        emptyText: String,
+        record: MeetingRecord? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("전사 근거", systemImage: "quote.bubble")
-            if record.transcript.isEmpty {
-                Text("전사 내용이 없습니다.")
+            sectionTitle("전사", systemImage: "quote.bubble")
+            if segments.isEmpty {
+                Text(emptyText)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             } else {
-                ForEach(Array(relevantTranscriptLines(for: record).enumerated()), id: \.offset) { _, segment in
+                ForEach(segments) { segment in
                     HStack(alignment: .top, spacing: 10) {
-                        Text(relativeTimestamp(segment, in: record))
+                        Text(relativeTimestamp(segment, in: record, fallbackSegments: segments))
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(.secondary)
                             .frame(width: 46, alignment: .leading)
@@ -535,6 +783,41 @@ public struct MeetingLibraryView: View {
 
     private var isSearching: Bool {
         !trimmedSearch.isEmpty
+    }
+
+    private var hasLiveMeeting: Bool {
+        viewModel.isRecording || viewModel.isFinalizingMeeting
+    }
+
+    private var liveSegments: [Segment] {
+        var segments = viewModel.committedSegments
+        if let pending = viewModel.pendingSegment,
+           !pending.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           segments.last?.text != pending.text {
+            segments.append(pending)
+        }
+        return segments
+    }
+
+    private var liveTitle: String {
+        let topic = MeetingContext.shared.topic.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !topic.isEmpty { return topic }
+        return viewModel.isFinalizingMeeting ? "정리 중인 회의" : "진행 중인 회의"
+    }
+
+    private var liveSubtitle: String {
+        let state = viewModel.isFinalizingMeeting ? "요약 생성 중" : "녹음 중"
+        return "\(state) · \(MeetingRecord.durationText(viewModel.recordingDuration)) · 구간 \(liveSegments.count)개"
+    }
+
+    private var liveRunningSummary: String {
+        MeetingContext.shared.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var livePrimaryText: String {
+        if !liveRunningSummary.isEmpty { return liveRunningSummary }
+        if let text = liveSegments.last?.text, !text.isEmpty { return text }
+        return "전사를 기다리는 중입니다"
     }
 
     private var displayedMeetings: [MeetingRecord] {
@@ -594,25 +877,26 @@ public struct MeetingLibraryView: View {
         return MeetingSearchMatch(badge: "회의", text: record.subtitle)
     }
 
-    private func relevantTranscriptLines(for record: MeetingRecord) -> [Segment] {
-        guard isSearching else { return Array(record.transcript.prefix(5)) }
-        let matches = record.transcript.filter { $0.text.localizedCaseInsensitiveContains(trimmedSearch) }
-        return Array((matches.isEmpty ? record.transcript : matches).prefix(5))
-    }
-
     private func selectFirstAvailableIfNeeded(preferFirstResult: Bool = false) {
+        if hasLiveMeeting, (preferFirstResult || showingLiveMeeting) {
+            showingLiveMeeting = true
+            return
+        }
         guard !displayedMeetings.isEmpty else {
             selectedID = nil
+            showingLiveMeeting = hasLiveMeeting
             return
         }
         if preferFirstResult {
             selectedID = displayedMeetings.first?.id
+            showingLiveMeeting = false
             return
         }
         if let selectedID, displayedMeetings.contains(where: { $0.id == selectedID }) {
             return
         }
         selectedID = displayedMeetings.first?.id
+        showingLiveMeeting = false
     }
 
     // MARK: - Helpers
@@ -629,19 +913,46 @@ public struct MeetingLibraryView: View {
         return formatter.string(from: date)
     }
 
-    private func relativeTimestamp(_ segment: Segment, in record: MeetingRecord) -> String {
-        let start = record.transcript.first?.timestamp ?? record.startedAt
+    private func relativeTimestamp(
+        _ segment: Segment,
+        in record: MeetingRecord? = nil,
+        fallbackSegments: [Segment] = []
+    ) -> String {
+        let start = record?.transcript.first?.timestamp
+            ?? fallbackSegments.first?.timestamp
+            ?? record?.startedAt
+            ?? segment.timestamp
         let seconds = max(0, Int(segment.timestamp.timeIntervalSince(start).rounded()))
         return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 
-    private func copySummary(_ record: MeetingRecord) {
+    private func markdownText(_ text: String) -> Text {
+        if let attributed = try? AttributedString(
+            markdown: text,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return Text(attributed)
+        }
+        return Text(text)
+    }
+
+    private func copyFullMeeting(_ record: MeetingRecord) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(record.summary.markdown(), forType: .string)
+        NSPasteboard.general.setString(MeetingExporter.markdown(for: MeetingResult.from(record)), forType: .string)
     }
 
     private func copyTranscript(_ record: MeetingRecord) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(record.transcript.map(\.text).joined(separator: "\n"), forType: .string)
+    }
+
+    private func copyLiveSummary() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(liveRunningSummary, forType: .string)
+    }
+
+    private func copyLiveTranscript() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(liveSegments.map(\.text).joined(separator: "\n"), forType: .string)
     }
 }

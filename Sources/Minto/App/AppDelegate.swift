@@ -5,22 +5,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     public let viewModel: TranscriptionViewModel
     public let floatingWindowManager: FloatingWindowManager
     public let meetingSetupManager: MeetingSetupWindowManager
-    public let summaryWindowManager: MeetingSummaryWindowManager
     public let reportService = ReportService()
     /// 회의 목록·상세 메인 윈도우. "새 회의 시작"은 기존 시작 흐름을 탄다.
     @MainActor public lazy var mainWindowManager = MainWindowManager(
-        onNewMeeting: { [weak self] in self?.requestStartSession() }
+        viewModel: viewModel,
+        onNewMeeting: { [weak self] in self?.requestStartSession() },
+        onShowOverlay: { [weak self] in self?.floatingWindowManager.show() }
     )
 
     override init() {
-        let (vm, floatManager, setupManager, summaryManager) = MainActor.assumeIsolated {
+        let (vm, floatManager, setupManager) = MainActor.assumeIsolated {
             let vm = TranscriptionViewModel()
-            return (vm, FloatingWindowManager(viewModel: vm), MeetingSetupWindowManager(), MeetingSummaryWindowManager())
+            return (vm, FloatingWindowManager(viewModel: vm), MeetingSetupWindowManager())
         }
         viewModel = vm
         floatingWindowManager = floatManager
         meetingSetupManager = setupManager
-        summaryWindowManager = summaryManager
         super.init()
     }
 
@@ -33,21 +33,23 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 MeetingContext.shared.start(topic: topic, glossary: glossary, document: document)
                 self.reportService.startNewReport(startedAt: Date())
                 self.viewModel.startRecording()
-                self.floatingWindowManager.show()
+                self.mainWindowManager.show()
             },
             onCancel: {}
         )
     }
 
-    /// "녹음 종료" → 녹음 정지 → 요약 창을 로딩으로 띄움 → (마지막 교정 완료 후) 최종 요약 생성
-    /// → 보고서에 tail·요약 기록 후 마감 → 요약 표시 → 회의 맥락 초기화.
+    /// "녹음 종료" → 녹음 정지 → (마지막 교정 완료 후) 최종 요약 생성
+    /// → 보고서에 tail·요약 기록 후 마감 → 회의 목록 갱신 → 회의 맥락 초기화.
     @MainActor
     public func handleStopRecording() {
         floatingWindowManager.hide()
-        summaryWindowManager.showLoading()
+        mainWindowManager.show()
+        viewModel.isFinalizingMeeting = true
 
         Task { @MainActor [weak self] in
             guard let self else { return }
+            defer { self.viewModel.isFinalizingMeeting = false }
             await self.viewModel.stopRecordingAndDrain()
             let summary = await self.viewModel.finalizeMeeting()
             let segments = self.viewModel.committedSegments
@@ -71,12 +73,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
 
             let saved = MeetingStore.shared.save(record)
 
-            // 빈 회의이거나 저장 실패면 결과로 표시하지 않는다(저장 안 됐는데 성공처럼 보이는 것 방지).
             if record.isEmpty || !saved {
-                self.summaryWindowManager.showFailed()
-            } else {
-                self.summaryWindowManager.showResult(MeetingResult.from(record))
+                self.viewModel.errorMessage = "저장할 회의 내용이 없습니다."
             }
+            self.mainWindowManager.show()
             MeetingContext.shared.clear()
         }
     }
@@ -110,7 +110,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.regular)
         // UserDefaults에서 저장된 모델 선택 읽기 (구버전/임시 기본 모델 → turbo 마이그레이션)
         let defaultModel = "openai_whisper-large-v3-v20240930_turbo"
         var savedVariant = UserDefaults.standard.string(forKey: "selectedModel") ?? defaultModel

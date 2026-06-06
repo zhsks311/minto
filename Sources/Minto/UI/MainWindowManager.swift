@@ -6,10 +6,18 @@ import SwiftUI
 public final class MainWindowManager: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
+    private let viewModel: TranscriptionViewModel
     private let onNewMeeting: () -> Void
+    private let onShowOverlay: () -> Void
 
-    public init(onNewMeeting: @escaping () -> Void) {
+    public init(
+        viewModel: TranscriptionViewModel,
+        onNewMeeting: @escaping () -> Void,
+        onShowOverlay: @escaping () -> Void
+    ) {
+        self.viewModel = viewModel
         self.onNewMeeting = onNewMeeting
+        self.onShowOverlay = onShowOverlay
         super.init()
     }
 
@@ -19,7 +27,12 @@ public final class MainWindowManager: NSObject, NSWindowDelegate {
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let view = MeetingLibraryView(store: .shared, onNewMeeting: onNewMeeting)
+        let view = MeetingLibraryView(
+            store: .shared,
+            viewModel: viewModel,
+            onNewMeeting: onNewMeeting,
+            onShowOverlay: onShowOverlay
+        )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 680),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
