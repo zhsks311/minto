@@ -24,6 +24,33 @@
 | sherpa-onnx Zipformer chunk 16 | measured | `27.5%` | `0.040` | true streaming, first partial `8.32s` | not default |
 | BatiSay ko base | blocked | n/a | n/a | no current model artifacts | wait for files/export |
 
+## Expanded meeting sample batch
+
+The initial common sample was `본회의_20260508_full.wav`. To check whether the result generalizes, every `sample/meeting/raw/*_full.wav` pair with a matching SMI file was measured on the first 120 seconds.
+
+| Sample | Ref chars | SpeechAnalyzer CER | Nemotron 8-bit CER | sherpa64 CER | WhisperKit 626MB CER | Winner |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `haengan_20260526` | 258 | `20.2%` | `26.4%` | `33.7%` | `26.0%` | SpeechAnalyzer |
+| `본회의_20260423` | 435 | `14.9%` | `21.6%` | `31.3%` | `33.6%` | SpeechAnalyzer |
+| `본회의_20260428` | 448 | `8.3%` | `17.9%` | `31.5%` | `31.9%` | SpeechAnalyzer |
+| `본회의_20260508` | 415 | `12.3%` | `16.4%` | `26.3%` | `25.1%` | SpeechAnalyzer |
+| `외교통일위원회_20260520` | 378 | `25.1%` | `33.9%` | `46.6%` | `30.4%` | SpeechAnalyzer |
+| `재정경제기획위원회_20260429` | 477 | `15.5%` | `23.3%` | `42.3%` | `33.8%` | SpeechAnalyzer |
+| `재정경제기획위원회_20260430` | 438 | `19.2%` | `29.2%` | `49.3%` | `36.1%` | SpeechAnalyzer |
+
+| Aggregate | SpeechAnalyzer | Nemotron 8-bit | sherpa64 | WhisperKit 626MB |
+| --- | ---: | ---: | ---: | ---: |
+| Weighted CER | `16.1%` | `23.8%` | `37.5%` | `31.4%` |
+| Macro CER | `16.5%` | `24.1%` | `37.3%` | `31.0%` |
+| Mean RTF / final p50 | `0.006` | `0.023` | `0.014` | `0.20` |
+
+Notes:
+
+- SpeechAnalyzer won all seven first-120s samples.
+- Nemotron 8-bit remained second by aggregate CER, but WhisperKit beat Nemotron on `외교통일위원회_20260520`.
+- WhisperKit latency is shown as final-window p50 RTF because it was measured through the app's rolling preview/final harness; the other rows use whole-clip or streaming runner RTF.
+- sherpa64 stayed fast but had the weakest CER on this corpus.
+
 ## BatiSay
 
 `batiai/batisay-ko-base` is not currently reproducible from the public HuggingFace repo.

@@ -25,9 +25,23 @@ Find a free or local-first Korean STT path for meeting transcription. Paid cloud
 | sherpa-onnx Korean Zipformer chunk 64 | measured | `26.3%` | RTF `0.025`, first partial `10.24s` | latency experiment |
 | BatiSay ko base | blocked | n/a | n/a | model files not exposed |
 
+## Expanded 7-sample check
+
+Every `sample/meeting/raw/*_full.wav` file with a matching SMI reference was measured on the first 120 seconds.
+
+| Candidate | Weighted CER | Macro CER | Latency metric |
+| --- | ---: | ---: | --- |
+| Apple SpeechAnalyzer final | `16.1%` | `16.5%` | mean RTF `0.006` |
+| MLX Nemotron 8-bit offline | `23.8%` | `24.1%` | mean RTF `0.023` |
+| WhisperKit large-v3 626MB rolling preview/final | `31.4%` | `31.0%` | final RTF p50 mean `0.20` |
+| sherpa-onnx Korean Zipformer chunk 64 | `37.5%` | `37.3%` | mean RTF `0.014` |
+
+SpeechAnalyzer had the lowest CER on all seven samples. The expanded batch strengthens the current decision rather than changing it.
+
 ## Notes
 
 - These current numbers are from `sample/meeting/raw/본회의_20260508_full.wav` and its SMI reference. Older rows used `haengan_20260526_full.wav`.
+- The expanded 7-sample check uses the same first-120s window for each available meeting WAV/SMI pair.
 - Apple SpeechAnalyzer final transcription is the best current result, but volatile streaming results need assembly/debounce before replacing live preview.
 - WhisperKit preview is fast enough on this machine but unstable: `96` preview revisions across `120` preview events.
 - sherpa-onnx is a true streaming recognizer and is fast, but this meeting sample CER is worse than SpeechAnalyzer, Nemotron, and WhisperKit.
