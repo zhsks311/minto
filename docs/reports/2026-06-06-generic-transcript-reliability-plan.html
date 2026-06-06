@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>전사 신뢰도 개선 계획 — generic</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --accent: #0969da;
+      --code-bg: #f6f8fa;
+
+      --c-critical: #cf222e; --c-critical-bg: #fff0ee; --c-critical-border: #ff818266;
+      --c-high: #9a6700; --c-high-bg: #fff8c5; --c-high-border: #f1e05a99;
+      --c-medium: #0550ae; --c-medium-bg: #ddf4ff; --c-medium-border: #79c0ff99;
+      --c-low: #116329; --c-low-bg: #dafbe1; --c-low-border: #56d36499;
+
+      --pass-bg: #f0fdf4; --pass-border: #bbf7d0;
+      --fail-bg: #fff0ee; --fail-border: #fecaca;
+
+      --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --surface: #161b22; --border: #30363d;
+        --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff; --code-bg: #161b22;
+        --c-critical: #ff7b72; --c-critical-bg: #2d0f0f; --c-critical-border: #ff7b7266;
+        --c-high: #e3b341; --c-high-bg: #2d1f04; --c-high-border: #e3b34166;
+        --c-medium: #79c0ff; --c-medium-bg: #051d4d; --c-medium-border: #79c0ff66;
+        --c-low: #56d364; --c-low-bg: #0a2d19; --c-low-border: #56d36466;
+        --pass-bg: #0a2d19; --pass-border: #56d36444;
+        --fail-bg: #2d0f0f; --fail-border: #ff7b7244;
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.65;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+    h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.01em; }
+    h2 { font-size: 1.08rem; font-weight: 650; margin: 2.5rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 0.96rem; font-weight: 650; margin: 1.25rem 0 0.45rem; }
+    p { margin-bottom: 0.75rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    pre {
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .summary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 1.1rem 1.4rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .summary-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    .summary p:last-child { margin-bottom: 0; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .stat-card--warning { background: var(--c-high-bg); border-color: var(--c-high-border); }
+    .stat-card--success { background: var(--pass-bg); border-color: var(--pass-border); }
+    .stat-card--info { background: var(--c-medium-bg); border-color: var(--c-medium-border); }
+    .stat-number {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-card--warning .stat-number { color: var(--c-high); }
+    .stat-card--success .stat-number { color: var(--c-low); }
+    .stat-card--info .stat-number { color: var(--c-medium); }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .stat-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      vertical-align: middle;
+    }
+    .tag-pass { background: var(--pass-bg); color: var(--c-low); }
+    .tag-info { background: var(--surface); color: var(--text-muted); }
+    .tag-medium { background: var(--c-medium-bg); color: var(--c-medium); }
+    .tag-high { background: var(--c-high-bg); color: var(--c-high); }
+
+    .finding {
+      border: 1px solid var(--border);
+      border-left-width: 3px;
+      border-radius: 6px;
+      padding: 0.9rem 1.1rem;
+      margin: 0.65rem 0;
+      background: var(--surface);
+    }
+    .finding--low { border-left-color: var(--c-low); background: var(--c-low-bg); }
+    .finding--medium { border-left-color: var(--c-medium); background: var(--c-medium-bg); }
+    .finding--high { border-left-color: var(--c-high); background: var(--c-high-bg); }
+    .finding-header { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+    .finding-title { font-weight: 650; font-size: 0.95rem; }
+    .finding-location { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .finding p { margin-bottom: 0.5rem; font-size: 0.9rem; }
+
+    .verify-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+      font-size: 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .verify-table th {
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      padding: 0.5rem 0.9rem;
+    }
+    .verify-table td { padding: 0.6rem 0.9rem; vertical-align: middle; }
+    .vrow-pass { background: var(--pass-bg); }
+    .vrow-info { background: var(--surface); }
+    .vrow-pass + tr, .vrow-info + tr { border-top: 1px solid var(--border); }
+
+    table:not(.verify-table) {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+      font-size: 0.9rem;
+    }
+    table:not(.verify-table) th {
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      padding: 0.45rem 0.75rem;
+    }
+    table:not(.verify-table) td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table:not(.verify-table) tr:last-child td { border-bottom: none; }
+
+    details { border: 1px solid var(--border); border-radius: 6px; margin: 0.6rem 0; }
+    details > summary {
+      padding: 0.65rem 1rem;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.92rem;
+      background: var(--surface);
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before {
+      content: ">";
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details[open] > summary { border-bottom: 1px solid var(--border); }
+    .details-body { padding: 1rem 1.25rem; }
+
+    .flow-diagram { width: 100%; max-width: 820px; display: block; margin: 1rem 0; overflow: visible; }
+    .flow-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+    .flow-box-accent { fill: var(--c-medium-bg); stroke: var(--c-medium-border); stroke-width: 1.5; }
+    .flow-box-good { fill: var(--pass-bg); stroke: var(--pass-border); stroke-width: 1.5; }
+    .flow-text { font-family: var(--font-body); font-size: 12px; fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+    .flow-label { font-family: var(--font-mono); font-size: 10px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: middle; }
+    .flow-arrow { stroke: var(--text-muted); stroke-width: 1.5; }
+    .flow-arrowhead { fill: var(--text-muted); }
+
+    footer {
+      margin-top: 3.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    @media print {
+      body { max-width: none; padding: 0; background: #fff; color: #000; }
+      .stat-card, .finding { border: 1px solid #ccc; background: #fff; }
+      .vrow-pass, .vrow-info { background: #fff; }
+      details { border: 1px solid #ccc; }
+      details[open] { page-break-inside: avoid; }
+      a[href]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #666; }
+      footer { color: #666; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>전사 신뢰도 개선 계획</h1>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--info">
+    <div class="stat-number">5</div>
+    <div class="stat-label">검토 옵션</div>
+    <div class="stat-sub">threshold, normalizer, drain, preview, schema split</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">4</div>
+    <div class="stat-label">구현 단계</div>
+    <div class="stat-sub">correctness → readability → evidence → tuning</div>
+  </div>
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">8</div>
+    <div class="stat-label">실행 순서</div>
+    <div class="stat-sub">작고 되돌릴 수 있는 순서</div>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <div class="stat-number">0</div>
+    <div class="stat-label">코드 변경</div>
+    <div class="stat-sub">이번 산출물은 계획 보고서</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">Summary</div>
+  <p>전사 신뢰도 문제는 threshold를 먼저 낮추는 방식보다, stop-time VAD drain과 저장 transcript normalizer를 먼저 적용하는 쪽이 안전하다. 계획은 짧은 발화 누락을 줄이되, 기존 STT hallucination guard를 약화하지 않는 순서로 설계됐다.</p>
+</div>
+
+<h2>권장 흐름</h2>
+
+<svg class="flow-diagram" viewBox="0 0 820 110" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="전사 신뢰도 개선 흐름">
+  <rect x="10" y="25" width="150" height="50" rx="6" class="flow-box-accent"/>
+  <text x="85" y="45" class="flow-text">Stop Drain</text>
+  <text x="85" y="62" class="flow-label">tail utterance 보존</text>
+  <line x1="160" y1="50" x2="200" y2="50" class="flow-arrow"/>
+  <polygon points="200,45 210,50 200,55" class="flow-arrowhead"/>
+
+  <rect x="210" y="25" width="150" height="50" rx="6" class="flow-box"/>
+  <text x="285" y="45" class="flow-text">Pending UX</text>
+  <text x="285" y="62" class="flow-label">final empty 안정화</text>
+  <line x1="360" y1="50" x2="400" y2="50" class="flow-arrow"/>
+  <polygon points="400,45 410,50 400,55" class="flow-arrowhead"/>
+
+  <rect x="410" y="25" width="150" height="50" rx="6" class="flow-box-good"/>
+  <text x="485" y="45" class="flow-text">Normalizer</text>
+  <text x="485" y="62" class="flow-label">문장/문단 저장</text>
+  <line x1="560" y1="50" x2="600" y2="50" class="flow-arrow"/>
+  <polygon points="600,45 610,50 600,55" class="flow-arrowhead"/>
+
+  <rect x="610" y="25" width="190" height="50" rx="6" class="flow-box"/>
+  <text x="705" y="45" class="flow-text">Measured Tuning</text>
+  <text x="705" y="62" class="flow-label">threshold는 실측 후</text>
+</svg>
+
+<h2>핵심 판단</h2>
+
+<div class="finding finding--high">
+  <div class="finding-header">
+    <span class="tag tag-high">Priority</span>
+    <span class="finding-title">먼저 고칠 것은 녹음 종료 시 tail 누락이다</span>
+  </div>
+  <div class="finding-location"><code>VADProcessor.flushPending()</code>, <code>TranscriptionViewModel.stopRecordingAndDrain()</code></div>
+  <p>현재 stop flow는 남은 VAD buffer를 강제로 전사하지 않고 task를 정리할 수 있다. 짧은 마지막 발화가 회의록에 남지 않는 문제는 threshold보다 drain 순서가 더 직접적인 원인이다.</p>
+</div>
+
+<div class="finding finding--medium">
+  <div class="finding-header">
+    <span class="tag tag-medium">Readability</span>
+    <span class="finding-title">저장 transcript는 처리 chunk가 아니라 읽기 단위여야 한다</span>
+  </div>
+  <div class="finding-location"><code>TranscriptNormalizer</code>, <code>AppDelegate.makeRecord</code></div>
+  <p>30초 교정 배치가 그대로 회의록 줄이 되면 문장이 <code>XML을</code>, <code>변경될 때마다</code>처럼 끊긴다. 저장/export 직전에 보수적인 normalizer를 적용하면 realtime STT 경로를 흔들지 않고 읽기 품질을 개선할 수 있다.</p>
+</div>
+
+<div class="finding finding--low">
+  <div class="finding-header">
+    <span class="tag tag-pass">Guard</span>
+    <span class="finding-title">preview는 final transcript로 무조건 승격하지 않는다</span>
+  </div>
+  <div class="finding-location"><code>pendingSegment</code> final-empty state</div>
+  <p>preview는 provisional 결과라 틀릴 수 있다. final STT가 empty일 때 조용히 사라지는 UX는 고치되, preview text를 저장 transcript에 바로 넣는 것은 실측과 guard가 생긴 뒤 판단한다.</p>
+</div>
+
+<h2>옵션 비교</h2>
+
+<table>
+  <thead>
+    <tr><th>옵션</th><th>효과</th><th>주요 리스크</th><th>판정</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>VAD/STT threshold 하향</td>
+      <td>일부 짧은 발화 회수 가능</td>
+      <td>잡음·phantom transcript 증가</td>
+      <td>측정 후 후순위</td>
+    </tr>
+    <tr>
+      <td>저장/export normalizer</td>
+      <td>회의록 chunk 느낌 완화</td>
+      <td>timestamp granularity 감소</td>
+      <td><span class="tag tag-pass">권장</span></td>
+    </tr>
+    <tr>
+      <td>stop-time VAD drain</td>
+      <td>종료 직전 짧은 발화 보존</td>
+      <td>저장 전 STT 대기 시간 증가</td>
+      <td><span class="tag tag-pass">최우선</span></td>
+    </tr>
+    <tr>
+      <td>preview fallback commit</td>
+      <td>잠깐 보였다 사라짐 감소</td>
+      <td>잘못된 preview가 저장될 수 있음</td>
+      <td>무조건 적용 금지</td>
+    </tr>
+    <tr>
+      <td>raw/normalized schema split</td>
+      <td>검색·진단·표시 요구 분리</td>
+      <td>JSON 호환성 처리 필요</td>
+      <td>Phase 3 후보</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>검증 계획</h2>
+
+<table class="verify-table">
+  <thead>
+    <tr><th>상태</th><th>검증 항목</th><th>판정 기준</th></tr>
+  </thead>
+  <tbody>
+    <tr class="vrow-info">
+      <td><span class="tag tag-info">Planned</span></td>
+      <td><code>VADProcessorTests</code></td>
+      <td>0.8초 발화는 flush되고, 0.5초 미만은 보수적으로 폐기된다.</td>
+    </tr>
+    <tr class="vrow-info">
+      <td><span class="tag tag-info">Planned</span></td>
+      <td><code>TranscriptNormalizerTests</code></td>
+      <td><code>XML을</code> + 다음 문장, <code>변경될 때마다</code> + 다음 문장이 병합된다.</td>
+    </tr>
+    <tr class="vrow-info">
+      <td><span class="tag tag-info">Planned</span></td>
+      <td><code>swift build --build-tests --disable-sandbox</code></td>
+      <td>구현 후 빌드가 통과해야 한다.</td>
+    </tr>
+    <tr class="vrow-info">
+      <td><span class="tag tag-info">Planned</span></td>
+      <td><code>swift test --disable-sandbox</code></td>
+      <td>구현 후 전체 테스트가 통과해야 한다.</td>
+    </tr>
+    <tr class="vrow-info">
+      <td><span class="tag tag-info">Manual</span></td>
+      <td>라이브 녹음 확인</td>
+      <td>짧은 발화, stop 직전 발화, 조용한 방의 non-speech noise를 직접 확인한다.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>실행 순서</h2>
+
+<ol>
+  <li><code>VADProcessor.flushPending()</code>와 VAD 단위 테스트를 먼저 추가한다.</li>
+  <li><code>stopRecordingAndDrain()</code>로 stop flow를 finish-and-await 방식으로 바꾼다.</li>
+  <li><code>pendingSegment</code>가 final empty에서 조용히 사라지지 않도록 상태 전이를 안정화한다.</li>
+  <li><code>TranscriptNormalizer</code>를 pure function으로 만들고 저장 전사 fixture를 테스트한다.</li>
+  <li><code>AppDelegate.makeRecord</code>에 normalizer를 적용해 새 회의 저장 품질을 개선한다.</li>
+  <li>빌드와 전체 테스트를 실행한다.</li>
+  <li>마이크 기반 라이브 체크로 짧은 발화와 non-speech noise를 확인한다.</li>
+  <li>검색 정밀도 문제가 생길 때만 raw/normalized transcript schema split을 검토한다.</li>
+</ol>
+
+<details>
+  <summary>원본 계획 문서 요약</summary>
+  <div class="details-body">
+    <pre><code>문서: docs/transcript-reliability-plan.md
+커밋: 22bc444 docs: plan transcript reliability fixes
+핵심: stop-time VAD drain, pending UX 안정화, transcript normalizer, measured threshold tuning</code></pre>
+  </div>
+</details>
+
+<details>
+  <summary>주요 근거 파일</summary>
+  <div class="details-body">
+    <ul>
+      <li><code>docs/transcript-reliability-plan.md</code></li>
+      <li><code>Sources/Minto/Services/VADProcessor.swift</code></li>
+      <li><code>Sources/Minto/ViewModels/TranscriptionViewModel.swift</code></li>
+      <li><code>Sources/Minto/Services/STTService.swift</code></li>
+      <li><code>Sources/Minto/App/AppDelegate.swift</code></li>
+    </ul>
+  </div>
+</details>
+
+<footer>
+  <span>생성: 2026-06-06 12:35:58 KST</span>
+  <span>모델: GPT-5 Codex</span>
+  <span>유형: generic</span>
+</footer>
+
+</body>
+</html>
