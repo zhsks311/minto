@@ -21,6 +21,20 @@ struct SpeechEngineTests {
         #expect(!SpeechEngineID.speechAnalyzer.supportsPreviewTranscription)
     }
 
+    @Test("SFSpeech 상태 확인은 background task에서도 안전하다")
+    func sfSpeechAvailabilityCanRunOffMainActor() async {
+        let availability = await Task.detached {
+            STTService.sfSpeechOnDeviceAvailability()
+        }.value
+
+        switch availability {
+        case .available, .requiresPermission, .unavailable:
+            break
+        case .checking:
+            Issue.record("SFSpeech 상태 확인은 즉시 판단 가능한 상태를 반환해야 합니다.")
+        }
+    }
+
     @Test("legacy selectedModel에서 새 selectedSpeechEngine을 복원한다")
     func restoresEngineFromLegacySelectedModel() {
         let suiteName = "minto-speech-engine-test-\(UUID().uuidString)"

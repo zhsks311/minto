@@ -40,14 +40,13 @@ public final class STTService {
         }
     }
 
-    public static func requestSFSpeechAuthorization() async -> SpeechEngineAvailability {
-        await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { _ in
-                Task { @MainActor in
-                    continuation.resume(returning: sfSpeechOnDeviceAvailability())
-                }
+    public nonisolated static func requestSFSpeechAuthorization() async -> SpeechEngineAvailability {
+        _ = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status)
             }
         }
+        return sfSpeechOnDeviceAvailability()
     }
 
     private static func speechAnalyzerAvailability() async -> SpeechEngineAvailability {
@@ -71,7 +70,7 @@ public final class STTService {
         return .available
     }
 
-    private static func sfSpeechOnDeviceAvailability() -> SpeechEngineAvailability {
+    nonisolated static func sfSpeechOnDeviceAvailability() -> SpeechEngineAvailability {
         switch SFSpeechRecognizer.authorizationStatus() {
         case .notDetermined:
             return .requiresPermission("Apple 음성 인식 권한을 허용해야 사용할 수 있습니다.")
@@ -85,7 +84,7 @@ public final class STTService {
             return .unavailable("Apple 음성 인식 권한 상태를 확인할 수 없습니다.")
         }
 
-        guard let recognizer = SFSpeechRecognizer(locale: koreanLocale) else {
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ko-KR")) else {
             return .unavailable("한국어 SFSpeechRecognizer를 만들 수 없습니다.")
         }
 
