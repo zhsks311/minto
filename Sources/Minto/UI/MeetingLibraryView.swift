@@ -28,6 +28,7 @@ public struct MeetingLibraryView: View {
     @State private var showingLiveMeeting = false
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
+    @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
     private let onStopRecording: () -> Void
@@ -463,6 +464,8 @@ public struct MeetingLibraryView: View {
                             }
                         }
                         Spacer()
+                        readingModeButton
+
                         Button { onShowOverlay() } label: {
                             Label("오버레이", systemImage: "rectangle.on.rectangle")
                         }
@@ -519,12 +522,12 @@ public struct MeetingLibraryView: View {
             sectionTitle("현재까지 요약", systemImage: "list.bullet.rectangle")
             if liveRunningSummary.isEmpty {
                 Text("요약은 전사가 충분히 쌓이면 자동으로 갱신됩니다.")
-                    .font(.system(size: 13))
+                    .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
                 markdownText(liveRunningSummary)
-                    .font(.system(size: 15))
-                    .lineSpacing(4)
+                    .font(.system(size: detailBodyFontSize))
+                    .lineSpacing(detailLineSpacing)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -540,12 +543,13 @@ public struct MeetingLibraryView: View {
             let recent = liveSegments.suffix(6)
             if recent.isEmpty {
                 Text("녹음이 시작되면 여기에 전사가 쌓입니다.")
-                    .font(.system(size: 13))
+                    .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
                 ForEach(Array(recent.enumerated()), id: \.element.id) { _, segment in
                     Text(segment.text)
-                        .font(.system(size: 13))
+                        .font(.system(size: detailBodyFontSize))
+                        .lineSpacing(detailLineSpacing)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -601,6 +605,8 @@ public struct MeetingLibraryView: View {
                     }
                 }
                 Spacer()
+                readingModeButton
+
                 Button { MeetingExporter.save(MeetingResult.from(record)) } label: {
                     Label("내보내기", systemImage: "square.and.arrow.up")
                 }
@@ -655,6 +661,19 @@ public struct MeetingLibraryView: View {
         .accessibilityAddTraits(active ? [.isSelected] : [])
     }
 
+    private var readingModeButton: some View {
+        Button { useReadableDetailText.toggle() } label: {
+            Text("Aa")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(useReadableDetailText ? .accentColor : .secondary)
+                .frame(width: 32, height: 26)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help(useReadableDetailText ? "표준 글자 크기로 보기" : "큰 글자 크기로 보기")
+        .accessibilityLabel(useReadableDetailText ? "표준 글자 크기로 보기" : "큰 글자 크기로 보기")
+    }
+
     private func whyThisResult(_ record: MeetingRecord) -> some View {
         let match = primaryMatch(for: record)
         return VStack(alignment: .leading, spacing: 8) {
@@ -691,19 +710,19 @@ public struct MeetingLibraryView: View {
             sectionTitle("요약", systemImage: "list.bullet.rectangle")
             if summary.isEmpty {
                 Text("요약이 없습니다. 전사 내용을 먼저 확인하세요.")
-                    .font(.system(size: 13))
+                    .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
                 if !summary.leadQuestion.isEmpty {
                     Text(summary.leadQuestion)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: detailSubBodyFontSize, weight: .semibold))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !summary.leadAnswer.isEmpty {
                     markdownText(summary.leadAnswer)
-                        .font(.system(size: 15))
-                        .lineSpacing(4)
+                        .font(.system(size: detailBodyFontSize))
+                        .lineSpacing(detailLineSpacing)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !summary.keywords.isEmpty {
@@ -732,39 +751,41 @@ public struct MeetingLibraryView: View {
     @ViewBuilder
     private func meetingNotes(_ sections: [MeetingSummary.Section]) -> some View {
         if !sections.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: detailCardSpacing) {
                 sectionTitle("회의 내용 정리", systemImage: "doc.text")
                 ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: detailItemSpacing) {
                         HStack(spacing: 8) {
                             Text(section.title.isEmpty ? "섹션" : section.title)
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(size: detailSectionTitleFontSize, weight: .bold))
                             if !section.time.isEmpty {
                                 Text(section.time)
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(.system(size: detailTimestampFontSize, weight: .semibold))
                                     .foregroundColor(.secondary)
                             }
                         }
                         ForEach(Array(section.points.enumerated()), id: \.offset) { _, point in
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: detailSubItemSpacing) {
                                 if !point.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("•")
-                                            .font(.system(size: 13, weight: .bold))
+                                            .font(.system(size: detailBodyFontSize, weight: .bold))
                                             .foregroundColor(.secondary)
                                         markdownText(point.text)
-                                            .font(.system(size: 13))
+                                            .font(.system(size: detailBodyFontSize))
+                                            .lineSpacing(detailLineSpacing)
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
                                 }
                                 ForEach(Array(point.subPoints.enumerated()), id: \.offset) { _, subPoint in
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("–")
-                                            .font(.system(size: 12, weight: .medium))
+                                            .font(.system(size: detailSubBodyFontSize, weight: .medium))
                                             .foregroundColor(.secondary)
                                         markdownText(subPoint)
-                                            .font(.system(size: 12))
-                                            .foregroundColor(.secondary)
+                                            .font(.system(size: detailSubBodyFontSize))
+                                            .foregroundColor(detailSubTextColor)
+                                            .lineSpacing(detailLineSpacing)
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
                                     .padding(.leading, 18)
@@ -791,17 +812,18 @@ public struct MeetingLibraryView: View {
             sectionTitle("전사", systemImage: "quote.bubble")
             if segments.isEmpty {
                 Text(emptyText)
-                    .font(.system(size: 13))
+                    .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
                 ForEach(segments) { segment in
                     HStack(alignment: .top, spacing: 10) {
                         Text(relativeTimestamp(segment, in: record, fallbackSegments: segments))
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(.system(size: detailTimestampFontSize, weight: .bold, design: .monospaced))
                             .foregroundColor(.secondary)
                             .frame(width: 46, alignment: .leading)
                         Text(segment.text)
-                            .font(.system(size: 13))
+                            .font(.system(size: detailBodyFontSize))
+                            .lineSpacing(detailLineSpacing)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -941,7 +963,7 @@ public struct MeetingLibraryView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.accentColor)
             Text(title)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: detailHeadingFontSize, weight: .bold))
         }
     }
 
@@ -1119,6 +1141,46 @@ public struct MeetingLibraryView: View {
             ?? segment.timestamp
         let seconds = max(0, Int(segment.timestamp.timeIntervalSince(start).rounded()))
         return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+
+    private var detailHeadingFontSize: CGFloat {
+        useReadableDetailText ? 15 : 14
+    }
+
+    private var detailSectionTitleFontSize: CGFloat {
+        useReadableDetailText ? 16 : 14
+    }
+
+    private var detailBodyFontSize: CGFloat {
+        useReadableDetailText ? 15 : 13
+    }
+
+    private var detailSubBodyFontSize: CGFloat {
+        useReadableDetailText ? 14 : 12
+    }
+
+    private var detailTimestampFontSize: CGFloat {
+        useReadableDetailText ? 12 : 11
+    }
+
+    private var detailLineSpacing: CGFloat {
+        useReadableDetailText ? 5 : 4
+    }
+
+    private var detailCardSpacing: CGFloat {
+        useReadableDetailText ? 18 : 12
+    }
+
+    private var detailItemSpacing: CGFloat {
+        useReadableDetailText ? 10 : 8
+    }
+
+    private var detailSubItemSpacing: CGFloat {
+        useReadableDetailText ? 6 : 4
+    }
+
+    private var detailSubTextColor: Color {
+        useReadableDetailText ? Color.primary.opacity(0.78) : .secondary
     }
 
     private func markdownText(_ text: String) -> Text {
