@@ -7,6 +7,8 @@ import MCP
 /// clientID도 OAuthAccessToken에 포함돼 저장되므로, DCR로 발급된 client_id도 함께 유지된다.
 final class KeychainTokenStorage: TokenStorage, @unchecked Sendable {
     private let keychainKey: String
+    private let lock = NSLock()
+    private var cachedToken: OAuthAccessToken??
 
     init(keychainKey: String) {
         self.keychainKey = keychainKey
@@ -14,15 +16,33 @@ final class KeychainTokenStorage: TokenStorage, @unchecked Sendable {
 
     func save(_ token: OAuthAccessToken) {
         guard let data = try? JSONEncoder().encode(token) else { return }
+        lock.withLock {
+            cachedToken = .some(token)
+        }
         KeychainService.save(provider: keychainKey, data: data)
     }
 
     func load() -> OAuthAccessToken? {
-        guard let data = KeychainService.load(provider: keychainKey) else { return nil }
-        return try? JSONDecoder().decode(OAuthAccessToken.self, from: data)
+        if let cached = lock.withLock({ cachedToken }) {
+            return cached
+        }
+        guard let data = KeychainService.load(provider: keychainKey) else {
+            lock.withLock {
+                cachedToken = .some(nil)
+            }
+            return nil
+        }
+        let token = try? JSONDecoder().decode(OAuthAccessToken.self, from: data)
+        lock.withLock {
+            cachedToken = .some(token)
+        }
+        return token
     }
 
     func clear() {
+        lock.withLock {
+            cachedToken = .some(nil)
+        }
         KeychainService.delete(provider: keychainKey)
     }
 }

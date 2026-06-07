@@ -18,17 +18,24 @@ public final class ConfluenceService: ObservableObject {
 
     /// 토큰 존재 여부 캐시 — isConfigured가 매 렌더마다 Keychain을 읽지 않도록 init에서 1회 로드.
     @Published private var hasToken: Bool = false
+    private var cachedAPIToken: String?
 
     public init(session: URLSession = .shared, defaults: UserDefaults = .standard) {
         self.session = session
         self.defaults = defaults
-        self.hasToken = (apiToken != nil)
+        let token = Self.loadAPIToken(keychainKey: keychainKey)
+        self.cachedAPIToken = token
+        self.hasToken = (token != nil)
     }
 
     // MARK: - 자격 관리
 
     /// 토큰 원문은 외부로 노출하지 않는다(로그·UI 유출 방지). search() 내부에서만 사용.
     private var apiToken: String? {
+        cachedAPIToken
+    }
+
+    private static func loadAPIToken(keychainKey: String) -> String? {
         guard let data = KeychainService.load(provider: keychainKey) else { return nil }
         let value = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (value?.isEmpty == false) ? value : nil
@@ -65,6 +72,7 @@ public final class ConfluenceService: ObservableObject {
         } else {
             KeychainService.save(provider: keychainKey, data: Data(trimmed.utf8))
         }
+        cachedAPIToken = trimmed.isEmpty ? nil : trimmed
         hasToken = !trimmed.isEmpty  // @Published라 objectWillChange 자동 발행
     }
 
