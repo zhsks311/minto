@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct SettingsView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
+    @AppStorage(SpeechEnginePreferences.selectedEngineKey) private var selectedSpeechEngineRaw = SpeechEngineID.defaultEngine.rawValue
     @AppStorage("selectedModel") private var selectedModel = "openai_whisper-large-v3-v20240930_turbo"
 
     // 교정 provider별 모델 선택(서비스가 같은 UserDefaults 키를 읽는다).
@@ -31,33 +32,8 @@ public struct SettingsView: View {
     @State private var showNotionSettings = false
     @State private var showConfluenceSettings = false
     @AppStorage("lastLLMProvider") private var lastLLMProviderRaw = "codex"
-
-    private let availableModels: [(id: String, label: String, note: String, memory: String)] = [
-        (
-            "openai_whisper-large-v3-v20240930_turbo",
-            "회의 정확도 우선",
-            "한국어 회의 권장 · 다운로드 약 810MB",
-            "실행 중 메모리 여유 2~3GB 권장"
-        ),
-        (
-            "openai_whisper-medium",
-            "균형",
-            "정확도와 속도 균형 · 다운로드 약 770MB",
-            "실행 중 메모리 여유 1.5~2.5GB 권장"
-        ),
-        (
-            "openai_whisper-small",
-            "빠른 기록",
-            "빠른 초안용 · 다운로드 약 250MB",
-            "실행 중 메모리 여유 1GB 내외 권장"
-        ),
-    ]
-    private let deprecatedModelIDs = [
-        "openai_whisper-tiny",
-        "openai_whisper-base",
-        "openai_whisper-large-v3-v20240930_626MB",
-        "openai_whisper-large-v3-v20240930_turbo_632MB",
-    ]
+    @State private var speechEngineAvailability: [SpeechEngineID: SpeechEngineAvailability] = [:]
+    @State private var isRequestingSpeechAuthorization = false
 
     public init(viewModel: TranscriptionViewModel) {
         self.viewModel = viewModel
@@ -69,34 +45,7 @@ public struct SettingsView: View {
             searchReadinessSection
             sourceConnectionsSection
 
-            Section("음성 인식 모델") {
-                ForEach(availableModels, id: \.id) { model in
-                    modelRow(model)
-                }
-                Text("선택한 모델은 다음 실행 시 적용됩니다.\n현재 세션에 바로 적용하려면 아래 버튼을 누르세요.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Button("지금 바로 모델 교체") {
-                    Task {
-                        await viewModel.loadModel(variant: selectedModel)
-                    }
-                }
-                .disabled(isModelBusy)
-                if isModelFailed {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("모델 파일이 손상되었거나 권한 문제로 열리지 않습니다.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Button("캐시 정리 후 모델 다시 받기") {
-                            Task {
-                                await viewModel.recoverModelCacheAndReload(variant: selectedModel)
-                            }
-                        }
-                        .disabled(isModelBusy)
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
+            speechEngineSection
 
             Section("오버레이") {
                 Text("투명도는 메뉴바에서 실시간으로 조절할 수 있습니다.")
@@ -105,18 +54,19 @@ public struct SettingsView: View {
             }
 
             Section("현재 상태") {
-                LabeledContent("로드된 모델", value: viewModel.modelDisplayName)
-                LabeledContent("모델 상태", value: modelStateDescription)
+                LabeledContent("음성 인식 엔진", value: viewModel.modelDisplayName)
+                LabeledContent("엔진 상태", value: modelStateDescription)
                 if viewModel.isRecording {
                     LabeledContent("녹음 시간", value: formatDuration(viewModel.recordingDuration))
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 520)
+        .frame(width: 480, height: 640)
         .onAppear {
-            normalizeSelectedModelIfNeeded()
+            normalizeSpeechEngineSelection()
             rememberCurrentProviderIfNeeded()
+            Task { await refreshSpeechEngineAvailability() }
         }
         .onChange(of: llmService.selectedProvider) { _, provider in
             if provider != .none {
@@ -531,32 +481,189 @@ public struct SettingsView: View {
         geminiEmail = GeminiOAuthService.shared.email
     }
 
-    // MARK: - Model section helpers
+    // MARK: - Speech engine section helpers
 
-    private func modelRow(_ model: (id: String, label: String, note: String, memory: String)) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.label)
-                    .font(.body.weight(.semibold))
-                Text(model.note)
+    private var speechEngineSection: some View {
+        Section("음성 인식 엔진") {
+            ForEach(SpeechEngineID.allCases) { engine in
+                speechEngineRow(engine)
+
+                if engine == .sfSpeechOnDevice, sfSpeechNeedsPermission {
+                    Button {
+                        Task { await requestSpeechAuthorization() }
+                    } label: {
+                        if isRequestingSpeechAuthorization {
+                            HStack {
+                                ProgressView().scaleEffect(0.8)
+                                Text("권한 요청 중...")
+                            }
+                        } else {
+                            Text("Apple 음성 인식 권한 허용하기")
+                        }
+                    }
+                    .disabled(isRequestingSpeechAuthorization)
+                }
+            }
+
+            Text("사용할 수 없는 엔진은 현재 기기, macOS 버전, 권한, 언어 asset 상태를 기준으로 비활성화됩니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Button("지금 바로 엔진 전환") {
+                Task { await applySelectedSpeechEngine() }
+            }
+            .disabled(isModelBusy || !selectedSpeechEngineAvailability.isSelectable)
+
+            if selectedSpeechEngineID == .sfSpeechOnDevice {
+                Label("SFSpeechRecognizer는 온디바이스 전용으로만 실행합니다.", systemImage: "shield.checkered")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text(model.memory)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
             }
-            Spacer()
-            if selectedModel == model.id {
-                Image(systemName: "checkmark")
-                    .foregroundColor(.accentColor)
-                    .fontWeight(.semibold)
+
+            if selectedSpeechEngineID.supportsCacheRecovery, isModelFailed {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("모델 파일이 손상되었거나 권한 문제로 열리지 않습니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Button("캐시 정리 후 모델 다시 받기") {
+                        Task {
+                            await viewModel.recoverModelCacheAndReload(
+                                variant: selectedSpeechEngineID.whisperVariant ?? selectedModel
+                            )
+                        }
+                    }
+                    .disabled(isModelBusy)
+                }
+                .padding(.vertical, 4)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            selectedModel = model.id
-            UserDefaults.standard.set(model.id, forKey: "selectedModel")
+    }
+
+    private func speechEngineRow(_ engine: SpeechEngineID) -> some View {
+        let availability = availability(for: engine)
+        return Button {
+            selectSpeechEngine(engine)
+        } label: {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(engine.title)
+                            .font(.body.weight(.semibold))
+                        Text(engine.engineName)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    Text("\(engine.description) · \(engine.memoryNote)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(engine.requirementNote)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    if let detail = availability.detailText {
+                        Text(detail)
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                }
+                Spacer()
+                statusBadge(for: availability)
+                if selectedSpeechEngineID == engine {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.accentColor)
+                        .fontWeight(.semibold)
+                }
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .help("\(engine.technicalName) · \(engine.requirementNote)")
+        .disabled(!availability.isSelectable)
+        .opacity(availability.isSelectable ? 1 : 0.58)
+    }
+
+    private func statusBadge(for availability: SpeechEngineAvailability) -> some View {
+        Text(availability.statusText)
+            .font(.caption2.weight(.bold))
+            .foregroundColor(statusColor(for: availability))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(statusColor(for: availability).opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private func statusColor(for availability: SpeechEngineAvailability) -> Color {
+        switch availability {
+        case .checking:
+            return .blue
+        case .available:
+            return .green
+        case .requiresPermission:
+            return .orange
+        case .unavailable:
+            return .secondary
+        }
+    }
+
+    private var selectedSpeechEngineID: SpeechEngineID {
+        SpeechEngineID(rawValue: selectedSpeechEngineRaw) ?? .defaultEngine
+    }
+
+    private var selectedSpeechEngineAvailability: SpeechEngineAvailability {
+        availability(for: selectedSpeechEngineID)
+    }
+
+    private var sfSpeechNeedsPermission: Bool {
+        if case .requiresPermission = availability(for: .sfSpeechOnDevice) {
+            return true
+        }
+        return false
+    }
+
+    private func availability(for engine: SpeechEngineID) -> SpeechEngineAvailability {
+        if let availability = speechEngineAvailability[engine] {
+            return availability
+        }
+        return engine.whisperVariant == nil ? .checking("가용성을 확인하고 있습니다.") : .available
+    }
+
+    private func selectSpeechEngine(_ engine: SpeechEngineID) {
+        selectedSpeechEngineRaw = engine.rawValue
+        UserDefaults.standard.set(engine.rawValue, forKey: SpeechEnginePreferences.selectedEngineKey)
+        if let variant = engine.whisperVariant {
+            selectedModel = variant
+            UserDefaults.standard.set(variant, forKey: SpeechEnginePreferences.selectedModelKey)
+        }
+    }
+
+    private func normalizeSpeechEngineSelection() {
+        SpeechEnginePreferences.normalizeLegacyValues()
+        selectedSpeechEngineRaw = SpeechEnginePreferences.selectedEngine().rawValue
+        if let variant = selectedSpeechEngineID.whisperVariant {
+            selectedModel = variant
+        }
+    }
+
+    private func refreshSpeechEngineAvailability() async {
+        var refreshed: [SpeechEngineID: SpeechEngineAvailability] = [:]
+        for engine in SpeechEngineID.allCases {
+            refreshed[engine] = await STTService.engineAvailability(for: engine)
+        }
+        speechEngineAvailability = refreshed
+    }
+
+    private func requestSpeechAuthorization() async {
+        isRequestingSpeechAuthorization = true
+        speechEngineAvailability[.sfSpeechOnDevice] = await STTService.requestSFSpeechAuthorization()
+        isRequestingSpeechAuthorization = false
+    }
+
+    private func applySelectedSpeechEngine() async {
+        if let variant = selectedSpeechEngineID.whisperVariant {
+            selectedModel = variant
+            UserDefaults.standard.set(variant, forKey: SpeechEnginePreferences.selectedModelKey)
+        }
+        await viewModel.loadSpeechEngine(selectedSpeechEngineID)
+        await refreshSpeechEngineAvailability()
     }
 
     private var isModelBusy: Bool {
@@ -569,12 +676,6 @@ public struct SettingsView: View {
     private var isModelFailed: Bool {
         if case .failed = viewModel.modelState { return true }
         return false
-    }
-
-    private func normalizeSelectedModelIfNeeded() {
-        if deprecatedModelIDs.contains(selectedModel) {
-            selectedModel = "openai_whisper-large-v3-v20240930_turbo"
-        }
     }
 
     private var modelStateDescription: String {

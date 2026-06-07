@@ -1,4 +1,6 @@
 import Foundation
+@preconcurrency import AVFoundation
+@preconcurrency import Speech
 @preconcurrency import WhisperKit
 
 /// WhisperKit 기반 STT 서비스.
@@ -10,6 +12,7 @@ public final class STTService {
 
     public private(set) var modelState: ModelState = .unloaded
     public private(set) var modelVariant: String = "openai_whisper-large-v3-v20240930_turbo"
+    public private(set) var speechEngineID: SpeechEngineID = .defaultEngine
 
     // ViewModel이 modelState 변화를 @Published 없이 수신하는 콜백
     var onModelStateChange: ((ModelState) -> Void)?
@@ -17,12 +20,120 @@ public final class STTService {
     // MARK: - Private
 
     nonisolated(unsafe) private var pipe: WhisperKit?
+    private static let sampleRate: Double = 16_000
+    private static let koreanLocale = Locale(identifier: "ko-KR")
 
     public init() {}
 
+    public static func engineAvailability(for engineID: SpeechEngineID) async -> SpeechEngineAvailability {
+        if engineID.whisperVariant != nil {
+            return .available
+        }
+
+        switch engineID {
+        case .speechAnalyzer:
+            return await speechAnalyzerAvailability()
+        case .sfSpeechOnDevice:
+            return sfSpeechOnDeviceAvailability()
+        case .whisperAccurate, .whisperBalanced, .whisperFast:
+            return .available
+        }
+    }
+
+    public static func requestSFSpeechAuthorization() async -> SpeechEngineAvailability {
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { _ in
+                Task { @MainActor in
+                    continuation.resume(returning: sfSpeechOnDeviceAvailability())
+                }
+            }
+        }
+    }
+
+    private static func speechAnalyzerAvailability() async -> SpeechEngineAvailability {
+        guard #available(macOS 26.0, *) else {
+            return .unavailable("macOS 26 이상에서 사용할 수 있습니다.")
+        }
+
+        guard SpeechTranscriber.isAvailable else {
+            return .unavailable("현재 기기에서 SpeechAnalyzer를 사용할 수 없습니다.")
+        }
+
+        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: koreanLocale) else {
+            return .unavailable("한국어 SpeechAnalyzer 지원을 찾을 수 없습니다.")
+        }
+
+        let installedLocales = await SpeechTranscriber.installedLocales
+        guard installedLocales.contains(where: { $0.identifier == locale.identifier }) else {
+            return .unavailable("한국어 SpeechAnalyzer asset이 설치되어 있지 않습니다.")
+        }
+
+        return .available
+    }
+
+    private static func sfSpeechOnDeviceAvailability() -> SpeechEngineAvailability {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .notDetermined:
+            return .requiresPermission("Apple 음성 인식 권한을 허용해야 사용할 수 있습니다.")
+        case .denied:
+            return .unavailable("시스템 설정에서 Apple 음성 인식 권한이 거부되어 있습니다.")
+        case .restricted:
+            return .unavailable("이 기기 정책상 Apple 음성 인식을 사용할 수 없습니다.")
+        case .authorized:
+            break
+        @unknown default:
+            return .unavailable("Apple 음성 인식 권한 상태를 확인할 수 없습니다.")
+        }
+
+        guard let recognizer = SFSpeechRecognizer(locale: koreanLocale) else {
+            return .unavailable("한국어 SFSpeechRecognizer를 만들 수 없습니다.")
+        }
+
+        guard recognizer.supportsOnDeviceRecognition else {
+            return .unavailable("한국어 온디바이스 음성 인식 asset이 없습니다.")
+        }
+
+        guard recognizer.isAvailable else {
+            return .unavailable("현재 Apple 음성 인식 서비스를 사용할 수 없습니다.")
+        }
+
+        return .available
+    }
+
     // MARK: - Model loading
 
+    public var supportsPreviewTranscription: Bool {
+        speechEngineID.supportsPreviewTranscription
+    }
+
+    public func loadEngine(_ engineID: SpeechEngineID = .defaultEngine) async {
+        let availability = await Self.engineAvailability(for: engineID)
+        guard availability.isSelectable else {
+            pipe = nil
+            speechEngineID = engineID
+            updateState(.failed(availability.detailText ?? "\(engineID.title)을 사용할 수 없습니다."))
+            return
+        }
+
+        if let variant = engineID.whisperVariant {
+            speechEngineID = engineID
+            await loadWhisperModel(variant: variant)
+            return
+        }
+
+        pipe = nil
+        speechEngineID = engineID
+        modelVariant = engineID.rawValue
+        updateState(.loaded)
+        fputs("[STT] Apple speech engine ready: \(engineID.rawValue)\n", stderr)
+    }
+
     public func loadModel(variant: String = "openai_whisper-large-v3-v20240930_turbo") async {
+        speechEngineID = SpeechEngineID.fromWhisperVariant(variant)
+        await loadWhisperModel(variant: variant)
+    }
+
+    private func loadWhisperModel(variant: String) async {
         modelVariant = variant
         fputs("[STT] downloading \(variant)...\n", stderr)
         updateState(.downloading(0))
@@ -138,6 +249,17 @@ public final class STTService {
     // MARK: - Transcription
 
     public func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult {
+        switch speechEngineID {
+        case .whisperAccurate, .whisperBalanced, .whisperFast:
+            return try await transcribeWithWhisper(pcmSamples: pcmSamples)
+        case .speechAnalyzer:
+            return try await transcribeWithSpeechAnalyzer(pcmSamples: pcmSamples)
+        case .sfSpeechOnDevice:
+            return try await transcribeWithSFSpeechOnDevice(pcmSamples: pcmSamples)
+        }
+    }
+
+    private func transcribeWithWhisper(pcmSamples: [Float]) async throws -> TranscriptionResult {
         guard let pipe else { throw STTError.modelNotLoaded }
 
         // whisper 최소 입력 ~0.5s @16kHz
@@ -228,11 +350,160 @@ public final class STTService {
         return TranscriptionResult(segment: segment, isFinal: true)
     }
 
+    private func transcribeWithSpeechAnalyzer(pcmSamples: [Float]) async throws -> TranscriptionResult {
+        guard #available(macOS 26.0, *) else {
+            throw STTError.engineUnavailable("SpeechAnalyzer는 macOS 26 이상에서 사용할 수 있습니다.")
+        }
+
+        let availability = await Self.engineAvailability(for: .speechAnalyzer)
+        guard availability.isSelectable else {
+            throw STTError.engineUnavailable(availability.detailText ?? "SpeechAnalyzer를 사용할 수 없습니다.")
+        }
+
+        let samples = paddedSamples(pcmSamples)
+        if let silent = silentResultIfNeeded(samples) {
+            return silent
+        }
+
+        let url = try writeTemporaryAudioFile(samples: samples)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let audioFile = try AVAudioFile(forReading: url)
+        let transcriber = SpeechTranscriber(locale: Self.koreanLocale, preset: .transcription)
+        let options = SpeechAnalyzer.Options(priority: .userInitiated, modelRetention: .whileInUse)
+        let analyzer = try await SpeechAnalyzer(
+            inputAudioFile: audioFile,
+            modules: [transcriber],
+            options: options,
+            finishAfterFile: true
+        )
+
+        let resultTask = Task<String, Error> {
+            var fullText = ""
+            var latestText = ""
+            for try await result in transcriber.results {
+                let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                if result.isFinal {
+                    fullText += text
+                } else {
+                    latestText = text
+                }
+            }
+            return fullText.isEmpty ? latestText : fullText
+        }
+
+        try await analyzer.start(inputAudioFile: audioFile, finishAfterFile: true)
+        let text = try await resultTask.value
+        return transcriptionResult(
+            text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+            sampleCount: samples.count
+        )
+    }
+
+    private func transcribeWithSFSpeechOnDevice(pcmSamples: [Float]) async throws -> TranscriptionResult {
+        let availability = Self.sfSpeechOnDeviceAvailability()
+        guard availability.isSelectable else {
+            if case .requiresPermission(let reason) = availability {
+                throw STTError.speechAuthorizationRequired(reason)
+            }
+            throw STTError.engineUnavailable(availability.detailText ?? "SFSpeechRecognizer를 사용할 수 없습니다.")
+        }
+
+        guard let recognizer = SFSpeechRecognizer(locale: Self.koreanLocale) else {
+            throw STTError.engineUnavailable("한국어 SFSpeechRecognizer를 만들 수 없습니다.")
+        }
+
+        let samples = paddedSamples(pcmSamples)
+        if let silent = silentResultIfNeeded(samples) {
+            return silent
+        }
+
+        let url = try writeTemporaryAudioFile(samples: samples)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let request = SFSpeechURLRecognitionRequest(url: url)
+        request.requiresOnDeviceRecognition = true
+        request.shouldReportPartialResults = false
+        request.addsPunctuation = true
+        request.taskHint = .dictation
+
+        let text = try await withCheckedThrowingContinuation { continuation in
+            let completion = SFSpeechRecognitionCompletion(continuation: continuation)
+            _ = recognizer.recognitionTask(with: request) { result, error in
+                completion.handle(result: result, error: error)
+            }
+        }
+        return transcriptionResult(text: text, sampleCount: samples.count)
+    }
+
     // MARK: - Private helpers
 
     private func updateState(_ state: ModelState) {
         modelState = state
         onModelStateChange?(state)
+    }
+
+    private func paddedSamples(_ pcmSamples: [Float]) -> [Float] {
+        let minSamples = 8000
+        return pcmSamples.count < minSamples
+            ? pcmSamples + [Float](repeating: 0, count: minSamples - pcmSamples.count)
+            : pcmSamples
+    }
+
+    private func silentResultIfNeeded(_ samples: [Float]) -> TranscriptionResult? {
+        let dbLevel = Self.dbLevel(samples)
+        guard dbLevel < -50 else { return nil }
+        fputs("[STT] skip (energy=\(String(format: "%.1f", dbLevel))dB)\n", stderr)
+        return transcriptionResult(text: "", sampleCount: samples.count)
+    }
+
+    private func transcriptionResult(text: String, sampleCount: Int) -> TranscriptionResult {
+        let segment = Segment(
+            text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+            timestamp: Date(),
+            duration: Double(sampleCount) / Self.sampleRate
+        )
+        return TranscriptionResult(segment: segment, isFinal: true)
+    }
+
+    private static func dbLevel(_ samples: [Float]) -> Float {
+        let rms = sqrt(samples.reduce(0.0 as Float) { $0 + $1 * $1 } / Float(samples.count))
+        return 20 * log10(max(rms, 1e-7))
+    }
+
+    private func writeTemporaryAudioFile(samples: [Float]) throws -> URL {
+        guard let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: Self.sampleRate,
+            channels: 1,
+            interleaved: false
+        ) else {
+            throw STTError.transcriptionFailed("임시 오디오 포맷을 만들 수 없습니다.")
+        }
+
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: AVAudioFrameCount(samples.count)
+        ) else {
+            throw STTError.transcriptionFailed("임시 오디오 버퍼를 만들 수 없습니다.")
+        }
+
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        if let channel = buffer.floatChannelData?.pointee {
+            samples.withUnsafeBufferPointer { pointer in
+                if let baseAddress = pointer.baseAddress {
+                    channel.update(from: baseAddress, count: samples.count)
+                }
+            }
+        }
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("minto-stt-\(UUID().uuidString)")
+            .appendingPathExtension("caf")
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        try file.write(from: buffer)
+        return url
     }
 
     /// meeting-transcriber에서 채용: WhisperKit 특수 토큰 제거
@@ -251,4 +522,41 @@ public final class STTService {
         return false
     }
 
+}
+
+private final class SFSpeechRecognitionCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didResume = false
+    private let continuation: CheckedContinuation<String, Error>
+
+    init(continuation: CheckedContinuation<String, Error>) {
+        self.continuation = continuation
+    }
+
+    func handle(result: SFSpeechRecognitionResult?, error: Error?) {
+        if let error {
+            resume(with: .failure(error))
+            return
+        }
+
+        guard let result, result.isFinal else { return }
+        resume(with: .success(result.bestTranscription.formattedString))
+    }
+
+    private func resume(with result: Result<String, Error>) {
+        lock.lock()
+        guard !didResume else {
+            lock.unlock()
+            return
+        }
+        didResume = true
+        lock.unlock()
+
+        switch result {
+        case .success(let text):
+            continuation.resume(returning: text)
+        case .failure(let error):
+            continuation.resume(throwing: error)
+        }
+    }
 }

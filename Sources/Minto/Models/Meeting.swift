@@ -68,9 +68,24 @@ public enum AudioSourceError: Error, Sendable {
     case engineStartFailed(Error)
 }
 
-public enum STTError: Error, Sendable {
+public enum STTError: Error, LocalizedError, Sendable {
     case modelNotLoaded
     case transcriptionFailed(String)
+    case engineUnavailable(String)
+    case speechAuthorizationRequired(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .modelNotLoaded:
+            return "음성 인식 엔진이 아직 준비되지 않았습니다."
+        case .transcriptionFailed(let message):
+            return message
+        case .engineUnavailable(let reason):
+            return reason
+        case .speechAuthorizationRequired(let reason):
+            return reason
+        }
+    }
 }
 
 /// WhisperKit 모델 로딩 단계 상태

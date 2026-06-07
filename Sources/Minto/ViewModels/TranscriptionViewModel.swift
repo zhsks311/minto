@@ -60,11 +60,18 @@ public final class TranscriptionViewModel: ObservableObject {
     // MARK: - Computed
 
     public var modelVariantName: String {
-        sttService.modelVariant.replacingOccurrences(of: "openai_whisper-", with: "")
+        if sttService.speechEngineID.whisperVariant != nil {
+            return sttService.modelVariant.replacingOccurrences(of: "openai_whisper-", with: "")
+        }
+        return sttService.speechEngineID.engineName
     }
 
     public var modelDisplayName: String {
-        Self.displayName(for: sttService.modelVariant)
+        sttService.speechEngineID.title
+    }
+
+    public var speechEngineID: SpeechEngineID {
+        sttService.speechEngineID
     }
 
     public static func displayName(for variant: String) -> String {
@@ -85,6 +92,14 @@ public final class TranscriptionViewModel: ObservableObject {
     }
 
     // MARK: - Model loading
+
+    public func loadSpeechEngine(_ engineID: SpeechEngineID = .defaultEngine) async {
+        errorMessage = nil
+        await sttService.loadEngine(engineID)
+        if case .failed(let msg) = sttService.modelState {
+            errorMessage = "음성 인식 엔진 전환 실패: \(msg)"
+        }
+    }
 
     public func loadModel(variant: String = "openai_whisper-large-v3-v20240930_turbo") async {
         await sttService.loadModel(variant: variant)
@@ -121,6 +136,10 @@ public final class TranscriptionViewModel: ObservableObject {
         vadProcessor.onPreviewChunk = { [weak self] chunk in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                guard self.sttService.supportsPreviewTranscription else {
+                    self.pendingSegment = nil
+                    return
+                }
                 self.previewTask?.cancel()
                 self.previewTask = Task { @MainActor [weak self] in
                     guard let self, !Task.isCancelled else { return }

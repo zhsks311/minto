@@ -112,20 +112,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        // UserDefaults에서 저장된 모델 선택 읽기 (구버전/임시 기본 모델 → turbo 마이그레이션)
-        let defaultModel = "openai_whisper-large-v3-v20240930_turbo"
-        var savedVariant = UserDefaults.standard.string(forKey: "selectedModel") ?? defaultModel
-        if [
-            "openai_whisper-tiny",
-            "openai_whisper-base",
-            "openai_whisper-large-v3-v20240930_626MB",
-            "openai_whisper-large-v3-v20240930_turbo_632MB",
-        ].contains(savedVariant) {
-            savedVariant = defaultModel
-            UserDefaults.standard.set(defaultModel, forKey: "selectedModel")
-        }
+        SpeechEnginePreferences.normalizeLegacyValues()
         Task {
-            await viewModel.loadModel(variant: savedVariant)
+            let savedEngine = SpeechEnginePreferences.selectedEngine()
+            let availability = await STTService.engineAvailability(for: savedEngine)
+            if availability.isSelectable {
+                await viewModel.loadSpeechEngine(savedEngine)
+            } else {
+                UserDefaults.standard.set(
+                    SpeechEngineID.defaultEngine.rawValue,
+                    forKey: SpeechEnginePreferences.selectedEngineKey
+                )
+                await viewModel.loadSpeechEngine(.defaultEngine)
+            }
         }
         // 런치 시 회의 목록 메인 윈도우를 띄워 저장된 회의를 바로 볼 수 있게 한다.
         mainWindowManager.show()
