@@ -10,6 +10,7 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
 
     public static let defaultEngine: SpeechEngineID = .whisperAccurate
+    public static let localModelOptions: [SpeechEngineID] = [.whisperAccurate, .whisperBalanced, .whisperFast]
 
     public var title: String {
         switch self {
@@ -174,6 +175,17 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         self == .sfSpeechOnDevice
     }
 
+    public var family: SpeechEngineFamily {
+        switch self {
+        case .whisperAccurate, .whisperBalanced, .whisperFast:
+            return .localAI
+        case .speechAnalyzer:
+            return .speechAnalyzer
+        case .sfSpeechOnDevice:
+            return .sfSpeechOnDevice
+        }
+    }
+
     public static func fromWhisperVariant(_ variant: String) -> SpeechEngineID {
         switch variant {
         case "openai_whisper-medium":
@@ -182,6 +194,102 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
             return .whisperFast
         default:
             return .whisperAccurate
+        }
+    }
+}
+
+public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
+    case localAI = "local_ai"
+    case speechAnalyzer = "speech_analyzer"
+    case sfSpeechOnDevice = "sf_speech_on_device"
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .localAI:
+            return "로컬 AI"
+        case .speechAnalyzer:
+            return "Apple 최신 인식"
+        case .sfSpeechOnDevice:
+            return "개인정보 우선 받아쓰기"
+        }
+    }
+
+    public var choiceBadge: String {
+        switch self {
+        case .localAI:
+            return "추천"
+        case .speechAnalyzer:
+            return "최신"
+        case .sfSpeechOnDevice:
+            return "개인정보"
+        }
+    }
+
+    public var bestFor: String {
+        switch self {
+        case .localAI:
+            return "회의록 품질과 안정성이 가장 중요할 때"
+        case .speechAnalyzer:
+            return "macOS 26 이상에서 Apple 최신 인식을 시험할 때"
+        case .sfSpeechOnDevice:
+            return "Apple 서버 없이 기기 안에서만 처리하고 싶을 때"
+        }
+    }
+
+    public var caution: String {
+        switch self {
+        case .localAI:
+            return "아래에서 회의 성격에 맞는 모델을 고를 수 있습니다."
+        case .speechAnalyzer:
+            return "OS와 한국어 언어 파일 상태에 따라 비활성화될 수 있습니다."
+        case .sfSpeechOnDevice:
+            return "권한, 받아쓰기 설정, 한국어 언어 파일 상태에 영향을 받습니다."
+        }
+    }
+
+    public var choiceChips: [String] {
+        switch self {
+        case .localAI:
+            return ["기본 권장", "모델 선택"]
+        case .speechAnalyzer:
+            return ["Apple 엔진", "macOS 26+"]
+        case .sfSpeechOnDevice:
+            return ["서버 전송 없음", "권한/언어 파일"]
+        }
+    }
+
+    public var requirementNote: String {
+        switch self {
+        case .localAI:
+            return "macOS 14+"
+        case .speechAnalyzer:
+            return "macOS 26+"
+        case .sfSpeechOnDevice:
+            return "macOS 10.15+ · 권한과 한국어 언어 파일 필요"
+        }
+    }
+
+    public var representativeEngine: SpeechEngineID {
+        switch self {
+        case .localAI:
+            return .whisperAccurate
+        case .speechAnalyzer:
+            return .speechAnalyzer
+        case .sfSpeechOnDevice:
+            return .sfSpeechOnDevice
+        }
+    }
+
+    public var technicalName: String {
+        switch self {
+        case .localAI:
+            return "WhisperKit"
+        case .speechAnalyzer:
+            return "SpeechAnalyzer"
+        case .sfSpeechOnDevice:
+            return "SFSpeechRecognizer"
         }
     }
 }

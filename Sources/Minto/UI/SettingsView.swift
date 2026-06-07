@@ -54,7 +54,10 @@ public struct SettingsView: View {
             }
 
             Section("현재 상태") {
-                LabeledContent("음성 인식 엔진", value: viewModel.modelDisplayName)
+                LabeledContent("실행 중인 엔진", value: viewModel.speechEngineID.family.title)
+                if viewModel.speechEngineID.family == .localAI {
+                    LabeledContent("실행 중인 모델", value: viewModel.speechEngineID.title)
+                }
                 LabeledContent("엔진 상태", value: modelStateDescription)
                 if viewModel.isRecording {
                     LabeledContent("녹음 시간", value: formatDuration(viewModel.recordingDuration))
@@ -486,11 +489,16 @@ public struct SettingsView: View {
     private var speechEngineSection: some View {
         Section("음성 인식 엔진") {
             speechEngineGuide
+            activeSpeechEngineStatus
 
-            ForEach(SpeechEngineID.allCases) { engine in
-                speechEngineRow(engine)
+            ForEach(SpeechEngineFamily.allCases) { family in
+                speechEngineFamilyRow(family)
 
-                if engine == .sfSpeechOnDevice, sfSpeechNeedsPermission {
+                if family == .localAI, selectedSpeechEngineFamily == .localAI {
+                    localModelPicker
+                }
+
+                if family == .sfSpeechOnDevice, sfSpeechNeedsPermission {
                     Button {
                         Task { await requestSpeechAuthorization() }
                     } label: {
@@ -543,10 +551,10 @@ public struct SettingsView: View {
 
     private var speechEngineGuide: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("대부분의 회의는 정확도 우선이 기본 선택입니다.", systemImage: "checkmark.seal.fill")
+            Label("대부분은 로컬 AI 엔진을 선택하고, 모델은 정확도 우선을 쓰면 됩니다.", systemImage: "checkmark.seal.fill")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.primary)
-            Text("속도는 빠른 초안, 서버 전송을 피하려면 개인정보 우선.")
+            Text("Apple 서버 없이 처리하려면 개인정보 우선 받아쓰기를 선택하세요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -558,37 +566,56 @@ public struct SettingsView: View {
         )
     }
 
-    private func speechEngineRow(_ engine: SpeechEngineID) -> some View {
-        let availability = availability(for: engine)
+    private var activeSpeechEngineStatus: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            LabeledContent("현재 실행 중", value: activeSpeechEngineText)
+                .font(.caption)
+            if isPendingSpeechEngineSelection {
+                LabeledContent("선택 예정", value: pendingSpeechEngineText)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+            LabeledContent("작동 상태", value: modelStateDescription)
+                .font(.caption)
+            Text("전환 버튼을 누른 뒤 현재 실행 중 값이 원하는 엔진으로 바뀌고 작동 상태가 로드됨이면 실제로 적용된 상태입니다.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+
+    private func speechEngineFamilyRow(_ family: SpeechEngineFamily) -> some View {
+        let availability = availability(for: family)
         return Button {
-            selectSpeechEngine(engine)
+            selectSpeechEngineFamily(family)
         } label: {
             HStack(alignment: .top, spacing: 10) {
-                engineIcon(for: engine)
+                engineIcon(for: family)
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(engine.title)
+                        Text(family.title)
                             .font(.callout.weight(.semibold))
-                        choiceBadge(for: engine)
-                        Text(engine.engineName)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                        choiceBadge(for: family)
                     }
 
-                    Text(engine.bestFor)
+                    Text(family.bestFor)
                         .font(.caption)
                         .foregroundColor(.primary)
 
-                    Text(engine.caution)
+                    Text(family.caution)
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 4) {
-                        ForEach(engine.choiceChips, id: \.self) { chip in
-                            engineChip(chip, tint: engineTint(for: engine))
+                        ForEach(family.choiceChips, id: \.self) { chip in
+                            engineChip(chip, tint: engineTint(for: family))
                         }
-                        Text(engine.requirementNote)
+                        Text(family.requirementNote)
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -604,7 +631,12 @@ public struct SettingsView: View {
 
                 VStack(alignment: .trailing, spacing: 8) {
                     statusBadge(for: availability)
-                    if selectedSpeechEngineID == engine {
+                    if viewModel.speechEngineID.family == family {
+                        Text("실행 중")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.accentColor)
+                    }
+                    if selectedSpeechEngineFamily == family {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.accentColor)
                             .fontWeight(.semibold)
@@ -614,36 +646,122 @@ public struct SettingsView: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 8)
-            .background(selectionBackground(for: engine))
-            .overlay(selectionBorder(for: engine))
+            .background(selectionBackground(for: family))
+            .overlay(selectionBorder(for: family))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(engine.technicalName) · \(engine.requirementNote)")
+        .help("\(family.technicalName) · \(family.requirementNote)")
         .disabled(!availability.isSelectable)
         .opacity(availability.isSelectable ? 1 : 0.58)
     }
 
-    private func engineIcon(for engine: SpeechEngineID) -> some View {
-        Image(systemName: engineIconName(for: engine))
+    private var localModelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("로컬 AI 모델")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+            ForEach(SpeechEngineID.localModelOptions) { model in
+                localModelRow(model)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func localModelRow(_ model: SpeechEngineID) -> some View {
+        Button {
+            selectLocalModel(model)
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                engineIcon(for: model)
+                    .scaleEffect(0.9)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(model.title)
+                            .font(.caption.weight(.semibold))
+                        choiceBadge(for: model)
+                    }
+                    Text(model.bestFor)
+                        .font(.caption2)
+                        .foregroundColor(.primary)
+                    Text(model.caution)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    HStack(spacing: 4) {
+                        ForEach(model.choiceChips, id: \.self) { chip in
+                            engineChip(chip, tint: engineTint(for: model))
+                        }
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                if viewModel.speechEngineID == model {
+                    Text("실행 중")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.accentColor)
+                }
+                if selectedSpeechEngineID == model {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.accentColor)
+                        .fontWeight(.semibold)
+                        .accessibilityLabel("선택됨")
+                }
+            }
+            .padding(.vertical, 7)
+            .padding(.horizontal, 8)
+            .background(selectionBackground(for: model))
+            .overlay(selectionBorder(for: model))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(model.technicalName) · \(model.requirementNote)")
+    }
+
+    private func engineIcon(for family: SpeechEngineFamily) -> some View {
+        Image(systemName: engineIconName(for: family))
             .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(engineTint(for: engine))
+            .foregroundColor(engineTint(for: family))
             .frame(width: 28, height: 28)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(engineTint(for: engine).opacity(0.12))
+                    .fill(engineTint(for: family).opacity(0.12))
             )
     }
 
-    private func choiceBadge(for engine: SpeechEngineID) -> some View {
-        Text(engine.choiceBadge)
+    private func engineIcon(for model: SpeechEngineID) -> some View {
+        Image(systemName: engineIconName(for: model))
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(engineTint(for: model))
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(engineTint(for: model).opacity(0.12))
+            )
+    }
+
+    private func choiceBadge(for family: SpeechEngineFamily) -> some View {
+        Text(family.choiceBadge)
             .font(.caption2.weight(.bold))
-            .foregroundColor(engineTint(for: engine))
+            .foregroundColor(engineTint(for: family))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(
                 Capsule()
-                    .fill(engineTint(for: engine).opacity(0.12))
+                    .fill(engineTint(for: family).opacity(0.12))
+            )
+    }
+
+    private func choiceBadge(for model: SpeechEngineID) -> some View {
+        Text(model.choiceBadge)
+            .font(.caption2.weight(.bold))
+            .foregroundColor(engineTint(for: model))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(engineTint(for: model).opacity(0.12))
             )
     }
 
@@ -659,18 +777,39 @@ public struct SettingsView: View {
             )
     }
 
-    private func selectionBackground(for engine: SpeechEngineID) -> some View {
+    private func selectionBackground(for family: SpeechEngineFamily) -> some View {
         RoundedRectangle(cornerRadius: 8)
-            .fill(selectedSpeechEngineID == engine ? Color.accentColor.opacity(0.08) : Color.clear)
+            .fill(selectedSpeechEngineFamily == family ? Color.accentColor.opacity(0.08) : Color.clear)
     }
 
-    private func selectionBorder(for engine: SpeechEngineID) -> some View {
+    private func selectionBorder(for family: SpeechEngineFamily) -> some View {
         RoundedRectangle(cornerRadius: 8)
-            .stroke(selectedSpeechEngineID == engine ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
+            .stroke(selectedSpeechEngineFamily == family ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
     }
 
-    private func engineIconName(for engine: SpeechEngineID) -> String {
-        switch engine {
+    private func selectionBackground(for model: SpeechEngineID) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(selectedSpeechEngineID == model ? Color.accentColor.opacity(0.08) : Color.clear)
+    }
+
+    private func selectionBorder(for model: SpeechEngineID) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(selectedSpeechEngineID == model ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
+    }
+
+    private func engineIconName(for family: SpeechEngineFamily) -> String {
+        switch family {
+        case .localAI:
+            return "checkmark.seal.fill"
+        case .speechAnalyzer:
+            return "sparkles"
+        case .sfSpeechOnDevice:
+            return "lock.shield.fill"
+        }
+    }
+
+    private func engineIconName(for model: SpeechEngineID) -> String {
+        switch model {
         case .whisperAccurate:
             return "checkmark.seal.fill"
         case .whisperBalanced:
@@ -684,8 +823,19 @@ public struct SettingsView: View {
         }
     }
 
-    private func engineTint(for engine: SpeechEngineID) -> Color {
-        switch engine {
+    private func engineTint(for family: SpeechEngineFamily) -> Color {
+        switch family {
+        case .localAI:
+            return .green
+        case .speechAnalyzer:
+            return .indigo
+        case .sfSpeechOnDevice:
+            return .teal
+        }
+    }
+
+    private func engineTint(for model: SpeechEngineID) -> Color {
+        switch model {
         case .whisperAccurate:
             return .green
         case .whisperBalanced:
@@ -726,15 +876,54 @@ public struct SettingsView: View {
         SpeechEngineID(rawValue: selectedSpeechEngineRaw) ?? .defaultEngine
     }
 
+    private var selectedSpeechEngineFamily: SpeechEngineFamily {
+        selectedSpeechEngineID.family
+    }
+
+    private var selectedLocalModelID: SpeechEngineID {
+        if selectedSpeechEngineID.family == .localAI {
+            return selectedSpeechEngineID
+        }
+        return SpeechEngineID.fromWhisperVariant(selectedModel)
+    }
+
     private var selectedSpeechEngineAvailability: SpeechEngineAvailability {
         availability(for: selectedSpeechEngineID)
     }
 
+    private var activeSpeechEngineText: String {
+        let active = viewModel.speechEngineID
+        if active.family == .localAI {
+            return "\(active.family.title) · \(active.title)"
+        }
+        return active.family.title
+    }
+
+    private var pendingSpeechEngineText: String {
+        if selectedSpeechEngineID.family == .localAI {
+            return "\(selectedSpeechEngineID.family.title) · \(selectedSpeechEngineID.title)"
+        }
+        return selectedSpeechEngineID.family.title
+    }
+
+    private var isPendingSpeechEngineSelection: Bool {
+        selectedSpeechEngineID != viewModel.speechEngineID
+    }
+
     private var sfSpeechNeedsPermission: Bool {
-        if case .requiresPermission = availability(for: .sfSpeechOnDevice) {
+        if case .requiresPermission = availability(for: SpeechEngineID.sfSpeechOnDevice) {
             return true
         }
         return false
+    }
+
+    private func availability(for family: SpeechEngineFamily) -> SpeechEngineAvailability {
+        switch family {
+        case .localAI:
+            return availability(for: selectedLocalModelID)
+        case .speechAnalyzer, .sfSpeechOnDevice:
+            return availability(for: family.representativeEngine)
+        }
     }
 
     private func availability(for engine: SpeechEngineID) -> SpeechEngineAvailability {
@@ -742,6 +931,22 @@ public struct SettingsView: View {
             return availability
         }
         return engine.whisperVariant == nil ? .checking("가용성을 확인하고 있습니다.") : .available
+    }
+
+    private func selectSpeechEngineFamily(_ family: SpeechEngineFamily) {
+        switch family {
+        case .localAI:
+            selectSpeechEngine(selectedLocalModelID)
+        case .speechAnalyzer:
+            selectSpeechEngine(.speechAnalyzer)
+        case .sfSpeechOnDevice:
+            selectSpeechEngine(.sfSpeechOnDevice)
+        }
+    }
+
+    private func selectLocalModel(_ model: SpeechEngineID) {
+        guard model.family == .localAI else { return }
+        selectSpeechEngine(model)
     }
 
     private func selectSpeechEngine(_ engine: SpeechEngineID) {

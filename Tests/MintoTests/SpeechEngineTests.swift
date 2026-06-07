@@ -47,6 +47,15 @@ struct SpeechEngineTests {
         }
     }
 
+    @Test("엔진 그룹과 로컬 모델 선택지는 분리된다")
+    func engineFamiliesSeparateEnginesFromLocalModels() {
+        #expect(SpeechEngineFamily.allCases == [.localAI, .speechAnalyzer, .sfSpeechOnDevice])
+        #expect(SpeechEngineID.localModelOptions == [.whisperAccurate, .whisperBalanced, .whisperFast])
+        #expect(SpeechEngineID.localModelOptions.allSatisfy { $0.family == .localAI })
+        #expect(SpeechEngineID.speechAnalyzer.family == .speechAnalyzer)
+        #expect(SpeechEngineID.sfSpeechOnDevice.family == .sfSpeechOnDevice)
+    }
+
     @Test("legacy selectedModel에서 새 selectedSpeechEngine을 복원한다")
     func restoresEngineFromLegacySelectedModel() {
         let suiteName = "minto-speech-engine-test-\(UUID().uuidString)"
