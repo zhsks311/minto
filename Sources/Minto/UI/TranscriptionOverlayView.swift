@@ -21,10 +21,6 @@ public struct TranscriptionOverlayView: View {
 
     @ObservedObject public var viewModel: TranscriptionViewModel
     @ObservedObject private var llmService = LLMCorrectionService.shared
-    @ObservedObject private var relatedInfo = RelatedInfoService.shared
-    @ObservedObject private var notionMCP = NotionMCPService.shared
-    @ObservedObject private var confluence = ConfluenceService.shared
-    @State private var showRelated = false
     @State private var isCollapsed = false
     private let onCollapseChange: (Bool) -> Void
 
@@ -44,13 +40,6 @@ public struct TranscriptionOverlayView: View {
                 headerView
                 Divider()
                 mainContentView
-                if showRelated {
-                    Divider()
-                    relatedInfoPanel
-                } else if shouldShowRelatedSuggestion {
-                    Divider()
-                    relatedSuggestionRow
-                }
                 Divider()
                 footerView
             }
@@ -100,14 +89,6 @@ public struct TranscriptionOverlayView: View {
             }
             .buttonStyle(.borderless)
             .help("오버레이 접기")
-
-            Button { showRelated.toggle() } label: {
-                Image(systemName: showRelated ? "lightbulb.fill" : "lightbulb")
-                    .font(.system(size: 12))
-                    .foregroundColor(showRelated ? .yellow : .secondary)
-            }
-            .buttonStyle(.borderless)
-            .help("전사 기반 관련 정보 (위키·Notion·Confluence)")
 
             if llmService.activeCorrections > 0 {
                 HStack(spacing: 3) {
@@ -181,7 +162,7 @@ public struct TranscriptionOverlayView: View {
     private var modelStateBadge: some View {
         switch viewModel.modelState {
         case .loaded:
-            Text(viewModel.modelVariantName)
+            Text(viewModel.modelDisplayName)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 7)
@@ -384,187 +365,6 @@ public struct TranscriptionOverlayView: View {
                 .modifier(PulsingOpacityModifier())
         }
         .padding(.vertical, 1)
-    }
-
-    // MARK: - Related info (전사 기반 Notion·Confluence 조회)
-
-    private var relatedInfoPanel: some View {
-        let keywords = detectedKeywords()
-        let query = relatedSearchQuery()
-        let isRelatedInfoConfigured = notionMCP.isConfigured || confluence.isConfigured
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles.rectangle.stack").font(.system(size: 11)).foregroundColor(.yellow)
-                Text("관련 정보").font(.system(size: 12, weight: .bold))
-                Spacer()
-                if relatedInfo.isSearching {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button {
-                        Task { await relatedInfo.search(query: query) }
-                    } label: {
-                        Label("조회", systemImage: "magnifyingglass").font(.system(size: 10))
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(query.isEmpty || !isRelatedInfoConfigured || relatedInfo.isSearching)
-                    .help(isRelatedInfoConfigured ? "감지된 주제로 Notion·Confluence 검색" : "설정에서 Notion/Confluence를 먼저 연동하세요")
-                }
-            }
-
-            if !keywords.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(keywords, id: \.self) { keyword in
-                            Text("#\(keyword)").font(.system(size: 11)).foregroundColor(.primary.opacity(0.8))
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
-                        }
-                    }
-                }
-            }
-
-            relatedResultsSection
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .frame(maxHeight: 240, alignment: .top)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var relatedResultsSection: some View {
-        if !(notionMCP.isConfigured || confluence.isConfigured) {
-            Text("설정에서 Notion 또는 Confluence를 연동하면 감지된 주제로 문서를 찾아 드립니다.")
-                .font(.system(size: 10)).foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        } else if !relatedInfo.results.isEmpty {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(relatedInfo.results) { doc in
-                        relatedDocRow(doc)
-                    }
-                }
-            }
-        } else if let message = relatedInfo.statusMessage {
-            Text(message).font(.system(size: 10)).foregroundColor(.secondary)
-        } else {
-            Text("‘조회’를 누르면 감지된 주제로 Notion·Confluence를 검색합니다.")
-                .font(.system(size: 10)).foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func relatedDocRow(_ doc: RelatedDoc) -> some View {
-        Button {
-            if let url = URL(string: doc.url) { NSWorkspace.shared.open(url) }
-        } label: {
-            HStack(alignment: .top, spacing: 6) {
-                Text(doc.source == .notion ? "N" : "C")
-                    .font(.system(size: 9, weight: .bold))
-                    .frame(width: 16, height: 16)
-                    .background((doc.source == .notion ? Color.primary : Color.blue).opacity(0.15))
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(doc.title).font(.system(size: 11, weight: .medium)).foregroundColor(.primary).lineLimit(1)
-                    if !doc.snippet.isEmpty {
-                        Text(doc.snippet).font(.system(size: 9)).foregroundColor(.secondary).lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "arrow.up.right.square").font(.system(size: 9)).foregroundColor(.secondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(doc.url)
-    }
-
-    private var shouldShowRelatedSuggestion: Bool {
-        guard !viewModel.isPermissionDenied, !isModelLoading else { return false }
-        guard notionMCP.isConfigured || confluence.isConfigured else { return false }
-        return !relatedSearchQuery().isEmpty || !relatedInfo.results.isEmpty || relatedInfo.statusMessage != nil
-    }
-
-    private var relatedSuggestionRow: some View {
-        let query = relatedSearchQuery()
-        let hasResults = !relatedInfo.results.isEmpty
-        return HStack(spacing: 10) {
-            Image(systemName: "sparkles.rectangle.stack")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.yellow)
-                .frame(width: 22, height: 22)
-                .background(Color.yellow.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(hasResults ? "관련 문서를 찾았어요" : "관련 문서를 찾아볼까요?")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.primary)
-                Text(hasResults ? "\(relatedInfo.results.count)개 결과를 접어뒀어요" : "회의 흐름을 방해하지 않게 작게 보여드릴게요")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            if relatedInfo.isSearching {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Button(hasResults ? "보기" : "조회") {
-                    if hasResults {
-                        showRelated = true
-                    } else {
-                        Task { await relatedInfo.search(query: query) }
-                    }
-                }
-                .font(.system(size: 11, weight: .semibold))
-                .buttonStyle(.borderless)
-                .disabled(query.isEmpty && !hasResults)
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 54)
-    }
-
-    /// 최근 전사 원문을 우선 검색한다. 짧은 한국어 명사구(`컬리 용어 모음집`)가
-    /// 토큰 필터에서 `모음집`만 남아 검색 품질이 떨어지는 문제를 피하기 위해서다.
-    private func relatedSearchQuery() -> String {
-        let recent = viewModel.committedSegments.suffix(4).map(\.text).joined(separator: " ")
-        let normalized = recent
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return "" }
-
-        if normalized.count <= 120 { return normalized }
-        return String(normalized.suffix(120))
-    }
-
-    /// 최근 전사에서 감지한 주제 후보. 한국어 업무 용어는 2글자 명사도 많아
-    /// Hangul/CJK 토큰은 2글자부터 표시한다(`컬리`, `용어` 등).
-    private func detectedKeywords() -> [String] {
-        let recent = viewModel.committedSegments.suffix(4).map(\.text).joined(separator: " ")
-        let separators = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
-        var seen = Set<String>()
-        var out: [String] = []
-        for token in recent.components(separatedBy: separators) {
-            let w = token.trimmingCharacters(in: .whitespaces)
-            guard isRelatedKeyword(w), !seen.contains(w) else { continue }
-            seen.insert(w)
-            out.append(w)
-            if out.count >= 8 { break }
-        }
-        return out
-    }
-
-    private func isRelatedKeyword(_ word: String) -> Bool {
-        if word.count >= 3 { return true }
-        return word.count >= 2 && word.unicodeScalars.contains { scalar in
-            (0xAC00...0xD7A3).contains(Int(scalar.value)) || (0x4E00...0x9FFF).contains(Int(scalar.value))
-        }
     }
 
     // MARK: - Footer

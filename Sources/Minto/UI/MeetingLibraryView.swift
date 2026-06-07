@@ -20,28 +20,44 @@ public struct MeetingLibraryView: View {
     @ObservedObject private var store: MeetingStore
     @ObservedObject private var viewModel: TranscriptionViewModel
     @ObservedObject private var summaryService = SummaryService.shared
+    @ObservedObject private var relatedInfo = RelatedInfoService.shared
+    @ObservedObject private var notionMCP = NotionMCPService.shared
+    @ObservedObject private var confluence = ConfluenceService.shared
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var showingLiveMeeting = false
     @State private var detailTab: DetailTab = .summary
+    @State private var lastRelatedQuery = ""
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
+    private let onStopRecording: () -> Void
 
     private enum DetailTab {
         case summary
         case transcript
+        case related
+
+        var title: String {
+            switch self {
+            case .summary: return "요약"
+            case .transcript: return "전사"
+            case .related: return "관련 문서"
+            }
+        }
     }
 
     public init(
         store: MeetingStore,
         viewModel: TranscriptionViewModel,
         onNewMeeting: @escaping () -> Void,
-        onShowOverlay: @escaping () -> Void
+        onShowOverlay: @escaping () -> Void,
+        onStopRecording: @escaping () -> Void
     ) {
         self.store = store
         self.viewModel = viewModel
         self.onNewMeeting = onNewMeeting
         self.onShowOverlay = onShowOverlay
+        self.onStopRecording = onStopRecording
     }
 
     public var body: some View {
@@ -304,6 +320,7 @@ public struct MeetingLibraryView: View {
         return HStack(alignment: .top, spacing: 8) {
             Button {
                 showingLiveMeeting = true
+                selectedID = nil
             } label: {
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(alignment: .firstTextBaseline) {
@@ -339,6 +356,16 @@ public struct MeetingLibraryView: View {
             .buttonStyle(.borderless)
             .help("전사 오버레이 열기")
             .disabled(!viewModel.isRecording)
+
+            Button { onStopRecording() } label: {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.borderless)
+            .foregroundColor(.red)
+            .help("녹음 종료")
+            .disabled(!viewModel.isRecording || viewModel.isFinalizingMeeting)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -356,6 +383,7 @@ public struct MeetingLibraryView: View {
 
         return Button {
             selectedID = record.id
+            showingLiveMeeting = false
         } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline) {
@@ -440,6 +468,12 @@ public struct MeetingLibraryView: View {
                         }
                         .buttonStyle(.bordered)
                         .disabled(!viewModel.isRecording)
+
+                        Button(role: .destructive) { onStopRecording() } label: {
+                            Label("녹음 종료", systemImage: "stop.fill")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!viewModel.isRecording || viewModel.isFinalizingMeeting)
                     }
 
                     detailTabs
@@ -465,8 +499,13 @@ public struct MeetingLibraryView: View {
                 if detailTab == .summary {
                     liveSummarySection
                     liveTranscriptSnippet
-                } else {
+                } else if detailTab == .transcript {
                     transcriptBlock(liveSegments, emptyText: "아직 전사된 내용이 없습니다.")
+                } else {
+                    relatedDocsSection(
+                        query: liveRelatedSearchQuery,
+                        emptyText: "전사가 쌓이면 현재 회의 주제로 관련 문서를 찾을 수 있습니다."
+                    )
                 }
             }
             .padding(28)
@@ -529,8 +568,13 @@ public struct MeetingLibraryView: View {
                 if detailTab == .summary {
                     leadSummary(record)
                     meetingNotes(record.summary.sections)
-                } else {
+                } else if detailTab == .transcript {
                     transcriptBlock(record.transcript, emptyText: "전사 내용이 없습니다.", record: record)
+                } else {
+                    relatedDocsSection(
+                        query: relatedSearchQuery(for: record),
+                        emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있습니다."
+                    )
                 }
             }
             .padding(28)
@@ -584,8 +628,9 @@ public struct MeetingLibraryView: View {
 
     private var detailTabs: some View {
         HStack(spacing: 6) {
-            detailTabButton("요약", .summary)
-            detailTabButton("전사", .transcript)
+            ForEach([DetailTab.summary, .transcript, .related], id: \.self) { tab in
+                detailTabButton(tab.title, tab)
+            }
         }
         .padding(4)
         .background(Color.secondary.opacity(0.08))
@@ -768,6 +813,128 @@ public struct MeetingLibraryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    private func relatedDocsSection(query: String, emptyText: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                sectionTitle("관련 문서", systemImage: "sparkles.rectangle.stack")
+                Spacer()
+                Button {
+                    runRelatedSearch(query)
+                } label: {
+                    Label("현재 회의로 조회", systemImage: "magnifyingglass")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(query.isEmpty || !relatedInfo.isAnyConfigured || relatedInfo.isSearching)
+                .help(relatedInfo.isAnyConfigured ? "현재 회의 요약과 전사로 Notion·Confluence를 검색합니다." : "설정에서 Notion 또는 Confluence를 먼저 연결하세요.")
+            }
+
+            HStack(spacing: 8) {
+                sourceStatus("Notion", connected: notionMCP.isConfigured)
+                sourceStatus("Confluence", connected: confluence.isConfigured)
+            }
+
+            if query.isEmpty {
+                Text(emptyText)
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            } else {
+                Text("검색 기준: \(query)")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+
+            let isCurrentQuery = lastRelatedQuery == query
+
+            if relatedInfo.isSearching, isCurrentQuery {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("관련 문서를 찾고 있습니다.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+            } else if !relatedInfo.isAnyConfigured {
+                Text("설정에서 검색 소스를 연결하면 회의 내용으로 관련 문서를 찾을 수 있습니다.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            } else if isCurrentQuery, !relatedInfo.results.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(relatedInfo.results) { doc in
+                        relatedDocRow(doc)
+                    }
+                }
+            } else if isCurrentQuery, let message = relatedInfo.statusMessage {
+                Text(message)
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            } else {
+                Text("조회 버튼을 누르면 현재 회의 기준으로 검색합니다.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(18)
+        .background(LibraryPalette.elevated)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func sourceStatus(_ title: String, connected: Bool) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(connected ? Color.green : Color.secondary.opacity(0.35))
+                .frame(width: 7, height: 7)
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(Capsule())
+    }
+
+    private func relatedDocRow(_ doc: RelatedDoc) -> some View {
+        Button {
+            if let url = URL(string: doc.url) {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Text(doc.source == .notion ? "N" : "C")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 22, height: 22)
+                    .background(Color.secondary.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(doc.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    if !doc.snippet.isEmpty {
+                        Text(doc.snippet)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right.square")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(doc.url)
+    }
+
+    private func runRelatedSearch(_ query: String) {
+        lastRelatedQuery = query
+        Task { await relatedInfo.search(query: query) }
+    }
+
     private func sectionTitle(_ title: String, systemImage: String) -> some View {
         HStack(spacing: 7) {
             Image(systemName: systemImage)
@@ -821,6 +988,10 @@ public struct MeetingLibraryView: View {
         if !liveRunningSummary.isEmpty { return liveRunningSummary }
         if let text = liveSegments.last?.text, !text.isEmpty { return text }
         return "전사를 기다리는 중입니다"
+    }
+
+    private var liveRelatedSearchQuery: String {
+        compactRelatedQuery(liveSegments.suffix(4).map(\.text).joined(separator: " "))
     }
 
     private var displayedMeetings: [MeetingRecord] {
@@ -880,8 +1051,29 @@ public struct MeetingLibraryView: View {
         return MeetingSearchMatch(badge: "회의", text: record.subtitle)
     }
 
+    private func relatedSearchQuery(for record: MeetingRecord) -> String {
+        let keywordText = record.summary.keywords.prefix(5).joined(separator: " ")
+        if !keywordText.isEmpty { return compactRelatedQuery(keywordText) }
+
+        let summaryText = record.summary.leadAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !summaryText.isEmpty { return compactRelatedQuery(summaryText) }
+
+        return compactRelatedQuery(record.transcript.suffix(4).map(\.text).joined(separator: " "))
+    }
+
+    private func compactRelatedQuery(_ text: String) -> String {
+        let normalized = text
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "" }
+        if normalized.count <= 120 { return normalized }
+        return String(normalized.prefix(120))
+    }
+
     private func selectFirstAvailableIfNeeded(preferFirstResult: Bool = false) {
-        if hasLiveMeeting, (preferFirstResult || showingLiveMeeting) {
+        if hasLiveMeeting, showingLiveMeeting, !preferFirstResult {
             showingLiveMeeting = true
             return
         }

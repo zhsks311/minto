@@ -28,11 +28,29 @@ public struct SettingsView: View {
     @State private var notionConnectLoading = false
     @State private var notionConnectError: String? = nil
     @State private var confluenceTokenInput = ""
+    @State private var showNotionSettings = false
+    @State private var showConfluenceSettings = false
+    @AppStorage("lastLLMProvider") private var lastLLMProviderRaw = "codex"
 
-    private let availableModels: [(id: String, label: String, note: String)] = [
-        ("openai_whisper-small", "small", "~250MB · 장점: 빠름 · 단점: 정확도 보통"),
-        ("openai_whisper-medium", "medium", "~770MB · 장점: 정확도 높음 · 단점: 느림"),
-        ("openai_whisper-large-v3-v20240930_turbo", "large-turbo", "~810MB · 장점: 한국어 회의 권장 · 단점: 용량 큼"),
+    private let availableModels: [(id: String, label: String, note: String, memory: String)] = [
+        (
+            "openai_whisper-large-v3-v20240930_turbo",
+            "회의 정확도 우선",
+            "한국어 회의 권장 · 다운로드 약 810MB",
+            "실행 중 메모리 여유 2~3GB 권장"
+        ),
+        (
+            "openai_whisper-medium",
+            "균형",
+            "정확도와 속도 균형 · 다운로드 약 770MB",
+            "실행 중 메모리 여유 1.5~2.5GB 권장"
+        ),
+        (
+            "openai_whisper-small",
+            "빠른 기록",
+            "빠른 초안용 · 다운로드 약 250MB",
+            "실행 중 메모리 여유 1GB 내외 권장"
+        ),
     ]
     private let deprecatedModelIDs = [
         "openai_whisper-tiny",
@@ -47,6 +65,7 @@ public struct SettingsView: View {
 
     public var body: some View {
         Form {
+            llmCorrectionSection
             searchReadinessSection
             sourceConnectionsSection
 
@@ -85,41 +104,8 @@ public struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
 
-            Section("LLM 교정") {
-                llmProviderRow
-                if llmService.selectedProvider != .none {
-                    if llmService.selectedProvider.requiresWarning {
-                        tosWarningRow
-                    }
-                    llmStatusRow
-                    llmActionRow
-                    if deviceCodeInProgress {
-                        deviceCodeRow
-                    }
-                    if let err = loginError {
-                        Text(err)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
-            }
-
-            Section("교정 모델 (공급자별)") {
-                Picker("OpenAI Codex", selection: $codexModel) {
-                    ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
-                }
-                Picker("Gemini", selection: $geminiModel) {
-                    ForEach(GeminiOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
-                }
-                Picker("GitHub Copilot", selection: $copilotModel) {
-                    ForEach(CopilotOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
-                }
-                Text("선택한 공급자(LLM 교정)에 적용됩니다. Codex의 ‘자동’은 플랜(무료/유료)에 맞춰 선택합니다.")
-                    .font(.caption).foregroundColor(.secondary)
-            }
-
             Section("현재 상태") {
-                LabeledContent("로드된 모델", value: viewModel.modelVariantName)
+                LabeledContent("로드된 모델", value: viewModel.modelDisplayName)
                 LabeledContent("모델 상태", value: modelStateDescription)
                 if viewModel.isRecording {
                     LabeledContent("녹음 시간", value: formatDuration(viewModel.recordingDuration))
@@ -130,6 +116,80 @@ public struct SettingsView: View {
         .frame(width: 440, height: 520)
         .onAppear {
             normalizeSelectedModelIfNeeded()
+            rememberCurrentProviderIfNeeded()
+        }
+        .onChange(of: llmService.selectedProvider) { _, provider in
+            if provider != .none {
+                lastLLMProviderRaw = provider.rawValue
+            }
+        }
+    }
+
+    // MARK: - Correction Section Rows
+
+    private var llmCorrectionSection: some View {
+        Section("전사 자동 교정") {
+            Toggle(isOn: llmCorrectionEnabledBinding) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text("전사 자동 교정")
+                            .font(.callout.weight(.semibold))
+                        Text("권장")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.green)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    Text("회의 용어와 문맥으로 띄어쓰기, 오인식, 전문용어 표기를 다듬습니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .help("음성 인식 결과를 회의 맥락에 맞게 자연스럽게 다듬습니다. 회의록 품질을 위해 켜두는 것을 권장합니다.")
+
+            if llmService.selectedProvider != .none {
+                llmProviderRow
+                currentProviderModelPicker
+                if llmService.selectedProvider.requiresWarning {
+                    tosWarningRow
+                }
+                llmStatusRow
+                llmActionRow
+                if deviceCodeInProgress {
+                    deviceCodeRow
+                }
+                if let err = loginError {
+                    Text(err)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+        }
+    }
+
+    private var llmCorrectionEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { llmService.selectedProvider != .none },
+            set: { enabled in
+                if enabled {
+                    llmService.selectedProvider = restoredLLMProvider
+                } else {
+                    rememberCurrentProviderIfNeeded()
+                    llmService.selectedProvider = .none
+                }
+            }
+        )
+    }
+
+    private var restoredLLMProvider: LLMCorrectionService.Provider {
+        LLMCorrectionService.Provider(rawValue: lastLLMProviderRaw) ?? .codex
+    }
+
+    private func rememberCurrentProviderIfNeeded() {
+        if llmService.selectedProvider != .none {
+            lastLLMProviderRaw = llmService.selectedProvider.rawValue
         }
     }
 
@@ -138,22 +198,15 @@ public struct SettingsView: View {
     private var searchReadinessSection: some View {
         Section("검색 준비도") {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(searchReadinessTitle)
-                            .font(.headline)
-                        Text(searchReadinessMessage)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Text("\(searchReadinessScore)%")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                }
-                ProgressView(value: Double(searchReadinessScore), total: 100)
-                Label(nextSearchSetupAction, systemImage: searchReadinessScore == 100 ? "checkmark.circle.fill" : "arrow.down.circle")
+                Label("기본 회의 검색 준비됨", systemImage: "checkmark.circle.fill")
+                    .font(.headline)
+                    .foregroundColor(.green)
+                Text(searchReadinessMessage)
                     .font(.caption)
-                    .foregroundColor(searchReadinessScore == 100 ? .green : .secondary)
+                    .foregroundColor(.secondary)
+                Label(nextSearchSetupAction, systemImage: connectedSearchSourceCount == 2 ? "checkmark.circle.fill" : "arrow.down.circle")
+                    .font(.caption)
+                    .foregroundColor(connectedSearchSourceCount == 2 ? .green : .secondary)
             }
             .padding(.vertical, 4)
         }
@@ -161,49 +214,88 @@ public struct SettingsView: View {
 
     private var sourceConnectionsSection: some View {
         Section("검색 소스") {
-            integrationStatusRow(title: "Notion", connected: notionMCP.isConnected)
-            if notionMCP.isConnected {
-                Button("연결 해제") {
-                    notionMCP.disconnect()
-                    notionConnectError = nil
-                }
-                .foregroundColor(.red)
-                Text("‘연결 해제’는 이 기기의 토큰만 지웁니다. 권한을 완전히 회수하려면 Notion 설정 › 연결된 앱에서 해제하세요.")
-                    .font(.caption).foregroundColor(.secondary)
-            } else if notionConnectLoading {
-                HStack {
-                    ProgressView().scaleEffect(0.8)
-                    Text("연결 중…").font(.callout).foregroundColor(.secondary)
-                }
-            } else {
-                Button("Notion 연결") {
-                    notionConnectError = nil
-                    notionConnectLoading = true
-                    Task {
-                        do {
-                            try await NotionMCPService.shared.connect()
-                        } catch is CancellationError {
-                            // 사용자 취소 — 조용히 처리
-                        } catch {
-                            // 내부 엔드포인트·파라미터가 섞일 수 있는 상세는 stderr로만, UI엔 일반 문구.
-                            let message = (error as? LocalizedError)?.errorDescription
-                                ?? error.localizedDescription
-                            FileHandle.standardError.write(Data("[NotionMCP] 연결 실패(type=\(String(describing: type(of: error))), message=\(message))\n".utf8))
-                            notionConnectError = "연결에 실패했습니다. 다시 시도해 주세요."
-                        }
-                        notionConnectLoading = false
+            DisclosureGroup(isExpanded: $showNotionSettings) {
+                notionSettingsBody
+            } label: {
+                integrationStatusRow(title: "Notion", connected: notionMCP.isConnected)
+            }
+
+            DisclosureGroup(isExpanded: $showConfluenceSettings) {
+                confluenceSettingsBody
+            } label: {
+                integrationStatusRow(title: "Confluence", connected: confluence.isConfigured)
+            }
+        }
+    }
+
+    private var connectedSearchSourceCount: Int {
+        (notionMCP.isConnected ? 1 : 0) + (confluence.isConfigured ? 1 : 0)
+    }
+
+    private var searchReadinessMessage: String {
+        switch connectedSearchSourceCount {
+        case 0:
+            return "저장된 회의는 바로 검색됩니다. Notion이나 Confluence를 연결하면 관련 문서까지 함께 찾습니다."
+        case 1:
+            return "저장된 회의와 연결된 외부 문서 1개를 함께 검색할 수 있습니다."
+        default:
+            return "Notion과 Confluence가 모두 연결되어 회의 내용으로 문서를 찾을 수 있습니다."
+        }
+    }
+
+    private var nextSearchSetupAction: String {
+        if connectedSearchSourceCount == 2 { return "추가 설정 없이 사용할 수 있습니다" }
+        if !notionMCP.isConnected { return "다음 단계: Notion 연결" }
+        return "다음 단계: Confluence 연결"
+    }
+
+    @ViewBuilder
+    private var notionSettingsBody: some View {
+        if notionMCP.isConnected {
+            Button("연결 해제") {
+                notionMCP.disconnect()
+                notionConnectError = nil
+            }
+            .foregroundColor(.red)
+            Text("이 기기의 토큰만 지웁니다. 권한을 완전히 회수하려면 Notion 설정의 연결된 앱에서 해제하세요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        } else if notionConnectLoading {
+            HStack {
+                ProgressView().scaleEffect(0.8)
+                Text("연결 중…")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            }
+        } else {
+            Button("Notion 연결") {
+                notionConnectError = nil
+                notionConnectLoading = true
+                Task {
+                    do {
+                        try await NotionMCPService.shared.connect()
+                    } catch is CancellationError {
+                        // 사용자 취소는 조용히 처리한다.
+                    } catch {
+                        let message = (error as? LocalizedError)?.errorDescription
+                            ?? error.localizedDescription
+                        FileHandle.standardError.write(Data("[NotionMCP] 연결 실패(type=\(String(describing: type(of: error))), message=\(message))\n".utf8))
+                        notionConnectError = "연결에 실패했습니다. 다시 시도해 주세요."
                     }
+                    notionConnectLoading = false
                 }
             }
-            if let err = notionConnectError {
-                Text(err).font(.caption).foregroundColor(.red)
-            }
-            Text("Notion을 연결하면 회의 중 감지된 주제로 문서를 찾을 수 있습니다.")
-                .font(.caption).foregroundColor(.secondary)
+        }
+        if let err = notionConnectError {
+            Text(err).font(.caption).foregroundColor(.red)
+        }
+        Text("Notion을 연결하면 회의 목록의 관련 문서 탭에서 문서를 찾을 수 있습니다.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+    }
 
-            Divider()
-
-            integrationStatusRow(title: "Confluence", connected: confluence.isConfigured)
+    private var confluenceSettingsBody: some View {
+        VStack(alignment: .leading, spacing: 8) {
             TextField("사이트 URL (https://회사.atlassian.net)", text: $confluenceBaseURL)
                 .textContentType(.URL)
             TextField("이메일", text: $confluenceEmail)
@@ -219,41 +311,14 @@ public struct SettingsView: View {
                         confluence.setAPIToken("")
                         confluenceEmail = ""
                         confluenceBaseURL = ""
-                    }.foregroundColor(.red)
+                    }
+                    .foregroundColor(.red)
                 }
             }
             Text("id.atlassian.com의 API tokens에서 토큰을 발급하세요.")
-                .font(.caption).foregroundColor(.secondary)
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
-    }
-
-    private var connectedSearchSourceCount: Int {
-        (notionMCP.isConnected ? 1 : 0) + (confluence.isConfigured ? 1 : 0)
-    }
-
-    private var searchReadinessScore: Int {
-        40 + connectedSearchSourceCount * 30
-    }
-
-    private var searchReadinessTitle: String {
-        searchReadinessScore == 100 ? "외부 문서 검색까지 준비됐어요" : "기본 회의 검색은 바로 쓸 수 있어요"
-    }
-
-    private var searchReadinessMessage: String {
-        switch connectedSearchSourceCount {
-        case 0:
-            return "저장된 회의는 검색됩니다. Notion이나 Confluence를 연결하면 문서까지 함께 찾습니다."
-        case 1:
-            return "연결된 소스 1개와 저장된 회의를 함께 검색할 수 있습니다."
-        default:
-            return "Notion과 Confluence가 모두 연결되어 회의 중 문서 추천도 사용할 수 있습니다."
-        }
-    }
-
-    private var nextSearchSetupAction: String {
-        if searchReadinessScore == 100 { return "추가 설정 없이 사용할 수 있습니다" }
-        if !notionMCP.isConnected { return "다음 단계: Notion 연결" }
-        return "다음 단계: Confluence 연결"
     }
 
     private func integrationStatusRow(title: String, connected: Bool) -> some View {
@@ -273,9 +338,33 @@ public struct SettingsView: View {
 
     private var llmProviderRow: some View {
         Picker("공급자", selection: $llmService.selectedProvider) {
-            ForEach(LLMCorrectionService.Provider.allCases, id: \.self) { provider in
+            ForEach(LLMCorrectionService.Provider.allCases.filter { $0 != .none }, id: \.self) { provider in
                 Text(provider.label).tag(provider)
             }
+        }
+        .help("교정에 사용할 도구를 선택합니다.")
+    }
+
+    @ViewBuilder
+    private var currentProviderModelPicker: some View {
+        switch llmService.selectedProvider {
+        case .codex:
+            Picker("교정 모델", selection: $codexModel) {
+                ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
+            }
+            Text("Codex의 ‘자동’은 계정 플랜에 맞춰 안전한 모델을 선택합니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        case .gemini:
+            Picker("교정 모델", selection: $geminiModel) {
+                ForEach(GeminiOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
+            }
+        case .copilot:
+            Picker("교정 모델", selection: $copilotModel) {
+                ForEach(CopilotOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
+            }
+        case .none:
+            EmptyView()
         }
     }
 
@@ -444,11 +533,17 @@ public struct SettingsView: View {
 
     // MARK: - Model section helpers
 
-    private func modelRow(_ model: (id: String, label: String, note: String)) -> some View {
+    private func modelRow(_ model: (id: String, label: String, note: String, memory: String)) -> some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.label).font(.body)
-                Text(model.note).font(.caption).foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(model.label)
+                    .font(.body.weight(.semibold))
+                Text(model.note)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(model.memory)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
             Spacer()
             if selectedModel == model.id {

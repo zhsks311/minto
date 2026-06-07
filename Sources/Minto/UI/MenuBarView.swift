@@ -81,7 +81,7 @@ public struct MenuBarView: View {
     private var modelStateText: some View {
         switch viewModel.modelState {
         case .loaded:
-            Text(viewModel.modelVariantName)
+            Text(viewModel.modelDisplayName)
                 .foregroundColor(.secondary)
         case .downloading(let p):
             Text("다운로드 \(Int(p * 100))%")

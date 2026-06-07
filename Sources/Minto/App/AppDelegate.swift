@@ -10,7 +10,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     @MainActor public lazy var mainWindowManager = MainWindowManager(
         viewModel: viewModel,
         onNewMeeting: { [weak self] in self?.requestStartSession() },
-        onShowOverlay: { [weak self] in self?.floatingWindowManager.show() }
+        onShowOverlay: { [weak self] in self?.floatingWindowManager.show() },
+        onStopRecording: { [weak self] in self?.handleStopRecording() }
     )
 
     override init() {

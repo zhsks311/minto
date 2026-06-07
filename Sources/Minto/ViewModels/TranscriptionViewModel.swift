@@ -63,6 +63,23 @@ public final class TranscriptionViewModel: ObservableObject {
         sttService.modelVariant.replacingOccurrences(of: "openai_whisper-", with: "")
     }
 
+    public var modelDisplayName: String {
+        Self.displayName(for: sttService.modelVariant)
+    }
+
+    public static func displayName(for variant: String) -> String {
+        switch variant {
+        case "openai_whisper-large-v3-v20240930_turbo":
+            return "회의 정확도 우선"
+        case "openai_whisper-medium":
+            return "균형"
+        case "openai_whisper-small":
+            return "빠른 기록"
+        default:
+            return variant.replacingOccurrences(of: "openai_whisper-", with: "")
+        }
+    }
+
     public var allText: String {
         committedSegments.map(\.text).joined(separator: "\n")
     }

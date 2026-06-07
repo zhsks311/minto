@@ -1,7 +1,7 @@
 import Foundation
 
 /// 전사 키워드로 Notion(MCP)·Confluence를 동시에 조회해 관련 문서를 모으는 통합 서비스.
-/// 회의 중 "관련 정보" 패널이 on-demand로 호출한다(매 청크 자동 조회는 rate-limit 위험).
+/// 회의 목록의 "관련 문서" 탭이 on-demand로 호출한다(매 청크 자동 조회는 rate-limit 위험).
 @MainActor
 public final class RelatedInfoService: ObservableObject {
     public static let shared = RelatedInfoService()

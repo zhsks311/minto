@@ -9,15 +9,18 @@ public final class MainWindowManager: NSObject, NSWindowDelegate {
     private let viewModel: TranscriptionViewModel
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
+    private let onStopRecording: () -> Void
 
     public init(
         viewModel: TranscriptionViewModel,
         onNewMeeting: @escaping () -> Void,
-        onShowOverlay: @escaping () -> Void
+        onShowOverlay: @escaping () -> Void,
+        onStopRecording: @escaping () -> Void
     ) {
         self.viewModel = viewModel
         self.onNewMeeting = onNewMeeting
         self.onShowOverlay = onShowOverlay
+        self.onStopRecording = onStopRecording
         super.init()
     }
 
@@ -31,7 +34,8 @@ public final class MainWindowManager: NSObject, NSWindowDelegate {
             store: .shared,
             viewModel: viewModel,
             onNewMeeting: onNewMeeting,
-            onShowOverlay: onShowOverlay
+            onShowOverlay: onShowOverlay,
+            onStopRecording: onStopRecording
         )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 680),

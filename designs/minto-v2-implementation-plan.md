@@ -33,3 +33,16 @@
   - Expanded overlay gives more room to transcript than related documents.
   - Collapsed overlay hides transcript text.
   - Settings first tells the user whether search sources are ready.
+
+## Post-implementation QA
+- Do not commit immediately after code changes. Run QA first.
+- QA order: build/tests → launch app → manual core-flow check → visual/UX check → fix issues → re-run relevant checks → commit.
+- Core-flow checks:
+  - Meeting start remains simple and can start with empty context.
+  - Active meeting appears in the library and exposes stop/overlay actions.
+  - Past meetings remain selectable while recording is active.
+  - Overlay quiet/collapsed states do not expose related-document search.
+  - Related-document search lives in the meeting library detail.
+  - Settings uses disclosure rows for Notion/Confluence and an on/off correction toggle.
+- Record each QA item as pass, needs fix, or deferred.
+- Run at most three fix/verify loops for the same issue before reporting the remaining risk.

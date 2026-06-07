@@ -23,7 +23,10 @@ public struct MeetingSetupView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("회의 시작")
+                Text("새 회의")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.accentColor)
+                Text("바로 녹음할 수 있어요")
                     .font(.title3.weight(.bold))
                 Text("주제만 적어도 충분합니다. 필요한 정보는 선택해서 더하세요.")
                     .font(.caption)
@@ -33,7 +36,7 @@ public struct MeetingSetupView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("회의 주제")
                     .font(.subheadline.weight(.medium))
-                TextField("예: 2분기 제품 리뷰", text: $topic)
+                TextField("예: 검색 고도화 설계 리뷰", text: $topic)
                     .textFieldStyle(.roundedBorder)
             }
 
@@ -55,7 +58,7 @@ public struct MeetingSetupView: View {
 
             HStack {
                 Spacer()
-                Button("취소") { onCancel() }
+                Button("닫기") { onCancel() }
                     .keyboardShortcut(.cancelAction)
                 Button("녹음 시작") { onStart(topic, glossary, document) }
                     .keyboardShortcut(.defaultAction)
