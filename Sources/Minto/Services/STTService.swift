@@ -133,7 +133,10 @@ public final class STTService {
         await loadWhisperModel(variant: variant)
     }
 
-    private func loadWhisperModel(variant: String) async {
+    private func loadWhisperModel(
+        variant: String,
+        didAttemptMetadataRecovery: Bool = false
+    ) async {
         modelVariant = variant
         fputs("[STT] downloading \(variant)...\n", stderr)
         updateState(.downloading(0))
@@ -156,6 +159,11 @@ public final class STTService {
             updateState(.loaded)
             fputs("[STT] WhisperKit ready: \(variant)\n", stderr)
         } catch {
+            if !didAttemptMetadataRecovery, Self.isRecoverableMetadataError(error) {
+                await recoverFromInvalidMetadataAndReload(variant: variant)
+                return
+            }
+
             updateState(.failed(error.localizedDescription))
             fputs("[STT] load error: \(error)\n", stderr)
         }
@@ -170,18 +178,19 @@ public final class STTService {
         updateState(.loading)
 
         do {
-            let removed = try await Self.removeCachedModelFiles(for: variant)
-            if removed.isEmpty {
-                fputs("[STT] recovery: no cached model files found for \(variant)\n", stderr)
-            } else {
-                fputs("[STT] recovery: removed \(removed.count) cached path(s) for \(variant)\n", stderr)
-            }
-            await loadModel(variant: variant)
+            try await removeCachedModelFilesAndLog(for: variant, reason: "manual recovery")
+            await loadWhisperModel(variant: variant, didAttemptMetadataRecovery: true)
         } catch {
             let message = "모델 캐시 정리에 실패했습니다: \(error.localizedDescription)"
             updateState(.failed(message))
             fputs("[STT] recovery error: \(error)\n", stderr)
         }
+    }
+
+    nonisolated static func isRecoverableMetadataError(_ error: Error) -> Bool {
+        let message = error.localizedDescription.lowercased()
+        return message.contains("invalid metadata")
+            || message.contains("corrupted metadata")
     }
 
     nonisolated static func modelCacheCandidateURLs(for variant: String, repoRoot: URL? = nil) -> [URL] {
@@ -212,6 +221,29 @@ public final class STTService {
 
         var seen = Set<String>()
         return candidates.filter { seen.insert($0.path).inserted }
+    }
+
+    private func recoverFromInvalidMetadataAndReload(variant: String) async {
+        pipe = nil
+        updateState(.loading)
+
+        do {
+            try await removeCachedModelFilesAndLog(for: variant, reason: "invalid metadata")
+            await loadWhisperModel(variant: variant, didAttemptMetadataRecovery: true)
+        } catch {
+            let message = "모델 캐시 정리에 실패했습니다: \(error.localizedDescription)"
+            updateState(.failed(message))
+            fputs("[STT] metadata recovery error: \(error)\n", stderr)
+        }
+    }
+
+    private func removeCachedModelFilesAndLog(for variant: String, reason: String) async throws {
+        let removed = try await Self.removeCachedModelFiles(for: variant)
+        if removed.isEmpty {
+            fputs("[STT] recovery(\(reason)): no cached model files found for \(variant)\n", stderr)
+        } else {
+            fputs("[STT] recovery(\(reason)): removed \(removed.count) cached path(s) for \(variant)\n", stderr)
+        }
     }
 
     nonisolated private static func removeCachedModelFiles(for variant: String) async throws -> [String] {

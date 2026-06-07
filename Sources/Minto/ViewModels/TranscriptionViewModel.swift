@@ -74,6 +74,17 @@ public final class TranscriptionViewModel: ObservableObject {
         sttService.speechEngineID
     }
 
+    public var cacheRecoveryVariant: String? {
+        guard sttService.speechEngineID.supportsCacheRecovery else { return nil }
+
+        if let variant = sttService.speechEngineID.whisperVariant {
+            return variant
+        }
+
+        let variant = sttService.modelVariant.trimmingCharacters(in: .whitespacesAndNewlines)
+        return variant.isEmpty ? nil : variant
+    }
+
     public static func displayName(for variant: String) -> String {
         switch variant {
         case "openai_whisper-large-v3-v20240930_turbo":

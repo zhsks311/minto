@@ -34,14 +34,39 @@ struct ModelCacheRecoveryTests {
             withIntermediateDirectories: true
         )
         try FileManager.default.createDirectory(
+            at: downloadRoot.appendingPathComponent("\(variant)_632MB", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
             at: downloadRoot.appendingPathComponent("openai_whisper-base", isDirectory: true),
             withIntermediateDirectories: true
         )
 
-        let names = Set(STTService.modelCacheCandidateURLs(for: variant, repoRoot: root).map(\.lastPathComponent))
+        let paths = Set(STTService.modelCacheCandidateURLs(for: variant, repoRoot: root).map(canonicalPath))
 
-        #expect(names == [variant, "\(variant)_632MB"])
-        #expect(!names.contains("openai_whisper-small"))
-        #expect(!names.contains("openai_whisper-base"))
+        #expect(paths.contains(canonicalPath(root.appendingPathComponent(variant, isDirectory: true))))
+        #expect(paths.contains(canonicalPath(root.appendingPathComponent("\(variant)_632MB", isDirectory: true))))
+        #expect(paths.contains(canonicalPath(downloadRoot.appendingPathComponent(variant, isDirectory: true))))
+        #expect(paths.contains(canonicalPath(downloadRoot.appendingPathComponent("\(variant)_632MB", isDirectory: true))))
+        #expect(!paths.contains(canonicalPath(root.appendingPathComponent("openai_whisper-small", isDirectory: true))))
+        #expect(!paths.contains(canonicalPath(downloadRoot.appendingPathComponent("openai_whisper-base", isDirectory: true))))
+    }
+
+    @Test("손상된 metadata 오류는 자동 복구 대상으로 본다")
+    func invalidMetadataErrorIsRecoverable() {
+        let error = NSError(
+            domain: "Hub",
+            code: 1,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Invalid metadata: Could not remove corrupted metadata file"
+            ]
+        )
+
+        #expect(STTService.isRecoverableMetadataError(error))
+        #expect(!STTService.isRecoverableMetadataError(CocoaError(.fileNoSuchFile)))
+    }
+
+    private func canonicalPath(_ url: URL) -> String {
+        url.resolvingSymlinksInPath().path
     }
 }

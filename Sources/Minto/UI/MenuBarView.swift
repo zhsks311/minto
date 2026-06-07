@@ -8,6 +8,7 @@ public struct MenuBarView: View {
     public var onOpenLibrary: (() -> Void)?
 
     @State private var opacity: Double = 1.0
+    @State private var isRecoveringModel = false
 
     public init(
         viewModel: TranscriptionViewModel,
@@ -26,6 +27,9 @@ public struct MenuBarView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             modelStatusRow
+            if isRecoverableModelFailure {
+                modelRecoveryButton
+            }
             Divider()
             recordingButton
             if viewModel.isRecording && !viewModel.allText.isEmpty {
@@ -77,6 +81,19 @@ public struct MenuBarView: View {
         }
     }
 
+    private var modelRecoveryButton: some View {
+        Button {
+            recoverCurrentModelCache()
+        } label: {
+            if isRecoveringModel {
+                Text("모델 다시 받는 중...")
+            } else {
+                Text("캐시 정리 후 다시 받기")
+            }
+        }
+        .disabled(isModelBusy || isRecoveringModel)
+    }
+
     @ViewBuilder
     private var modelStateText: some View {
         switch viewModel.modelState {
@@ -123,6 +140,30 @@ public struct MenuBarView: View {
     private var isModelReady: Bool {
         if case .loaded = viewModel.modelState { return true }
         return false
+    }
+
+    private var isModelBusy: Bool {
+        switch viewModel.modelState {
+        case .downloading, .loading:
+            return true
+        case .loaded, .failed, .unloaded:
+            return false
+        }
+    }
+
+    private var isRecoverableModelFailure: Bool {
+        guard case .failed = viewModel.modelState else { return false }
+        return viewModel.cacheRecoveryVariant != nil
+    }
+
+    private func recoverCurrentModelCache() {
+        guard let variant = viewModel.cacheRecoveryVariant else { return }
+        isRecoveringModel = true
+
+        Task { @MainActor in
+            await viewModel.recoverModelCacheAndReload(variant: variant)
+            isRecoveringModel = false
+        }
     }
 
     private var copyButton: some View {
