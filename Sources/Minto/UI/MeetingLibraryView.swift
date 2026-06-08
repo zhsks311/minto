@@ -327,8 +327,7 @@ public struct MeetingLibraryView: View {
         let selected = showingLiveMeeting
         return HStack(alignment: .top, spacing: 8) {
             Button {
-                showingLiveMeeting = true
-                selectedID = nil
+                selectLiveMeeting()
             } label: {
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(alignment: .firstTextBaseline) {
@@ -383,6 +382,10 @@ public struct MeetingLibraryView: View {
                 .stroke(selected ? Color.accentColor.opacity(0.45) : LibraryPalette.border, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+        .onTapGesture {
+            selectLiveMeeting()
+        }
     }
 
     private func meetingRow(_ record: MeetingRecord) -> some View {
@@ -1507,6 +1510,11 @@ public struct MeetingLibraryView: View {
         }
         selectedID = displayedMeetings.first?.id
         showingLiveMeeting = false
+    }
+
+    private func selectLiveMeeting() {
+        showingLiveMeeting = true
+        selectedID = nil
     }
 
     // MARK: - Helpers
