@@ -140,6 +140,13 @@ vad_summary.md
 vad_summary.csv
 ```
 
+Use `--max-seconds 0` for full meeting duration. The default is `120` seconds so regular smoke runs stay short.
+Use `--sort duration` when running full-duration benchmarks across all samples. This processes shorter meetings first and avoids waiting on the longest files before getting any full-run evidence.
+
+For full-duration VAD chunk STT runs, the runner sets `VAD_SKIP_SWIFT_GLOBAL_CER=1` by default through `--skip-swift-global-cer auto`.
+Reason: concatenated global Levenshtein can become very expensive on 1-3 hour meetings. The metric files still keep per-chunk CER, macro CER, micro CER, RTF, peak memory, empty finals, and false-positive transcript characters.
+Use `--skip-swift-global-cer never` only for short full files where the reference and hypothesis text sizes are known to be safe.
+
 Compare Energy and Silero only after FluidAudio/Silero assets are available:
 
 ```bash

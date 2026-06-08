@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+import wave
 from datetime import datetime
 from pathlib import Path
 
@@ -33,7 +34,18 @@ def parse_args():
         help="baseline writes VAD recall metrics. stt transcribes VAD chunks and writes CER metrics.",
     )
     parser.add_argument("--stt-engine", default="whisper_accurate")
-    parser.add_argument("--max-seconds", type=float, default=120.0)
+    parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=120.0,
+        help="0 means full meeting duration. Use a small number for smoke tests.",
+    )
+    parser.add_argument(
+        "--skip-swift-global-cer",
+        choices=["auto", "always", "never"],
+        default="auto",
+        help="auto skips global Levenshtein only for full-duration VAD STT runs to avoid O(n*m) blowups.",
+    )
     parser.add_argument("--frame-sec", type=float, default=None)
     parser.add_argument("--short-utterance-sec", type=float, default=None)
     parser.add_argument("--merge-gap-sec", type=float, default=None)
@@ -47,6 +59,7 @@ def parse_args():
     parser.add_argument("--silero-max-speech-sec", type=float, default=None)
     parser.add_argument("--fluidaudio-model-dir", type=Path, default=None)
     parser.add_argument("--configuration", choices=["debug", "release"], default="release")
+    parser.add_argument("--sort", choices=["name", "duration"], default="name")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--list-samples", action="store_true")
     parser.add_argument("--fail-fast", action="store_true")
@@ -63,17 +76,28 @@ def sample_pairs(raw_dir):
     return pairs
 
 
-def selected_pairs(raw_dir, requested_samples):
+def wav_duration_seconds(path):
+    with wave.open(str(path), "rb") as handle:
+        return handle.getnframes() / float(handle.getframerate())
+
+
+def sort_pairs(raw_dir, pairs, sort_mode):
+    if sort_mode == "duration":
+        return sorted(pairs, key=lambda pair: wav_duration_seconds(raw_dir / pair[1]))
+    return pairs
+
+
+def selected_pairs(raw_dir, requested_samples, sort_mode):
     pairs = sample_pairs(raw_dir)
     if not requested_samples:
-        return pairs
+        return sort_pairs(raw_dir, pairs, sort_mode)
 
     requested = {value.strip() for value in requested_samples.split(",") if value.strip()}
     selected = [pair for pair in pairs if pair[0] in requested]
     missing = sorted(requested - {pair[0] for pair in selected})
     if missing:
         raise SystemExit(f"Missing sample ids in {raw_dir}: {', '.join(missing)}")
-    return selected
+    return sort_pairs(raw_dir, selected, sort_mode)
 
 
 def split_csv(value):
@@ -107,6 +131,14 @@ def make_command(args):
     ]
 
 
+def should_skip_swift_global_cer(mode, max_seconds):
+    if mode == "always":
+        return True
+    if mode == "never":
+        return False
+    return max_seconds <= 0
+
+
 def set_optional(env, key, value):
     if value is not None:
         env[key] = str(value)
@@ -132,6 +164,10 @@ def make_env(args, vad_engine, wav_name, smi_name, output_dir):
             "STT_ENGINE": args.stt_engine,
             "VAD_STT_OUTPUT_DIR": str(output_dir),
         })
+        if should_skip_swift_global_cer(args.skip_swift_global_cer, args.max_seconds):
+            env["VAD_SKIP_SWIFT_GLOBAL_CER"] = "1"
+        else:
+            env.pop("VAD_SKIP_SWIFT_GLOBAL_CER", None)
     else:
         env.update({
             "RUN_VAD_BENCH": "1",
@@ -184,6 +220,7 @@ def run_one(root, args, vad_engine, sample_id, wav_name, smi_name, output_root):
             "elapsed_seconds": 0,
             "output_dir": str(engine_dir),
             "metrics_file": expected_metrics_file(args, engine_dir, sample_id, vad_engine),
+            "skip_swift_global_cer": env.get("VAD_SKIP_SWIFT_GLOBAL_CER") == "1",
             "command": command,
         }
 
@@ -202,6 +239,7 @@ def run_one(root, args, vad_engine, sample_id, wav_name, smi_name, output_root):
         "elapsed_seconds": elapsed,
         "output_dir": str(engine_dir),
         "metrics_file": expected_metrics_file(args, engine_dir, sample_id, vad_engine),
+        "skip_swift_global_cer": env.get("VAD_SKIP_SWIFT_GLOBAL_CER") == "1",
         "command": command,
     }
 
@@ -220,7 +258,7 @@ def main():
     args = parse_args()
     root = Path(__file__).resolve().parents[1]
     args.raw_dir = args.raw_dir.expanduser().resolve()
-    pairs = selected_pairs(args.raw_dir, args.samples)
+    pairs = selected_pairs(args.raw_dir, args.samples, args.sort)
     vad_engines = split_csv(args.engines)
 
     if args.list_samples:
@@ -244,7 +282,9 @@ def main():
         "stt_engine": args.stt_engine if args.mode == "stt" else "",
         "sample_count": len(pairs),
         "max_seconds": args.max_seconds,
+        "skip_swift_global_cer": args.skip_swift_global_cer,
         "configuration": args.configuration,
+        "sort": args.sort,
         "dry_run": args.dry_run,
         "runs": [],
     }

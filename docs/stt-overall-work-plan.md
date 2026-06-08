@@ -296,6 +296,18 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - app 기본 경로는 기존 Energy VAD를 유지한다. 따라서 기본 녹음 UX는 이번 실험 코드만으로 바뀌지 않는다.
 - feature flag로 붙인 뒤 `sample/meeting` 전체 길이 VAD chunk STT를 다시 돌려 Full Global CER, empty final, false-positive text, peak memory를 확인한다.
 
+**현재 full-duration 운영 보정과 short3 결과**
+
+- `scripts/run_meeting_vad_benchmarks.py --max-seconds 0`이 실제 full-duration이 아니라 내부 기본 120초로 되돌아가는 문제를 확인했다. 이제 `0`은 no cap, 양수는 cap, 미지정은 기존 120초 smoke로 고정한다.
+- full-duration VAD chunk STT에서는 긴 회의의 global Levenshtein이 O(n*m)으로 터질 수 있다. runner에 `--skip-swift-global-cer auto`를 추가해 `--max-seconds 0`일 때는 global/full-global CER를 자동 skip할 수 있게 한다.
+- 전체 샘플을 한 번에 돌릴 때 긴 파일이 먼저 잡히면 첫 결과까지 너무 오래 걸린다. runner에 `--sort duration`을 추가해 full run은 짧은 파일부터 처리한다.
+- 실제 full-duration short3 재현 조건: `본회의_20260428` 724초, `본회의_20260508` 1069초, `재정경제기획위원회_20260430` 1560초, Silero `threshold=0.6`, `merge gap=1.1초`, WhisperKit turbo, `--skip-swift-global-cer never`.
+- 결과 위치: `/private/tmp/minto2-vad-full-silero-060-gap11-short3`.
+- 결과: 3/3 성공, weighted CER 37.9%, macro CER 35.1%, covered global CER 28.8%, Full Global CER 21.9%, RTF 0.113, peak memory 419.3MB, empty final 42, false-positive text 22 chars.
+- 샘플별 Full Global CER: `본회의_20260428` 17.2%, `본회의_20260508` 8.2%, `재정경제기획위원회_20260430` 30.8%.
+- 해석: Silero 0.6/gap1.1은 짧은 full 샘플에서도 속도는 충분히 빠르지만, 긴 구간으로 갈수록 empty final이 누적된다. 특히 `재정경제기획위원회_20260430`에서 133 chunk 중 29개가 empty final이라 기본값 승격 전 empty final 원인 분해가 필요하다.
+- 다음 판단: 나머지 긴 4개 샘플은 `--sort duration`과 `--skip-swift-global-cer auto`로 개별 또는 duration 순서 실행한다. 긴 샘플에서는 우선 micro/macro CER, empty final, FP chars, RTF, peak memory를 보고, Full Global CER는 작은 텍스트 범위나 segment bucket으로 보완한다.
+
 **검증**
 
 - short utterance recall
@@ -509,18 +521,19 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 
 ## 바로 다음 작업 순서
 
-1. Silero feature flag adapter를 컴파일/테스트로 고정한다.
-2. Silero `threshold=0.6`, `merge gap=1.1초`로 `sample/meeting` 전체 길이 VAD chunk STT를 순차 실행한다.
+1. 남은 긴 4개 샘플을 Silero `threshold=0.6`, `merge gap=1.1초`, `--sort duration`, `--skip-swift-global-cer auto`로 순차 실행한다.
+2. long-sample 결과는 micro/macro CER, empty final, false-positive text, RTF, peak memory부터 비교하고, Full Global CER는 작은 범위나 segment bucket으로 보완한다.
 3. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
 4. `segments.md`와 `segment_buckets.md`에서 low VAD overlap empty row와 high VAD overlap empty row를 분리해 원인을 나눈다.
-5. SFSpeech 권한/Dictation 상태를 복구한 뒤 같은 120초 runner로 다시 smoke를 돌린다.
-6. macOS 26+ 환경에서 SpeechAnalyzer 한국어 asset 상태를 확인하고 같은 120초 runner로 smoke를 돌린다.
-7. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.
-8. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
-9. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
-10. `StreamingTranscriptionEngine` protocol과 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
-11. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다.
-12. diarization은 audio offset 보존 작업 이후 offline PoC로 시작한다.
+5. `재정경제기획위원회_20260430`의 empty final 29개를 우선 진단해 Silero threshold, speech padding, WhisperKit skip/empty guard 중 어느 축의 문제인지 나눈다.
+6. SFSpeech 권한/Dictation 상태를 복구한 뒤 같은 120초 runner로 다시 smoke를 돌린다.
+7. macOS 26+ 환경에서 SpeechAnalyzer 한국어 asset 상태를 확인하고 같은 120초 runner로 smoke를 돌린다.
+8. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.
+9. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
+10. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
+11. `StreamingTranscriptionEngine` protocol과 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
+12. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다.
+13. diarization은 audio offset 보존 작업 이후 offline PoC로 시작한다.
 
 ## 당장 하지 않을 것
 

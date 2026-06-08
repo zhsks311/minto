@@ -43,7 +43,7 @@ struct VADBenchmarkTests {
     }
 
     private static var maxSeconds: Double {
-        positiveDoubleEnv("VAD_MAX_SECONDS", default: 120.0)
+        nonNegativeDoubleEnv("VAD_MAX_SECONDS") ?? 120.0
     }
 
     private static var frameSeconds: Double {
@@ -101,6 +101,10 @@ struct VADBenchmarkTests {
         return value
     }
 
+    private static var shouldSkipSwiftGlobalCER: Bool {
+        ProcessInfo.processInfo.environment["VAD_SKIP_SWIFT_GLOBAL_CER"] == "1"
+    }
+
     private static var benchmarkConfig: VADBenchmarkConfigMetric {
         VADBenchmarkConfigMetric(
             energyNoiseOffsetDB: Double(Self.energyNoiseOffsetDB),
@@ -125,7 +129,7 @@ struct VADBenchmarkTests {
         }
 
         let samples = try Self.readWAVSamples(from: Self.audioURL)
-        let totalSeconds = min(Double(samples.count) / Double(Self.sampleRate), Self.maxSeconds)
+        let totalSeconds = Self.evaluationSeconds(audioSeconds: Double(samples.count) / Double(Self.sampleRate))
         let captions = try Self.parseSMI(from: Self.smiURL)
         let candidate = Self.candidate
 
@@ -179,7 +183,7 @@ struct VADBenchmarkTests {
         }
 
         let samples = try Self.readWAVSamples(from: Self.audioURL)
-        let totalSeconds = min(Double(samples.count) / Double(Self.sampleRate), Self.maxSeconds)
+        let totalSeconds = Self.evaluationSeconds(audioSeconds: Double(samples.count) / Double(Self.sampleRate))
         let captions = try Self.parseSMI(from: Self.smiURL)
         let candidate = Self.candidate
         let rawChunks: [VADChunkMetric]
@@ -255,11 +259,11 @@ struct VADBenchmarkTests {
             ))
         }
 
-        let globalStats = Self.cerStats(
+        let globalStats = Self.shouldSkipSwiftGlobalCER ? nil : Self.cerStats(
             reference: allReferences.joined(separator: " "),
             hypothesis: allHypotheses.joined(separator: " ")
         )
-        let fullReferenceGlobalStats = Self.cerStats(
+        let fullReferenceGlobalStats = Self.shouldSkipSwiftGlobalCER ? nil : Self.cerStats(
             reference: Self.referenceText(captions: captions, start: 0, end: totalSeconds),
             hypothesis: allHypotheses.joined(separator: " ")
         )
@@ -280,14 +284,14 @@ struct VADBenchmarkTests {
             distance: totalDistance,
             microCER: totalRefLen > 0 ? Double(totalDistance) / Double(totalRefLen) : 0,
             macroCER: STTBenchmarkTextMetrics.macroCER(chunkMetrics),
-            globalDistance: globalStats.distance,
-            globalReferenceLength: globalStats.refLen,
-            globalCER: globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0,
-            fullReferenceGlobalDistance: fullReferenceGlobalStats.distance,
-            fullReferenceGlobalReferenceLength: fullReferenceGlobalStats.refLen,
-            fullReferenceGlobalCER: fullReferenceGlobalStats.refLen > 0
-                ? Double(fullReferenceGlobalStats.distance) / Double(fullReferenceGlobalStats.refLen)
-                : 0,
+            globalDistance: globalStats?.distance,
+            globalReferenceLength: globalStats?.refLen,
+            globalCER: globalStats.flatMap { $0.refLen > 0 ? Double($0.distance) / Double($0.refLen) : 0 },
+            fullReferenceGlobalDistance: fullReferenceGlobalStats?.distance,
+            fullReferenceGlobalReferenceLength: fullReferenceGlobalStats?.refLen,
+            fullReferenceGlobalCER: fullReferenceGlobalStats.flatMap {
+                $0.refLen > 0 ? Double($0.distance) / Double($0.refLen) : 0
+            },
             emptyFinalCount: emptyCount,
             falsePositiveTranscriptCount: falsePositiveTranscriptionCount,
             falsePositiveTranscriptChars: falsePositiveTranscriptChars,
@@ -306,10 +310,17 @@ struct VADBenchmarkTests {
                 "silero_threshold": "\(Self.benchmarkConfig.sileroThreshold)",
                 "silero_min_speech_seconds": "\(Self.benchmarkConfig.sileroMinSpeechSeconds)",
                 "silero_min_silence_seconds": "\(Self.benchmarkConfig.sileroMinSilenceSeconds)",
+                "skip_swift_global_cer": "\(Self.shouldSkipSwiftGlobalCER)",
             ],
             segments: chunkMetrics
         )
         try Self.writeSTTMetricsIfNeeded(metric)
+        let globalDescription = metric.globalCER.map {
+            "\(String(format: "%.1f%%", $0 * 100)) (distance \(metric.globalDistance ?? 0) / ref \(metric.globalReferenceLength ?? 0))"
+        } ?? "skipped"
+        let fullGlobalDescription = metric.fullReferenceGlobalCER.map {
+            "\(String(format: "%.1f%%", $0 * 100)) (distance \(metric.fullReferenceGlobalDistance ?? 0) / ref \(metric.fullReferenceGlobalReferenceLength ?? 0))"
+        } ?? "skipped"
         print("""
 
         === VAD STT Benchmark [\(candidate.rawValue) -> \(engineLabel)] ===
@@ -318,8 +329,8 @@ struct VADBenchmarkTests {
         empty final count       : \(metric.emptyFinalCount)
         false positive text     : \(metric.falsePositiveTranscriptCount) chunks / \(metric.falsePositiveTranscriptChars) chars
         chunk CER               : \(String(format: "%.1f%%", metric.microCER * 100)) (distance \(metric.distance) / ref \(metric.referenceLength))
-        covered global CER      : \(String(format: "%.1f%%", (metric.globalCER ?? 0) * 100)) (distance \(metric.globalDistance ?? 0) / ref \(metric.globalReferenceLength ?? 0))
-        full reference CER      : \(String(format: "%.1f%%", (metric.fullReferenceGlobalCER ?? 0) * 100)) (distance \(metric.fullReferenceGlobalDistance ?? 0) / ref \(metric.fullReferenceGlobalReferenceLength ?? 0))
+        covered global CER      : \(globalDescription)
+        full reference CER      : \(fullGlobalDescription)
         RTF                     : \(String(format: "%.2f", metric.rtf))
         elapsed                 : \(String(format: "%.1f", metric.elapsedSeconds))s
         ==============================================
@@ -328,6 +339,22 @@ struct VADBenchmarkTests {
 
         #expect(metric.measuredUnitCount > 0)
         #expect(metric.referenceLength > 0)
+    }
+
+    @Test("VAD_MAX_SECONDS 0은 전체 길이로 처리한다")
+    func maxSecondsZeroMeansFullDuration() {
+        #expect(Self.cappedTotalSeconds(audioSeconds: 987, maxSeconds: 0) == 987)
+        #expect(Self.cappedTotalSeconds(audioSeconds: 987, maxSeconds: 120) == 120)
+        #expect(Self.cappedTotalSeconds(audioSeconds: 80, maxSeconds: 120) == 80)
+    }
+
+    private static func evaluationSeconds(audioSeconds: Double) -> Double {
+        cappedTotalSeconds(audioSeconds: audioSeconds, maxSeconds: Self.maxSeconds)
+    }
+
+    private static func cappedTotalSeconds(audioSeconds: Double, maxSeconds: Double) -> Double {
+        guard maxSeconds > 0 else { return audioSeconds }
+        return min(audioSeconds, maxSeconds)
     }
 
     private static func buildMetrics(
