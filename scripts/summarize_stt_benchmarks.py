@@ -2,6 +2,7 @@
 import argparse
 import csv
 import json
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
@@ -10,10 +11,27 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Summarize Minto STT benchmark metric JSON files.")
     parser.add_argument("benchmark_root", type=Path)
     parser.add_argument("--write", action="store_true", help="Write summary.md and summary.csv into benchmark_root.")
+    parser.add_argument(
+        "--compute-missing-global-cer",
+        action="store_true",
+        help="Compute missing global_cer from sibling *_ref.txt and *_hyp.txt files when bounded by safety limits.",
+    )
+    parser.add_argument(
+        "--global-char-limit",
+        type=int,
+        default=20_000,
+        help="Maximum combined reference+hypothesis characters for computed global CER.",
+    )
+    parser.add_argument(
+        "--global-cell-limit",
+        type=int,
+        default=50_000_000,
+        help="Maximum edit-distance DP cells for computed global CER.",
+    )
     return parser.parse_args()
 
 
-def load_metrics(root):
+def load_metrics(root, compute_missing_global_cer=False, global_char_limit=20_000, global_cell_limit=50_000_000):
     metrics = []
     for path in sorted(root.glob("**/*_metrics.json")):
         try:
@@ -23,8 +41,79 @@ def load_metrics(root):
         if data.get("schema_version") != 1 or "engine_id" not in data:
             continue
         data["_path"] = str(path)
+        if compute_missing_global_cer and data.get("global_cer") is None:
+            compute_missing_global(data, path, global_char_limit, global_cell_limit)
         metrics.append(data)
     return metrics
+
+
+def compute_missing_global(metric, metric_path, global_char_limit, global_cell_limit):
+    if not metric_path.name.endswith("_metrics.json"):
+        metric["_global_cer_skip_reason"] = "unexpected_metric_filename"
+        return
+
+    sample_name = metric_path.name.removesuffix("_metrics.json")
+    ref_path = metric_path.with_name(f"{sample_name}_ref.txt")
+    hyp_path = metric_path.with_name(f"{sample_name}_hyp.txt")
+    if not ref_path.exists() or not hyp_path.exists():
+        metric["_global_cer_skip_reason"] = "missing_ref_or_hyp"
+        return
+
+    try:
+        if ref_path.stat().st_size + hyp_path.stat().st_size > global_char_limit * 4:
+            metric["_global_cer_skip_reason"] = "byte_limit"
+            return
+        reference = ref_path.read_text(encoding="utf-8")
+        hypothesis = hyp_path.read_text(encoding="utf-8")
+    except OSError as error:
+        metric["_global_cer_skip_reason"] = f"read_error:{error.__class__.__name__}"
+        return
+
+    if len(reference) + len(hypothesis) > global_char_limit:
+        metric["_global_cer_skip_reason"] = "char_limit"
+        return
+
+    ref_chars = strip_for_cer(reference)
+    hyp_chars = strip_for_cer(hypothesis)
+    if len(ref_chars) * len(hyp_chars) > global_cell_limit:
+        metric["_global_cer_skip_reason"] = "cell_limit"
+        return
+
+    ref_len = len(ref_chars)
+    distance = edit_distance(ref_chars, hyp_chars)
+    metric["global_distance"] = distance
+    metric["global_reference_length"] = ref_len
+    metric["global_cer"] = distance / ref_len if ref_len else None
+    metric["_global_cer_source"] = "computed_ref_hyp"
+
+
+def strip_for_cer(text):
+    normalized = unicodedata.normalize("NFC", text)
+    return [
+        char
+        for char in normalized
+        if not char.isspace() and not unicodedata.category(char).startswith("P")
+    ]
+
+
+def edit_distance(left, right):
+    if not left:
+        return len(right)
+    if not right:
+        return len(left)
+    if len(right) > len(left):
+        left, right = right, left
+
+    previous = list(range(len(right) + 1))
+    for left_index, left_value in enumerate(left, start=1):
+        current = [left_index]
+        for right_index, right_value in enumerate(right, start=1):
+            substitution = previous[right_index - 1] + (left_value != right_value)
+            insertion = current[right_index - 1] + 1
+            deletion = previous[right_index] + 1
+            current.append(min(substitution, insertion, deletion))
+        previous = current
+    return previous[-1]
 
 
 def fmt_percent(value):
@@ -126,12 +215,30 @@ def write_csv(path, rows):
 def main():
     args = parse_args()
     root = args.benchmark_root.expanduser().resolve()
-    metrics = load_metrics(root)
+    metrics = load_metrics(
+        root,
+        compute_missing_global_cer=args.compute_missing_global_cer,
+        global_char_limit=args.global_char_limit,
+        global_cell_limit=args.global_cell_limit,
+    )
     rows = summarize_by_engine(metrics)
     table = markdown_table(rows)
+    computed_global_count = sum(
+        1
+        for metric in metrics
+        if metric.get("_global_cer_source") == "computed_ref_hyp"
+    )
+    skipped_global_count = sum(
+        1
+        for metric in metrics
+        if metric.get("_global_cer_skip_reason") is not None
+    )
 
     print(table)
     print(f"\nmetrics: {len(metrics)}")
+    if args.compute_missing_global_cer:
+        print(f"computed missing global CER: {computed_global_count}")
+        print(f"skipped missing global CER: {skipped_global_count}")
 
     if args.write:
         (root / "summary.md").write_text(table + "\n", encoding="utf-8")

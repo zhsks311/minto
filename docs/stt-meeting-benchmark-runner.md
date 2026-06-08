@@ -64,6 +64,14 @@ Use `--skip-swift-global-cer never` only for short runs or when the global text 
 scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> --write
 ```
 
+If a full-duration run skipped Swift global CER, compute it from saved `*_ref.txt` / `*_hyp.txt` files when the text is small enough:
+
+```bash
+scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> \
+  --compute-missing-global-cer \
+  --write
+```
+
 This writes:
 
 ```text
