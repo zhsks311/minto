@@ -111,6 +111,23 @@ The segment diagnostics include `Dur`, `Ref cps`, `Hyp cps`, `VAD overlap`, `VAD
 Use high `Ref cps` empty rows to find windows where the subtitle/reference is dense but the engine returned no final text.
 Use low `VAD overlap` to identify segmentation misses, and high `VAD overlap` with empty output to identify decode/model failures.
 
+To inspect fixed empty-output probes with WhisperKit diagnostics:
+
+```bash
+RUN_STT_TESTS=1 \
+WHISPER_DIAG_PROBE_SET=sileroFullDuration \
+WHISPER_DIAG_PATH=service \
+WHISPER_MODEL_FOLDER=/Users/d66hjkxwt9/Documents/huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-large-v3-v20240930_turbo \
+swift test --filter WhisperEmptyClipDiagnosticsTests/rawWhisperKitOutput
+```
+
+Useful knobs:
+
+- `WHISPER_DIAG_PATH=direct|service|both`: direct WhisperKit CPU-only path, app `STTService` path, or both.
+- `WHISPER_DIAG_LABELS=a,b,c`: run only specific fixed probe labels.
+- `WHISPER_DIAG_MAX_CLIPS=1`: smoke a subset before a full diagnostic run.
+- `WHISPER_DIAG_VARIANT=logProbNil`: compare decode variants without changing production defaults.
+
 ## VAD benchmark run
 
 Run Energy VAD over every `sample/meeting` pair:

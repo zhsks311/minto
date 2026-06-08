@@ -1,6 +1,7 @@
 import Foundation
 import CoreML
 import Testing
+@testable import MintoCore
 @preconcurrency import WhisperKit
 
 @Suite("Whisper Empty Clip Diagnostics (Manual Only)", .serialized)
@@ -8,23 +9,84 @@ struct WhisperEmptyClipDiagnosticsTests {
 
     private struct Clip {
         let label: String
+        let audioFile: String
         let start: Double
         let end: Double
+        let referenceLength: Int?
+        let source: String
     }
 
     private static let model = "openai_whisper-large-v3-v20240930_turbo"
     private static let sampleRate = 16_000
-    private static let clips = [
-        Clip(label: "good-009.7-025.6", start: 9.7, end: 25.6),
-        Clip(label: "nonspeech-recess-120-180", start: 120, end: 180),   // 정회(-45dB), "감사합니다" 날조
-        Clip(label: "nonspeech-crowd-180-187", start: 180, end: 187),    // 군중소음(-24.8dB) 날조
-        Clip(label: "empty-096.8-104.4", start: 96.8, end: 104.4),
-        Clip(label: "empty-366.3-385.2", start: 366.3, end: 385.2),
-        Clip(label: "empty-399.7-422.7", start: 399.7, end: 422.7),
-        Clip(label: "empty-912.1-932.8", start: 912.1, end: 932.8),
-        Clip(label: "empty-330.2-333.2", start: 330.2, end: 333.2),
-        Clip(label: "empty-524.7-527.7", start: 524.7, end: 527.7),
-        Clip(label: "empty-581.4-584.4", start: 581.4, end: 584.4),
+    private static let sileroFullDurationClips = [
+        Clip(
+            label: "silero-empty-jaegyeong-20260430-063",
+            audioFile: "재정경제기획위원회_20260430_full.wav",
+            start: 703.368,
+            end: 717.176,
+            referenceLength: 125,
+            source: "minto2-vad-full-silero-060-gap11-all7"
+        ),
+        Clip(
+            label: "silero-empty-jaegyeong-20260429-097",
+            audioFile: "재정경제기획위원회_20260429_full.wav",
+            start: 1192.072,
+            end: 1205.880,
+            referenceLength: 124,
+            source: "minto2-vad-full-silero-060-gap11-all7"
+        ),
+        Clip(
+            label: "silero-empty-plenary-20260423-411",
+            audioFile: "본회의_20260423_full.wav",
+            start: 6891.144,
+            end: 6904.952,
+            referenceLength: 104,
+            source: "minto2-vad-full-silero-060-gap11-all7"
+        ),
+        Clip(
+            label: "silero-empty-haengan-20260526-154",
+            audioFile: "haengan_20260526_full.wav",
+            start: 1760.136,
+            end: 1773.944,
+            referenceLength: 100,
+            source: "minto2-vad-full-silero-060-gap11-all7"
+        ),
+        Clip(
+            label: "silero-empty-diplomacy-20260520-299",
+            audioFile: "외교통일위원회_20260520_full.wav",
+            start: 3251.080,
+            end: 3264.888,
+            referenceLength: 92,
+            source: "minto2-vad-full-silero-060-gap11-all7"
+        ),
+        Clip(
+            label: "silero-empty-plenary-20260428-041",
+            audioFile: "본회의_20260428_full.wav",
+            start: 501.896,
+            end: 515.7039375,
+            referenceLength: 82,
+            source: "minto2-vad-full-silero-060-gap11-all7"
+        ),
+        Clip(
+            label: "silero-empty-plenary-20260508-037",
+            audioFile: "본회의_20260508_full.wav",
+            start: 442.504,
+            end: 451.448,
+            referenceLength: 52,
+            source: "minto2-vad-full-silero-060-gap11-all7"
+        ),
+    ]
+    private static let legacyHaenganClips = [
+        Clip(label: "good-009.7-025.6", audioFile: "haengan_20260526_full.wav", start: 9.7, end: 25.6, referenceLength: nil, source: "legacy-haengan"),
+        Clip(label: "nonspeech-recess-120-180", audioFile: "haengan_20260526_full.wav", start: 120, end: 180, referenceLength: nil, source: "legacy-haengan"),   // 정회(-45dB), "감사합니다" 날조
+        Clip(label: "nonspeech-crowd-180-187", audioFile: "haengan_20260526_full.wav", start: 180, end: 187, referenceLength: nil, source: "legacy-haengan"),    // 군중소음(-24.8dB) 날조
+        Clip(label: "empty-096.8-104.4", audioFile: "haengan_20260526_full.wav", start: 96.8, end: 104.4, referenceLength: nil, source: "legacy-haengan"),
+        Clip(label: "empty-366.3-385.2", audioFile: "haengan_20260526_full.wav", start: 366.3, end: 385.2, referenceLength: nil, source: "legacy-haengan"),
+        Clip(label: "empty-399.7-422.7", audioFile: "haengan_20260526_full.wav", start: 399.7, end: 422.7, referenceLength: nil, source: "legacy-haengan"),
+        Clip(label: "empty-912.1-932.8", audioFile: "haengan_20260526_full.wav", start: 912.1, end: 932.8, referenceLength: nil, source: "legacy-haengan"),
+        Clip(label: "empty-330.2-333.2", audioFile: "haengan_20260526_full.wav", start: 330.2, end: 333.2, referenceLength: nil, source: "legacy-haengan"),
+        Clip(label: "empty-524.7-527.7", audioFile: "haengan_20260526_full.wav", start: 524.7, end: 527.7, referenceLength: nil, source: "legacy-haengan"),
+        Clip(label: "empty-581.4-584.4", audioFile: "haengan_20260526_full.wav", start: 581.4, end: 584.4, referenceLength: nil, source: "legacy-haengan"),
     ]
 
     private static let rawDir: URL = {
@@ -40,16 +102,101 @@ struct WhisperEmptyClipDiagnosticsTests {
         guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1" else { return }
 
         let variant = ProcessInfo.processInfo.environment["WHISPER_DIAG_VARIANT"] ?? "baseline"
-        let audioURL = Self.rawDir.appendingPathComponent("haengan_20260526_full.wav")
-        let samples = try Self.readWAVSamples(from: audioURL)
+        let probeSet = ProcessInfo.processInfo.environment["WHISPER_DIAG_PROBE_SET"] ?? "sileroFullDuration"
+        let diagnosticPath = ProcessInfo.processInfo.environment["WHISPER_DIAG_PATH"] ?? "direct"
+        let clips = Self.limitedClips(Self.filteredClips(Self.clips(for: probeSet)))
+        guard !clips.isEmpty else {
+            print("[DIAG] no clips selected for probeSet=\(probeSet)")
+            return
+        }
+        let runDirect = diagnosticPath != "service"
+        let runService = diagnosticPath == "service" || diagnosticPath == "both"
+        let pipe = runDirect ? try await Self.loadDirectWhisperKit() : nil
+        let service = runService ? try await Self.loadSTTService() : nil
 
+        print("\n=== Whisper empty clip diagnostics variant=\(variant) probeSet=\(probeSet) path=\(diagnosticPath) clips=\(clips.count) ===")
+        for audioFile in Self.audioFiles(in: clips) {
+            let audioURL = Self.rawDir.appendingPathComponent(audioFile)
+            for clip in clips where clip.audioFile == audioFile {
+                let audio = try Self.readWAVClipSamples(from: audioURL, start: clip.start, end: clip.end)
+                guard !audio.isEmpty else { continue }
+
+                let rms = sqrt(audio.reduce(0.0 as Float) { $0 + $1 * $1 } / Float(audio.count))
+                let db = 20 * log10(max(rms, 1e-7))
+                nonisolated(unsafe) var progressEvents: [TranscriptionProgress] = []
+
+                if let pipe {
+                    let results = try await pipe.transcribe(
+                        audioArray: audio,
+                        decodeOptions: Self.options(for: variant),
+                        callback: { progress in
+                            progressEvents.append(progress)
+                            return nil
+                        },
+                        segmentCallback: { segments in
+                            print("[DIAG][segmentCallback] \(clip.label) count=\(segments.count)")
+                            for segment in segments {
+                                Self.printSegment(segment)
+                            }
+                        }
+                    )
+
+                    let resultText = results.map(\.text).joined(separator: " ")
+                    let segments = results.flatMap(\.segments)
+                    print(String(format: "[DIAG][direct] %@ file=%@ source=%@ refLen=%@ %.3f-%.3fs dur=%.3fs rms=%.1fdB results=%d segments=%d progress=%d text=%@",
+                                 clip.label,
+                                 clip.audioFile,
+                                 clip.source,
+                                 Self.format(clip.referenceLength),
+                                 clip.start,
+                                 clip.end,
+                                 Double(audio.count) / Double(Self.sampleRate),
+                                 db,
+                                 results.count,
+                                 segments.count,
+                                 progressEvents.count,
+                                 resultText))
+                    if let last = progressEvents.last {
+                        print(String(format: "[DIAG][progress-last] %@ temp=%@ avg=%@ comp=%@ tokens=%d text=%@",
+                                     clip.label,
+                                     Self.format(last.temperature),
+                                     Self.format(last.avgLogprob),
+                                     Self.format(last.compressionRatio),
+                                     last.tokens.count,
+                                     last.text))
+                    }
+                    for segment in segments {
+                        Self.printSegment(segment)
+                    }
+                }
+
+                if let service {
+                    let result = try await service.transcribe(pcmSamples: audio)
+                    let text = result.segment.text
+                    print(String(format: "[DIAG][service] %@ file=%@ source=%@ refLen=%@ %.3f-%.3fs dur=%.3fs rms=%.1fdB empty=%@ text=%@",
+                                 clip.label,
+                                 clip.audioFile,
+                                 clip.source,
+                                 Self.format(clip.referenceLength),
+                                 clip.start,
+                                 clip.end,
+                                 Double(audio.count) / Double(Self.sampleRate),
+                                 db,
+                                 "\(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)",
+                                 text))
+                }
+            }
+        }
+    }
+
+    private static func loadDirectWhisperKit() async throws -> WhisperKit {
         let folder: URL
         if let modelFolder = ProcessInfo.processInfo.environment["WHISPER_MODEL_FOLDER"] {
             folder = URL(fileURLWithPath: modelFolder)
         } else {
             folder = try await WhisperKit.download(variant: Self.model)
         }
-        let pipe = try await WhisperKit(WhisperKitConfig(
+        return try await WhisperKit(WhisperKitConfig(
             model: Self.model,
             modelFolder: folder.path(percentEncoded: false),
             computeOptions: ModelComputeOptions(
@@ -60,48 +207,55 @@ struct WhisperEmptyClipDiagnosticsTests {
             ),
             verbose: true
         ))
+    }
 
-        print("\n=== Whisper empty clip diagnostics variant=\(variant) ===")
-        for clip in Self.clips {
-            let startSample = max(0, Int(clip.start * Double(Self.sampleRate)))
-            let endSample = min(samples.count, Int(clip.end * Double(Self.sampleRate)))
-            guard endSample > startSample else { continue }
+    @MainActor
+    private static func loadSTTService() async throws -> STTService {
+        let service = STTService()
+        await service.loadModel(variant: Self.model)
+        guard case .loaded = service.modelState else {
+            throw NSError(domain: "WhisperDiag", code: 5, userInfo: [
+                NSLocalizedDescriptionKey: "STTService model load failed: \(service.modelState)"
+            ])
+        }
+        return service
+    }
 
-            let audio = Array(samples[startSample..<endSample])
-            let rms = sqrt(audio.reduce(0.0 as Float) { $0 + $1 * $1 } / Float(audio.count))
-            let db = 20 * log10(max(rms, 1e-7))
-            nonisolated(unsafe) var progressEvents: [TranscriptionProgress] = []
+    private static func clips(for probeSet: String) -> [Clip] {
+        switch probeSet {
+        case "legacy", "legacyHaengan":
+            Self.legacyHaenganClips
+        case "sileroFullDuration", "fullSilero", "silero":
+            Self.sileroFullDurationClips
+        default:
+            Self.sileroFullDurationClips
+        }
+    }
 
-            let results = try await pipe.transcribe(
-                audioArray: audio,
-                decodeOptions: Self.options(for: variant),
-                callback: { progress in
-                    progressEvents.append(progress)
-                    return nil
-                },
-                segmentCallback: { segments in
-                    print("[DIAG][segmentCallback] \(clip.label) count=\(segments.count)")
-                    for segment in segments {
-                        Self.printSegment(segment)
-                    }
-                }
-            )
+    private static func limitedClips(_ clips: [Clip]) -> [Clip] {
+        guard let rawValue = ProcessInfo.processInfo.environment["WHISPER_DIAG_MAX_CLIPS"],
+              let maxClips = Int(rawValue),
+              maxClips >= 0 else {
+            return clips
+        }
+        return Array(clips.prefix(maxClips))
+    }
 
-            let resultText = results.map(\.text).joined(separator: " ")
-            let segments = results.flatMap(\.segments)
-            print(String(format: "[DIAG][clip] %@ %.1f-%.1fs dur=%.1fs rms=%.1fdB results=%d segments=%d progress=%d text=%@",
-                         clip.label, clip.start, clip.end, clip.end - clip.start, db, results.count, segments.count, progressEvents.count, resultText))
-            if let last = progressEvents.last {
-                print(String(format: "[DIAG][progress-last] %@ temp=%@ avg=%@ comp=%@ tokens=%d text=%@",
-                             clip.label,
-                             Self.format(last.temperature),
-                             Self.format(last.avgLogprob),
-                             Self.format(last.compressionRatio),
-                             last.tokens.count,
-                             last.text))
-            }
-            for segment in segments {
-                Self.printSegment(segment)
+    private static func filteredClips(_ clips: [Clip]) -> [Clip] {
+        guard let rawValue = ProcessInfo.processInfo.environment["WHISPER_DIAG_LABELS"],
+              !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return clips
+        }
+        let labels = Set(rawValue
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+        return clips.filter { labels.contains($0.label) }
+    }
+
+    private static func audioFiles(in clips: [Clip]) -> [String] {
+        clips.reduce(into: []) { files, clip in
+            if !files.contains(clip.audioFile) {
+                files.append(clip.audioFile)
             }
         }
     }
@@ -152,8 +306,13 @@ struct WhisperEmptyClipDiagnosticsTests {
         return String(format: "%.3f", value)
     }
 
-    private static func readWAVSamples(from url: URL) throws -> [Float] {
-        let data = try Data(contentsOf: url)
+    private static func format(_ value: Int?) -> String {
+        guard let value else { return "nil" }
+        return "\(value)"
+    }
+
+    private static func readWAVClipSamples(from url: URL, start: Double, end: Double) throws -> [Float] {
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
         guard data.count >= 12,
               String(data: data[0..<4], encoding: .ascii) == "RIFF",
               String(data: data[8..<12], encoding: .ascii) == "WAVE"
@@ -202,12 +361,24 @@ struct WhisperEmptyClipDiagnosticsTests {
 
         switch (audioFormat, bitsPerSample) {
         case (1, 16):
-            return stride(from: dataRange.lowerBound, to: dataRange.upperBound - 1, by: 2).map { index in
+            let clipRange = Self.clipByteRange(
+                dataRange: dataRange,
+                bytesPerSample: 2,
+                start: start,
+                end: end
+            )
+            return stride(from: clipRange.lowerBound, to: clipRange.upperBound - 1, by: 2).map { index in
                 let sample = Int16(bitPattern: Self.readUInt16LE(data, index))
                 return max(-1.0, Float(sample) / 32768.0)
             }
         case (3, 32):
-            return stride(from: dataRange.lowerBound, to: dataRange.upperBound - 3, by: 4).map { index in
+            let clipRange = Self.clipByteRange(
+                dataRange: dataRange,
+                bytesPerSample: 4,
+                start: start,
+                end: end
+            )
+            return stride(from: clipRange.lowerBound, to: clipRange.upperBound - 3, by: 4).map { index in
                 Float(bitPattern: Self.readUInt32LE(data, index))
             }
         default:
@@ -215,6 +386,19 @@ struct WhisperEmptyClipDiagnosticsTests {
                 NSLocalizedDescriptionKey: "Unsupported WAV format=\(audioFormat), bits=\(bitsPerSample)"
             ])
         }
+    }
+
+    private static func clipByteRange(
+        dataRange: Range<Int>,
+        bytesPerSample: Int,
+        start: Double,
+        end: Double
+    ) -> Range<Int> {
+        let startFrame = max(0, Int(start * Double(Self.sampleRate)))
+        let endFrame = max(startFrame, Int(end * Double(Self.sampleRate)))
+        let lowerBound = min(dataRange.upperBound, dataRange.lowerBound + startFrame * bytesPerSample)
+        let upperBound = min(dataRange.upperBound, dataRange.lowerBound + endFrame * bytesPerSample)
+        return lowerBound..<upperBound
     }
 
     private static func readUInt16LE(_ data: Data, _ offset: Int) -> UInt16 {
