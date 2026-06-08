@@ -66,6 +66,16 @@ struct ModelCacheRecoveryTests {
         #expect(!STTService.isRecoverableMetadataError(CocoaError(.fileNoSuchFile)))
     }
 
+    @Test("WHISPER_MODEL_FOLDER가 있으면 로컬 모델 폴더를 우선 사용한다")
+    func localModelFolderOverrideUsesExplicitEnvironmentValue() {
+        let folder = STTService.localModelFolderOverride(environment: [
+            "WHISPER_MODEL_FOLDER": " /tmp/minto-whisper-model "
+        ])
+
+        #expect(folder?.path == "/tmp/minto-whisper-model")
+        #expect(STTService.localModelFolderOverride(environment: [:]) == nil)
+    }
+
     private func canonicalPath(_ url: URL) -> String {
         url.resolvingSymlinksInPath().path
     }

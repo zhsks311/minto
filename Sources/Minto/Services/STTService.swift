@@ -137,18 +137,25 @@ public final class STTService {
         didAttemptMetadataRecovery: Bool = false
     ) async {
         modelVariant = variant
-        fputs("[STT] downloading \(variant)...\n", stderr)
-        updateState(.downloading(0))
 
         do {
-            let folder = try await WhisperKit.download(
-                variant: variant,
-                progressCallback: { @Sendable [weak self] progress in
-                    Task { @MainActor [weak self] in
-                        self?.updateState(.downloading(progress.fractionCompleted))
+            let folder: URL
+            if let localFolder = Self.localModelFolderOverride() {
+                folder = localFolder
+                fputs("[STT] initializing WhisperKit from local folder: \(folder.path)\n", stderr)
+                updateState(.loading)
+            } else {
+                fputs("[STT] downloading \(variant)...\n", stderr)
+                updateState(.downloading(0))
+                folder = try await WhisperKit.download(
+                    variant: variant,
+                    progressCallback: { @Sendable [weak self] progress in
+                        Task { @MainActor [weak self] in
+                            self?.updateState(.downloading(progress.fractionCompleted))
+                        }
                     }
-                }
-            )
+                )
+            }
             fputs("[STT] initializing WhisperKit...\n", stderr)
             updateState(.loading)
             pipe = try await WhisperKit(WhisperKitConfig(
@@ -166,6 +173,16 @@ public final class STTService {
             updateState(.failed(error.localizedDescription))
             fputs("[STT] load error: \(error)\n", stderr)
         }
+    }
+
+    nonisolated static func localModelFolderOverride(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL? {
+        guard let value = environment["WHISPER_MODEL_FOLDER"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: value)
     }
 
     /// User-triggered recovery path for corrupted Hugging Face/WhisperKit cache metadata.
