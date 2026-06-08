@@ -178,7 +178,7 @@ struct StreamingChunkBenchmarkTests {
         var finalEvents = 0
         var emptyFinals = 0
         var finalRTFs: [Double] = []
-        var allFinalText = ""
+        var allFinalTexts: [String] = []
         var lastPreviewFinalDistanceTotal = 0
         var finalWindows: [FinalMetric] = []
 
@@ -235,7 +235,7 @@ struct StreamingChunkBenchmarkTests {
                     lastPreviewFinalDistanceTotal += distance
                     previewFinalDistance = distance
                 }
-                allFinalText += finalText + " "
+                allFinalTexts.append(finalText)
                 finalWindows.append(FinalMetric(
                     index: finalEvents - 1,
                     startSeconds: finalStart,
@@ -251,7 +251,7 @@ struct StreamingChunkBenchmarkTests {
             t += Self.previewStepSeconds
         }
 
-        let stats = Self.cerStats(reference: reference, hypothesis: allFinalText)
+        let stats = Self.cerStats(reference: reference, hypothesis: allFinalTexts.joined(separator: " "))
         let globalCER = stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0
         let avgPreviewRevisionDistance = previewRevisions > 0
             ? Double(previewEditDistanceTotal) / Double(previewRevisions)

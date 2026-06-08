@@ -164,8 +164,8 @@ struct MeetingCorpusTests {
         // 전역 CER용: 모든 창의 hyp/ref를 이어붙인다. 창 경계를 가로지르는 매칭이
         // 허용돼, 자막 타이밍 드리프트로 구절이 옆 창으로 밀린 경우를 흡수한다.
         // (per-window micro-average는 그런 경우 양쪽 창을 모두 깎아 dissimilarity를 부풀린다.)
-        var allRefText = ""
-        var allHypText = ""
+        var allReferences: [String] = []
+        var allHypotheses: [String] = []
         var windowMetrics: [MeetingWindowMetric] = []
         for (index, window) in targetWindows.enumerated() {
             let startSample = max(0, Int(window.start * Double(Self.sampleRate)))
@@ -185,8 +185,8 @@ struct MeetingCorpusTests {
             if empty {
                 emptyCount += 1
             }
-            allRefText += window.text + " "
-            allHypText += hypothesis + " "
+            allReferences.append(window.text)
+            allHypotheses.append(hypothesis)
             let windowCER = stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0
             let durationSeconds = window.end - window.start
             windowMetrics.append(MeetingWindowMetric(
@@ -217,6 +217,8 @@ struct MeetingCorpusTests {
         }
 
         let microCER = Double(totalDistance) / Double(totalRefLen)
+        let globalReferenceText = allReferences.joined(separator: " ")
+        let globalHypothesisText = allHypotheses.joined(separator: " ")
         let shouldSkipGlobalCER = ProcessInfo.processInfo.environment["MEETING_SKIP_SWIFT_GLOBAL_CER"] == "1"
         let globalSummary: String
         let globalDistance: Int?
@@ -228,7 +230,7 @@ struct MeetingCorpusTests {
             globalCERValue = nil
             globalSummary = "global(전체) CER  : skipped (external UTF-8 Levenshtein aggregation)"
         } else {
-            let globalStats = Self.cerStats(reference: allRefText, hypothesis: allHypText)
+            let globalStats = Self.cerStats(reference: globalReferenceText, hypothesis: globalHypothesisText)
             let globalCER = globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0
             globalDistance = globalStats.distance
             globalRefLen = globalStats.refLen
@@ -244,12 +246,12 @@ struct MeetingCorpusTests {
                 .deletingPathExtension()
                 .lastPathComponent
                 .replacingOccurrences(of: "_full", with: "")
-            try allRefText.write(
+            try globalReferenceText.write(
                 to: outputDirectory.appendingPathComponent("\(sample)_ref.txt"),
                 atomically: true,
                 encoding: .utf8
             )
-            try allHypText.write(
+            try globalHypothesisText.write(
                 to: outputDirectory.appendingPathComponent("\(sample)_hyp.txt"),
                 atomically: true,
                 encoding: .utf8
