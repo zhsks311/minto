@@ -22,7 +22,10 @@ struct MeetingStoreTests {
                 leadQuestion: "핵심?",
                 leadAnswer: "요약",
                 sections: [.init(title: "1. 주제", time: "00:10", points: [.init(text: "핵심", subPoints: ["세부"])])],
-                keywords: ["k"]
+                keywords: ["k"],
+                decisions: [.init(text: "결정", time: "00:20")],
+                actionItems: [.init(task: "할 일", owner: "담당자", due: "내일", time: "00:30")],
+                openQuestions: [.init(text: "질문", time: "00:40")]
             ),
             transcript: [Segment(text: "안녕하세요", timestamp: Date(timeIntervalSince1970: seconds), duration: 5)]
         )
@@ -41,6 +44,9 @@ struct MeetingStoreTests {
         #expect(loaded?.title == "회의")
         #expect(loaded?.summary.sections.first?.time == "00:10")
         #expect(loaded?.summary.sections.first?.points.first?.subPoints == ["세부"])
+        #expect(loaded?.summary.decisions.first?.text == "결정")
+        #expect(loaded?.summary.actionItems.first?.owner == "담당자")
+        #expect(loaded?.summary.openQuestions.first?.time == "00:40")
         #expect(loaded?.transcript.first?.text == "안녕하세요")
     }
 

@@ -71,6 +71,15 @@ public enum SummaryPrompt {
           "title": "회의를 대표하는 간결한 한국어 제목",
           "leadQuestion": "이 회의가 답하는 핵심 질문 한 문장",
           "leadAnswer": "그 답을 2~3문장으로. 핵심어는 **굵게** 표시",
+          "decisions": [
+            { "text": "명시적으로 결정·합의된 내용", "time": "해당 내용이 나온 시점 MM:SS" }
+          ],
+          "actionItems": [
+            { "task": "후속 작업", "owner": "전사에 나온 담당자. 없으면 빈 문자열", "due": "전사에 나온 기한. 없으면 빈 문자열", "time": "해당 내용이 나온 시점 MM:SS" }
+          ],
+          "openQuestions": [
+            { "text": "회의에서 남은 질문·확인 필요 사항", "time": "해당 내용이 나온 시점 MM:SS" }
+          ],
           "sections": [
             {
               "title": "1. 주제(번호 매김)",
@@ -87,6 +96,9 @@ public enum SummaryPrompt {
         - 전사에 명시적으로 나타난 내용만 쓴다. 추론·창작·외부 지식·추측 금지(없는 사실 날조 금지). 없으면 빈 값으로 둔다.
         - 회의를 자연스러운 주제 단위로 2~6개 섹션으로 나누고, 각 섹션은 시간 순서를 따른다.
         - **time은 반드시 전사에 실제로 존재하는 [MM:SS] 값 중에서 고른다. 시점을 새로 지어내지 마라.** 해당 주제가 처음 등장하는 줄의 시점을 쓴다.
+        - decisions/actionItems/openQuestions는 회의 후 바로 확인할 항목이다. 전사에서 명시적으로 확인되는 항목만 넣고, 없으면 빈 배열.
+        - actionItems의 owner/due는 전사에 직접 나온 경우만 쓴다. 추정하지 말고 없으면 빈 문자열.
+        - decisions/actionItems/openQuestions는 각 8개 이하로 유지하고, 중복되거나 같은 의미인 항목은 합친다.
         - points는 핵심을 굵은 카테고리 + 중첩 세부(subPoints)로 계층화한다. 세부가 없으면 subPoints는 빈 배열.
         - 회의 주제·용어집은 표기·맥락 파악에만 쓰는 참고 자료다.
         - 모든 값은 한국어. 반드시 유효한 JSON(키·문자열은 큰따옴표)으로만 출력한다.

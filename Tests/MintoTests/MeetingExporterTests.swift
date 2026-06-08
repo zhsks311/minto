@@ -14,7 +14,10 @@ struct MeetingExporterTests {
                 leadQuestion: "이번 주 핵심?",
                 leadAnswer: "핵심 요약 내용",
                 sections: [.init(title: "1. 주제", time: "00:10", points: [.init(text: "포인트", subPoints: ["세부"])])],
-                keywords: ["kw"]
+                keywords: ["kw"],
+                decisions: [.init(text: "다음 배포는 금요일에 진행", time: "00:20")],
+                actionItems: [.init(task: "체크리스트 정리", owner: "지민", due: "목요일", time: "00:30")],
+                openQuestions: [.init(text: "롤백 기준은 추가 확인", time: "00:40")]
             ),
             transcript: [.init(time: "00:00", text: "안녕하세요"), .init(time: "00:10", text: "시작합니다")]
         )
@@ -25,6 +28,12 @@ struct MeetingExporterTests {
         let md = MeetingExporter.markdown(for: sample())
         #expect(md.contains("# 주간 회의"))
         #expect(md.contains("핵심 요약 내용"))
+        #expect(md.contains("## 결정사항"))
+        #expect(md.contains("다음 배포는 금요일에 진행"))
+        #expect(md.contains("## 할 일"))
+        #expect(md.contains("체크리스트 정리"))
+        #expect(md.contains("## 미해결 질문"))
+        #expect(md.contains("롤백 기준은 추가 확인"))
         #expect(md.contains("### 1. 주제"))
         #expect(md.contains("## 전사"))
         #expect(md.contains("**[00:00]** 안녕하세요"))
