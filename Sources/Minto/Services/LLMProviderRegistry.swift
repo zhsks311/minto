@@ -45,6 +45,15 @@ public struct LLMProviderRegistry: Sendable {
         }
         return LLMAPIKeyTextProvider(providerID: id, registry: self)
     }
+
+    public func embeddingProvider(for id: LLMProviderID) -> (any LLMEmbeddingProvider)? {
+        switch id {
+        case .local:
+            return LocalHashEmbeddingProvider(registry: self)
+        case .gpt, .gemini, .claude, .openRouter, .copilot, .chatGPTAccount, .geminiAccount:
+            return nil
+        }
+    }
 }
 
 extension LLMProviderRegistry {

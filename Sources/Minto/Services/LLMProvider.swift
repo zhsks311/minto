@@ -198,17 +198,30 @@ public struct LLMEmbeddingRequest: Sendable {
     }
 }
 
+public enum LLMEmbeddingKind: String, Codable, Sendable {
+    case semantic
+    case lexicalHash
+}
+
 public struct LLMEmbeddingResponse: Equatable, Sendable {
     public let vector: [Double]
     public let providerID: LLMProviderID
     public let modelID: String
     public let sourceID: String?
+    public let kind: LLMEmbeddingKind
 
-    public init(vector: [Double], providerID: LLMProviderID, modelID: String, sourceID: String? = nil) {
+    public init(
+        vector: [Double],
+        providerID: LLMProviderID,
+        modelID: String,
+        sourceID: String? = nil,
+        kind: LLMEmbeddingKind = .semantic
+    ) {
         self.vector = vector
         self.providerID = providerID
         self.modelID = modelID
         self.sourceID = sourceID
+        self.kind = kind
     }
 }
 
