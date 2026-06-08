@@ -104,6 +104,7 @@ struct WhisperEmptyClipDiagnosticsTests {
         let variant = ProcessInfo.processInfo.environment["WHISPER_DIAG_VARIANT"] ?? "baseline"
         let probeSet = ProcessInfo.processInfo.environment["WHISPER_DIAG_PROBE_SET"] ?? "sileroFullDuration"
         let diagnosticPath = ProcessInfo.processInfo.environment["WHISPER_DIAG_PATH"] ?? "direct"
+        let padSeconds = Self.padSeconds()
         let clips = Self.limitedClips(Self.filteredClips(Self.clips(for: probeSet)))
         guard !clips.isEmpty else {
             print("[DIAG] no clips selected for probeSet=\(probeSet)")
@@ -114,11 +115,13 @@ struct WhisperEmptyClipDiagnosticsTests {
         let pipe = runDirect ? try await Self.loadDirectWhisperKit() : nil
         let service = runService ? try await Self.loadSTTService() : nil
 
-        print("\n=== Whisper empty clip diagnostics variant=\(variant) probeSet=\(probeSet) path=\(diagnosticPath) clips=\(clips.count) ===")
+        print("\n=== Whisper empty clip diagnostics variant=\(variant) probeSet=\(probeSet) path=\(diagnosticPath) clips=\(clips.count) pad=\(padSeconds)s ===")
         for audioFile in Self.audioFiles(in: clips) {
             let audioURL = Self.rawDir.appendingPathComponent(audioFile)
             for clip in clips where clip.audioFile == audioFile {
-                let audio = try Self.readWAVClipSamples(from: audioURL, start: clip.start, end: clip.end)
+                let effectiveStart = max(0, clip.start - padSeconds)
+                let effectiveEnd = clip.end + padSeconds
+                let audio = try Self.readWAVClipSamples(from: audioURL, start: effectiveStart, end: effectiveEnd)
                 guard !audio.isEmpty else { continue }
 
                 let rms = sqrt(audio.reduce(0.0 as Float) { $0 + $1 * $1 } / Float(audio.count))
@@ -143,13 +146,14 @@ struct WhisperEmptyClipDiagnosticsTests {
 
                     let resultText = results.map(\.text).joined(separator: " ")
                     let segments = results.flatMap(\.segments)
-                    print(String(format: "[DIAG][direct] %@ file=%@ source=%@ refLen=%@ %.3f-%.3fs dur=%.3fs rms=%.1fdB results=%d segments=%d progress=%d text=%@",
+                    print(String(format: "[DIAG][direct] %@ file=%@ source=%@ pad=%.3f refLen=%@ %.3f-%.3fs dur=%.3fs rms=%.1fdB results=%d segments=%d progress=%d text=%@",
                                  clip.label,
                                  clip.audioFile,
                                  clip.source,
+                                 padSeconds,
                                  Self.format(clip.referenceLength),
-                                 clip.start,
-                                 clip.end,
+                                 effectiveStart,
+                                 effectiveEnd,
                                  Double(audio.count) / Double(Self.sampleRate),
                                  db,
                                  results.count,
@@ -173,13 +177,14 @@ struct WhisperEmptyClipDiagnosticsTests {
                 if let service {
                     let result = try await service.transcribe(pcmSamples: audio)
                     let text = result.segment.text
-                    print(String(format: "[DIAG][service] %@ file=%@ source=%@ refLen=%@ %.3f-%.3fs dur=%.3fs rms=%.1fdB empty=%@ text=%@",
+                    print(String(format: "[DIAG][service] %@ file=%@ source=%@ pad=%.3f refLen=%@ %.3f-%.3fs dur=%.3fs rms=%.1fdB empty=%@ text=%@",
                                  clip.label,
                                  clip.audioFile,
                                  clip.source,
+                                 padSeconds,
                                  Self.format(clip.referenceLength),
-                                 clip.start,
-                                 clip.end,
+                                 effectiveStart,
+                                 effectiveEnd,
                                  Double(audio.count) / Double(Self.sampleRate),
                                  db,
                                  "\(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)",
@@ -258,6 +263,15 @@ struct WhisperEmptyClipDiagnosticsTests {
                 files.append(clip.audioFile)
             }
         }
+    }
+
+    private static func padSeconds() -> Double {
+        guard let rawValue = ProcessInfo.processInfo.environment["WHISPER_DIAG_PAD_SECONDS"],
+              let value = Double(rawValue),
+              value > 0 else {
+            return 0
+        }
+        return value
     }
 
     private static func options(for variant: String) -> DecodingOptions {

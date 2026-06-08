@@ -32,6 +32,12 @@ def parse_args():
     parser.add_argument("--variants", default=",".join(DEFAULT_VARIANTS))
     parser.add_argument("--paths", default=",".join(DEFAULT_PATHS))
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument(
+        "--pad-seconds",
+        type=float,
+        default=0,
+        help="Expand each fixed probe clip by this many seconds on both sides.",
+    )
     parser.add_argument("--model-folder", type=Path, default=None)
     parser.add_argument("--configuration", choices=["debug", "release"], default="debug")
     parser.add_argument(
@@ -78,6 +84,7 @@ def make_env(args, labels, diagnostic_path, variant):
         "WHISPER_DIAG_PATH": diagnostic_path,
         "WHISPER_DIAG_LABELS": ",".join(labels),
         "WHISPER_DIAG_VARIANT": variant,
+        "WHISPER_DIAG_PAD_SECONDS": str(args.pad_seconds),
         "CLANG_MODULE_CACHE_PATH": env.get("CLANG_MODULE_CACHE_PATH", "/private/tmp/minto2-clang-cache"),
         "SWIFTPM_HOME": env.get("SWIFTPM_HOME", "/private/tmp/minto2-swiftpm-cache"),
         "XDG_CACHE_HOME": env.get("XDG_CACHE_HOME", "/private/tmp/minto2-xdg-cache"),
@@ -340,6 +347,7 @@ def main():
         "paths": paths,
         "repeats": args.repeats,
         "configuration": args.configuration,
+        "pad_seconds": args.pad_seconds,
         "service_per_variant": args.service_per_variant,
         "dry_run": args.dry_run,
         "runs": [],

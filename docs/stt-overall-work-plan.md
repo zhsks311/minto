@@ -113,6 +113,9 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - service repeat별 empty: 2/7, 3/7, 4/7. 앱 실제 경로에서도 단일 실행 결과가 흔들린다.
 - service label별 empty: `silero-empty-jaegyeong-20260429-097` 3/3, `silero-empty-plenary-20260423-411` 3/3, `silero-empty-haengan-20260526-154` 0/3, `silero-empty-plenary-20260428-041` 0/3, 나머지 3개는 1/3.
 - 해석: empty final probe는 "항상 실패하는 clip"과 "단독 재실행에서 회복되는 clip"으로 나뉜다. 다음 실험은 항상 실패하는 2개 label을 우선 대상으로 삼고, padding/window boundary/decode option을 반복 측정한다. direct CPU-only는 원인 분석용으로만 제한적으로 사용한다.
+- padding probe 결과: 항상 service-empty였던 2개 label에 `pad=0.5초`를 적용하면 empty가 1/2, 2/2, 2/2로 안정적이지 않았다. 결과 위치는 `/private/tmp/minto2-whisper-empty-probe-service-pad05-always-empty2-20260608`.
+- 같은 2개 label에 `pad=1.0초`를 적용하면 3회 모두 0/2 empty였다. 결과 위치는 `/private/tmp/minto2-whisper-empty-probe-service-pad10-always-empty2-20260608`.
+- 해석: 적어도 일부 empty final은 너무 타이트한 chunk boundary와 관련이 있다. 다만 `pad=1.0초` 출력은 reference보다 길어지고 주변 문맥을 포함하므로, 기본 적용 전에는 전체 VAD chunk STT에서 empty 감소와 CER/중복 증가를 같이 재측정해야 한다.
 
 Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
 
