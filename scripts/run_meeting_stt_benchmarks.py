@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+import wave
 from datetime import datetime
 from pathlib import Path
 
@@ -45,6 +46,7 @@ def parse_args():
     )
     parser.add_argument("--configuration", choices=["debug", "release"], default="release")
     parser.add_argument("--filter", default="MeetingCorpusTests")
+    parser.add_argument("--sort", choices=["name", "duration"], default="name")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--list-samples", action="store_true")
     parser.add_argument("--fail-fast", action="store_true")
@@ -61,17 +63,28 @@ def sample_pairs(raw_dir):
     return pairs
 
 
-def selected_pairs(raw_dir, requested_samples):
+def wav_duration_seconds(path):
+    with wave.open(str(path), "rb") as handle:
+        return handle.getnframes() / float(handle.getframerate())
+
+
+def sort_pairs(raw_dir, pairs, sort_mode):
+    if sort_mode == "duration":
+        return sorted(pairs, key=lambda pair: wav_duration_seconds(raw_dir / pair[1]))
+    return pairs
+
+
+def selected_pairs(raw_dir, requested_samples, sort_mode):
     pairs = sample_pairs(raw_dir)
     if not requested_samples:
-        return pairs
+        return sort_pairs(raw_dir, pairs, sort_mode)
 
     requested = {value.strip() for value in requested_samples.split(",") if value.strip()}
     selected = [pair for pair in pairs if pair[0] in requested]
     missing = sorted(requested - {pair[0] for pair in selected})
     if missing:
         raise SystemExit(f"Missing sample ids in {raw_dir}: {', '.join(missing)}")
-    return selected
+    return sort_pairs(raw_dir, selected, sort_mode)
 
 
 def split_csv(value):
@@ -186,7 +199,7 @@ def main():
     args = parse_args()
     root = Path(__file__).resolve().parents[1]
     raw_dir = args.raw_dir.expanduser().resolve()
-    pairs = selected_pairs(raw_dir, args.samples)
+    pairs = selected_pairs(raw_dir, args.samples, args.sort)
     engines = split_csv(args.engines)
 
     if args.list_samples:
@@ -211,6 +224,7 @@ def main():
         "max_windows": args.max_windows,
         "skip_swift_global_cer": args.skip_swift_global_cer,
         "configuration": args.configuration,
+        "sort": args.sort,
         "dry_run": args.dry_run,
         "runs": [],
     }

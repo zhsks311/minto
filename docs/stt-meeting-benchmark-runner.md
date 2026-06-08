@@ -24,7 +24,8 @@ scripts/run_meeting_stt_benchmarks.py \
 ```bash
 scripts/run_meeting_stt_benchmarks.py \
   --engines whisper_accurate,speech_analyzer,sf_speech_on_device \
-  --max-windows 0
+  --max-windows 0 \
+  --sort duration
 ```
 
 Output goes to:
@@ -34,6 +35,7 @@ tmp/stt-meeting-benchmarks/<timestamp>/
 ```
 
 Each engine gets its own output directory so metric files do not overwrite each other.
+Use `--sort duration` for full-duration runs across all samples. This processes shorter meetings first and avoids waiting on the longest files before getting any full-run evidence.
 
 WhisperKit/CoreML full-duration runs need write access to the E5RT cache under `~/Library/Caches/swiftpm-testing-helper`.
 If the process cannot write there, WhisperKit can load the model and still fail on the first decode with `.pixelBufferFailed`.
