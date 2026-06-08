@@ -93,12 +93,14 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - `STTBenchmarkRunMetric` / `STTBenchmarkSegmentMetric` schema v1을 추가했다.
 - `MeetingCorpusTests`, `VADBenchmarkTests`의 STT 측정, `StreamingChunkBenchmarkTests`는 같은 top-level schema로 JSON을 쓴다.
 - `peak_memory_mb`는 macOS `getrusage` 기반 peak RSS 스냅샷으로 기록한다.
+- `scripts/run_meeting_stt_benchmarks.py`로 `sample/meeting` 샘플과 엔진을 순차 실행할 수 있다.
 
 **작업**
 
 - 모든 STT benchmark output을 같은 schema로 맞춘다.
 - 결과는 `tmp/`에 저장하고, 사람이 읽는 요약만 `docs/`에 남긴다.
 - 긴 샘플은 병렬 수를 제한해 메모리 폭주를 막는다.
+- 전체 회의 실행에서는 Swift global CER를 자동 skip하고, per-window micro/macro CER와 peak memory를 먼저 본다.
 - benchmark runner는 같은 샘플을 다음 축으로 분리해 실행한다.
   - 60초 smoke
   - 120초 비교

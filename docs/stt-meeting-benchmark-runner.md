@@ -1,0 +1,59 @@
+# STT meeting benchmark runner
+
+`scripts/run_meeting_stt_benchmarks.py` runs `MeetingCorpusTests` across the meeting samples and selected engines.
+
+The runner is intentionally sequential. It favors reproducibility and memory safety over speed.
+
+## List samples
+
+```bash
+scripts/run_meeting_stt_benchmarks.py --list-samples
+```
+
+## Dry run
+
+```bash
+scripts/run_meeting_stt_benchmarks.py \
+  --dry-run \
+  --samples haengan_20260526 \
+  --engines whisper_accurate
+```
+
+## Full meeting run
+
+```bash
+scripts/run_meeting_stt_benchmarks.py \
+  --engines whisper_accurate,speech_analyzer,sf_speech_on_device \
+  --max-windows 0
+```
+
+Output goes to:
+
+```text
+tmp/stt-meeting-benchmarks/<timestamp>/
+```
+
+Each engine gets its own output directory so metric files do not overwrite each other.
+
+## Smoke run
+
+```bash
+scripts/run_meeting_stt_benchmarks.py \
+  --engines whisper_accurate \
+  --max-windows 3
+```
+
+## Global CER note
+
+For full-duration runs, the runner sets `MEETING_SKIP_SWIFT_GLOBAL_CER=1` by default.
+
+Reason: full-meeting Levenshtein over concatenated text can become very expensive. The common schema still records:
+
+- `micro_cer`
+- `macro_cer`
+- `rtf`
+- `aggregate_rtf`
+- `peak_memory_mb`
+- per-segment CER
+
+Use `--skip-swift-global-cer never` only for short runs or when the global text size is known to be safe.
