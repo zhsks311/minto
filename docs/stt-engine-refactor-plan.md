@@ -42,6 +42,12 @@
    - `StreamingTranscriptionEvent`
    - Verify: current engines keep `supportsTrueStreaming == false`, including WhisperKit rolling preview.
 
+7. Add coordinator route planning without changing runtime behavior.
+   - `TranscriptionCoordinatorPlan`
+   - one-shot engines route to VAD chunk final plus optional rolling preview.
+   - true streaming candidates route to continuous audio sessions.
+   - Verify: current Apple final-only engines still route to one-shot without preview.
+
 ## Non-goals
 
 - Do not add Nemotron or sherpa runtime integration in this step.
