@@ -105,6 +105,9 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - 검증 결과 위치: `/private/tmp/minto2-whisper-empty-probe-service-skip-reasons-20260608`.
 - 결과: service baseline probe 3개 모두 empty였고, 3개 모두 `service_skip_count=0`이었다. RMS도 -24.6dB, -25.5dB, -26.7dB라 energy gate 대상이 아니다.
 - 해석: 이 3개 probe의 empty는 앱 내부 skip 필터가 만든 빈 출력이 아니라 WhisperKit service path가 최종 텍스트를 내지 않은 경우다. 따라서 다음 실험은 skip threshold 완화가 아니라 direct/service compute path, decode option, chunk boundary 재분할을 우선한다.
+- 전체 7개 service probe 결과 위치: `/private/tmp/minto2-whisper-empty-probe-service-skip-reasons-all7-20260608`.
+- 결과: 7개 중 4개가 empty, 3개가 non-empty였고, 7개 모두 `service_skip_count=0`이었다. non-empty 3개 중 1개는 `-` 한 글자라 실질 복구로 보기 어렵다.
+- 해석: full-duration에서 empty였던 probe 일부는 단독 재실행 시 non-empty로 복구된다. 하지만 이 흔들림도 앱 skip 필터 때문이 아니다. 따라서 전역 energy/logprob/compression threshold를 완화하는 변경은 근거가 약하고, chunk 경계와 WhisperKit compute/decode path 반복성을 먼저 비교해야 한다.
 
 Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
 
