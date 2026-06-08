@@ -91,6 +91,37 @@ struct TranscriptNormalizerTests {
         #expect(record.title == "DB 형상관리")
     }
 
+    @MainActor
+    @Test("요약이 없어도 저장·export는 전사를 원문 fallback으로 보존한다")
+    func emptySummaryKeepsTranscriptForRecordAndExport() {
+        let segments = [
+            segment("마지막으로 남은 전사입니다.", offset: 0),
+        ]
+
+        let record = AppDelegate.makeRecord(
+            summary: MeetingSummary(),
+            segments: segments,
+            topic: "주간 회의",
+            duration: 30
+        )
+        let markdown = MeetingExporter.markdown(
+            for: MeetingResult(
+                title: record.title,
+                metaText: "",
+                summary: record.summary,
+                transcript: record.transcript.map {
+                    MeetingResult.TranscriptLine(time: "00:00", text: $0.text)
+                }
+            )
+        )
+
+        #expect(!record.isEmpty)
+        #expect(record.title == "주간 회의")
+        #expect(record.transcript.map(\.text) == ["마지막으로 남은 전사입니다."])
+        #expect(markdown.contains("## 전사"))
+        #expect(markdown.contains("마지막으로 남은 전사입니다."))
+    }
+
     private func segment(_ text: String, offset: TimeInterval) -> Segment {
         Segment(text: text, timestamp: baseDate.addingTimeInterval(offset), duration: 30)
     }

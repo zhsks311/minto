@@ -170,6 +170,7 @@ public final class TranscriptionViewModel: ObservableObject {
     // MARK: - Recording control
 
     public func startNewRecordingSession() {
+        guard !isRecording else { return }
         clearTranscript()
         startRecording()
     }

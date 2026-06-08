@@ -487,6 +487,9 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - `stopRecordingAndDrain()`은 audio stop 이후 VAD `flushPending()`을 호출하고 final chunk를 전사 queue에 넣는다.
 - final STT가 empty이면 기존 preview를 즉시 지우지 않는다.
 - `finalizeMeeting()`은 마지막 correction task를 기다린 뒤 최종 summary를 만든다.
+- LLM provider가 `none`이어도 누적 요약이 있으면 최종 요약은 평문 fallback으로 끝난다.
+- 요약이 없어도 전사가 있으면 저장 record와 Markdown export는 전사를 보존한다.
+- 새 회의 시작은 `startNewRecordingSession()`을 통해 이전 회의 전사와 preview를 비운 뒤 녹음을 시작한다.
 
 **남은 작업**
 

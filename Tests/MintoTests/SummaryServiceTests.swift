@@ -34,6 +34,21 @@ struct SummaryServiceTests {
         #expect(result == nil)
     }
 
+    @Test("provider none이어도 누적 요약이 있으면 최종 요약은 평문 폴백한다")
+    func finalFallsBackToRunningSummaryWhenProviderNone() async {
+        let saved = LLMCorrectionService.shared.selectedProvider
+        LLMCorrectionService.shared.selectedProvider = .none
+        defer { LLMCorrectionService.shared.selectedProvider = saved }
+        MeetingContext.shared.start(topic: "", glossary: "")
+        MeetingContext.shared.runningSummary = "누적 요약입니다."
+        defer { MeetingContext.shared.clear() }
+
+        let result = await SummaryService.shared.generateFinal(transcript: "[00:01] 실제 전사")
+
+        #expect(result?.leadAnswer == "누적 요약입니다.")
+        #expect(MeetingContext.shared.finalSummary?.leadAnswer == "누적 요약입니다.")
+    }
+
     @Test("빈 배치는 증분 요약을 건너뛴다(nil)")
     func incrementalSkipsEmptyBatch() async {
         MeetingContext.shared.start(topic: "", glossary: "")
