@@ -110,8 +110,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         )
     }
 
+    @MainActor
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        LLMSummarySettingsService.shared.migrateIfNeeded(from: LLMCorrectionService.shared.selectedProvider)
         SpeechEnginePreferences.normalizeLegacyValues()
         Task {
             let savedEngine = SpeechEnginePreferences.selectedEngine()

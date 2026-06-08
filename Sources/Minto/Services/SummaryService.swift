@@ -3,9 +3,9 @@ import SwiftUI
 
 /// 회의 요약 생성 서비스.
 ///
-/// `LLMCorrectionService`와 동일한 provider 선택값을 재사용하되, 실행은 provider adapter를 통해 수행한다.
-/// 사용자가 교정용으로 고른 provider(`selectedProvider`)를 그대로 쓰며, Codex는 tier-aware
-/// 모델 상향도 그대로 적용된다.
+/// 요약 provider는 교정 provider와 별도 설정으로 관리한다.
+/// 기존 사용자는 최초 실행 시 교정 provider를 한 번 복사해 요약 동작 회귀를 줄이고,
+/// 이후에는 교정 off + 요약 on 조합을 독립적으로 사용할 수 있다.
 ///
 /// 모든 경로 fail-soft: provider 미선택·미로그인·네트워크 오류·빈 응답이면 nil을 반환하고
 /// 기존 요약을 유지한다(요약 실패가 전사·교정을 망가뜨리지 않는다).
@@ -83,7 +83,7 @@ public final class SummaryService: ObservableObject {
 
     /// provider adapter dispatch. 실패·none·빈 응답이면 nil.
     private func dispatch(_ prompt: (instructions: String, userContent: String), useCase: LLMUseCase) async -> String? {
-        guard let provider = LLMCorrectionService.shared.selectedTextProvider() else { return nil }
+        guard let provider = LLMSummarySettingsService.shared.selectedTextProvider() else { return nil }
 
         activeGenerations += 1
         defer { activeGenerations -= 1 }

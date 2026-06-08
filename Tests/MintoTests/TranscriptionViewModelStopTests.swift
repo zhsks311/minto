@@ -221,6 +221,42 @@ struct TranscriptionViewModelStopTests {
 
         viewModel.clearTranscript()
     }
+
+    @Test("교정이 꺼져 있어도 원문 batch로 진행 중 요약을 갱신한다")
+    func summaryUsesOriginalBatchWhenCorrectionOff() async throws {
+        let savedProvider = LLMCorrectionService.shared.selectedProvider
+        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
+        LLMCorrectionService.shared.selectedProvider = .none
+
+        let audioSource = StubAudioSource()
+        let vad = StubVoiceActivityDetector()
+        let stt = StubSTTService(resultText: "원문 발화")
+        let summary = StubSummaryGenerator()
+        let viewModel = TranscriptionViewModel(
+            sttService: stt,
+            audioSource: audioSource,
+            vadProcessor: vad,
+            summaryService: summary
+        )
+
+        viewModel.startRecording()
+        vad.pendingChunk = AudioChunk(
+            samples: [Float](repeating: 0.5, count: 8_000),
+            durationSeconds: 0.5,
+            trailingSilence: 0,
+            startSeconds: 0.0,
+            endSeconds: 0.5
+        )
+
+        await viewModel.stopRecordingAndDrain()
+        _ = await viewModel.finalizeMeeting()
+        await waitUntil { summary.incrementalBatches.count == 1 }
+
+        #expect(viewModel.committedSegments.map(\.text) == ["원문 발화"])
+        #expect(summary.incrementalBatches == ["원문 발화"])
+
+        viewModel.clearTranscript()
+    }
 }
 
 @MainActor
@@ -306,5 +342,32 @@ private final class StubVoiceActivityDetector: VoiceActivityDetector, @unchecked
 
     func reset() {
         resetCount += 1
+    }
+}
+
+@MainActor
+private final class StubSummaryGenerator: TranscriptionSummaryGenerating {
+    private(set) var incrementalBatches: [String] = []
+    private(set) var finalTranscripts: [String] = []
+
+    func generateIncremental(correctedBatch: String) async -> String? {
+        incrementalBatches.append(correctedBatch)
+        return correctedBatch
+    }
+
+    func generateFinal(transcript: String) async -> MeetingSummary? {
+        finalTranscripts.append(transcript)
+        return nil
+    }
+}
+
+@MainActor
+private func waitUntil(
+    timeoutNanoseconds: UInt64 = 500_000_000,
+    condition: @escaping @MainActor () -> Bool
+) async {
+    let started = DispatchTime.now().uptimeNanoseconds
+    while !condition(), DispatchTime.now().uptimeNanoseconds - started < timeoutNanoseconds {
+        try? await Task.sleep(nanoseconds: 10_000_000)
     }
 }

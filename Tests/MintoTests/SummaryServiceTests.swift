@@ -11,8 +11,14 @@ struct SummaryServiceTests {
     @Test("provider none이면 증분 요약은 LLM 호출 없이 nil, runningSummary 미변경")
     func incrementalNilWhenProviderNone() async {
         let saved = LLMCorrectionService.shared.selectedProvider
+        let summarySnapshot = SummarySettingsSnapshot.capture()
         LLMCorrectionService.shared.selectedProvider = .none
-        defer { LLMCorrectionService.shared.selectedProvider = saved }
+        LLMSummarySettingsService.shared.isEnabled = false
+        LLMSummarySettingsService.shared.selectedProvider = .none
+        defer {
+            LLMCorrectionService.shared.selectedProvider = saved
+            summarySnapshot.restore()
+        }
         MeetingContext.shared.start(topic: "", glossary: "")
         defer { MeetingContext.shared.clear() }
 
@@ -24,9 +30,15 @@ struct SummaryServiceTests {
     @Test("빈 회의(누적·tail 모두 없음)면 최종 요약은 LLM 미호출로 nil")
     func finalNilWhenEmpty() async {
         let saved = LLMCorrectionService.shared.selectedProvider
+        let summarySnapshot = SummarySettingsSnapshot.capture()
         // provider가 있어도 요약할 내용이 없으면 LLM을 부르지 않고 nil(가드). 네트워크 미발생.
         LLMCorrectionService.shared.selectedProvider = .codex
-        defer { LLMCorrectionService.shared.selectedProvider = saved }
+        LLMSummarySettingsService.shared.isEnabled = true
+        LLMSummarySettingsService.shared.selectedProvider = .codex
+        defer {
+            LLMCorrectionService.shared.selectedProvider = saved
+            summarySnapshot.restore()
+        }
         MeetingContext.shared.start(topic: "", glossary: "")
         defer { MeetingContext.shared.clear() }
 
@@ -37,8 +49,14 @@ struct SummaryServiceTests {
     @Test("provider none이어도 누적 요약이 있으면 최종 요약은 평문 폴백한다")
     func finalFallsBackToRunningSummaryWhenProviderNone() async {
         let saved = LLMCorrectionService.shared.selectedProvider
+        let summarySnapshot = SummarySettingsSnapshot.capture()
         LLMCorrectionService.shared.selectedProvider = .none
-        defer { LLMCorrectionService.shared.selectedProvider = saved }
+        LLMSummarySettingsService.shared.isEnabled = false
+        LLMSummarySettingsService.shared.selectedProvider = .none
+        defer {
+            LLMCorrectionService.shared.selectedProvider = saved
+            summarySnapshot.restore()
+        }
         MeetingContext.shared.start(topic: "", glossary: "")
         MeetingContext.shared.runningSummary = "누적 요약입니다."
         defer { MeetingContext.shared.clear() }
@@ -55,6 +73,44 @@ struct SummaryServiceTests {
         defer { MeetingContext.shared.clear() }
         let result = await SummaryService.shared.generateIncremental(correctedBatch: "   \n ")
         #expect(result == nil)
+    }
+
+    @Test("요약 설정 migration은 교정 provider를 한 번만 복사한다")
+    func summarySettingsMigrationRunsOnce() {
+        let suiteName = "minto-summary-settings-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = LLMSummarySettingsService(defaults: defaults)
+        settings.migrateIfNeeded(from: .gptAPI)
+
+        #expect(settings.hasMigratedFromCorrectionProvider)
+        #expect(settings.isEnabled)
+        #expect(settings.selectedProvider == .gptAPI)
+
+        settings.isEnabled = false
+        settings.selectedProvider = .none
+        settings.migrateIfNeeded(from: .claudeAPI)
+
+        #expect(settings.isEnabled == false)
+        #expect(settings.selectedProvider == .none)
+    }
+
+    @Test("교정을 꺼도 요약 provider는 독립적으로 유지된다")
+    func summaryProviderIsIndependentFromCorrectionProvider() {
+        let saved = LLMCorrectionService.shared.selectedProvider
+        let summarySnapshot = SummarySettingsSnapshot.capture()
+        defer {
+            LLMCorrectionService.shared.selectedProvider = saved
+            summarySnapshot.restore()
+        }
+
+        LLMCorrectionService.shared.selectedProvider = .none
+        LLMSummarySettingsService.shared.isEnabled = true
+        LLMSummarySettingsService.shared.selectedProvider = .codex
+
+        #expect(LLMCorrectionService.shared.selectedTextProvider() == nil)
+        #expect(LLMSummarySettingsService.shared.selectedTextProvider()?.descriptor.id == .chatGPTAccount)
     }
 
     @Test("parseStructured: 계층형 JSON 전체 필드 파싱")
@@ -145,5 +201,26 @@ struct SummaryServiceTests {
         MeetingContext.shared.clear()
         #expect(MeetingContext.shared.runningSummary.isEmpty)
         #expect(MeetingContext.shared.finalSummary == nil)
+    }
+}
+
+@MainActor
+private struct SummarySettingsSnapshot {
+    let isEnabled: Bool
+    let selectedProvider: LLMProviderSelection
+    let hasMigrated: Bool
+
+    static func capture() -> SummarySettingsSnapshot {
+        SummarySettingsSnapshot(
+            isEnabled: LLMSummarySettingsService.shared.isEnabled,
+            selectedProvider: LLMSummarySettingsService.shared.selectedProvider,
+            hasMigrated: LLMSummarySettingsService.shared.hasMigratedFromCorrectionProvider
+        )
+    }
+
+    func restore() {
+        LLMSummarySettingsService.shared.isEnabled = isEnabled
+        LLMSummarySettingsService.shared.selectedProvider = selectedProvider
+        LLMSummarySettingsService.shared.hasMigratedFromCorrectionProvider = hasMigrated
     }
 }

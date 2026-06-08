@@ -16,6 +16,7 @@ public struct SettingsView: View {
 
     // LLM 교정 서비스 관찰
     @ObservedObject private var llmService = LLMCorrectionService.shared
+    @ObservedObject private var summarySettings = LLMSummarySettingsService.shared
     @ObservedObject private var copilot = CopilotOAuthService.shared
     @ObservedObject private var codex = CodexOAuthService.shared
 
@@ -48,7 +49,10 @@ public struct SettingsView: View {
 
     public var body: some View {
         Form {
-            llmCorrectionSection
+            aiProcessingSection
+            if aiProcessingEnabled {
+                aiConnectionSection
+            }
             searchReadinessSection
             sourceConnectionsSection
 
@@ -74,6 +78,7 @@ public struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480, height: 640)
         .onAppear {
+            summarySettings.migrateIfNeeded(from: llmService.selectedProvider)
             normalizeSpeechEngineSelection()
             rememberCurrentProviderIfNeeded()
             Task { await refreshSpeechEngineAvailability() }
@@ -85,16 +90,23 @@ public struct SettingsView: View {
             apiKeyInput = ""
             loginError = nil
         }
+        .onChange(of: summarySettings.selectedProvider) { _, provider in
+            if provider != .none {
+                lastLLMProviderRaw = provider.rawValue
+            }
+            apiKeyInput = ""
+            loginError = nil
+        }
     }
 
-    // MARK: - Correction Section Rows
+    // MARK: - AI Section Rows
 
-    private var llmCorrectionSection: some View {
-        Section("전사 자동 교정") {
-            Toggle(isOn: llmCorrectionEnabledBinding) {
+    private var aiProcessingSection: some View {
+        Section("AI 처리") {
+            Toggle(isOn: transcriptionCleanupEnabledBinding) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text("전사 자동 교정")
+                        Text("전사 다듬기")
                             .font(.callout.weight(.semibold))
                         Text("권장")
                             .font(.caption2.weight(.bold))
@@ -111,27 +123,44 @@ public struct SettingsView: View {
             }
             .help("음성 인식 결과를 회의 맥락에 맞게 자연스럽게 다듬습니다. 회의록 품질을 위해 켜두는 것을 권장합니다.")
 
-            if llmService.selectedProvider != .none {
-                llmProviderRow
-                currentProviderModelPicker
-                if llmService.selectedProvider.requiresWarning {
-                    tosWarningRow
-                }
-                llmStatusRow
-                llmActionRow
-                if deviceCodeInProgress {
-                    deviceCodeRow
-                }
-                if let err = loginError {
-                    Text(err)
+            Toggle(isOn: meetingSummaryEnabledBinding) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("회의록 정리")
+                        .font(.callout.weight(.semibold))
+                    Text("요약, 목차, 결정사항, 할 일을 만듭니다.")
                         .font(.caption)
-                        .foregroundColor(.red)
+                        .foregroundColor(.secondary)
                 }
+            }
+            .help("회의 종료 후 구조화된 회의록을 생성합니다. 전사 다듬기를 꺼도 사용할 수 있습니다.")
+
+            Text(aiProcessingStateMessage)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var aiConnectionSection: some View {
+        Section("AI 연결") {
+            aiProviderRow
+            currentProviderModelPicker
+            if activeAIProvider.requiresWarning {
+                tosWarningRow
+            }
+            llmStatusRow
+            llmActionRow
+            if deviceCodeInProgress {
+                deviceCodeRow
+            }
+            if let err = loginError {
+                Text(err)
+                    .font(.caption)
+                    .foregroundColor(.red)
             }
         }
     }
 
-    private var llmCorrectionEnabledBinding: Binding<Bool> {
+    private var transcriptionCleanupEnabledBinding: Binding<Bool> {
         Binding(
             get: { llmService.selectedProvider != .none },
             set: { enabled in
@@ -145,13 +174,44 @@ public struct SettingsView: View {
         )
     }
 
-    private var restoredLLMProvider: LLMCorrectionService.Provider {
-        LLMCorrectionService.Provider(rawValue: lastLLMProviderRaw) ?? .codex
+    private var meetingSummaryEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { summarySettings.isEnabled },
+            set: { enabled in
+                summarySettings.isEnabled = enabled
+                if enabled, summarySettings.selectedProvider == .none {
+                    summarySettings.selectedProvider = activeAIProvider
+                }
+            }
+        )
+    }
+
+    private var aiProcessingEnabled: Bool {
+        llmService.selectedProvider != .none || summarySettings.isEnabled
+    }
+
+    private var aiProcessingStateMessage: String {
+        switch (llmService.selectedProvider != .none, summarySettings.isEnabled) {
+        case (true, true):
+            return "전사를 다듬고, 회의록도 자동으로 정리합니다."
+        case (true, false):
+            return "전사는 다듬지만, 요약과 구조화는 생성하지 않습니다."
+        case (false, true):
+            return "전사는 원문 그대로 저장하고, 회의록 정리만 AI로 생성합니다."
+        case (false, false):
+            return "전사만 저장됩니다. 요약과 구조화는 생성되지 않습니다."
+        }
+    }
+
+    private var restoredLLMProvider: LLMProviderSelection {
+        LLMProviderSelection(rawValue: lastLLMProviderRaw) ?? .codex
     }
 
     private func rememberCurrentProviderIfNeeded() {
         if llmService.selectedProvider != .none {
             lastLLMProviderRaw = llmService.selectedProvider.rawValue
+        } else if summarySettings.selectedProvider != .none {
+            lastLLMProviderRaw = summarySettings.selectedProvider.rawValue
         }
     }
 
@@ -309,44 +369,70 @@ public struct SettingsView: View {
 
     // MARK: - LLM Section Rows
 
-    private var llmProviderRow: some View {
-        Picker("공급자", selection: $llmService.selectedProvider) {
-            ForEach(LLMCorrectionService.Provider.allCases.filter { $0 != .none }, id: \.self) { provider in
+    private var aiProviderRow: some View {
+        Picker("AI 서비스", selection: activeAIProviderBinding) {
+            ForEach(LLMProviderSelection.allCases.filter { $0 != .none }, id: \.self) { provider in
                 Text(provider.label).tag(provider)
             }
         }
-        .help("교정에 사용할 도구를 선택합니다.")
+        .help("AI 처리에 사용할 서비스를 선택합니다.")
     }
 
     @ViewBuilder
     private var currentProviderModelPicker: some View {
-        switch llmService.selectedProvider {
+        switch activeAIProvider {
         case .gptAPI:
-            apiModelPicker(title: "교정 모델", providerID: .gpt, selection: $gptAPIModel)
+            apiModelPicker(title: "AI 모델", providerID: .gpt, selection: $gptAPIModel)
         case .geminiAPI:
-            apiModelPicker(title: "교정 모델", providerID: .gemini, selection: $geminiAPIModel)
+            apiModelPicker(title: "AI 모델", providerID: .gemini, selection: $geminiAPIModel)
         case .claudeAPI:
-            apiModelPicker(title: "교정 모델", providerID: .claude, selection: $claudeAPIModel)
+            apiModelPicker(title: "AI 모델", providerID: .claude, selection: $claudeAPIModel)
         case .openRouterAPI:
-            apiModelPicker(title: "교정 모델", providerID: .openRouter, selection: $openRouterAPIModel)
+            apiModelPicker(title: "AI 모델", providerID: .openRouter, selection: $openRouterAPIModel)
         case .codex:
-            Picker("교정 모델", selection: $codexModel) {
+            Picker("AI 모델", selection: $codexModel) {
                 ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
             Text("GPT 계정의 ‘자동’은 계정 플랜에 맞춰 안전한 모델을 선택합니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .gemini:
-            Picker("교정 모델", selection: $geminiModel) {
+            Picker("AI 모델", selection: $geminiModel) {
                 ForEach(GeminiOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
         case .copilot:
-            Picker("교정 모델", selection: $copilotModel) {
+            Picker("AI 모델", selection: $copilotModel) {
                 ForEach(CopilotOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
         case .none:
             EmptyView()
         }
+    }
+
+    private var activeAIProvider: LLMProviderSelection {
+        if llmService.selectedProvider != .none {
+            return llmService.selectedProvider
+        }
+        if summarySettings.selectedProvider != .none {
+            return summarySettings.selectedProvider
+        }
+        return restoredLLMProvider
+    }
+
+    private var activeAIProviderBinding: Binding<LLMProviderSelection> {
+        Binding(
+            get: { activeAIProvider },
+            set: { provider in
+                guard provider != .none else { return }
+                lastLLMProviderRaw = provider.rawValue
+                if llmService.selectedProvider != .none {
+                    llmService.selectedProvider = provider
+                }
+                if summarySettings.isEnabled {
+                    summarySettings.selectedProvider = provider
+                }
+            }
+        )
     }
 
     private func apiModelPicker(
@@ -453,7 +539,7 @@ public struct SettingsView: View {
             apiKeySettingsRow(providerID)
         } else if currentProviderLoggedIn {
             Button("로그아웃") {
-                llmService.logout()
+                disconnectCurrentAIProvider()
                 refreshGeminiState()
                 loginError = nil
             }
@@ -542,7 +628,7 @@ public struct SettingsView: View {
     // MARK: - Computed helpers
 
     private var currentProviderLoggedIn: Bool {
-        switch llmService.selectedProvider {
+        switch activeAIProvider {
         case .none:
             return false
         case .gptAPI:
@@ -570,7 +656,7 @@ public struct SettingsView: View {
     }
 
     private var currentEmail: String {
-        switch llmService.selectedProvider {
+        switch activeAIProvider {
         case .none, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
             return ""
         case .gemini:
@@ -581,7 +667,7 @@ public struct SettingsView: View {
     }
 
     private var deviceCodeInProgress: Bool {
-        switch llmService.selectedProvider {
+        switch activeAIProvider {
         case .copilot: return copilot.isPolling
         case .codex:   return codex.isPolling
         default:       return false
@@ -589,7 +675,7 @@ public struct SettingsView: View {
     }
 
     private var currentAPIKeyProviderID: LLMProviderID? {
-        switch llmService.selectedProvider {
+        switch activeAIProvider {
         case .gptAPI:
             return .gpt
         case .geminiAPI:
@@ -604,7 +690,7 @@ public struct SettingsView: View {
     }
 
     private var currentDeviceCode: String {
-        switch llmService.selectedProvider {
+        switch activeAIProvider {
         case .copilot: return copilot.deviceCode
         case .codex:   return codex.deviceCode
         default:       return ""
@@ -615,7 +701,7 @@ public struct SettingsView: View {
 
     private func startLogin() {
         isLoginLoading = true
-        switch llmService.selectedProvider {
+        switch activeAIProvider {
         case .none, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI:
             isLoginLoading = false
         case .gemini:
@@ -642,6 +728,27 @@ public struct SettingsView: View {
                     self.loginError = err.localizedDescription
                 }
             }
+        }
+    }
+
+    private func disconnectCurrentAIProvider() {
+        switch activeAIProvider {
+        case .none:
+            break
+        case .gptAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .gpt)
+        case .geminiAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .gemini)
+        case .claudeAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .claude)
+        case .openRouterAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .openRouter)
+        case .gemini:
+            GeminiOAuthService.shared.logout()
+        case .copilot:
+            CopilotOAuthService.shared.logout()
+        case .codex:
+            CodexOAuthService.shared.logout()
         }
     }
 

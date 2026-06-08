@@ -18,6 +18,14 @@ protocol TranscriptionSTTServicing: AnyObject {
 extension STTService: TranscriptionSTTServicing {}
 
 @MainActor
+protocol TranscriptionSummaryGenerating: AnyObject {
+    func generateIncremental(correctedBatch: String) async -> String?
+    func generateFinal(transcript: String) async -> MeetingSummary?
+}
+
+extension SummaryService: TranscriptionSummaryGenerating {}
+
+@MainActor
 public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Published
@@ -36,6 +44,7 @@ public final class TranscriptionViewModel: ObservableObject {
 
     private let sttService: any TranscriptionSTTServicing
     private let llmService = LLMCorrectionService.shared
+    private let summaryService: any TranscriptionSummaryGenerating
     private var transcriptionTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
@@ -81,9 +90,11 @@ public final class TranscriptionViewModel: ObservableObject {
         sttService: any TranscriptionSTTServicing,
         audioSource: AudioSourceProtocol,
         vadProcessor: any VoiceActivityDetector,
+        summaryService: any TranscriptionSummaryGenerating = SummaryService.shared,
         emptyFinalRepairPolicy: EmptyFinalRepairPolicy = .fromEnvironment()
     ) {
         self.sttService = sttService
+        self.summaryService = summaryService
         self.audioSource = audioSource
         self.vadProcessor = vadProcessor
         self.emptyFinalRepairPolicy = emptyFinalRepairPolicy
@@ -332,8 +343,8 @@ public final class TranscriptionViewModel: ObservableObject {
         isFinalizingMeeting = false
     }
 
-    /// 누적된 미교정 구간을 한 번에 교정해 하나의 문단으로 병합한다.
-    /// 원본은 이미 표시돼 있으므로 fail-soft: 실패하면 병합하지 않고 원본을 유지한다.
+    /// 누적된 배치를 교정/요약한다.
+    /// 교정 실패나 교정 off 상태에서는 원본을 유지하되, 요약이 켜져 있으면 원본으로 증분 요약을 갱신한다.
     private func flushCorrectionBatch() {
         guard !pendingCorrectionIds.isEmpty else { return }
         let ids = pendingCorrectionIds
@@ -352,19 +363,31 @@ public final class TranscriptionViewModel: ObservableObject {
         correctionTask = Task { @MainActor [weak self] in
             await previous?.value
             guard let self else { return }
-            guard let corrected = await self.llmService.correct(text: original, context: context),
-                  !corrected.isEmpty else { return }
-            self.state.replaceRange(ids: ids, correctedText: corrected)
-            self.committedSegments = self.state.committedSegments
 
-            // 교정본으로 증분 요약 갱신. drop-if-running: 진행 중이면 이번 배치는 건너뛴다
-            // (요약 호출 누적·종료 지연 방지). 누락분은 runningSummary 누적본 + 종료 시 최종 요약이 보완.
-            if self.summaryTask == nil {
-                self.summaryTask = Task { @MainActor [weak self] in
-                    defer { self?.summaryTask = nil }
-                    await SummaryService.shared.generateIncremental(correctedBatch: corrected)
-                }
+            let summaryBatch: String
+            if let corrected = await self.llmService.correct(text: original, context: context),
+               !corrected.isEmpty {
+                self.state.replaceRange(ids: ids, correctedText: corrected)
+                self.committedSegments = self.state.committedSegments
+                summaryBatch = corrected
+            } else {
+                summaryBatch = original
             }
+
+            self.enqueueIncrementalSummary(summaryBatch)
+        }
+    }
+
+    private func enqueueIncrementalSummary(_ batch: String) {
+        let trimmed = batch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, summaryTask == nil else { return }
+
+        // drop-if-running: 진행 중이면 이번 배치는 건너뛴다.
+        // 누락분은 runningSummary 누적본 + 종료 시 최종 요약이 보완.
+        summaryTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.summaryTask = nil }
+            _ = await self.summaryService.generateIncremental(correctedBatch: trimmed)
         }
     }
 
@@ -436,7 +459,7 @@ public final class TranscriptionViewModel: ObservableObject {
             let s = max(0, Int(seg.timestamp.timeIntervalSince(start).rounded()))
             return String(format: "[%02d:%02d] %@", s / 60, s % 60, seg.text)
         }.joined(separator: "\n")
-        return await SummaryService.shared.generateFinal(transcript: transcript)
+        return await summaryService.generateFinal(transcript: transcript)
     }
 
     public func enqueueChunk(_ chunk: AudioChunk) {
