@@ -321,3 +321,28 @@ Sample-level `Full Global CER`:
 
 Decision: `empty repair 1.00` is not a product default yet. It passed short3 on CER and empty finals, but RTF rose from `0.113` to `0.140` and false-positive text rose from `22` to `35` chars.
 Next run it on all seven full-duration samples with memory-safe sequential execution.
+
+Full-duration all7 repair check:
+
+Scope: all seven `sample/meeting` samples, full duration, Silero `threshold=0.6`, `merge gap=1.1`, `merge max=15`, WhisperKit turbo, Swift global CER skipped.
+
+| Candidate | Weighted CER | Macro CER | Empty | FP chars | RTF | Peak MB | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| repair off | 46.1% | 42.0% | 329 | 508 | 0.121 | 1120.4 | baseline |
+| empty repair 1.00 | 42.6% | 37.9% | 133 | 628 | 0.129 | 1673.3 | improves CER/empty, not default |
+
+Sample-level all7 comparison:
+
+| Sample | Repair off CER | Repair CER | Empty off -> repair | FP off -> repair | Repair accepted |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 본회의_20260428 | 34.7% | 29.4% | 8 -> 3 | 9 -> 9 | 5/8 |
+| 본회의_20260508 | 24.5% | 22.6% | 5 -> 1 | 0 -> 2 | 3/4 |
+| 재정경제기획위원회_20260430 | 46.3% | 37.4% | 29 -> 9 | 13 -> 24 | 19/28 |
+| 재정경제기획위원회_20260429 | 49.3% | 44.3% | 87 -> 33 | 103 -> 175 | 63/96 |
+| haengan_20260526 | 40.3% | 39.0% | 55 -> 29 | 149 -> 156 | 30/59 |
+| 외교통일위원회_20260520 | 53.8% | 50.4% | 75 -> 19 | 9 -> 9 | 50/69 |
+| 본회의_20260423 | 45.5% | 42.6% | 70 -> 39 | 225 -> 253 | 34/73 |
+
+Decision: do not promote `empty repair 1.00` to default.
+It improved weighted CER for all seven samples and cut empty finals by `196`, but increased false-positive text by `120` chars, RTF by `0.008`, and peak memory by about `553MB`.
+Next test a smaller repair pad or narrower guard before product wiring.
