@@ -101,6 +101,8 @@ This writes:
 ```text
 segments.md
 segments.csv
+segment_buckets.md
+segment_buckets.csv
 ```
 
 The summary groups metric files by `engine_id` and reports weighted CER, sample macro CER, RTF, peak memory, empty finals, and false-positive transcript characters.
@@ -108,3 +110,60 @@ The summary groups metric files by `engine_id` and reports weighted CER, sample 
 The segment diagnostics include `Dur`, `Ref cps`, `Hyp cps`, `VAD overlap`, `VAD gap`, and `VAD chunks`.
 Use high `Ref cps` empty rows to find windows where the subtitle/reference is dense but the engine returned no final text.
 Use low `VAD overlap` to identify segmentation misses, and high `VAD overlap` with empty output to identify decode/model failures.
+
+## VAD benchmark run
+
+Run Energy VAD over every `sample/meeting` pair:
+
+```bash
+scripts/run_meeting_vad_benchmarks.py \
+  --engines energy \
+  --max-seconds 120
+```
+
+Output goes to:
+
+```text
+tmp/vad-meeting-benchmarks/<timestamp>/
+```
+
+Summarize VAD recall and false-positive metrics:
+
+```bash
+scripts/summarize_vad_benchmarks.py tmp/vad-meeting-benchmarks/<timestamp> --write
+```
+
+This writes:
+
+```text
+vad_summary.md
+vad_summary.csv
+```
+
+Compare Energy and Silero only after FluidAudio/Silero assets are available:
+
+```bash
+scripts/run_meeting_vad_benchmarks.py \
+  --engines energy,silero \
+  --max-seconds 120 \
+  --merge-gap-sec 1.1
+```
+
+## VAD chunk STT run
+
+To measure whether a VAD policy improves actual WhisperKit chunk CER, run VAD chunk STT mode:
+
+```bash
+scripts/run_meeting_vad_benchmarks.py \
+  --mode stt \
+  --engines energy \
+  --stt-engine whisper_accurate \
+  --vad-stt-max-chunks 0
+```
+
+This mode loads the selected STT engine, so model availability and memory limits apply.
+Summarize the generated STT metric files with the same STT summary script:
+
+```bash
+scripts/summarize_stt_benchmarks.py tmp/vad-meeting-benchmarks/<timestamp> --write
+```

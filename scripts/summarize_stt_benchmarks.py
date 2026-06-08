@@ -56,12 +56,24 @@ def parse_args():
         default="energy",
         help="VAD engine id to use from --vad-root. Defaults to energy.",
     )
+    parser.add_argument(
+        "--vad-low-overlap",
+        type=float,
+        default=0.5,
+        help="Segments below this VAD overlap ratio are treated as VAD/segmentation miss candidates.",
+    )
+    parser.add_argument(
+        "--vad-high-overlap",
+        type=float,
+        default=0.8,
+        help="Segments at or above this VAD overlap ratio are treated as ASR/decode failure candidates.",
+    )
     return parser.parse_args()
 
 
 def load_metrics(root, compute_missing_global_cer=False, global_char_limit=20_000, global_cell_limit=50_000_000):
     metrics = []
-    for path in sorted(root.glob("**/*_metrics.json")):
+    for path in sorted(root.glob("**/*.json")):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
@@ -220,7 +232,7 @@ def summarize_by_engine(metrics):
     return rows
 
 
-def segment_diagnostics(metrics, min_cer, limit, vad_metrics=None, vad_engine="energy"):
+def segment_diagnostics(metrics, min_cer, vad_metrics=None, vad_engine="energy"):
     vad_metrics = vad_metrics or {}
     rows = []
     for metric in metrics:
@@ -262,7 +274,70 @@ def segment_diagnostics(metrics, min_cer, limit, vad_metrics=None, vad_engine="e
         row["sample_id"],
         row["index"],
     ))
-    return rows[:max(0, limit)]
+    return rows
+
+
+def annotate_segment_buckets(rows, enabled, low_overlap, high_overlap):
+    for row in rows:
+        row["vad_bucket"] = (
+            classify_segment_bucket(row, low_overlap, high_overlap)
+            if enabled else ""
+        )
+
+
+def classify_segment_bucket(row, low_overlap, high_overlap):
+    prefix = "empty" if row["empty"] else "high_cer"
+    overlap = row.get("vad_overlap_ratio")
+    if overlap is None:
+        return f"{prefix}_no_vad_data"
+    if overlap < low_overlap:
+        return f"{prefix}_low_vad_overlap"
+    if overlap >= high_overlap:
+        return f"{prefix}_high_vad_overlap"
+    return f"{prefix}_mid_vad_overlap"
+
+
+def bucket_interpretation(bucket):
+    if bucket.endswith("_no_vad_data"):
+        return "missing VAD metrics"
+    if bucket.startswith("empty_low"):
+        return "VAD or segmentation miss candidate"
+    if bucket.startswith("empty_high"):
+        return "ASR empty decode candidate"
+    if bucket.startswith("high_cer_low"):
+        return "boundary or segmentation candidate"
+    if bucket.startswith("high_cer_high"):
+        return "ASR quality candidate"
+    return "mixed cause candidate"
+
+
+def segment_bucket_summary(rows):
+    groups = defaultdict(list)
+    for row in rows:
+        bucket = row.get("vad_bucket")
+        if bucket:
+            groups[bucket].append(row)
+
+    summaries = []
+    for bucket, bucket_rows in sorted(groups.items()):
+        cer_values = [row["cer"] for row in bucket_rows if row.get("cer") is not None]
+        vad_values = [
+            row["vad_overlap_ratio"]
+            for row in bucket_rows
+            if row.get("vad_overlap_ratio") is not None
+        ]
+        summaries.append({
+            "bucket": bucket,
+            "interpretation": bucket_interpretation(bucket),
+            "segment_count": len(bucket_rows),
+            "sample_count": len({row["sample_id"] for row in bucket_rows}),
+            "empty_count": sum(1 for row in bucket_rows if row["empty"]),
+            "reference_length": sum(row["reference_length"] for row in bucket_rows),
+            "hypothesis_length": sum(row["hypothesis_length"] for row in bucket_rows),
+            "mean_cer": sum(cer_values) / len(cer_values) if cer_values else None,
+            "mean_vad_overlap": sum(vad_values) / len(vad_values) if vad_values else None,
+        })
+    return summaries
 
 
 def add_vad_overlap(row, vad_metrics, vad_engine):
@@ -342,12 +417,12 @@ def markdown_table(rows):
 
 def segment_markdown_table(rows):
     lines = [
-        "| Engine | Sample | # | Time | Dur | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | VAD overlap | VAD gap | VAD chunks | Reference | Hypothesis |",
-        "| --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
+        "| Engine | Sample | # | Time | Dur | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | VAD overlap | Bucket | VAD gap | VAD chunks | Reference | Hypothesis |",
+        "| --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {engine} | {sample} | {index} | {time} | {duration} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {vad_overlap} | {vad_gap} | {vad_chunks} | {reference} | {hypothesis} |".format(
+            "| {engine} | {sample} | {index} | {time} | {duration} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {vad_overlap} | {bucket} | {vad_gap} | {vad_chunks} | {reference} | {hypothesis} |".format(
                 engine=row["engine_id"],
                 sample=row["sample_id"],
                 index=row["index"],
@@ -360,10 +435,33 @@ def segment_markdown_table(rows):
                 hyp_len=row["hypothesis_length"],
                 hyp_cps=fmt_float(row["hypothesis_chars_per_second"]),
                 vad_overlap=fmt_percent(row["vad_overlap_ratio"]),
+                bucket=row.get("vad_bucket") or "",
                 vad_gap=fmt_float(row["vad_nearest_gap_seconds"]),
                 vad_chunks=escape_markdown_cell(row["vad_chunks"]),
                 reference=escape_markdown_cell(row["reference"]),
                 hypothesis=escape_markdown_cell(row["hypothesis"]),
+            )
+        )
+    return "\n".join(lines)
+
+
+def bucket_markdown_table(rows):
+    lines = [
+        "| Bucket | Meaning | Segments | Samples | Empty | Mean CER | Mean VAD overlap | Ref len | Hyp len |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {bucket} | {meaning} | {segments} | {samples} | {empty} | {cer} | {vad_overlap} | {ref_len} | {hyp_len} |".format(
+                bucket=row["bucket"],
+                meaning=row["interpretation"],
+                segments=row["segment_count"],
+                samples=row["sample_count"],
+                empty=row["empty_count"],
+                cer=fmt_percent(row["mean_cer"]),
+                vad_overlap=fmt_percent(row["mean_vad_overlap"]),
+                ref_len=row["reference_length"],
+                hyp_len=row["hypothesis_length"],
             )
         )
     return "\n".join(lines)
@@ -406,12 +504,31 @@ def write_segment_csv(path, rows):
         "distance",
         "vad_overlap_seconds",
         "vad_overlap_ratio",
+        "vad_bucket",
         "vad_nearest_gap_seconds",
         "vad_chunk_count",
         "vad_chunks",
         "reference",
         "hypothesis",
         "metrics_file",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_bucket_csv(path, rows):
+    fieldnames = [
+        "bucket",
+        "interpretation",
+        "segment_count",
+        "sample_count",
+        "empty_count",
+        "reference_length",
+        "hypothesis_length",
+        "mean_cer",
+        "mean_vad_overlap",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -431,14 +548,22 @@ def main():
     vad_metrics = load_vad_metrics(args.vad_root)
     rows = summarize_by_engine(metrics)
     table = markdown_table(rows)
-    segment_rows = segment_diagnostics(
+    all_segment_rows = segment_diagnostics(
         metrics,
         min_cer=args.segment_min_cer,
-        limit=args.segment_limit,
         vad_metrics=vad_metrics,
         vad_engine=args.vad_engine,
     )
+    annotate_segment_buckets(
+        all_segment_rows,
+        enabled=args.vad_root is not None,
+        low_overlap=args.vad_low_overlap,
+        high_overlap=args.vad_high_overlap,
+    )
+    segment_rows = all_segment_rows[:max(0, args.segment_limit)]
     segment_table = segment_markdown_table(segment_rows)
+    bucket_rows = segment_bucket_summary(all_segment_rows)
+    bucket_table = bucket_markdown_table(bucket_rows)
     computed_global_count = sum(
         1
         for metric in metrics
@@ -456,11 +581,14 @@ def main():
         print(f"computed missing global CER: {computed_global_count}")
         print(f"skipped missing global CER: {skipped_global_count}")
     if args.write_segments:
-        print(f"segment diagnostics: {len(segment_rows)}")
+        print(f"segment diagnostics: {len(segment_rows)} shown / {len(all_segment_rows)} total")
         if args.vad_root is not None:
             print(f"vad metrics loaded: {len(vad_metrics)}")
         print()
         print(segment_table)
+        if bucket_rows:
+            print()
+            print(bucket_table)
 
     if args.write:
         (root / "summary.md").write_text(table + "\n", encoding="utf-8")
@@ -472,6 +600,11 @@ def main():
         write_segment_csv(root / "segments.csv", segment_rows)
         print(f"wrote: {root / 'segments.md'}")
         print(f"wrote: {root / 'segments.csv'}")
+        if bucket_rows:
+            (root / "segment_buckets.md").write_text(bucket_table + "\n", encoding="utf-8")
+            write_bucket_csv(root / "segment_buckets.csv", bucket_rows)
+            print(f"wrote: {root / 'segment_buckets.md'}")
+            print(f"wrote: {root / 'segment_buckets.csv'}")
 
     return 0 if metrics else 1
 

@@ -128,8 +128,11 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - `peak_memory_mb`는 macOS `getrusage` 기반 peak RSS 스냅샷으로 기록한다.
 - `scripts/run_meeting_stt_benchmarks.py`로 `sample/meeting` 샘플과 엔진을 순차 실행할 수 있다.
 - `scripts/summarize_stt_benchmarks.py`로 실행 결과를 엔진별 weighted CER/RTF/peak memory 표로 요약할 수 있다.
+- `scripts/run_meeting_vad_benchmarks.py`로 VAD baseline 또는 VAD chunk STT를 `sample/meeting` 전체에 순차 실행할 수 있다.
+- `scripts/summarize_vad_benchmarks.py`로 VAD speech recall, short recall, missed speech, false-positive seconds를 엔진별로 요약할 수 있다.
 - full-duration 실행에서 Swift global CER를 skip한 경우, `scripts/summarize_stt_benchmarks.py --compute-missing-global-cer`로 작은 ref/hyp 파일에 한해 global CER를 후계산할 수 있다.
-- `scripts/summarize_stt_benchmarks.py --write-segments --vad-root ...`로 empty final과 high-CER window를 샘플/시간대/duration/reference density/VAD overlap/참조문/가설문 기준으로 정렬해 볼 수 있다.
+- `scripts/summarize_stt_benchmarks.py --write-segments --vad-root ...`로 empty final과 high-CER window를 샘플/시간대/duration/reference density/VAD overlap/bucket/참조문/가설문 기준으로 정렬해 볼 수 있다.
+- VAD overlap bucket은 low-overlap empty를 VAD/segmentation miss 후보로, high-overlap empty를 ASR empty decode 후보로 나눈다.
 
 **작업**
 
@@ -253,6 +256,8 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - per-chunk CER
 - global CER
 - stop/drain 누락 여부
+- 전체 샘플 VAD recall과 short recall
+- STT 실패 segment의 VAD overlap bucket 분포
 
 **성공 기준**
 
@@ -458,8 +463,8 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 2. SFSpeech 권한/Dictation 상태를 복구한 뒤 같은 120초 runner로 다시 smoke를 돌린다.
 3. macOS 26+ 환경에서 SpeechAnalyzer 한국어 asset 상태를 확인하고 같은 120초 runner로 smoke를 돌린다.
 4. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.
-5. `segments.md`에서 low VAD overlap empty row와 high VAD overlap empty row를 분리해 원인을 나눈다.
-6. 같은 runner로 VAD energy와 Silero 후보를 비교하되, per-chunk CER와 global CER를 함께 본다.
+5. `segments.md`와 `segment_buckets.md`에서 low VAD overlap empty row와 high VAD overlap empty row를 분리해 원인을 나눈다.
+6. VAD runner로 energy와 Silero 후보를 비교하되, VAD recall만 보지 말고 VAD chunk STT의 per-chunk CER와 global CER를 함께 본다.
 7. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
 8. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
 9. `StreamingTranscriptionEngine` protocol과 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
