@@ -86,6 +86,12 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - VAD별 결과가 같은 JSON schema로 저장된다.
 - Silero가 좋거나 나쁘다는 결론을 per-chunk CER 하나로 내리지 않는다.
 
+**현재 60초 smoke 결과**
+
+- energy VAD + WhisperKit turbo: chunk CER 35.8%, global CER 31.2%, empty final 1, false-positive text 1 chunk / 13 chars.
+- Silero VAD + gap merge 1.1초 + WhisperKit turbo: chunk CER 54.5%, global CER 31.8%, empty final 1, false-positive text 0.
+- 해석: global CER를 같이 봐야 chunk 경계 페널티를 줄여 비교할 수 있다. 다만 WhisperKit/CoreML 출력 변동이 관찰되므로, 이 단일 smoke만으로 VAD 기본값을 바꾸지 않는다.
+
 ### P1. 측정 하니스 표준화
 
 **목표**

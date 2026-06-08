@@ -205,6 +205,8 @@ struct VADBenchmarkTests {
         var falsePositiveTranscriptionCount = 0
         var falsePositiveTranscriptChars = 0
         var chunkMetrics: [VADSTTChunkMetric] = []
+        var allReferences: [String] = []
+        var allHypotheses: [String] = []
 
         for (index, chunk) in targetChunks.enumerated() {
             let startSample = max(0, Int(chunk.startSeconds * Double(Self.sampleRate)))
@@ -229,6 +231,8 @@ struct VADBenchmarkTests {
             }
             totalDistance += stats.distance
             totalRefLen += stats.refLen
+            allReferences.append(reference)
+            allHypotheses.append(hypothesis)
             chunkMetrics.append(VADSTTChunkMetric(
                 index: index,
                 startSeconds: chunk.startSeconds,
@@ -245,6 +249,10 @@ struct VADBenchmarkTests {
             ))
         }
 
+        let globalStats = Self.cerStats(
+            reference: allReferences.joined(separator: " "),
+            hypothesis: allHypotheses.joined(separator: " ")
+        )
         let metric = VADSTTBenchmarkMetric(
             vad: candidate.rawValue,
             engine: engineLabel,
@@ -260,6 +268,9 @@ struct VADBenchmarkTests {
             distance: totalDistance,
             refLen: totalRefLen,
             cer: totalRefLen > 0 ? Double(totalDistance) / Double(totalRefLen) : 0,
+            globalDistance: globalStats.distance,
+            globalRefLen: globalStats.refLen,
+            globalCER: globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0,
             elapsedSeconds: Date().timeIntervalSince(startedAt),
             chunks: chunkMetrics
         )
@@ -272,6 +283,7 @@ struct VADBenchmarkTests {
         empty final count       : \(metric.emptyCount)
         false positive text     : \(metric.falsePositiveTranscriptionCount) chunks / \(metric.falsePositiveTranscriptChars) chars
         chunk CER               : \(String(format: "%.1f%%", metric.cer * 100)) (distance \(metric.distance) / ref \(metric.refLen))
+        global CER              : \(String(format: "%.1f%%", metric.globalCER * 100)) (distance \(metric.globalDistance) / ref \(metric.globalRefLen))
         elapsed                 : \(String(format: "%.1f", metric.elapsedSeconds))s
         ==============================================
 
@@ -818,6 +830,9 @@ private struct VADSTTBenchmarkMetric: Codable {
     let distance: Int
     let refLen: Int
     let cer: Double
+    let globalDistance: Int
+    let globalRefLen: Int
+    let globalCER: Double
     let elapsedSeconds: Double
     let chunks: [VADSTTChunkMetric]
 
@@ -836,6 +851,9 @@ private struct VADSTTBenchmarkMetric: Codable {
         case distance
         case refLen = "ref_len"
         case cer
+        case globalDistance = "global_distance"
+        case globalRefLen = "global_ref_len"
+        case globalCER = "global_cer"
         case elapsedSeconds = "elapsed_seconds"
         case chunks
     }
