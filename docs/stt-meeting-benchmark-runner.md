@@ -35,6 +35,9 @@ tmp/stt-meeting-benchmarks/<timestamp>/
 
 Each engine gets its own output directory so metric files do not overwrite each other.
 
+WhisperKit/CoreML full-duration runs need write access to the E5RT cache under `~/Library/Caches/swiftpm-testing-helper`.
+If the process cannot write there, WhisperKit can load the model and still fail on the first decode with `.pixelBufferFailed`.
+
 ## Smoke run
 
 ```bash
@@ -375,8 +378,20 @@ Scope: `본회의_20260428`, `본회의_20260508`, `재정경제기획위원회_
 
 | Candidate | Weighted CER | Macro CER | Global CER | Full Global CER | Empty | FP chars | RTF | Peak MB | Result |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| final-only 20s window | 56.5% | 52.9% | 48.4% | n/a | 75 | 0 | 0.135 | 300.0 | comparison baseline |
 | repair off | 37.9% | 35.1% | 28.8% | 21.9% | 42 | 22 | 0.113 | 419.3 | baseline |
 | empty repair 1.00 | 30.7% | 29.3% | 22.4% | 14.8% | 9 | 35 | 0.140 | 420.8 | promote to all7 full check |
+
+Final-only short3 sample-level result:
+
+| Sample | CER | Global CER | Empty | RTF | Peak MB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 본회의_20260428 | 48.4% | 45.5% | 12 | 0.120 | 232.5 |
+| 본회의_20260508 | 44.3% | 41.0% | 22 | 0.121 | 255.3 |
+| 재정경제기획위원회_20260430 | 66.0% | 58.7% | 41 | 0.150 | 300.0 |
+
+Decision: keep the final-only 20s window path as a comparison baseline only.
+On the same short3 set, Silero VAD chunk STT beats it on CER, global CER, and empty finals even before repair.
 
 Sample-level `Full Global CER`:
 
