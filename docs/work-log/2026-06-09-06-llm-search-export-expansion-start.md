@@ -9,6 +9,8 @@
 대규모 기능 확장을 바로 코드에 넣기 전에, 구현 기준이 되는 기능 정의와 프로젝트 컨벤션을 정리했다.
 이후 첫 코드 슬라이스로 LLM 공급자 공통 계약을 추가해 로컬 LLM, GPT, Gemini, Claude, OpenRouter, Copilot을 같은 방식으로 붙일 수 있는 기반을 만들었다.
 코드리뷰/아키텍처 리뷰에서 `provider registry`, 기능별 protocol 분리, 기존 provider enum과의 bridge가 필요하다는 `WATCH` 의견이 나와 이를 반영했다.
+그 다음 기존 Codex/Gemini/Copilot 계정 로그인 경로를 `LegacyAccountLLMTextProvider` adapter로 감싸고, 교정/요약 서비스가 직접 OAuth service를 switch하지 않도록 전환했다.
+adapter 전환 코드리뷰에서 provider protocol 전체를 `@MainActor`로 묶으면 로컬 LLM/embedding 확장에 불리하다는 지적이 있어, protocol은 actor 독립으로 되돌리고 legacy adapter 내부에서만 기존 OAuth service로 actor hop 하도록 수정했다.
 
 ## 변경 파일
 
@@ -28,14 +30,27 @@
   - 모델 카탈로그, 텍스트 생성, 임베딩 provider protocol 분리
   - 요청/응답/모델 정보/오류 타입 추가
   - `LLMProviderError`를 `LocalizedError`로 연결해 UI 오류 문구 유실 방지
+  - provider protocol은 로컬 LLM/embedding 확장을 위해 actor 독립 + `Sendable` 경계로 유지
 - `Sources/Minto/Services/LLMProviderRegistry.swift`
   - 공급자 descriptor와 기존 교정 provider raw value bridge 추가
   - 공식 API provider와 계정 로그인 provider를 분리
+  - legacy 계정 로그인 provider 생성 경로 추가
+- `Sources/Minto/Services/LegacyAccountLLMTextProvider.swift`
+  - Codex/Gemini/Copilot 계정 로그인 방식의 기존 교정 API를 `LLMTextGenerationProvider`로 adapter화
+  - bundled fallback 모델 카탈로그 제공
+  - 기존 OAuth 오류를 `LLMProviderError`로 변환
+  - legacy OAuth service 접근 시점에만 `@MainActor`로 hop
 - `Sources/Minto/Services/LLMCorrectionService.swift`
   - 기존 "OpenAI Codex" 표시를 사용자에게 더 명확한 "GPT 계정 로그인"으로 변경
   - legacy provider enum이 registry descriptor를 참조하도록 변경
+  - 교정 호출을 `LLMTextGenerationProvider.generateText` 경로로 전환
+- `Sources/Minto/Services/SummaryService.swift`
+  - 증분/최종 요약 호출을 `LLMTextGenerationProvider.generateText` 경로로 전환
+  - `.incrementalSummary`, `.finalSummary` use case를 명시
 - `Tests/MintoTests/LLMProviderTests.swift`
   - 공급자 표시명, 로컬/클라우드 구분, 오류 메시지, legacy bridge, 텍스트/임베딩 계약 분리 테스트 추가
+  - legacy 계정 provider 생성과 교정 서비스 선택값 adapter 연결 테스트 추가
+  - singleton 상태 변경 테스트가 병렬 실행에서 섞이지 않도록 suite 직렬화
 
 ## 검증 계획
 
@@ -44,6 +59,9 @@
 - `swift build --disable-sandbox --scratch-path /tmp/minto2-llm-provider-build` 통과
 - `swift test --disable-sandbox --scratch-path /tmp/minto2-llm-provider-boundary-test --filter LLMProviderTests` 통과
 - `swift build --disable-sandbox --scratch-path /tmp/minto2-llm-provider-boundary-build` 통과
+- `swift test --disable-sandbox --scratch-path /tmp/minto2-llm-adapter-test --filter LLMProviderTests` 통과
+- `swift test --disable-sandbox --scratch-path /tmp/minto2-llm-adapter-test --filter SummaryServiceTests` 통과
+- `swift build --disable-sandbox --scratch-path /tmp/minto2-llm-adapter-build` 통과
 - 문서 경로와 링크 확인
 - 기존 경고:
   - `MicrophoneSource.swift`의 `nonisolated(unsafe)` 관련 경고

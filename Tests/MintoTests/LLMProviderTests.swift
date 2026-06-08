@@ -1,7 +1,7 @@
 import Testing
 @testable import MintoCore
 
-@Suite("LLMProvider 공통 타입")
+@Suite("LLMProvider 공통 타입", .serialized)
 struct LLMProviderTests {
 
     @Test("공급자 표시 이름은 사용자 용어를 사용한다")
@@ -60,5 +60,37 @@ struct LLMProviderTests {
 
         #expect(textResponse.text == "ok")
         #expect(embeddingResponse.vector == [0.1, 0.2])
+    }
+
+    @MainActor
+    @Test("legacy 계정 공급자는 text generation adapter로 생성된다")
+    func legacyAccountTextProviderCreation() async {
+        let registry = LLMProviderRegistry.shared
+        let chatGPTProvider = registry.textGenerationProvider(for: .chatGPTAccount)
+        let geminiProvider = registry.textGenerationProvider(for: .geminiAccount)
+        let copilotProvider = registry.textGenerationProvider(for: .copilot)
+        let gptAPIProvider = registry.textGenerationProvider(for: .gpt)
+
+        #expect(chatGPTProvider?.descriptor.id == .chatGPTAccount)
+        #expect(geminiProvider?.descriptor.id == .geminiAccount)
+        #expect(copilotProvider?.descriptor.id == .copilot)
+        #expect(gptAPIProvider == nil)
+
+        let catalog = await chatGPTProvider?.modelCatalog()
+        #expect(catalog?.source == .bundledFallback)
+        #expect(catalog?.models.isEmpty == false)
+    }
+
+    @MainActor
+    @Test("교정 서비스의 legacy 선택값은 text adapter로 연결된다")
+    func correctionServiceSelectedProviderResolvesToAdapter() {
+        let saved = LLMCorrectionService.shared.selectedProvider
+        defer { LLMCorrectionService.shared.selectedProvider = saved }
+
+        LLMCorrectionService.shared.selectedProvider = .codex
+        #expect(LLMCorrectionService.shared.selectedTextProvider()?.descriptor.id == .chatGPTAccount)
+
+        LLMCorrectionService.shared.selectedProvider = .none
+        #expect(LLMCorrectionService.shared.selectedTextProvider() == nil)
     }
 }

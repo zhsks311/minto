@@ -286,10 +286,10 @@ extension LLMProviderError: LocalizedError {
     public var recoverySuggestion: String? { userAction }
 }
 
-public protocol LLMModelCatalogProvider {
+public protocol LLMModelCatalogProvider: Sendable {
     var descriptor: LLMProviderDescriptor { get }
-    var isConfigured: Bool { get }
 
+    func isConfigured() async -> Bool
     func modelCatalog() async -> LLMModelCatalog
 }
 

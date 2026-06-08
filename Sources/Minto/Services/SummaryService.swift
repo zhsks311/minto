@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 회의 요약 생성 서비스.
 ///
-/// `LLMCorrectionService`와 동일한 provider 분기(Codex/Gemini/Copilot)를 재사용한다.
+/// `LLMCorrectionService`와 동일한 provider 선택값을 재사용하되, 실행은 provider adapter를 통해 수행한다.
 /// 사용자가 교정용으로 고른 provider(`selectedProvider`)를 그대로 쓰며, Codex는 tier-aware
 /// 모델 상향도 그대로 적용된다.
 ///
@@ -33,7 +33,7 @@ public final class SummaryService: ObservableObject {
             newBatch: batch,
             document: meeting.document
         )
-        guard let summary = await dispatch(prompt) else { return nil }
+        guard let summary = await dispatch(prompt, useCase: .incrementalSummary) else { return nil }
         meeting.runningSummary = summary
         return summary
     }
@@ -52,7 +52,7 @@ public final class SummaryService: ObservableObject {
             document: meeting.document
         )
 
-        if let raw = await dispatch(prompt) {
+        if let raw = await dispatch(prompt, useCase: .finalSummary) {
             // JSON 파싱 시도 → 실패하면 raw를 평문 요약으로 감싼다(빈 화면 방지).
             let summary = Self.parseStructured(raw) ?? .plain(raw)
             meeting.finalSummary = summary
@@ -81,30 +81,23 @@ public final class SummaryService: ObservableObject {
         return summary
     }
 
-    /// provider 분기 — `LLMCorrectionService.selectedProvider`를 재사용. 실패·none·빈 응답이면 nil.
-    private func dispatch(_ prompt: (instructions: String, userContent: String)) async -> String? {
-        let provider = LLMCorrectionService.shared.selectedProvider
-        guard provider != .none else { return nil }
+    /// provider adapter dispatch. 실패·none·빈 응답이면 nil.
+    private func dispatch(_ prompt: (instructions: String, userContent: String), useCase: LLMUseCase) async -> String? {
+        guard let provider = LLMCorrectionService.shared.selectedTextProvider() else { return nil }
 
         activeGenerations += 1
         defer { activeGenerations -= 1 }
 
         do {
-            let result: String
-            switch provider {
-            case .none:
-                return nil
-            case .gemini:
-                result = try await GeminiOAuthService.shared.correct(instructions: prompt.instructions, userContent: prompt.userContent)
-            case .copilot:
-                result = try await CopilotOAuthService.shared.correct(instructions: prompt.instructions, userContent: prompt.userContent)
-            case .codex:
-                result = try await CodexOAuthService.shared.correct(instructions: prompt.instructions, userContent: prompt.userContent)
-            }
-            let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            let response = try await provider.generateText(LLMTextRequest(
+                useCase: useCase,
+                instructions: prompt.instructions,
+                userContent: prompt.userContent
+            ))
+            let trimmed = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
         } catch {
-            fputs("[Summary] generation failed via \(provider.rawValue): \(error)\n", stderr)
+            fputs("[Summary] generation failed via \(provider.descriptor.id.rawValue): \(error.localizedDescription)\n", stderr)
             return nil
         }
     }

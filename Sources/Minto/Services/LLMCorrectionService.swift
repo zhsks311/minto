@@ -43,6 +43,11 @@ public final class LLMCorrectionService: ObservableObject {
     // 교정 진행 중 카운터 (ViewModel에서 UI 인디케이터에 사용)
     @Published public var activeCorrections: Int = 0
 
+    func selectedTextProvider() -> (any LLMTextGenerationProvider)? {
+        guard let providerID = selectedProvider.providerID else { return nil }
+        return LLMProviderRegistry.shared.textGenerationProvider(for: providerID)
+    }
+
     // MARK: - Correct
 
     /// 비동기 교정 수행. 실패 시 nil 반환 (원본 유지).
@@ -63,23 +68,20 @@ public final class LLMCorrectionService: ObservableObject {
             document: meeting.document
         )
 
-        fputs("[LLM] correcting via \(selectedProvider.rawValue): \"\(text)\"\n", stderr)
+        guard let provider = selectedTextProvider() else { return nil }
+
+        fputs("[LLM] correcting via \(provider.descriptor.id.rawValue): \"\(text)\"\n", stderr)
         do {
-            let corrected: String
-            switch selectedProvider {
-            case .none:
-                return nil
-            case .gemini:
-                corrected = try await GeminiOAuthService.shared.correct(instructions: instructions, userContent: userContent)
-            case .copilot:
-                corrected = try await CopilotOAuthService.shared.correct(instructions: instructions, userContent: userContent)
-            case .codex:
-                corrected = try await CodexOAuthService.shared.correct(instructions: instructions, userContent: userContent)
-            }
+            let response = try await provider.generateText(LLMTextRequest(
+                useCase: .correction,
+                instructions: instructions,
+                userContent: userContent
+            ))
+            let corrected = response.text
             fputs("[LLM] corrected → \"\(corrected)\"\n", stderr)
             return corrected
         } catch {
-            fputs("[LLM] correction failed: \(error)\n", stderr)
+            fputs("[LLM] correction failed via \(provider.descriptor.id.rawValue): \(error.localizedDescription)\n", stderr)
             return nil
         }
     }

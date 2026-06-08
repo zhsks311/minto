@@ -38,6 +38,10 @@ public struct LLMProviderRegistry: Sendable {
             return nil
         }
     }
+
+    public func textGenerationProvider(for id: LLMProviderID) -> (any LLMTextGenerationProvider)? {
+        LegacyAccountLLMTextProvider(providerID: id, registry: self)
+    }
 }
 
 extension LLMProviderRegistry {
