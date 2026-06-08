@@ -116,6 +116,10 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - padding probe 결과: 항상 service-empty였던 2개 label에 `pad=0.5초`를 적용하면 empty가 1/2, 2/2, 2/2로 안정적이지 않았다. 결과 위치는 `/private/tmp/minto2-whisper-empty-probe-service-pad05-always-empty2-20260608`.
 - 같은 2개 label에 `pad=1.0초`를 적용하면 3회 모두 0/2 empty였다. 결과 위치는 `/private/tmp/minto2-whisper-empty-probe-service-pad10-always-empty2-20260608`.
 - 해석: 적어도 일부 empty final은 너무 타이트한 chunk boundary와 관련이 있다. 다만 `pad=1.0초` 출력은 reference보다 길어지고 주변 문맥을 포함하므로, 기본 적용 전에는 전체 VAD chunk STT에서 empty 감소와 CER/중복 증가를 같이 재측정해야 한다.
+- 120초 전체 7샘플에서 `speech padding=1.0초`를 3회 반복했다. 결과 위치는 `/private/tmp/minto2-vad-stt-120s-silero-pad100`, `/private/tmp/minto2-vad-stt-120s-silero-pad100-repeat2`, `/private/tmp/minto2-vad-stt-120s-silero-pad100-repeat3`.
+- `speech padding=1.0초` 반복 결과: weighted CER 37.3%, 39.8%, 37.6%; Full Global CER 19.6%, 21.5%, 20.0%; empty 8, 8, 7; false-positive text 18 chars 고정; peak memory 1066.6MB, 1123.0MB, 1239.7MB.
+- 기준 조건 `speech padding=0.12초`: weighted CER 36.9%, Full Global CER 19.9%, empty 9, false-positive text 41 chars, peak 849.0MB.
+- 해석: `speech padding=1.0초`는 empty와 false-positive text를 줄이지만, Full Global CER 평균이 20.4%로 기준보다 나쁘고 peak memory도 크게 오른다. 따라서 기본 VAD padding으로 승격하지 않는다. 대신 empty가 의심되는 chunk에만 제한적으로 재전사할 수 있는 targeted boundary repair 후보로 남긴다.
 
 Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
 
