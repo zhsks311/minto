@@ -102,6 +102,15 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - baseline 반복 결과 위치: `/private/tmp/minto2-whisper-empty-probe-baseline-repeat-20260608`.
 - baseline 3회 반복: direct는 label별 empty 3/3, 2/3, 3/3이고, service는 3/3, 3/3, 1/3이다. 따라서 다음 실험은 최소 3회 반복 또는 전체 sample metric으로 판단해야 한다.
 
+Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
+
+- 기준 조건: `threshold=0.6`, `merge gap=1.1초`, `merge max=15초`, `speech padding=0.12초`, `min speech=0.25초`.
+- 기준 결과: weighted CER 36.9%, Full Global CER 19.9%, empty final 9, false-positive text 41 chars, RTF 0.107, peak 849.0MB.
+- `speech padding=0.30초`: weighted CER 40.5%, Full Global CER 24.0%, empty final 10, false-positive text 41 chars, RTF 0.109, peak 802.8MB.
+- `min speech=0.50초`: weighted CER 37.0%, Full Global CER 20.1%, empty final 8, false-positive text 41 chars, RTF 0.111, peak 719.0MB.
+- `merge max=20초`: weighted CER 34.0%, Full Global CER 19.5%, empty final 9, false-positive text 41 chars, RTF 0.097, peak 687.3MB.
+- 해석: padding 증가는 기각한다. min speech 증가는 empty 1개를 줄였지만 CER가 개선되지 않아 기본 후보로는 약하다. `merge max=20초`는 120초 기준에서 CER/RTF/peak memory가 좋아졌지만 empty는 줄지 않았다. 따라서 바로 기본값 변경이 아니라, `merge max=20초`만 반복 측정과 short3 full-duration 재검증 후보로 올린다.
+
 같은 runner로 Apple 엔진 smoke도 확인했다.
 
 - `sf_speech_on_device`: 현재 시스템에서 "Apple 음성 인식 권한이 거부" 상태라 1샘플 smoke가 load 단계에서 실패했다.
@@ -569,7 +578,7 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 
 ## 바로 다음 작업 순서
 
-1. Silero speech padding, min speech duration, chunk merge 정책을 작은 sweep으로 다시 돌려 empty final과 false-positive text가 동시에 줄어드는지 본다.
+1. `merge max=20초` 후보를 120초 기준에서 최소 3회 반복하고, 변동폭이 작으면 short3 full-duration으로 재검증한다.
 2. probe matrix는 후보마다 최소 3회 반복하고, 단일 run의 empty/non-empty만으로 채택하지 않는다.
 3. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
 4. low VAD overlap empty row와 high VAD overlap empty row를 분리해 VAD miss와 WhisperKit decode failure를 따로 센다.

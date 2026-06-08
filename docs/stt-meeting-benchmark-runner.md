@@ -255,3 +255,12 @@ scripts/run_meeting_vad_benchmarks.py \
   --silero-threshold 0.6 \
   --merge-gap-sec 1.1
 ```
+
+Recent 120s segmentation sweep, all with `threshold=0.6` and `merge gap=1.1`:
+
+| Candidate | Weighted CER | Full Global CER | Empty | FP chars | RTF | Peak MB | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| baseline: padding 0.12, min speech 0.25, merge max 15 | 36.9% | 19.9% | 9 | 41 | 0.107 | 849.0 | current candidate |
+| speech padding 0.30 | 40.5% | 24.0% | 10 | 41 | 0.109 | 802.8 | reject |
+| min speech 0.50 | 37.0% | 20.1% | 8 | 41 | 0.111 | 719.0 | weak, not default |
+| merge max 20 | 34.0% | 19.5% | 9 | 41 | 0.097 | 687.3 | repeat/full candidate |
