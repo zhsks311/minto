@@ -171,8 +171,23 @@ scripts/run_meeting_vad_benchmarks.py \
 ```
 
 This mode loads the selected STT engine, so model availability and memory limits apply.
+For WhisperKit/CoreML runs, prefer a local model folder and run outside the sandbox when CoreML needs to write E5RT cache files:
+
+```bash
+WHISPER_MODEL_FOLDER=/path/to/openai_whisper-large-v3-v20240930_turbo \
+scripts/run_meeting_vad_benchmarks.py \
+  --mode stt \
+  --samples haengan_20260526 \
+  --engines energy \
+  --stt-engine whisper_accurate \
+  --max-seconds 60 \
+  --vad-stt-max-chunks 0
+```
+
 Summarize the generated STT metric files with the same STT summary script:
 
 ```bash
 scripts/summarize_stt_benchmarks.py tmp/vad-meeting-benchmarks/<timestamp> --write
 ```
+
+When the metric files include VAD metadata, the summary groups by VAD config instead of merging every result into the same STT engine row.

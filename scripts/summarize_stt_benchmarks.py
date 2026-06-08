@@ -193,10 +193,19 @@ def fmt_float(value):
 def summarize_by_engine(metrics):
     groups = defaultdict(list)
     for metric in metrics:
-        groups[metric["engine_id"]].append(metric)
+        groups[summary_group_key(metric)].append(metric)
 
     rows = []
-    for engine_id, items in sorted(groups.items()):
+    for key, items in sorted(groups.items()):
+        (
+            engine_id,
+            benchmark_kind,
+            vad,
+            energy_noise_offset_db,
+            silero_threshold,
+            merge_gap_seconds,
+            merge_max_seconds,
+        ) = key
         total_distance = sum(int(item.get("distance") or 0) for item in items)
         total_ref = sum(int(item.get("reference_length") or 0) for item in items)
         total_elapsed = sum(float(item.get("elapsed_seconds") or 0) for item in items)
@@ -220,6 +229,12 @@ def summarize_by_engine(metrics):
             "engine_id": engine_id,
             "engine_label": items[0].get("engine_label", engine_id),
             "model_id": items[0].get("model_id", ""),
+            "benchmark_kind": benchmark_kind,
+            "vad": vad,
+            "energy_noise_offset_db": energy_noise_offset_db,
+            "silero_threshold": silero_threshold,
+            "chunk_merge_gap_seconds": merge_gap_seconds,
+            "chunk_merge_max_seconds": merge_max_seconds,
             "sample_count": len(items),
             "weighted_micro_cer": total_distance / total_ref if total_ref else None,
             "sample_macro_cer": sum(macro_values) / len(macro_values) if macro_values else None,
@@ -230,6 +245,31 @@ def summarize_by_engine(metrics):
             "peak_memory_mb": max(peak_values) if peak_values else None,
         })
     return rows
+
+
+def summary_group_key(metric):
+    metadata = metric.get("metadata") or {}
+    if metadata.get("vad"):
+        vad = metadata.get("vad", "")
+        return (
+            metric["engine_id"],
+            metric.get("benchmark_kind", ""),
+            vad,
+            metadata.get("energy_noise_offset_db", "") if vad == "energy" else "",
+            metadata.get("silero_threshold", "") if vad == "silero" else "",
+            metadata.get("chunk_merge_gap_seconds", ""),
+            metadata.get("chunk_merge_max_seconds", ""),
+        )
+
+    return (
+        metric["engine_id"],
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    )
 
 
 def segment_diagnostics(metrics, min_cer, vad_metrics=None, vad_engine="energy"):
@@ -394,6 +434,9 @@ def escape_markdown_cell(value):
 
 
 def markdown_table(rows):
+    if any(row.get("vad") for row in rows):
+        return vad_markdown_table(rows)
+
     lines = [
         "| Engine | Samples | Weighted CER | Macro CER | Global CER | RTF | Peak MB | Empty | FP chars |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -402,6 +445,33 @@ def markdown_table(rows):
         lines.append(
             "| {engine} | {samples} | {weighted} | {macro} | {global_cer} | {rtf} | {peak} | {empty} | {fp} |".format(
                 engine=row["engine_id"],
+                samples=row["sample_count"],
+                weighted=fmt_percent(row["weighted_micro_cer"]),
+                macro=fmt_percent(row["sample_macro_cer"]),
+                global_cer=fmt_percent(row["global_cer_mean"]),
+                rtf=fmt_float(row["rtf"]),
+                peak=fmt_float(row["peak_memory_mb"]),
+                empty=row["empty_final_count"],
+                fp=row["false_positive_chars"],
+            )
+        )
+    return "\n".join(lines)
+
+
+def vad_markdown_table(rows):
+    lines = [
+        "| Engine | VAD | Energy offset | Silero threshold | Merge gap | Merge max | Samples | Weighted CER | Macro CER | Global CER | RTF | Peak MB | Empty | FP chars |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {engine} | {vad} | {energy_offset} | {silero_threshold} | {merge_gap} | {merge_max} | {samples} | {weighted} | {macro} | {global_cer} | {rtf} | {peak} | {empty} | {fp} |".format(
+                engine=row["engine_id"],
+                vad=row["vad"] or "n/a",
+                energy_offset=row["energy_noise_offset_db"] or "n/a",
+                silero_threshold=row["silero_threshold"] or "n/a",
+                merge_gap=row["chunk_merge_gap_seconds"] or "n/a",
+                merge_max=row["chunk_merge_max_seconds"] or "n/a",
                 samples=row["sample_count"],
                 weighted=fmt_percent(row["weighted_micro_cer"]),
                 macro=fmt_percent(row["sample_macro_cer"]),
@@ -472,6 +542,12 @@ def write_csv(path, rows):
         "engine_id",
         "engine_label",
         "model_id",
+        "benchmark_kind",
+        "vad",
+        "energy_noise_offset_db",
+        "silero_threshold",
+        "chunk_merge_gap_seconds",
+        "chunk_merge_max_seconds",
         "sample_count",
         "weighted_micro_cer",
         "sample_macro_cer",

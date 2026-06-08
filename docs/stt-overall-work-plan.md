@@ -267,6 +267,9 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - energy VAD + WhisperKit turbo: chunk CER 35.8%, global CER 31.2%, empty final 1, false-positive text 1 chunk / 13 chars.
 - Silero VAD + gap merge 1.1초 + WhisperKit turbo: chunk CER 54.5%, global CER 31.8%, empty final 1, false-positive text 0.
 - 해석: Silero는 false-positive를 줄일 가능성이 있지만, chunk 경계가 잘게 나뉘면 WhisperKit final CER가 나빠질 수 있다. 기본값 변경은 아직 금지다.
+- 2026-06-08 재현 조건: `haengan_20260526` 첫 60초, `openai_whisper-large-v3-v20240930_turbo`, 로컬 `WHISPER_MODEL_FOLDER`, `scripts/run_meeting_vad_benchmarks.py --mode stt`.
+- 실행 주의: WhisperKit/CoreML STT smoke는 E5RT cache를 `~/Library/Caches/swiftpm-testing-helper`에 쓰므로 샌드박스 안에서는 `.pixelBufferFailed`로 실패할 수 있다. 같은 명령을 샌드박스 밖에서 실행하면 통과했다.
+- 요약 주의: VAD chunk STT 결과는 같은 `engine_id`라도 VAD config가 다르면 별도 후보로 봐야 한다. `scripts/summarize_stt_benchmarks.py`는 VAD metadata가 있는 결과를 VAD/threshold/merge config별로 분리해 요약한다.
 
 **검증**
 
