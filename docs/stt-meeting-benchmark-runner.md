@@ -302,6 +302,18 @@ Decision: do not promote `merge max 20` and do not spend a full-duration short3 
 Weighted CER improved in all three repeats, but `Full Global CER` did not improve consistently and empty finals did not drop.
 For VAD policy selection, prefer `Full Global CER` over chunk-only weighted CER because missed speech outside emitted chunks is counted only in the full-reference comparison.
 
+120s repair pad repeat check, same 7 samples and 120s scope:
+
+| Candidate | Weighted CER mean | Full Global CER mean | Empty mean | FP chars mean | RTF mean | Peak MB mean | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| repair off | 36.9% | 19.9% | 9.0 | 41.0 | 0.107 | 849.0 | baseline |
+| empty repair 1.00 mean of 3 | 34.0% | 16.6% | 5.3 | 41.0 | 0.123 | 1018.5 | short3/all7 checked, not default |
+| empty repair 0.75 mean of 3 | 34.3% | 17.1% | 4.7 | 44.3 | 0.123 | 1171.6 | reject; not safer than 1.00 |
+
+Decision: do not promote `empty repair 0.75`.
+It reduced empty finals slightly versus `1.00`, but had worse `Full Global CER`, higher false-positive text, and higher peak memory.
+Next inspect accepted repair chunks and test stricter guard conditions instead of shrinking the pad again.
+
 Full-duration short3 repair check:
 
 Scope: `본회의_20260428`, `본회의_20260508`, `재정경제기획위원회_20260430`, full duration, Silero `threshold=0.6`, `merge gap=1.1`, `merge max=15`, WhisperKit turbo.
