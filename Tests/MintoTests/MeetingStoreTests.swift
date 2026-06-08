@@ -89,4 +89,82 @@ struct MeetingStoreTests {
         #expect(store.meetings.first?.title == "new")
         #expect(store.meetings.last?.title == "old")
     }
+
+    @Test("회의 저장은 검색 sidecar index를 갱신하고 중복 저장은 chunk를 중복하지 않는다")
+    func saveUpdatesSearchIndexWithoutDuplicates() {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = MeetingStore(directory: dir)
+        let rec = sampleRecord()
+
+        store.save(rec)
+        store.save(rec)
+
+        let index = MeetingSearchIndexStore(directory: dir).load()
+        let chunks = index?.chunks.filter { $0.meetingID == rec.id } ?? []
+        #expect(chunks.isEmpty == false)
+        #expect(Set(chunks.map(\.id)).count == chunks.count)
+    }
+
+    @Test("회의 삭제는 검색 sidecar index에서도 chunk를 제거한다")
+    func deleteUpdatesSearchIndex() {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = MeetingStore(directory: dir)
+        let rec = sampleRecord()
+
+        store.save(rec)
+        store.delete(rec.id)
+
+        let index = MeetingSearchIndexStore(directory: dir).load()
+        #expect(index?.chunks.contains { $0.meetingID == rec.id } == false)
+    }
+
+    @Test("손상된 검색 sidecar index는 reload 시 현재 회의 목록 기준으로 재생성된다")
+    func reloadRebuildsCorruptSearchIndex() throws {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = MeetingStore(directory: dir)
+        let rec = sampleRecord()
+        store.save(rec)
+
+        try "corrupt".write(to: store.searchIndexURL, atomically: true, encoding: .utf8)
+        _ = MeetingStore(directory: dir)
+
+        let index = MeetingSearchIndexStore(directory: dir).load()
+        #expect(index?.chunks.contains { $0.meetingID == rec.id } == true)
+    }
+
+    @Test("버전이 맞지 않는 검색 sidecar index는 reload 시 재생성된다")
+    func reloadRebuildsIncompatibleSearchIndex() throws {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = MeetingStore(directory: dir)
+        let rec = sampleRecord()
+        store.save(rec)
+
+        let staleSnapshot = """
+        {
+          "chunks": [],
+          "chunkingVersion": 999,
+          "generatedAt": "2026-06-09T00:00:00Z",
+          "schemaVersion": \(MeetingSearchIndex.schemaVersion)
+        }
+        """
+        try staleSnapshot.write(to: store.searchIndexURL, atomically: true, encoding: .utf8)
+        _ = MeetingStore(directory: dir)
+
+        let index = MeetingSearchIndexStore(directory: dir).load()
+        #expect(index?.chunks.contains { $0.meetingID == rec.id } == true)
+    }
+
+    @Test("검색 sidecar index 파일이 없어도 reload 시 재생성된다")
+    func reloadRebuildsMissingSearchIndex() throws {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = MeetingStore(directory: dir)
+        let rec = sampleRecord()
+        store.save(rec)
+
+        try FileManager.default.removeItem(at: store.searchIndexURL)
+        _ = MeetingStore(directory: dir)
+
+        let index = MeetingSearchIndexStore(directory: dir).load()
+        #expect(index?.chunks.contains { $0.meetingID == rec.id } == true)
+    }
 }
