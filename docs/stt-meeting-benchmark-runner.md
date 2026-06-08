@@ -152,6 +152,7 @@ scripts/run_whisper_empty_probe_matrix.py \
 
 The service-path summary also records `service_skip_count`, `service_skip_reasons`, and `service_skip_details`.
 Use these fields to separate raw WhisperKit empty output from app-side filters such as `energy_gate`, `avg_logprob`, `compression_ratio`, and `low_energy_short_phantom`.
+The Markdown summary includes empty counts by run and by label, so repeated probes can show whether a clip always fails or only fails intermittently.
 
 ## VAD benchmark run
 

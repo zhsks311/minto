@@ -108,6 +108,11 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - 전체 7개 service probe 결과 위치: `/private/tmp/minto2-whisper-empty-probe-service-skip-reasons-all7-20260608`.
 - 결과: 7개 중 4개가 empty, 3개가 non-empty였고, 7개 모두 `service_skip_count=0`이었다. non-empty 3개 중 1개는 `-` 한 글자라 실질 복구로 보기 어렵다.
 - 해석: full-duration에서 empty였던 probe 일부는 단독 재실행 시 non-empty로 복구된다. 하지만 이 흔들림도 앱 skip 필터 때문이 아니다. 따라서 전역 energy/logprob/compression threshold를 완화하는 변경은 근거가 약하고, chunk 경계와 WhisperKit compute/decode path 반복성을 먼저 비교해야 한다.
+- direct CPU-only all7 반복은 비용이 크다. 결과 위치 `/private/tmp/minto2-whisper-empty-probe-path-repeat-all7-20260608`에서 direct baseline repeat1은 7개 중 4개 empty였고 346.8초가 걸렸다. 3회 반복은 리소스 대비 효율이 낮아 중단했다.
+- service baseline all7 3회 반복 결과 위치: `/private/tmp/minto2-whisper-empty-probe-service-repeat-all7-20260608`.
+- service repeat별 empty: 2/7, 3/7, 4/7. 앱 실제 경로에서도 단일 실행 결과가 흔들린다.
+- service label별 empty: `silero-empty-jaegyeong-20260429-097` 3/3, `silero-empty-plenary-20260423-411` 3/3, `silero-empty-haengan-20260526-154` 0/3, `silero-empty-plenary-20260428-041` 0/3, 나머지 3개는 1/3.
+- 해석: empty final probe는 "항상 실패하는 clip"과 "단독 재실행에서 회복되는 clip"으로 나뉜다. 다음 실험은 항상 실패하는 2개 label을 우선 대상으로 삼고, padding/window boundary/decode option을 반복 측정한다. direct CPU-only는 원인 분석용으로만 제한적으로 사용한다.
 
 Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
 

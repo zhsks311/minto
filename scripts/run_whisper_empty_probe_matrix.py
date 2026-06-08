@@ -257,6 +257,43 @@ def write_outputs(output_root, manifest, rows):
             )
         )
 
+    run_counts = Counter()
+    run_empty_counts = Counter()
+    label_counts = Counter()
+    label_empty_counts = Counter()
+    for row in rows:
+        run_key = (row["path"], row["variant"], row["repeat"])
+        label_key = (row["path"], row["variant"], row["label"])
+        run_counts[run_key] += 1
+        label_counts[label_key] += 1
+        if row["empty"]:
+            run_empty_counts[run_key] += 1
+            label_empty_counts[label_key] += 1
+
+    if run_counts:
+        lines.extend([
+            "",
+            "## Empty summary by run",
+            "",
+            "| Path | Variant | Repeat | Empty | Total |",
+            "| --- | --- | ---: | ---: | ---: |",
+        ])
+        for path, variant, repeat in sorted(run_counts):
+            key = (path, variant, repeat)
+            lines.append(f"| {path} | {variant} | {repeat} | {run_empty_counts[key]} | {run_counts[key]} |")
+
+    if label_counts:
+        lines.extend([
+            "",
+            "## Empty summary by label",
+            "",
+            "| Path | Variant | Label | Empty | Total |",
+            "| --- | --- | --- | ---: | ---: |",
+        ])
+        for path, variant, label in sorted(label_counts):
+            key = (path, variant, label)
+            lines.append(f"| {path} | {variant} | {label} | {label_empty_counts[key]} | {label_counts[key]} |")
+
     reason_counts = Counter()
     for row in rows:
         for reason in split_csv(row.get("service_skip_reasons", "")):
