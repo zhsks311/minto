@@ -515,15 +515,17 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - streaming 지원 엔진만 session lifecycle을 사용한다.
 - one-shot 엔진의 기존 성능과 안정성을 유지한다.
 
+**현재 고정된 것**
+
+- `StreamingTranscriptionEngine` / `StreamingTranscriptionSession` protocol scaffold를 추가했다.
+- streaming event는 `partial`과 `final`을 구분하고 revision을 기록한다.
+- `SpeechEngineID.supportsTrueStreaming`을 추가했다. 현재 등록된 WhisperKit, SpeechAnalyzer final-only, SFSpeech on-device 엔진은 모두 `false`다.
+- WhisperKit rolling preview는 `supportsPreviewTranscription=true`지만 true streaming은 아니다.
+- 아직 `STTService`나 `TranscriptionViewModel`의 제품 경로에 streaming session을 연결하지 않았다.
+
 **작업**
 
-- `StreamingTranscriptionEngine` protocol을 추가한다.
-  - `startSession()`
-  - `accept(samples:)`
-  - `finish()`
-  - `resetSession()`
-  - partial callback
-  - final callback
+- streaming 지원 엔진 구현체를 하나만 hidden PoC로 붙인다.
 - `TranscriptionCoordinator`가 capability에 따라 경로를 나눈다.
   - one-shot: VAD chunk final + optional rolling preview
   - streaming: continuous samples + engine partial/final event
@@ -688,7 +690,7 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 13. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.
 14. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
 15. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
-16. `StreamingTranscriptionEngine` protocol과 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
+16. `StreamingTranscriptionEngine` protocol scaffold는 추가했다. 다음은 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
 17. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다.
 18. diarization은 audio offset 보존 작업 이후 offline PoC로 시작한다.
 

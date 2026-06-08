@@ -36,9 +36,15 @@
    - Run a 1-window `whisper_accurate` smoke with `WHISPER_MODEL_FOLDER`.
    - Compare the smoke path against the previously recorded baseline command.
 
+6. Add true streaming scaffold after batch engine separation is stable.
+   - `StreamingTranscriptionEngine`
+   - `StreamingTranscriptionSession`
+   - `StreamingTranscriptionEvent`
+   - Verify: current engines keep `supportsTrueStreaming == false`, including WhisperKit rolling preview.
+
 ## Non-goals
 
 - Do not add Nemotron or sherpa runtime integration in this step.
 - Do not change VAD behavior.
 - Do not change the default engine.
-- Do not introduce true streaming abstractions until batch engine separation is stable.
+- Do not connect true streaming abstractions to app runtime until a streaming engine PoC is selected.
