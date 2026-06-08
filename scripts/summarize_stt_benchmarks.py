@@ -45,6 +45,17 @@ def parse_args():
         default=0.8,
         help="Include non-empty segments at or above this CER.",
     )
+    parser.add_argument(
+        "--vad-root",
+        type=Path,
+        default=None,
+        help="Optional root containing *_vad_*_metrics.json files for segment/VAD overlap diagnostics.",
+    )
+    parser.add_argument(
+        "--vad-engine",
+        default="energy",
+        help="VAD engine id to use from --vad-root. Defaults to energy.",
+    )
     return parser.parse_args()
 
 
@@ -62,6 +73,28 @@ def load_metrics(root, compute_missing_global_cer=False, global_char_limit=20_00
             compute_missing_global(data, path, global_char_limit, global_cell_limit)
         metrics.append(data)
     return metrics
+
+
+def load_vad_metrics(root):
+    if root is None:
+        return {}
+
+    metrics = {}
+    for path in root.expanduser().resolve().glob("**/*_vad_*_metrics.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if "chunks" not in data or "sample" not in data or "vad" not in data:
+            continue
+        data["_path"] = str(path)
+        key = (normalize_id(data["sample"]), str(data["vad"]))
+        metrics[key] = data
+    return metrics
+
+
+def normalize_id(value):
+    return unicodedata.normalize("NFC", str(value))
 
 
 def compute_missing_global(metric, metric_path, global_char_limit, global_cell_limit):
@@ -187,7 +220,8 @@ def summarize_by_engine(metrics):
     return rows
 
 
-def segment_diagnostics(metrics, min_cer, limit):
+def segment_diagnostics(metrics, min_cer, limit, vad_metrics=None, vad_engine="energy"):
+    vad_metrics = vad_metrics or {}
     rows = []
     for metric in metrics:
         for segment in metric.get("segments", []):
@@ -219,6 +253,7 @@ def segment_diagnostics(metrics, min_cer, limit):
         duration = row["duration_seconds"]
         row["reference_chars_per_second"] = row["reference_length"] / duration if duration else None
         row["hypothesis_chars_per_second"] = row["hypothesis_length"] / duration if duration else None
+        add_vad_overlap(row, vad_metrics, vad_engine)
 
     rows.sort(key=lambda row: (
         not row["empty"],
@@ -228,6 +263,48 @@ def segment_diagnostics(metrics, min_cer, limit):
         row["index"],
     ))
     return rows[:max(0, limit)]
+
+
+def add_vad_overlap(row, vad_metrics, vad_engine):
+    vad_metric = vad_metrics.get((normalize_id(row["sample_id"]), vad_engine))
+    if vad_metric is None:
+        row["vad_overlap_seconds"] = None
+        row["vad_overlap_ratio"] = None
+        row["vad_nearest_gap_seconds"] = None
+        row["vad_chunk_count"] = 0
+        row["vad_chunks"] = ""
+        return
+
+    chunks = sorted(vad_metric.get("chunks", []), key=lambda chunk: float(chunk.get("start_seconds") or 0))
+    overlaps = []
+    overlap_seconds = 0.0
+    nearest_gap = None
+    for chunk in chunks:
+        start = float(chunk.get("start_seconds") or 0)
+        end = float(chunk.get("end_seconds") or 0)
+        overlap = max(0.0, min(row["end_seconds"], end) - max(row["start_seconds"], start))
+        if overlap > 0:
+            overlaps.append((start, end))
+            overlap_seconds += overlap
+        else:
+            gap = min(abs(row["start_seconds"] - end), abs(start - row["end_seconds"]))
+            nearest_gap = gap if nearest_gap is None else min(nearest_gap, gap)
+
+    bounded_overlap = min(row["duration_seconds"], overlap_seconds)
+    row["vad_overlap_seconds"] = bounded_overlap
+    row["vad_overlap_ratio"] = bounded_overlap / row["duration_seconds"] if row["duration_seconds"] else None
+    row["vad_nearest_gap_seconds"] = 0.0 if overlaps else nearest_gap
+    row["vad_chunk_count"] = len(overlaps)
+    row["vad_chunks"] = compact_ranges(overlaps)
+
+
+def compact_ranges(ranges, limit=3):
+    if not ranges:
+        return ""
+    head = [f"{start:.1f}-{end:.1f}" for start, end in ranges[:limit]]
+    if len(ranges) > limit:
+        head.append(f"+{len(ranges) - limit}")
+    return "; ".join(head)
 
 
 def compact_text(value, limit=90):
@@ -265,12 +342,12 @@ def markdown_table(rows):
 
 def segment_markdown_table(rows):
     lines = [
-        "| Engine | Sample | # | Time | Dur | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | Reference | Hypothesis |",
-        "| --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- | --- |",
+        "| Engine | Sample | # | Time | Dur | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | VAD overlap | VAD gap | VAD chunks | Reference | Hypothesis |",
+        "| --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {engine} | {sample} | {index} | {time} | {duration} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {reference} | {hypothesis} |".format(
+            "| {engine} | {sample} | {index} | {time} | {duration} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {vad_overlap} | {vad_gap} | {vad_chunks} | {reference} | {hypothesis} |".format(
                 engine=row["engine_id"],
                 sample=row["sample_id"],
                 index=row["index"],
@@ -282,6 +359,9 @@ def segment_markdown_table(rows):
                 ref_cps=fmt_float(row["reference_chars_per_second"]),
                 hyp_len=row["hypothesis_length"],
                 hyp_cps=fmt_float(row["hypothesis_chars_per_second"]),
+                vad_overlap=fmt_percent(row["vad_overlap_ratio"]),
+                vad_gap=fmt_float(row["vad_nearest_gap_seconds"]),
+                vad_chunks=escape_markdown_cell(row["vad_chunks"]),
                 reference=escape_markdown_cell(row["reference"]),
                 hypothesis=escape_markdown_cell(row["hypothesis"]),
             )
@@ -324,6 +404,11 @@ def write_segment_csv(path, rows):
         "hypothesis_length",
         "hypothesis_chars_per_second",
         "distance",
+        "vad_overlap_seconds",
+        "vad_overlap_ratio",
+        "vad_nearest_gap_seconds",
+        "vad_chunk_count",
+        "vad_chunks",
         "reference",
         "hypothesis",
         "metrics_file",
@@ -343,12 +428,15 @@ def main():
         global_char_limit=args.global_char_limit,
         global_cell_limit=args.global_cell_limit,
     )
+    vad_metrics = load_vad_metrics(args.vad_root)
     rows = summarize_by_engine(metrics)
     table = markdown_table(rows)
     segment_rows = segment_diagnostics(
         metrics,
         min_cer=args.segment_min_cer,
         limit=args.segment_limit,
+        vad_metrics=vad_metrics,
+        vad_engine=args.vad_engine,
     )
     segment_table = segment_markdown_table(segment_rows)
     computed_global_count = sum(
@@ -369,6 +457,8 @@ def main():
         print(f"skipped missing global CER: {skipped_global_count}")
     if args.write_segments:
         print(f"segment diagnostics: {len(segment_rows)}")
+        if args.vad_root is not None:
+            print(f"vad metrics loaded: {len(vad_metrics)}")
         print()
         print(segment_table)
 

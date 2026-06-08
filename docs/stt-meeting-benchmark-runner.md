@@ -87,6 +87,15 @@ scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> \
   --segment-min-cer 0.8
 ```
 
+If VAD benchmark metrics are available, add overlap columns:
+
+```bash
+scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> \
+  --write-segments \
+  --vad-root /private/tmp/minto2-vad-full-smoke \
+  --vad-engine energy
+```
+
 This writes:
 
 ```text
@@ -96,5 +105,6 @@ segments.csv
 
 The summary groups metric files by `engine_id` and reports weighted CER, sample macro CER, RTF, peak memory, empty finals, and false-positive transcript characters.
 
-The segment diagnostics include `Dur`, `Ref cps`, and `Hyp cps`.
+The segment diagnostics include `Dur`, `Ref cps`, `Hyp cps`, `VAD overlap`, `VAD gap`, and `VAD chunks`.
 Use high `Ref cps` empty rows to find windows where the subtitle/reference is dense but the engine returned no final text.
+Use low `VAD overlap` to identify segmentation misses, and high `VAD overlap` with empty output to identify decode/model failures.
