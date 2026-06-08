@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import time
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -94,7 +95,11 @@ def variants_for_path(path, variants, service_per_variant):
 
 def parse_diag_rows(output, diagnostic_path, variant, repeat, returncode):
     rows = []
+    pending_stt_skips = []
     for line in output.splitlines():
+        if line.startswith("[STT] skip"):
+            pending_stt_skips.append(line)
+
         if not line.startswith("[DIAG][direct] ") and not line.startswith("[DIAG][service] "):
             continue
 
@@ -109,6 +114,13 @@ def parse_diag_rows(output, diagnostic_path, variant, repeat, returncode):
         else:
             empty = not text.strip()
 
+        skip_reasons = []
+        skip_details = []
+        if channel == "service":
+            skip_reasons = [classify_stt_skip(line) for line in pending_stt_skips]
+            skip_details = [sanitize_table_cell(line) for line in pending_stt_skips]
+            pending_stt_skips = []
+
         rows.append({
             "path": diagnostic_path,
             "reported_path": channel,
@@ -122,9 +134,28 @@ def parse_diag_rows(output, diagnostic_path, variant, repeat, returncode):
             "rms_db": capture_value(line, r"rms=([^ ]+)dB"),
             "segments": capture_value(line, r"segments=([0-9]+)"),
             "progress": capture_value(line, r"progress=([0-9]+)"),
+            "service_skip_count": len(skip_reasons),
+            "service_skip_reasons": ",".join(skip_reasons),
+            "service_skip_details": "; ".join(skip_details),
             "text_preview": text.strip().replace("|", "\\|")[:120],
         })
     return rows
+
+
+def classify_stt_skip(line):
+    if "low-energy short phantom" in line:
+        return "low_energy_short_phantom"
+    if "avgLogprob=" in line:
+        return "avg_logprob"
+    if "compressionRatio=" in line:
+        return "compression_ratio"
+    if "energy=" in line:
+        return "energy_gate"
+    return "unknown"
+
+
+def sanitize_table_cell(value):
+    return value.strip().replace("|", "\\|")[:200]
 
 
 def capture_value(text, pattern):
@@ -204,6 +235,9 @@ def write_outputs(output_root, manifest, rows):
         "rms_db",
         "segments",
         "progress",
+        "service_skip_count",
+        "service_skip_reasons",
+        "service_skip_details",
         "text_preview",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
@@ -213,15 +247,30 @@ def write_outputs(output_root, manifest, rows):
 
     summary_path = output_root / "summary.md"
     lines = [
-        "| Path | Variant | Repeat | Label | Empty | Text chars | Ref len | RMS dB | Segments | Progress | Preview |",
-        "| --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Path | Variant | Repeat | Label | Empty | Text chars | Ref len | RMS dB | Segments | Progress | STT skips | STT skip reasons | Preview |",
+        "| --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {path} | {variant} | {repeat} | {label} | {empty} | {text_chars} | {ref_len} | {rms_db} | {segments} | {progress} | {text_preview} |".format(
+            "| {path} | {variant} | {repeat} | {label} | {empty} | {text_chars} | {ref_len} | {rms_db} | {segments} | {progress} | {service_skip_count} | {service_skip_reasons} | {text_preview} |".format(
                 **row
             )
         )
+
+    reason_counts = Counter()
+    for row in rows:
+        for reason in split_csv(row.get("service_skip_reasons", "")):
+            reason_counts[(row["path"], row["variant"], reason)] += 1
+    if reason_counts:
+        lines.extend([
+            "",
+            "## Service STT skip summary",
+            "",
+            "| Path | Variant | Reason | Count |",
+            "| --- | --- | --- | ---: |",
+        ])
+        for (path, variant, reason), count in sorted(reason_counts.items()):
+            lines.append(f"| {path} | {variant} | {reason} | {count} |")
     summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return manifest_path, csv_path, summary_path
 

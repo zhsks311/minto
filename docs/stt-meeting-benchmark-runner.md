@@ -150,6 +150,9 @@ scripts/run_whisper_empty_probe_matrix.py \
   --repeats 3
 ```
 
+The service-path summary also records `service_skip_count`, `service_skip_reasons`, and `service_skip_details`.
+Use these fields to separate raw WhisperKit empty output from app-side filters such as `energy_gate`, `avg_logprob`, `compression_ratio`, and `low_energy_short_phantom`.
+
 ## VAD benchmark run
 
 Run Energy VAD over every `sample/meeting` pair:

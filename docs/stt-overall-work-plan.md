@@ -101,6 +101,10 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - service baseline: empty 2/3. production path에서도 같은 probe의 empty가 재현된다.
 - baseline 반복 결과 위치: `/private/tmp/minto2-whisper-empty-probe-baseline-repeat-20260608`.
 - baseline 3회 반복: direct는 label별 empty 3/3, 2/3, 3/3이고, service는 3/3, 3/3, 1/3이다. 따라서 다음 실험은 최소 3회 반복 또는 전체 sample metric으로 판단해야 한다.
+- service path probe matrix는 앱 내부 skip 사유도 함께 기록한다. `service_skip_count`, `service_skip_reasons`, `service_skip_details`로 raw WhisperKit empty와 `energy_gate`, `avg_logprob`, `compression_ratio`, `low_energy_short_phantom` 필터를 구분한다.
+- 검증 결과 위치: `/private/tmp/minto2-whisper-empty-probe-service-skip-reasons-20260608`.
+- 결과: service baseline probe 3개 모두 empty였고, 3개 모두 `service_skip_count=0`이었다. RMS도 -24.6dB, -25.5dB, -26.7dB라 energy gate 대상이 아니다.
+- 해석: 이 3개 probe의 empty는 앱 내부 skip 필터가 만든 빈 출력이 아니라 WhisperKit service path가 최종 텍스트를 내지 않은 경우다. 따라서 다음 실험은 skip threshold 완화가 아니라 direct/service compute path, decode option, chunk boundary 재분할을 우선한다.
 
 Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
 
