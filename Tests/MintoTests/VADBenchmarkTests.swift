@@ -7,6 +7,19 @@ import Testing
 struct VADBenchmarkTests {
     private static let sampleRate = 16_000
 
+    private enum Candidate: String {
+        case energy
+        case silero
+    }
+
+    private static var candidate: Candidate {
+        guard let rawValue = ProcessInfo.processInfo.environment["VAD_ENGINE"]?.lowercased(),
+              !rawValue.isEmpty else {
+            return .energy
+        }
+        return Candidate(rawValue: rawValue) ?? .energy
+    }
+
     private static var rawDir: URL {
         if let value = ProcessInfo.processInfo.environment["MEETING_RAW_DIR"], !value.isEmpty {
             return URL(fileURLWithPath: value)
@@ -38,13 +51,24 @@ struct VADBenchmarkTests {
         positiveDoubleEnv("VAD_SHORT_UTTERANCE_SEC", default: 1.0)
     }
 
-    @Test("sample/meeting Energy VAD baseline metrics")
-    func energyVADBaselineMetrics() async throws {
+    @Test("sample/meeting VAD baseline metrics")
+    func vadBaselineMetrics() async throws {
         guard ProcessInfo.processInfo.environment["RUN_VAD_BENCH"] == "1" else { return }
 
         guard FileManager.default.fileExists(atPath: Self.audioURL.path),
               FileManager.default.fileExists(atPath: Self.smiURL.path) else {
             print("[VADBench] 자료 없음 - skip (\(Self.audioURL.path), \(Self.smiURL.path))")
+            return
+        }
+
+        let candidate = Self.candidate
+        guard candidate == .energy else {
+            let metrics = Self.unavailableMetrics(
+                candidate: candidate,
+                reason: "FluidAudio Silero VAD is not linked yet. Add the FluidAudio package before running VAD_ENGINE=silero."
+            )
+            try Self.writeMetricsIfNeeded(metrics)
+            print("[VADBench] \(candidate.rawValue) unavailable: \(metrics.error ?? "")")
             return
         }
 
@@ -97,7 +121,9 @@ struct VADBenchmarkTests {
         }.count
 
         let metrics = VADBenchmarkMetric(
-            vad: "energy",
+            vad: candidate.rawValue,
+            available: true,
+            error: nil,
             sample: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
             seconds: totalSeconds,
             frameSeconds: Self.frameSeconds,
@@ -121,7 +147,7 @@ struct VADBenchmarkTests {
 
         print("""
 
-        === VAD Benchmark [energy] ===
+        === VAD Benchmark [\(candidate.rawValue)] ===
         audio                  : \(Self.audioURL.lastPathComponent)
         seconds                : \(String(format: "%.1f", totalSeconds))
         chunks / previews      : \(finalChunks.count) / \(previewChunks.count)
@@ -135,6 +161,32 @@ struct VADBenchmarkTests {
 
         #expect(referenceSpeechSeconds > 0, "VAD benchmark reference speech should not be empty")
         #expect(!finalChunks.isEmpty, "Energy VAD should produce baseline chunks for sample speech")
+    }
+
+    private static func unavailableMetrics(candidate: Candidate, reason: String) -> VADBenchmarkMetric {
+        VADBenchmarkMetric(
+            vad: candidate.rawValue,
+            available: false,
+            error: reason,
+            sample: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
+            seconds: 0,
+            frameSeconds: Self.frameSeconds,
+            chunkCount: 0,
+            previewCount: 0,
+            finalSpeechSeconds: 0,
+            referenceSpeechSeconds: 0,
+            coveredSpeechSeconds: 0,
+            missedSpeechSeconds: 0,
+            falsePositiveSeconds: 0,
+            speechRecall: 0,
+            falsePositiveRatio: 0,
+            shortUtteranceSeconds: Self.shortUtteranceSeconds,
+            shortReferenceCount: 0,
+            shortCoveredCount: 0,
+            shortRecall: 0,
+            chunks: [],
+            previews: []
+        )
     }
 
     nonisolated private static func metric(for chunk: AudioChunk, index: Int) -> VADChunkMetric {
@@ -305,6 +357,8 @@ struct VADBenchmarkTests {
 
 private struct VADBenchmarkMetric: Codable {
     let vad: String
+    let available: Bool
+    let error: String?
     let sample: String
     let seconds: Double
     let frameSeconds: Double
@@ -326,6 +380,8 @@ private struct VADBenchmarkMetric: Codable {
 
     enum CodingKeys: String, CodingKey {
         case vad
+        case available
+        case error
         case sample
         case seconds
         case frameSeconds = "frame_seconds"
