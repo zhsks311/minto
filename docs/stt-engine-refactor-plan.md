@@ -1,0 +1,44 @@
+# STT Engine Refactor Plan
+
+## Goal
+
+- Keep the current `STTService` public API stable.
+- Move WhisperKit, SpeechAnalyzer, and SFSpeech implementation details behind engine implementations.
+- Preserve the current WhisperKit default path before adding new engines such as Nemotron, sherpa, FluidAudio, or true streaming engines.
+
+## Scope
+
+- `STTService` remains the facade used by `TranscriptionViewModel` and tests.
+- New engine implementations handle their own load and transcribe behavior.
+- `STT_ENGINE` benchmark work remains compatible with the refactor.
+- No default engine change in this step.
+
+## Steps
+
+1. Add `SpeechTranscriptionEngine`.
+   - Verify: existing call sites still compile through `STTService`.
+
+2. Extract shared audio helpers.
+   - Verify: WhisperKit, SpeechAnalyzer, and SFSpeech produce the same `TranscriptionResult` shape.
+
+3. Extract engine implementations.
+   - `WhisperKitSTTEngine`
+   - `SpeechAnalyzerSTTEngine`
+   - `SFSpeechOnDeviceSTTEngine`
+   - Verify: `STTService.transcribe` delegates to the loaded engine.
+
+4. Keep `STTService` as facade.
+   - Preserve `loadEngine`, `loadModel`, `recoverModelCacheAndReload`, `modelState`, `modelVariant`, `speechEngineID`, and `supportsPreviewTranscription`.
+   - Verify: existing app/view model code is unchanged.
+
+5. Validate.
+   - Run `swift test --disable-sandbox`.
+   - Run a 1-window `whisper_accurate` smoke with `WHISPER_MODEL_FOLDER`.
+   - Compare the smoke path against the previously recorded baseline command.
+
+## Non-goals
+
+- Do not add Nemotron or sherpa runtime integration in this step.
+- Do not change VAD behavior.
+- Do not change the default engine.
+- Do not introduce true streaming abstractions until batch engine separation is stable.
