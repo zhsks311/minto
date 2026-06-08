@@ -28,6 +28,23 @@ def parse_args():
         default=50_000_000,
         help="Maximum edit-distance DP cells for computed global CER.",
     )
+    parser.add_argument(
+        "--write-segments",
+        action="store_true",
+        help="Write segments.md and segments.csv with empty or high-CER segments.",
+    )
+    parser.add_argument(
+        "--segment-limit",
+        type=int,
+        default=40,
+        help="Maximum segment diagnostics to print/write.",
+    )
+    parser.add_argument(
+        "--segment-min-cer",
+        type=float,
+        default=0.8,
+        help="Include non-empty segments at or above this CER.",
+    )
     return parser.parse_args()
 
 
@@ -170,6 +187,55 @@ def summarize_by_engine(metrics):
     return rows
 
 
+def segment_diagnostics(metrics, min_cer, limit):
+    rows = []
+    for metric in metrics:
+        for segment in metric.get("segments", []):
+            cer = segment.get("cer")
+            empty = bool(segment.get("empty"))
+            if cer is None:
+                continue
+            if not empty and float(cer) < min_cer:
+                continue
+
+            rows.append({
+                "engine_id": metric.get("engine_id", ""),
+                "sample_id": metric.get("sample_id", ""),
+                "index": int(segment.get("index") or 0),
+                "start_seconds": float(segment.get("start_seconds") or 0),
+                "end_seconds": float(segment.get("end_seconds") or 0),
+                "duration_seconds": float(segment.get("duration_seconds") or 0),
+                "cer": float(cer),
+                "empty": empty,
+                "reference_length": int(segment.get("reference_length") or 0),
+                "hypothesis_length": int(segment.get("hypothesis_length") or 0),
+                "distance": int(segment.get("distance") or 0),
+                "reference": segment.get("reference") or "",
+                "hypothesis": segment.get("hypothesis") or "",
+                "metrics_file": metric.get("_path", ""),
+            })
+
+    rows.sort(key=lambda row: (
+        not row["empty"],
+        -row["cer"],
+        -row["reference_length"],
+        row["sample_id"],
+        row["index"],
+    ))
+    return rows[:max(0, limit)]
+
+
+def compact_text(value, limit=90):
+    text = " ".join(str(value).split())
+    if len(text) <= limit:
+        return text
+    return text[:limit - 1] + "..."
+
+
+def escape_markdown_cell(value):
+    return compact_text(value).replace("|", "\\|")
+
+
 def markdown_table(rows):
     lines = [
         "| Engine | Samples | Weighted CER | Macro CER | Global CER | RTF | Peak MB | Empty | FP chars |",
@@ -187,6 +253,29 @@ def markdown_table(rows):
                 peak=fmt_float(row["peak_memory_mb"]),
                 empty=row["empty_final_count"],
                 fp=row["false_positive_chars"],
+            )
+        )
+    return "\n".join(lines)
+
+
+def segment_markdown_table(rows):
+    lines = [
+        "| Engine | Sample | # | Time | CER | Empty | Ref len | Hyp len | Reference | Hypothesis |",
+        "| --- | --- | ---: | --- | ---: | --- | ---: | ---: | --- | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {engine} | {sample} | {index} | {time} | {cer} | {empty} | {ref_len} | {hyp_len} | {reference} | {hypothesis} |".format(
+                engine=row["engine_id"],
+                sample=row["sample_id"],
+                index=row["index"],
+                time=f"{row['start_seconds']:.1f}-{row['end_seconds']:.1f}s",
+                cer=fmt_percent(row["cer"]),
+                empty="yes" if row["empty"] else "no",
+                ref_len=row["reference_length"],
+                hyp_len=row["hypothesis_length"],
+                reference=escape_markdown_cell(row["reference"]),
+                hypothesis=escape_markdown_cell(row["hypothesis"]),
             )
         )
     return "\n".join(lines)
@@ -212,6 +301,29 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
+def write_segment_csv(path, rows):
+    fieldnames = [
+        "engine_id",
+        "sample_id",
+        "index",
+        "start_seconds",
+        "end_seconds",
+        "duration_seconds",
+        "cer",
+        "empty",
+        "reference_length",
+        "hypothesis_length",
+        "distance",
+        "reference",
+        "hypothesis",
+        "metrics_file",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main():
     args = parse_args()
     root = args.benchmark_root.expanduser().resolve()
@@ -223,6 +335,12 @@ def main():
     )
     rows = summarize_by_engine(metrics)
     table = markdown_table(rows)
+    segment_rows = segment_diagnostics(
+        metrics,
+        min_cer=args.segment_min_cer,
+        limit=args.segment_limit,
+    )
+    segment_table = segment_markdown_table(segment_rows)
     computed_global_count = sum(
         1
         for metric in metrics
@@ -239,12 +357,21 @@ def main():
     if args.compute_missing_global_cer:
         print(f"computed missing global CER: {computed_global_count}")
         print(f"skipped missing global CER: {skipped_global_count}")
+    if args.write_segments:
+        print(f"segment diagnostics: {len(segment_rows)}")
+        print()
+        print(segment_table)
 
     if args.write:
         (root / "summary.md").write_text(table + "\n", encoding="utf-8")
         write_csv(root / "summary.csv", rows)
         print(f"wrote: {root / 'summary.md'}")
         print(f"wrote: {root / 'summary.csv'}")
+    if args.write_segments:
+        (root / "segments.md").write_text(segment_table + "\n", encoding="utf-8")
+        write_segment_csv(root / "segments.csv", segment_rows)
+        print(f"wrote: {root / 'segments.md'}")
+        print(f"wrote: {root / 'segments.csv'}")
 
     return 0 if metrics else 1
 

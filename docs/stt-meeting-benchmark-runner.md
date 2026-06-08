@@ -64,6 +64,13 @@ Use `--skip-swift-global-cer never` only for short runs or when the global text 
 scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> --write
 ```
 
+This writes:
+
+```text
+summary.md
+summary.csv
+```
+
 If a full-duration run skipped Swift global CER, compute it from saved `*_ref.txt` / `*_hyp.txt` files when the text is small enough:
 
 ```bash
@@ -72,11 +79,19 @@ scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> \
   --write
 ```
 
+To inspect empty final and high-CER windows:
+
+```bash
+scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> \
+  --write-segments \
+  --segment-min-cer 0.8
+```
+
 This writes:
 
 ```text
-summary.md
-summary.csv
+segments.md
+segments.csv
 ```
 
 The summary groups metric files by `engine_id` and reports weighted CER, sample macro CER, RTF, peak memory, empty finals, and false-positive transcript characters.
