@@ -155,7 +155,137 @@ RAM 안내 기준 초안:
 - 회의 주제와 무관한 용어는 제외한다.
 - 용어집은 지시가 아니라 참고 자료로 취급한다.
 
-## 5. 구현 단계
+## 5. 아키텍처 거버넌스
+
+이 확장은 provider, 저장소, 검색, 내보내기, 입력 소스가 모두 얽힌다. 유지보수가 쉬운 구조를 위해 기능 구현보다 아키텍처 경계와 리뷰 절차를 먼저 고정한다.
+
+### 5.1 변경 결정 기준
+
+아키텍처 변경은 다음 기준을 모두 설명할 수 있을 때만 허용한다.
+
+- 사용자 가치: 현재 구조로는 달성하기 어려운 기능 또는 위험 감소가 있는가
+- 유지보수성: 인지 부하를 줄이고 소유 경계를 더 명확히 하는가
+- 테스트 가능성: IO 없이 domain logic을 테스트할 수 있게 되는가
+- 되돌리기 쉬움: 데이터 마이그레이션 없이 롤백 가능한가
+- 기존 패턴과 일관성: 현재 SwiftUI/서비스/스토어 구조와 충돌하지 않는가
+- 개인정보/보안: prompt, transcript, token, export 데이터 흐름이 명확한가
+- 운영 영향: timeout, retry, idempotency, 로그, 비용 추적이 설계되어 있는가
+
+하나라도 약하면 기본값은 "현재 경계를 보존한 최소 변경"이다.
+
+### 5.2 보존할 경계
+
+기본 dependency direction은 다음을 따른다.
+
+> Domain/Core <- Application/Use-case <- Infrastructure/Adapter <- UI
+
+- Domain/Core
+  - 전사 정규화, 용어 매칭, 검색 scoring, export 변환 규칙처럼 순수한 비즈니스 규칙
+  - HTTP client, Keychain, UserDefaults, LLM SDK, 파일 IO에 직접 의존하지 않는다.
+- Application/Use-case
+  - 교정, 요약, 검색, 내보내기 workflow를 조합한다.
+  - retry, timeout, idempotency, job 상태 전이를 소유한다.
+- Infrastructure/Adapter
+  - OpenAI/Gemini/Claude/OpenRouter, Confluence, Keychain, 파일 변환, embedding backend 같은 구체 구현
+  - domain rule을 넣지 않고 interface 뒤에서 교체 가능하게 둔다.
+- UI
+  - 상태를 보여주고 명령을 전달한다.
+  - provider request 조립, prompt 생성, 저장 schema 변환을 직접 하지 않는다.
+
+### 5.3 ADR 필요 조건
+
+다음 중 하나라도 해당하면 `docs/adr/`에 ADR을 먼저 작성한다.
+
+- 새 외부 dependency 또는 저장소를 도입한다.
+- provider adapter, pipeline, job runner처럼 여러 기능이 공유할 core abstraction을 만든다.
+- sync에서 async/batch/worker 구조로 실행 모델을 바꾼다.
+- 저장 schema, embedding index, export contract를 비호환 방식으로 변경한다.
+- domain 책임을 infrastructure나 UI로 옮기거나 반대로 옮긴다.
+- 개인정보가 외부 provider로 나가는 범위가 달라진다.
+
+ADR에는 다음을 포함한다.
+
+- Context: 문제와 제약
+- Decision: 선택한 방식
+- Alternatives: 실제로 고려한 대안과 기각 이유
+- Consequences: 장점, 단점, 비용, 운영 영향
+- Migration/Rollback: 기존 데이터/설정 호환과 되돌리기 방법
+- Verification: 테스트, 수동 QA, benchmark, observability
+
+### 5.4 리팩터링 기준
+
+리팩터링을 해도 되는 경우:
+
+- 같은 취약 영역을 두 번 이상 반복 수정해야 한다.
+- 현재 구조 때문에 unit test가 어렵다.
+- retry/idempotency/error handling이 여러 곳에 흩어진다.
+- provider, export, search가 서로 직접 의존하기 시작한다.
+- 성능 문제가 구조적 원인으로 반복된다.
+
+리팩터링을 하지 않는 경우:
+
+- 미적 취향이나 막연한 future-proofing이 주된 이유다.
+- 현재 milestone과 직접 관련 없는 framework/library를 들여온다.
+- 여러 layer를 한 번에 바꾸지만 측정 가능한 이득이 없다.
+- 기능 구현과 무관한 파일 이동/이름 변경이 커진다.
+
+### 5.5 다중 관점 리뷰 게이트
+
+아키텍처 경계를 넘거나 ADR 조건에 해당하는 변경은 다음 관점 리뷰를 통과해야 한다.
+
+- PM/Product 리뷰
+  - 사용자가 실제로 얻는 가치와 scope creep 여부를 본다.
+- Architecture 리뷰
+  - 경계, dependency direction, interface 안정성, migration 가능성을 본다.
+- UI/UX 리뷰
+  - 단순함, progressive disclosure, 설정 피로도, Pencil 필요 여부를 본다.
+- Security/Privacy 리뷰
+  - transcript, prompt, token, export 데이터가 어디로 나가는지 본다.
+- QA/Code Review
+  - 테스트 증거, edge case, 실패 처리, 회귀 위험을 본다.
+- Docs 리뷰
+  - docs/work, docs/benchmark, ADR, AGENTS/CLAUDE 업데이트 여부를 본다.
+
+리뷰 중 하나라도 blocking 이슈를 내면, 해당 PR은 merge하지 않는다. 예외는 ADR에 남기고 사용자가 승인해야 한다.
+
+### 5.6 UI 아키텍처 기준
+
+Pencil 작업이 필요한 경우:
+
+- 3단계 이상 multi-step flow가 생긴다.
+- 설정 화면에 4개 이상의 상태가 추가된다.
+- 검색, 답변, 용어집처럼 사용자의 mental model이 바뀐다.
+- 내보내기, 파일 입력, 시스템 오디오처럼 실패/권한/진행 상태가 많은 화면이다.
+
+설정 비대화 원칙:
+
+- 핵심 설정만 기본으로 노출한다.
+- 고급 모델 파라미터는 접는다.
+- export 관련 설정은 전역 설정이 아니라 export sheet 안에 둔다.
+- input source 관련 설정은 녹음/파일 입력 흐름 근처에 둔다.
+
+### 5.7 코드리뷰 단계
+
+각 구현 PR 또는 커밋 묶음은 다음 순서로 닫는다.
+
+1. 작성자가 self-review를 먼저 한다.
+2. 자동 검증을 통과한다.
+3. 변경 scope에 맞는 agent/code-owner 리뷰를 받는다.
+4. 리뷰 지적을 반영하거나, 반영하지 않는 이유를 계획/ADR/작업 로그에 남긴다.
+5. 최종 QA 증거를 남긴다.
+
+코드리뷰 체크리스트:
+
+- 변경이 계획의 어느 Phase와 연결되는지 명확하다.
+- 새 abstraction은 두 개 이상의 실제 사용처 또는 명확한 near-term 사용처가 있다.
+- domain logic은 IO 없이 테스트 가능하다.
+- provider/network 오류는 timeout, rate limit, auth, malformed response로 구분된다.
+- token, prompt, transcript 원문이 로그에 남지 않는다.
+- 저장 schema 변경은 backward-compatible 하거나 migration/rollback이 있다.
+- UI 변경은 empty/loading/error/success/disabled 상태를 가진다.
+- 관련 문서와 benchmark 위치가 업데이트되어 있다.
+
+## 6. 구현 단계
 
 ### Phase 0. 기반 문서와 디자인 원칙
 
@@ -402,7 +532,7 @@ RAM 안내 기준 초안:
 - 녹음 시작/종료와 기존 VAD pipeline 호환
 - 마이크만 선택한 기존 흐름 회귀 없음
 
-## 6. UI/Pencil 작업 계획
+## 7. UI/Pencil 작업 계획
 
 Pencil 산출물 위치:
 
@@ -428,7 +558,7 @@ Pencil 산출물 위치:
 - 클라우드 전송 여부가 명확한가
 - 연결 실패 시 다음 행동이 보이는가
 
-## 7. 병렬 작업 운영
+## 8. 병렬 작업 운영
 
 작업은 한 브랜치에서 무작정 병렬 편집하지 않는다. 다음 lane으로 분리한다.
 
@@ -438,6 +568,7 @@ Pencil 산출물 위치:
 - Lane D: Confluence export
 - Lane E: File/System audio input
 - Lane F: Docs/AGENTS/CLAUDE
+- Lane G: Review/QA/ADR
 
 병렬 규칙:
 
@@ -445,8 +576,9 @@ Pencil 산출물 위치:
 - `SettingsView`, `MeetingLibraryView`, `AppDelegate`는 통합 충돌 가능성이 크므로 integration pass에서 한 번에 합친다.
 - 각 lane은 자기 테스트를 먼저 통과한 뒤 integration branch에 병합한다.
 - 큰 provider/API 변경은 fixture parser 테스트를 먼저 만든다.
+- 아키텍처 경계를 넘는 lane은 구현 전에 ADR 초안을 작성하고, merge 전에 다중 관점 리뷰를 통과한다.
 
-## 8. 검증 게이트
+## 9. 검증 게이트
 
 필수:
 
@@ -463,13 +595,14 @@ Pencil 산출물 위치:
 - File import: fixture 파일 전사 job 테스트
 - System audio: 권한/availability unit 테스트 + 수동 QA
 - UI: 앱 실행 후 설정, 회의 목록, 내보내기, 파일 입력 화면 수동 QA
+- Code review: self-review, agent/code-owner review, QA evidence, ADR 필요 여부 확인
 
 벤치마크:
 
 - 로컬 LLM 후보별 교정 품질, 요약 구조화 성공률, latency, RAM 사용량을 `docs/benchmark/`에 기록
 - benchmark 없는 모델을 기본값으로 올리지 않는다.
 
-## 9. 리스크와 대응
+## 10. 리스크와 대응
 
 - 리스크: provider API 모델명이 자주 바뀜
   - 대응: 자동 목록 + 캐시 + 수동 입력 fallback + 공식 문서 링크
@@ -483,8 +616,10 @@ Pencil 산출물 위치:
   - 대응: availability 검사와 비활성화 상태 표시, 마이크 경로 회귀 테스트
 - 리스크: Confluence publish가 잘못된 위치에 생성됨
   - 대응: dry-run preview, 최근 위치, 명시적 parent page 선택
+- 리스크: 기능 확장 중 무리한 리팩터링으로 기존 녹음/전사 흐름이 흔들림
+  - 대응: ADR 조건, hard boundary, self-review, code-owner review, 회귀 테스트를 merge gate로 둔다.
 
-## 10. 1차 실행 범위 제안
+## 11. 1차 실행 범위 제안
 
 처음 구현은 다음까지로 끊는다.
 
@@ -496,10 +631,11 @@ Pencil 산출물 위치:
 6. 전역 용어집 관리 skeleton과 회의별 용어집 선택 흐름
 7. Confluence token guide UI 개선
 8. Keychain 개발 편의 설계와 SecretStore skeleton
+9. 아키텍처 ADR/코드리뷰/QA 게이트 문서화
 
 임베딩, Confluence publish, 파일 입력, 시스템 사운드는 기반이 안정된 다음 별도 커밋으로 진행한다.
 
-## 11. PM 리뷰 반영
+## 12. 전문가 리뷰 반영
 
 아키텍처 리뷰 결론:
 
@@ -507,6 +643,8 @@ Pencil 산출물 위치:
 - provider adapter와 job/pipeline 경계를 먼저 고정
 - 임베딩/Q&A/Confluence publish/system audio는 기반 안정 후 진행
 - 교정 output과 요약 output은 내부 구조를 안정화해야 search/export가 흔들리지 않음
+- architecture boundary를 넘는 변경은 ADR과 다중 관점 리뷰를 통과해야 함
+- aesthetic refactor나 speculative abstraction은 금지하고, 반복 수정/테스트 불가/운영 위험이 있을 때만 리팩터링
 
 UIUX 리뷰 반영:
 
@@ -515,8 +653,16 @@ UIUX 리뷰 반영:
 - 검색 답변은 일반 검색과 구분하고 source chip을 둔다.
 - 내보내기는 sheet에서 명확한 선택지로 보여준다.
 - "Auto-select best" 또는 "추천" 기본값을 제공한다.
+- 3단계 이상 flow, 상태 4개 이상, mental model 변화가 있는 UI는 Pencil mockup을 먼저 만든다.
+- 설정은 80/20 원칙과 progressive disclosure로 비대화를 막는다.
 
-## 12. 완료 정의
+문서/프로세스 리뷰 반영:
+
+- ADR, docs/work, docs/benchmark, QA evidence를 PR 완료 조건에 포함한다.
+- 구현 PR은 conventional commit 단위로 작게 유지한다.
+- 인터페이스 변경 시 서비스 정의서와 AGENTS/CLAUDE 컨벤션을 함께 업데이트한다.
+
+## 13. 완료 정의
 
 전체 작업 완료 조건:
 
@@ -529,4 +675,6 @@ UIUX 리뷰 반영:
 - 시스템 사운드 입력 가능 여부가 기기/권한 기준으로 정확히 표시된다.
 - 개발 중 Keychain prompt를 줄이는 opt-in 경로가 있다.
 - 기능 정의서와 작업 컨벤션이 docs/AGENTS/CLAUDE에 반영되어 있다.
+- 아키텍처 변경은 ADR과 다중 관점 리뷰를 거쳐 결정된다.
+- 각 구현 단위는 코드리뷰와 QA evidence를 통과한다.
 - 모든 변경은 테스트와 수동 QA 증거를 남긴다.
