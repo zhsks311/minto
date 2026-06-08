@@ -42,10 +42,11 @@ def fmt_float(value):
 def summarize_by_vad(metrics):
     groups = defaultdict(list)
     for metric in metrics:
-        groups[metric["vad"]].append(metric)
+        groups[group_key(metric)].append(metric)
 
     rows = []
-    for vad, items in sorted(groups.items()):
+    for key, items in sorted(groups.items()):
+        vad, merge_gap_seconds, merge_max_seconds = key
         total_seconds = sum(float(item.get("seconds") or 0) for item in items)
         total_reference = sum(float(item.get("reference_speech_seconds") or 0) for item in items)
         total_covered = sum(float(item.get("covered_speech_seconds") or 0) for item in items)
@@ -67,6 +68,8 @@ def summarize_by_vad(metrics):
         ]
         rows.append({
             "vad": vad,
+            "merge_gap_seconds": merge_gap_seconds,
+            "merge_max_seconds": merge_max_seconds,
             "sample_count": len(items),
             "available_count": sum(1 for item in items if item.get("available") is True),
             "error_count": sum(1 for item in items if item.get("available") is False),
@@ -94,15 +97,26 @@ def summarize_by_vad(metrics):
     return rows
 
 
+def group_key(metric):
+    config = metric.get("config") or {}
+    return (
+        metric["vad"],
+        config.get("chunk_merge_gap_seconds"),
+        config.get("chunk_merge_max_seconds"),
+    )
+
+
 def markdown_table(rows):
     lines = [
-        "| VAD | Samples | Available | Chunks | Raw chunks | Chunks/min | Speech recall | Short recall | Missed sec | FP sec | FP ratio |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| VAD | Merge gap | Merge max | Samples | Available | Chunks | Raw chunks | Chunks/min | Speech recall | Short recall | Missed sec | FP sec | FP ratio |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         lines.append(
-            "| {vad} | {samples} | {available} | {chunks} | {raw_chunks} | {chunks_per_minute} | {speech_recall} | {short_recall} | {missed} | {fp_sec} | {fp_ratio} |".format(
+            "| {vad} | {merge_gap} | {merge_max} | {samples} | {available} | {chunks} | {raw_chunks} | {chunks_per_minute} | {speech_recall} | {short_recall} | {missed} | {fp_sec} | {fp_ratio} |".format(
                 vad=row["vad"],
+                merge_gap=fmt_float(row["merge_gap_seconds"]),
+                merge_max=fmt_float(row["merge_max_seconds"]),
                 samples=row["sample_count"],
                 available=row["available_count"],
                 chunks=row["chunk_count"],
@@ -121,6 +135,8 @@ def markdown_table(rows):
 def write_csv(path, rows):
     fieldnames = [
         "vad",
+        "merge_gap_seconds",
+        "merge_max_seconds",
         "sample_count",
         "available_count",
         "error_count",
