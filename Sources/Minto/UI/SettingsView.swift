@@ -19,6 +19,7 @@ public struct SettingsView: View {
     @ObservedObject private var summarySettings = LLMSummarySettingsService.shared
     @ObservedObject private var copilot = CopilotOAuthService.shared
     @ObservedObject private var codex = CodexOAuthService.shared
+    @ObservedObject private var glossaryStore = GlossaryStore.shared
 
     // Gemini는 ObservableObject가 아니므로 @State로 상태 관리
     @State private var geminiLoggedIn = GeminiOAuthService.shared.isLoggedIn
@@ -28,6 +29,11 @@ public struct SettingsView: View {
     @State private var apiKeyInput = ""
     @State private var apiModelCatalogs: [LLMProviderID: LLMModelCatalog] = [:]
     @State private var loadingAPIModelProviderIDs: Set<LLMProviderID> = []
+    @State private var glossaryCanonicalInput = ""
+    @State private var glossaryAliasesInput = ""
+    @State private var glossaryDescriptionInput = ""
+    @State private var glossaryTagsInput = ""
+    @State private var showGlossaryAddForm = false
 
     // 외부 연동(Notion MCP OAuth·Confluence token).
     @ObservedObject private var notionMCP = NotionMCPService.shared
@@ -53,6 +59,7 @@ public struct SettingsView: View {
             if aiProcessingEnabled {
                 aiConnectionSection
             }
+            glossarySection
             searchReadinessSection
             sourceConnectionsSection
 
@@ -97,6 +104,99 @@ public struct SettingsView: View {
             apiKeyInput = ""
             loginError = nil
         }
+    }
+
+    private var glossarySection: some View {
+        Section("용어집") {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("회의 시작 때 관련 용어만 추천합니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("활성 용어 \(glossaryStore.entries.filter(\.enabled).count)개")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button(showGlossaryAddForm ? "접기" : "용어 추가") {
+                    showGlossaryAddForm.toggle()
+                }
+            }
+
+            if showGlossaryAddForm {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("정확한 표기 예: Liquibase", text: $glossaryCanonicalInput)
+                    TextField("잘못 인식되기 쉬운 표현 예: 리퀴베이스, liqui base", text: $glossaryAliasesInput)
+                    TextField("짧은 설명 예: DB 스키마 변경 관리", text: $glossaryDescriptionInput)
+                    TextField("태그 예: db, 마이그레이션", text: $glossaryTagsInput)
+                    Button("저장") {
+                        if glossaryStore.add(
+                            canonical: glossaryCanonicalInput,
+                            aliasesText: glossaryAliasesInput,
+                            description: glossaryDescriptionInput,
+                            tagsText: glossaryTagsInput
+                        ) {
+                            glossaryCanonicalInput = ""
+                            glossaryAliasesInput = ""
+                            glossaryDescriptionInput = ""
+                            glossaryTagsInput = ""
+                            showGlossaryAddForm = false
+                        }
+                    }
+                    .disabled(glossaryCanonicalInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+
+            if glossaryStore.entries.isEmpty {
+                Text("자주 쓰는 회사명, 제품명, 프로젝트명, 기술 용어를 추가해두면 회의 시작 때 선택할 수 있습니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(glossaryStore.entries) { entry in
+                    glossaryEntryRow(entry)
+                }
+            }
+        }
+    }
+
+    private func glossaryEntryRow(_ entry: GlossaryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.normalizedCanonical)
+                        .font(.callout.weight(.semibold))
+                    if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(entry.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    let aliases = entry.aliases.joined(separator: ", ")
+                    if !aliases.isEmpty {
+                        Text("오인식 표현: \(aliases)")
+                            .font(.caption2)
+                        .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    glossaryStore.delete(entry.id)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("삭제")
+            }
+
+            Toggle("회의 시작 때 추천에 포함", isOn: Binding(
+                get: { entry.enabled },
+                set: { glossaryStore.setEnabled(entry.id, enabled: $0) }
+            ))
+            .font(.caption)
+            .toggleStyle(.checkbox)
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: - AI Section Rows
