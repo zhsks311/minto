@@ -190,6 +190,16 @@ def fmt_float(value):
     return f"{value:.3f}"
 
 
+def fmt_config(value):
+    if value is None or value == "":
+        return "n/a"
+    try:
+        text = f"{float(value):.3f}"
+        return text.rstrip("0").rstrip(".")
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def summarize_by_engine(metrics):
     groups = defaultdict(list)
     for metric in metrics:
@@ -501,10 +511,10 @@ def vad_markdown_table(rows):
             "| {engine} | {vad} | {energy_offset} | {silero_threshold} | {merge_gap} | {merge_max} | {samples} | {weighted} | {macro} | {global_cer} |{full_value} {rtf} | {peak} | {empty} | {fp} |".format(
                 engine=row["engine_id"],
                 vad=row["vad"] or "n/a",
-                energy_offset=row["energy_noise_offset_db"] or "n/a",
-                silero_threshold=row["silero_threshold"] or "n/a",
-                merge_gap=row["chunk_merge_gap_seconds"] or "n/a",
-                merge_max=row["chunk_merge_max_seconds"] or "n/a",
+                energy_offset=fmt_config(row["energy_noise_offset_db"]),
+                silero_threshold=fmt_config(row["silero_threshold"]),
+                merge_gap=fmt_config(row["chunk_merge_gap_seconds"]),
+                merge_max=fmt_config(row["chunk_merge_max_seconds"]),
                 samples=row["sample_count"],
                 weighted=fmt_percent(row["weighted_micro_cer"]),
                 macro=fmt_percent(row["sample_macro_cer"]),

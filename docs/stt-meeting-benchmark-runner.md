@@ -195,3 +195,17 @@ When the metric files include VAD metadata, the summary groups by VAD config ins
 For VAD chunk STT comparisons, use `Full Global CER` as the primary VAD decision metric.
 The regular `Global CER` is computed only from references inside emitted VAD chunks, so missed speech outside those chunks is not counted as deletion.
 `Full Global CER` compares the whole benchmark-window reference against the concatenated VAD chunk hypotheses.
+
+To sweep Silero candidates, keep the same sample scope and change one variable at a time:
+
+```bash
+WHISPER_MODEL_FOLDER=/path/to/openai_whisper-large-v3-v20240930_turbo \
+scripts/run_meeting_vad_benchmarks.py \
+  --mode stt \
+  --engines silero \
+  --stt-engine whisper_accurate \
+  --max-seconds 120 \
+  --vad-stt-max-chunks 0 \
+  --silero-threshold 0.6 \
+  --merge-gap-sec 1.1
+```

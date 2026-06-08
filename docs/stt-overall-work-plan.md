@@ -279,6 +279,15 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - 해석: 전체 reference 기준으로 missed speech를 deletion 처리해도 Silero가 크게 이긴다. 다만 empty final은 8개에서 12개로 늘고 peak memory도 약 160MB 증가했다. Silero는 기본값 후보로 승격하되, 바로 기본값으로 바꾸기 전에 empty final 원인과 threshold/merge sweep을 추가로 본다.
 - 측정 주의: VAD별 chunk가 다르면 기존 `global_cer`는 emitted chunk reference만 비교하므로 missed speech를 벌점 처리하지 못한다. VAD 후보 결정에는 `full_reference_global_cer`를 우선한다.
 
+**현재 Silero threshold/merge sweep 결과**
+
+- 재현 조건: 같은 7개 샘플 첫 120초, Silero VAD, WhisperKit turbo, `vad-stt-max-chunks=0`.
+- `threshold=0.6`, `merge gap=1.1초`: weighted CER 36.9%, covered global CER 28.6%, Full Global CER 19.9%, RTF 0.107, peak 849.0MB, empty final 9, false-positive text 41 chars.
+- `threshold=0.6`, `merge gap=1.8초`: weighted CER 37.1%, covered global CER 28.4%, Full Global CER 20.2%, RTF 0.107, peak 854.1MB, empty final 9, false-positive text 41 chars.
+- `threshold=0.7`, `merge gap=1.1초`: weighted CER 36.7%, covered global CER 28.8%, Full Global CER 21.3%, RTF 0.097, peak 1238.8MB, empty final 10, false-positive text 41 chars.
+- 해석: 현재 최선 후보는 `threshold=0.6`, `merge gap=1.1초`다. 0.5보다 Full Global CER와 empty final이 모두 좋아졌고, 0.7은 속도는 빠르지만 Full Global CER가 밀린다. merge gap 1.8초는 1.1초 대비 실질 이득이 없다.
+- 다음 판단: Silero `threshold=0.6`, `merge gap=1.1초`를 feature-flagged adapter 후보로 구현하고, 전체 길이 또는 더 긴 window에서 반복 실행해 ANE/CoreML 비결정성에도 이 우위가 유지되는지 본다.
+
 **검증**
 
 - short utterance recall
