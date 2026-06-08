@@ -561,32 +561,34 @@ public struct MeetingLibraryView: View {
     }
 
     private func meetingPreview(_ record: MeetingRecord) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                previewHeader(record)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    previewHeader(record)
 
-                if isSearching {
-                    whyThisResult(record)
-                }
+                    if isSearching {
+                        whyThisResult(record)
+                    }
 
-                if detailTab == .summary {
-                    leadSummary(record)
-                    meetingTableOfContents(record.summary.sections)
-                    meetingNotes(record.summary.sections)
-                    meetingOutcomes(record.summary)
-                } else if detailTab == .transcript {
-                    transcriptBlock(record.transcript, emptyText: "전사 내용이 없습니다.", record: record)
-                } else {
-                    relatedDocsSection(
-                        query: relatedSearchQuery(for: record),
-                        emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있습니다."
-                    )
+                    if detailTab == .summary {
+                        leadSummary(record)
+                        meetingTableOfContents(record.summary.sections, scrollProxy: proxy)
+                        meetingNotes(record.summary.sections)
+                        meetingOutcomes(record.summary)
+                    } else if detailTab == .transcript {
+                        transcriptBlock(record.transcript, emptyText: "전사 내용이 없습니다.", record: record)
+                    } else {
+                        relatedDocsSection(
+                            query: relatedSearchQuery(for: record),
+                            emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있습니다."
+                        )
+                    }
                 }
+                .padding(28)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(28)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(LibraryPalette.background)
         }
-        .background(LibraryPalette.background)
     }
 
     private func previewHeader(_ record: MeetingRecord) -> some View {
@@ -885,7 +887,7 @@ public struct MeetingLibraryView: View {
     }
 
     @ViewBuilder
-    private func meetingTableOfContents(_ sections: [MeetingSummary.Section]) -> some View {
+    private func meetingTableOfContents(_ sections: [MeetingSummary.Section], scrollProxy: ScrollViewProxy) -> some View {
         let entries = meetingTableOfContentsEntries(sections)
         if !entries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
@@ -899,13 +901,20 @@ public struct MeetingLibraryView: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
-                        tocRow(
-                            number: entry.number,
-                            title: entry.title,
-                            time: entry.time,
-                            preview: entry.preview,
-                            pointCount: entry.pointCount
-                        )
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                scrollProxy.scrollTo(tocAnchorID(entry.sectionIndex), anchor: .top)
+                            }
+                        } label: {
+                            tocRow(
+                                number: entry.number,
+                                title: entry.title,
+                                time: entry.time,
+                                preview: entry.preview,
+                                pointCount: entry.pointCount
+                            )
+                        }
+                        .buttonStyle(.plain)
 
                         if index < entries.count - 1 {
                             Divider()
@@ -915,6 +924,7 @@ public struct MeetingLibraryView: View {
                 }
             }
             .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(LibraryPalette.elevated)
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -923,22 +933,75 @@ public struct MeetingLibraryView: View {
 
     @ViewBuilder
     private func meetingNotes(_ sections: [MeetingSummary.Section]) -> some View {
-        let notes = meetingNotesText(sections)
-        if !notes.isEmpty {
+        let noteSections = meetingNoteSections(sections)
+        if !noteSections.isEmpty {
             VStack(alignment: .leading, spacing: detailCardSpacing) {
                 sectionTitle("회의 내용 정리", systemImage: "doc.text")
-                markdownText(notes)
-                    .font(.system(size: detailBodyFontSize))
-                    .foregroundColor(.primary)
-                    .lineSpacing(detailLineSpacing)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+
+                VStack(alignment: .leading, spacing: detailCardSpacing) {
+                    ForEach(Array(noteSections.enumerated()), id: \.element.sectionIndex) { position, section in
+                        meetingNoteSection(section)
+                            .id(tocAnchorID(section.sectionIndex))
+
+                        if position < noteSections.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(LibraryPalette.elevated)
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+    }
+
+    private func meetingNoteSection(_ section: MeetingNoteSection) -> some View {
+        VStack(alignment: .leading, spacing: detailItemSpacing) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(section.number). \(section.title)")
+                    .font(.system(size: detailBodyFontSize, weight: .bold))
+                    .foregroundColor(.primary)
+                if !section.time.isEmpty {
+                    timeBadge(section.time)
+                }
+            }
+
+            ForEach(Array(section.points.enumerated()), id: \.offset) { _, point in
+                VStack(alignment: .leading, spacing: detailSubItemSpacing) {
+                    if !point.text.isEmpty {
+                        HStack(alignment: .top, spacing: 7) {
+                            Text("•")
+                                .font(.system(size: detailBodyFontSize, weight: .bold))
+                                .foregroundColor(.secondary)
+                            markdownText(point.text)
+                                .font(.system(size: detailBodyFontSize, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .lineSpacing(detailLineSpacing)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    ForEach(Array(point.subPoints.enumerated()), id: \.offset) { _, subPoint in
+                        HStack(alignment: .top, spacing: 7) {
+                            Text("-")
+                                .font(.system(size: detailBodyFontSize, weight: .medium))
+                                .foregroundColor(.secondary)
+                            markdownText(subPoint)
+                                .font(.system(size: detailBodyFontSize))
+                                .foregroundColor(detailSubTextColor)
+                                .lineSpacing(detailLineSpacing)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.leading, 18)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
     }
 
     private func tocRow(number: Int, title: String, time: String, preview: String, pointCount: Int) -> some View {
@@ -1339,7 +1402,7 @@ public struct MeetingLibraryView: View {
 
     private func meetingTableOfContentsEntries(
         _ sections: [MeetingSummary.Section]
-    ) -> [(number: Int, title: String, time: String, preview: String, pointCount: Int)] {
+    ) -> [(sectionIndex: Int, number: Int, title: String, time: String, preview: String, pointCount: Int)] {
         sections.enumerated().compactMap { index, section in
             let title = cleanedSectionTitle(section.title, fallbackIndex: index)
             let time = section.time.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1349,6 +1412,7 @@ public struct MeetingLibraryView: View {
             }.count
             guard !title.isEmpty || pointCount > 0 else { return nil }
             return (
+                sectionIndex: index,
                 number: index + 1,
                 title: title,
                 time: time,
@@ -1364,28 +1428,46 @@ public struct MeetingLibraryView: View {
             .first { !$0.isEmpty } ?? ""
     }
 
-    private func meetingNotesText(_ sections: [MeetingSummary.Section]) -> String {
+    private func meetingNoteSections(_ sections: [MeetingSummary.Section]) -> [MeetingNoteSection] {
         sections.enumerated().compactMap { index, section in
             let title = cleanedSectionTitle(section.title, fallbackIndex: index)
             let time = section.time.trimmingCharacters(in: .whitespacesAndNewlines)
-            var lines = [time.isEmpty ? "**\(title)**" : "**\(title)**  \(time)"]
 
-            for point in section.points {
+            let points = section.points.compactMap { point -> MeetingNotePoint? in
                 let pointText = point.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !pointText.isEmpty {
-                    lines.append("• \(pointText)")
-                }
-                for subPoint in point.subPoints {
-                    let subText = subPoint.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !subText.isEmpty {
-                        lines.append("  - \(subText)")
-                    }
-                }
+                let subPoints = point.subPoints
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                guard !pointText.isEmpty || !subPoints.isEmpty else { return nil }
+                return MeetingNotePoint(text: pointText, subPoints: subPoints)
             }
 
-            return lines.count > 1 ? lines.joined(separator: "\n") : nil
+            guard !title.isEmpty || !points.isEmpty else { return nil }
+            return MeetingNoteSection(
+                sectionIndex: index,
+                number: index + 1,
+                title: title,
+                time: time,
+                points: points
+            )
         }
-        .joined(separator: "\n\n")
+    }
+
+    private func tocAnchorID(_ index: Int) -> String {
+        "meeting-note-section-\(index)"
+    }
+
+    private struct MeetingNoteSection {
+        let sectionIndex: Int
+        let number: Int
+        let title: String
+        let time: String
+        let points: [MeetingNotePoint]
+    }
+
+    private struct MeetingNotePoint {
+        let text: String
+        let subPoints: [String]
     }
 
     private func cleanedSectionTitle(_ title: String, fallbackIndex: Int) -> String {

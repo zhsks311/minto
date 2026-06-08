@@ -525,8 +525,8 @@ public struct SettingsView: View {
             .disabled(isModelBusy || !selectedSpeechEngineAvailability.isSelectable)
 
             if selectedSpeechEngineID == .sfSpeechOnDevice {
-                Label("개인정보 우선 받아쓰기는 온디바이스 전용으로만 실행합니다.", systemImage: "shield.checkered")
-                    .font(.caption)
+                Label("Apple 기본 받아쓰기는 온디바이스 전용 요청으로 실행합니다.", systemImage: "shield.checkered")
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
 
@@ -552,10 +552,10 @@ public struct SettingsView: View {
     private var speechEngineGuide: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("대부분은 로컬 AI 엔진을 선택하고, 모델은 정확도 우선을 쓰면 됩니다.", systemImage: "checkmark.seal.fill")
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.primary)
-            Text("Apple 서버 없이 처리하려면 개인정보 우선 받아쓰기를 선택하세요.")
-                .font(.caption)
+            Text("Apple 기본 받아쓰기는 온디바이스 전용 요청으로 실행합니다.")
+                .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -569,16 +569,16 @@ public struct SettingsView: View {
     private var activeSpeechEngineStatus: some View {
         VStack(alignment: .leading, spacing: 6) {
             LabeledContent("현재 실행 중", value: activeSpeechEngineText)
-                .font(.caption)
+                .font(.system(size: 13))
             if isPendingSpeechEngineSelection {
                 LabeledContent("선택 예정", value: pendingSpeechEngineText)
-                    .font(.caption)
+                    .font(.system(size: 13))
                     .foregroundColor(.orange)
             }
             LabeledContent("작동 상태", value: modelStateDescription)
-                .font(.caption)
+                .font(.system(size: 13))
             Text("전환 버튼을 누른 뒤 현재 실행 중 값이 원하는 엔진으로 바뀌고 작동 상태가 로드됨이면 실제로 적용된 상태입니다.")
-                .font(.caption2)
+                .font(.system(size: 12))
                 .foregroundColor(.secondary)
         }
         .padding(8)
@@ -599,16 +599,16 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(family.title)
-                            .font(.callout.weight(.semibold))
+                            .font(.system(size: 15, weight: .semibold))
                         choiceBadge(for: family)
                     }
 
                     Text(family.bestFor)
-                        .font(.caption)
+                        .font(.system(size: 13))
                         .foregroundColor(.primary)
 
                     Text(family.caution)
-                        .font(.caption2)
+                        .font(.system(size: 12))
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 4) {
@@ -616,13 +616,13 @@ public struct SettingsView: View {
                             engineChip(chip, tint: engineTint(for: family))
                         }
                         Text(family.requirementNote)
-                            .font(.caption2)
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
                     }
 
                     if let detail = availability.detailText {
                         Text(detail)
-                            .font(.caption2)
+                            .font(.system(size: 12))
                             .foregroundColor(.orange)
                     }
                 }
@@ -633,7 +633,7 @@ public struct SettingsView: View {
                     statusBadge(for: availability)
                     if viewModel.speechEngineID.family == family {
                         Text("실행 중")
-                            .font(.caption2.weight(.semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(.accentColor)
                     }
                     if selectedSpeechEngineFamily == family {
@@ -657,15 +657,35 @@ public struct SettingsView: View {
     }
 
     private var localModelPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("로컬 AI 모델")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
-            ForEach(SpeechEngineID.localModelOptions) { model in
-                localModelRow(model)
+        HStack(alignment: .top, spacing: 10) {
+            Rectangle()
+                .fill(engineTint(for: SpeechEngineFamily.localAI).opacity(0.32))
+                .frame(width: 3)
+                .clipShape(Capsule())
+                .padding(.vertical, 8)
+
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("로컬 AI 안에서 모델 선택")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.primary)
+                    Text("위 로컬 AI 엔진을 선택했을 때 사용할 실제 전사 모델입니다.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+
+                ForEach(SpeechEngineID.localModelOptions) { model in
+                    localModelRow(model)
+                }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.leading, 38)
+        .padding(.trailing, 8)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(engineTint(for: SpeechEngineFamily.localAI).opacity(0.06))
+        )
     }
 
     private func localModelRow(_ model: SpeechEngineID) -> some View {
@@ -679,14 +699,14 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(model.title)
-                            .font(.caption.weight(.semibold))
+                            .font(.system(size: 13, weight: .semibold))
                         choiceBadge(for: model)
                     }
                     Text(model.bestFor)
-                        .font(.caption2)
+                        .font(.system(size: 12))
                         .foregroundColor(.primary)
                     Text(model.caution)
-                        .font(.caption2)
+                        .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     HStack(spacing: 4) {
                         ForEach(model.choiceChips, id: \.self) { chip in
@@ -699,7 +719,7 @@ public struct SettingsView: View {
 
                 if viewModel.speechEngineID == model {
                     Text("실행 중")
-                        .font(.caption2.weight(.semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.accentColor)
                 }
                 if selectedSpeechEngineID == model {
@@ -743,7 +763,7 @@ public struct SettingsView: View {
 
     private func choiceBadge(for family: SpeechEngineFamily) -> some View {
         Text(family.choiceBadge)
-            .font(.caption2.weight(.bold))
+            .font(.system(size: 12, weight: .bold))
             .foregroundColor(engineTint(for: family))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -755,7 +775,7 @@ public struct SettingsView: View {
 
     private func choiceBadge(for model: SpeechEngineID) -> some View {
         Text(model.choiceBadge)
-            .font(.caption2.weight(.bold))
+            .font(.system(size: 12, weight: .bold))
             .foregroundColor(engineTint(for: model))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -767,7 +787,7 @@ public struct SettingsView: View {
 
     private func engineChip(_ text: String, tint: Color) -> some View {
         Text(text)
-            .font(.caption2)
+            .font(.system(size: 12))
             .foregroundColor(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -851,7 +871,7 @@ public struct SettingsView: View {
 
     private func statusBadge(for availability: SpeechEngineAvailability) -> some View {
         Text(availability.statusText)
-            .font(.caption2.weight(.bold))
+            .font(.system(size: 12, weight: .bold))
             .foregroundColor(statusColor(for: availability))
             .padding(.horizontal, 7)
             .padding(.vertical, 4)

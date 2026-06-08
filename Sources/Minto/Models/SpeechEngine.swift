@@ -18,7 +18,7 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         case .whisperBalanced: return "균형 모드"
         case .whisperFast: return "빠른 초안"
         case .speechAnalyzer: return "Apple 최신 인식"
-        case .sfSpeechOnDevice: return "개인정보 우선 받아쓰기"
+        case .sfSpeechOnDevice: return "Apple 기본 받아쓰기"
         }
     }
 
@@ -55,7 +55,7 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return "macOS 26+ Apple 최신 엔진"
         case .sfSpeechOnDevice:
-            return "Apple 서버 없이 기기에서 처리"
+            return "Apple 받아쓰기 엔진"
         }
     }
 
@@ -85,7 +85,7 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return "최신"
         case .sfSpeechOnDevice:
-            return "개인정보"
+            return "온디바이스"
         }
     }
 
@@ -100,7 +100,7 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return "macOS 26 이상에서 Apple 최신 인식을 시험할 때"
         case .sfSpeechOnDevice:
-            return "Apple 서버 없이 기기 안에서만 처리하고 싶을 때"
+            return "Apple 기본 받아쓰기 엔진을 쓰고 싶을 때"
         }
     }
 
@@ -130,7 +130,7 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return ["Apple 엔진", "macOS 26+"]
         case .sfSpeechOnDevice:
-            return ["서버 전송 없음", "권한/언어 파일"]
+            return ["온디바이스 전용", "권한/언어 파일"]
         }
     }
 
@@ -212,7 +212,7 @@ public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return "Apple 최신 인식"
         case .sfSpeechOnDevice:
-            return "개인정보 우선 받아쓰기"
+            return "Apple 기본 받아쓰기"
         }
     }
 
@@ -223,7 +223,7 @@ public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return "최신"
         case .sfSpeechOnDevice:
-            return "개인정보"
+            return "온디바이스"
         }
     }
 
@@ -234,7 +234,7 @@ public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return "macOS 26 이상에서 Apple 최신 인식을 시험할 때"
         case .sfSpeechOnDevice:
-            return "Apple 서버 없이 기기 안에서만 처리하고 싶을 때"
+            return "Apple 기본 받아쓰기 엔진을 쓰고 싶을 때"
         }
     }
 
@@ -256,7 +256,7 @@ public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return ["Apple 엔진", "macOS 26+"]
         case .sfSpeechOnDevice:
-            return ["서버 전송 없음", "권한/언어 파일"]
+            return ["온디바이스 전용", "권한/언어 파일"]
         }
     }
 

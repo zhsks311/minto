@@ -38,7 +38,7 @@ struct SpeechEngineTests {
     @Test("엔진 선택 가이드는 사용자 판단 기준을 제공한다")
     func speechEnginesExposeChoiceGuidance() {
         #expect(SpeechEngineID.defaultEngine.choiceBadge == "추천")
-        #expect(SpeechEngineID.sfSpeechOnDevice.choiceBadge == "개인정보")
+        #expect(SpeechEngineID.sfSpeechOnDevice.choiceBadge == "온디바이스")
 
         for engine in SpeechEngineID.allCases {
             #expect(!engine.bestFor.isEmpty)
