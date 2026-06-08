@@ -126,9 +126,9 @@ public struct MeetingSetupView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 12)
-                    Text("Confluence 문맥")
+                    Text("Confluence 문맥 조회")
                         .font(.subheadline.weight(.medium))
-                    Text(confluenceDocuments.isEmpty ? "선택" : "\(confluenceDocuments.count)개")
+                    Text(confluenceBadgeText)
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
@@ -143,6 +143,17 @@ public struct MeetingSetupView: View {
 
             if showDocument {
                 VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: confluence.isConfigured ? "link.circle.fill" : "exclamationmark.circle")
+                            .font(.caption)
+                            .foregroundColor(confluence.isConfigured ? .green : .secondary)
+                        Text(confluence.isConfigured
+                             ? "설정 > 검색 소스의 Confluence 연결을 사용합니다."
+                             : "설정 > 검색 소스에서 Confluence를 연결하면 사용할 수 있습니다.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+
                     Text("회의 주제나 안건으로 Confluence를 조회해 전사 교정과 요약에 참고합니다.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -213,6 +224,11 @@ public struct MeetingSetupView: View {
         confluence.isConfigured
             && !confluenceQuery.isEmpty
             && !isSearchingConfluence
+    }
+
+    private var confluenceBadgeText: String {
+        if !confluenceDocuments.isEmpty { return "\(confluenceDocuments.count)개 선택" }
+        return confluence.isConfigured ? "연결됨" : "설정 필요"
     }
 
     private var confluenceQuery: String {

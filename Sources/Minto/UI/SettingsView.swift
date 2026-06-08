@@ -249,6 +249,17 @@ public struct SettingsView: View {
 
     private var confluenceSettingsBody: some View {
         VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: confluence.isConfigured ? "link.circle.fill" : "link.circle")
+                    .font(.caption)
+                    .foregroundColor(confluence.isConfigured ? .green : .secondary)
+                Text(confluence.isConfigured
+                     ? "회의 목록 관련 문서 검색과 회의 시작의 Confluence 문맥 조회에 함께 사용됩니다."
+                     : "연결하면 회의 목록 관련 문서 검색과 회의 시작의 Confluence 문맥 조회에서 함께 사용됩니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
             TextField("사이트 URL (https://회사.atlassian.net)", text: $confluenceBaseURL)
                 .textContentType(.URL)
             TextField("이메일", text: $confluenceEmail)
