@@ -315,7 +315,11 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - 결과 위치: `/private/tmp/minto2-vad-full-silero-060-gap11-haengan`.
 - 결과: 1/1 성공, measured chunk 681/681(raw 889), weighted CER 40.3%, macro CER 40.3%, global CER skip, RTF 0.124, peak memory 1120.4MB, empty final 55, false-positive text 149 chars, wall time 851.1초.
 - 해석: long2는 long1보다 CER와 empty final 비율이 낮다. empty final 비율은 55/681, 약 8.1%다. 다만 `segments.md` 상위 항목은 long1과 마찬가지로 reference가 있는 chunk가 완전히 빈 hypothesis로 끝난 케이스가 반복된다.
-- 다음 판단: 나머지 긴 2개 샘플은 `--sort duration`과 `--skip-swift-global-cer auto`로 개별 또는 duration 순서 실행한다. 긴 샘플에서는 우선 micro/macro CER, empty final, FP chars, RTF, peak memory를 보고, Full Global CER는 작은 범위나 segment bucket으로 보완한다.
+- 실제 full-duration long3 재현 조건: `외교통일위원회_20260520` 7555초, Silero `threshold=0.6`, `merge gap=1.1초`, WhisperKit turbo, `--skip-swift-global-cer auto`.
+- 결과 위치: `/private/tmp/minto2-vad-full-silero-060-gap11-diplomacy`.
+- 결과: 1/1 성공, measured chunk 679/679(raw 798), weighted CER 53.8%, macro CER 53.8%, global CER skip, RTF 0.112, peak memory 755.9MB, empty final 75, false-positive text 9 chars, wall time 845.3초.
+- 해석: long3는 false-positive text는 낮지만 weighted CER가 가장 높다. empty final 비율은 75/679, 약 11.0%다. 따라서 Silero 후보의 문제는 false-positive 증가 하나로 설명되지 않고, reference가 있는 speech chunk의 empty final과 non-empty high-CER chunk가 함께 작동한다.
+- 다음 판단: 나머지 긴 1개 샘플은 `--skip-swift-global-cer auto`로 개별 실행한다. 긴 샘플에서는 우선 micro/macro CER, empty final, FP chars, RTF, peak memory를 보고, Full Global CER는 작은 범위나 segment bucket으로 보완한다.
 
 **검증**
 
@@ -530,7 +534,7 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 
 ## 바로 다음 작업 순서
 
-1. 남은 긴 2개 샘플을 Silero `threshold=0.6`, `merge gap=1.1초`, `--sort duration`, `--skip-swift-global-cer auto`로 순차 실행한다.
+1. 남은 긴 1개 샘플을 Silero `threshold=0.6`, `merge gap=1.1초`, `--skip-swift-global-cer auto`로 실행한다.
 2. long-sample 결과는 micro/macro CER, empty final, false-positive text, RTF, peak memory부터 비교하고, Full Global CER는 작은 범위나 segment bucket으로 보완한다.
 3. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
 4. `segments.md`와 `segment_buckets.md`에서 low VAD overlap empty row와 high VAD overlap empty row를 분리해 원인을 나눈다.
