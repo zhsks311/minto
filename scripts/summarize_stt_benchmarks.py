@@ -190,6 +190,12 @@ def fmt_float(value):
     return f"{value:.3f}"
 
 
+def fmt_bool(value):
+    if value is None:
+        return "n/a"
+    return "yes" if value else "no"
+
+
 def fmt_config(value):
     if value is None or value == "":
         return "n/a"
@@ -311,11 +317,19 @@ def segment_diagnostics(metrics, min_cer, vad_metrics=None, vad_engine="energy")
         for segment in metric.get("segments", []):
             cer = segment.get("cer")
             empty = bool(segment.get("empty"))
+            repair_attempted = segment.get("repair_attempted")
+            repair_accepted = segment.get("repair_accepted")
             if cer is None:
                 continue
-            if not empty and float(cer) < min_cer:
+            if not empty and float(cer) < min_cer and not repair_attempted:
                 continue
 
+            repair_reference_present = segment.get("repair_reference_present")
+            if repair_reference_present is None and repair_attempted:
+                repair_reference_present = int(segment.get("reference_length") or 0) > 0
+            repair_false_positive = segment.get("repair_false_positive")
+            if repair_false_positive is None and repair_attempted:
+                repair_false_positive = bool(repair_accepted) and int(segment.get("reference_length") or 0) == 0 and int(segment.get("hypothesis_length") or 0) > 0
             rows.append({
                 "engine_id": metric.get("engine_id", ""),
                 "sample_id": metric.get("sample_id", ""),
@@ -323,11 +337,21 @@ def segment_diagnostics(metrics, min_cer, vad_metrics=None, vad_engine="energy")
                 "start_seconds": float(segment.get("start_seconds") or 0),
                 "end_seconds": float(segment.get("end_seconds") or 0),
                 "duration_seconds": float(segment.get("duration_seconds") or 0),
+                "audio_db": float_or_none(segment.get("audio_db")),
                 "cer": float(cer),
                 "empty": empty,
                 "reference_length": int(segment.get("reference_length") or 0),
                 "hypothesis_length": int(segment.get("hypothesis_length") or 0),
                 "distance": int(segment.get("distance") or 0),
+                "repair_attempted": repair_attempted,
+                "repair_accepted": repair_accepted,
+                "repair_pad_seconds": float_or_none(segment.get("repair_pad_seconds")),
+                "repair_start_seconds": float_or_none(segment.get("repair_start_seconds")),
+                "repair_end_seconds": float_or_none(segment.get("repair_end_seconds")),
+                "repair_duration_seconds": float_or_none(segment.get("repair_duration_seconds")),
+                "repair_audio_db": float_or_none(segment.get("repair_audio_db")),
+                "repair_reference_present": repair_reference_present,
+                "repair_false_positive": repair_false_positive,
                 "reference": segment.get("reference") or "",
                 "hypothesis": segment.get("hypothesis") or "",
                 "metrics_file": metric.get("_path", ""),
@@ -341,12 +365,23 @@ def segment_diagnostics(metrics, min_cer, vad_metrics=None, vad_engine="energy")
 
     rows.sort(key=lambda row: (
         not row["empty"],
+        not bool(row.get("repair_accepted")),
+        not bool(row.get("repair_attempted")),
         -row["cer"],
         -row["reference_length"],
         row["sample_id"],
         row["index"],
     ))
     return rows
+
+
+def float_or_none(value):
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def annotate_segment_buckets(rows, enabled, low_overlap, high_overlap):
@@ -465,6 +500,16 @@ def escape_markdown_cell(value):
     return compact_text(value).replace("|", "\\|")
 
 
+def repair_status(row):
+    if row.get("repair_attempted") is None:
+        return "n/a"
+    if row.get("repair_accepted"):
+        return "accepted"
+    if row.get("repair_attempted"):
+        return "rejected"
+    return "no"
+
+
 def markdown_table(rows):
     if any(row.get("vad") for row in rows):
         return vad_markdown_table(rows)
@@ -541,23 +586,29 @@ def vad_markdown_table(rows):
 
 def segment_markdown_table(rows):
     lines = [
-        "| Engine | Sample | # | Time | Dur | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | VAD overlap | Bucket | VAD gap | VAD chunks | Reference | Hypothesis |",
-        "| --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- | --- | --- |",
+        "| Engine | Sample | # | Time | Dur | dB | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | Repair | Repair dur | Repair dB | Repair ref | Repair FP | VAD overlap | Bucket | VAD gap | VAD chunks | Reference | Hypothesis |",
+        "| --- | --- | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | --- | ---: | --- | ---: | --- | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {engine} | {sample} | {index} | {time} | {duration} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {vad_overlap} | {bucket} | {vad_gap} | {vad_chunks} | {reference} | {hypothesis} |".format(
+            "| {engine} | {sample} | {index} | {time} | {duration} | {audio_db} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {repair} | {repair_duration} | {repair_db} | {repair_ref} | {repair_fp} | {vad_overlap} | {bucket} | {vad_gap} | {vad_chunks} | {reference} | {hypothesis} |".format(
                 engine=row["engine_id"],
                 sample=row["sample_id"],
                 index=row["index"],
                 time=f"{row['start_seconds']:.1f}-{row['end_seconds']:.1f}s",
                 duration=fmt_float(row["duration_seconds"]),
+                audio_db=fmt_float(row["audio_db"]),
                 cer=fmt_percent(row["cer"]),
                 empty="yes" if row["empty"] else "no",
                 ref_len=row["reference_length"],
                 ref_cps=fmt_float(row["reference_chars_per_second"]),
                 hyp_len=row["hypothesis_length"],
                 hyp_cps=fmt_float(row["hypothesis_chars_per_second"]),
+                repair=repair_status(row),
+                repair_duration=fmt_float(row["repair_duration_seconds"]),
+                repair_db=fmt_float(row["repair_audio_db"]),
+                repair_ref=fmt_bool(row["repair_reference_present"]),
+                repair_fp=fmt_bool(row["repair_false_positive"]),
                 vad_overlap=fmt_percent(row["vad_overlap_ratio"]),
                 bucket=row.get("vad_bucket") or "",
                 vad_gap=fmt_float(row["vad_nearest_gap_seconds"]),
@@ -630,6 +681,7 @@ def write_segment_csv(path, rows):
         "start_seconds",
         "end_seconds",
         "duration_seconds",
+        "audio_db",
         "cer",
         "empty",
         "reference_length",
@@ -637,6 +689,15 @@ def write_segment_csv(path, rows):
         "hypothesis_length",
         "hypothesis_chars_per_second",
         "distance",
+        "repair_attempted",
+        "repair_accepted",
+        "repair_pad_seconds",
+        "repair_start_seconds",
+        "repair_end_seconds",
+        "repair_duration_seconds",
+        "repair_audio_db",
+        "repair_reference_present",
+        "repair_false_positive",
         "vad_overlap_seconds",
         "vad_overlap_ratio",
         "vad_bucket",

@@ -185,6 +185,7 @@ struct STTBenchmarkSegmentMetric: Encodable {
     let startSeconds: Double
     let endSeconds: Double
     let durationSeconds: Double
+    let audioDB: Double?
     let reference: String
     let hypothesis: String
     let referenceLength: Int
@@ -194,12 +195,22 @@ struct STTBenchmarkSegmentMetric: Encodable {
     let elapsedSeconds: Double
     let rtf: Double
     let empty: Bool
+    let repairAttempted: Bool?
+    let repairAccepted: Bool?
+    let repairPadSeconds: Double?
+    let repairStartSeconds: Double?
+    let repairEndSeconds: Double?
+    let repairDurationSeconds: Double?
+    let repairAudioDB: Double?
+    let repairReferencePresent: Bool?
+    let repairFalsePositive: Bool?
 
     enum CodingKeys: String, CodingKey {
         case index
         case startSeconds = "start_seconds"
         case endSeconds = "end_seconds"
         case durationSeconds = "duration_seconds"
+        case audioDB = "audio_db"
         case reference
         case hypothesis
         case referenceLength = "reference_length"
@@ -209,6 +220,65 @@ struct STTBenchmarkSegmentMetric: Encodable {
         case elapsedSeconds = "elapsed_seconds"
         case rtf
         case empty
+        case repairAttempted = "repair_attempted"
+        case repairAccepted = "repair_accepted"
+        case repairPadSeconds = "repair_pad_seconds"
+        case repairStartSeconds = "repair_start_seconds"
+        case repairEndSeconds = "repair_end_seconds"
+        case repairDurationSeconds = "repair_duration_seconds"
+        case repairAudioDB = "repair_audio_db"
+        case repairReferencePresent = "repair_reference_present"
+        case repairFalsePositive = "repair_false_positive"
+    }
+
+    init(
+        index: Int,
+        startSeconds: Double,
+        endSeconds: Double,
+        durationSeconds: Double,
+        audioDB: Double? = nil,
+        reference: String,
+        hypothesis: String,
+        referenceLength: Int,
+        hypothesisLength: Int,
+        distance: Int,
+        cer: Double,
+        elapsedSeconds: Double,
+        rtf: Double,
+        empty: Bool,
+        repairAttempted: Bool? = nil,
+        repairAccepted: Bool? = nil,
+        repairPadSeconds: Double? = nil,
+        repairStartSeconds: Double? = nil,
+        repairEndSeconds: Double? = nil,
+        repairDurationSeconds: Double? = nil,
+        repairAudioDB: Double? = nil,
+        repairReferencePresent: Bool? = nil,
+        repairFalsePositive: Bool? = nil
+    ) {
+        self.index = index
+        self.startSeconds = startSeconds
+        self.endSeconds = endSeconds
+        self.durationSeconds = durationSeconds
+        self.audioDB = audioDB
+        self.reference = reference
+        self.hypothesis = hypothesis
+        self.referenceLength = referenceLength
+        self.hypothesisLength = hypothesisLength
+        self.distance = distance
+        self.cer = cer
+        self.elapsedSeconds = elapsedSeconds
+        self.rtf = rtf
+        self.empty = empty
+        self.repairAttempted = repairAttempted
+        self.repairAccepted = repairAccepted
+        self.repairPadSeconds = repairPadSeconds
+        self.repairStartSeconds = repairStartSeconds
+        self.repairEndSeconds = repairEndSeconds
+        self.repairDurationSeconds = repairDurationSeconds
+        self.repairAudioDB = repairAudioDB
+        self.repairReferencePresent = repairReferencePresent
+        self.repairFalsePositive = repairFalsePositive
     }
 }
 

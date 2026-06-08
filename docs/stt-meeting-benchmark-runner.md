@@ -107,9 +107,11 @@ segment_buckets.csv
 
 The summary groups metric files by `engine_id` and reports weighted CER, sample macro CER, RTF, peak memory, empty finals, and false-positive transcript characters.
 
-The segment diagnostics include `Dur`, `Ref cps`, `Hyp cps`, `VAD overlap`, `VAD gap`, and `VAD chunks`.
+The segment diagnostics include `Dur`, `dB`, `Ref cps`, `Hyp cps`, `VAD overlap`, `VAD gap`, and `VAD chunks`.
 Use high `Ref cps` empty rows to find windows where the subtitle/reference is dense but the engine returned no final text.
 Use low `VAD overlap` to identify segmentation misses, and high `VAD overlap` with empty output to identify decode/model failures.
+When `--vad-stt-repair-pad-sec` is enabled, segment diagnostics also include `Repair`, `Repair dur`, `Repair dB`, `Repair ref`, and `Repair FP`.
+Use these columns to separate useful empty-final repair from accepted repair chunks that only add false-positive text.
 
 To inspect fixed empty-output probes with WhisperKit diagnostics:
 
@@ -313,6 +315,13 @@ For VAD policy selection, prefer `Full Global CER` over chunk-only weighted CER 
 Decision: do not promote `empty repair 0.75`.
 It reduced empty finals slightly versus `1.00`, but had worse `Full Global CER`, higher false-positive text, and higher peak memory.
 Next inspect accepted repair chunks and test stricter guard conditions instead of shrinking the pad again.
+
+Repair telemetry smoke:
+
+- Scope: `재정경제기획위원회_20260430`, first 120s, Silero `threshold=0.6`, `merge gap=1.1`, `repair pad=1.0`.
+- Result root: `/private/tmp/minto2-vad-stt-telemetry-smoke`.
+- Result: 11 chunks, repair attempted 3, accepted 2, repair false positives 0, empty final 1.
+- `segments.md` now shows per-chunk source `dB`, repair status, repair duration, repair `dB`, whether the repair chunk had reference text, and whether the accepted repair was a false positive.
 
 Full-duration short3 repair check:
 

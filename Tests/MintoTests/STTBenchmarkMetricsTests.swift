@@ -69,6 +69,49 @@ struct STTBenchmarkMetricsTests {
         #expect(STTBenchmarkTextMetrics.normalizedLength("가 나,다.") == 3)
     }
 
+    @Test("segment metric encodes repair telemetry when present")
+    func segmentMetricEncodesRepairTelemetryWhenPresent() throws {
+        let metric = STTBenchmarkSegmentMetric(
+            index: 1,
+            startSeconds: 10,
+            endSeconds: 20,
+            durationSeconds: 10,
+            audioDB: -27.5,
+            reference: "참조",
+            hypothesis: "가설",
+            referenceLength: 2,
+            hypothesisLength: 2,
+            distance: 1,
+            cer: 0.5,
+            elapsedSeconds: 1,
+            rtf: 0.1,
+            empty: false,
+            repairAttempted: true,
+            repairAccepted: true,
+            repairPadSeconds: 1,
+            repairStartSeconds: 9,
+            repairEndSeconds: 21,
+            repairDurationSeconds: 12,
+            repairAudioDB: -26.5,
+            repairReferencePresent: true,
+            repairFalsePositive: false
+        )
+
+        let data = try JSONEncoder().encode(metric)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["audio_db"] as? Double == -27.5)
+        #expect(object["repair_attempted"] as? Bool == true)
+        #expect(object["repair_accepted"] as? Bool == true)
+        #expect(object["repair_pad_seconds"] as? Double == 1)
+        #expect(object["repair_start_seconds"] as? Double == 9)
+        #expect(object["repair_end_seconds"] as? Double == 21)
+        #expect(object["repair_duration_seconds"] as? Double == 12)
+        #expect(object["repair_audio_db"] as? Double == -26.5)
+        #expect(object["repair_reference_present"] as? Bool == true)
+        #expect(object["repair_false_positive"] as? Bool == false)
+    }
+
     @Test("peak resident memory is available on macOS benchmark runs")
     func peakResidentMemoryIsAvailable() throws {
         let memoryMB = try #require(STTBenchmarkProcessMetrics.peakResidentMemoryMB())
