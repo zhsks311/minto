@@ -63,6 +63,15 @@ struct LLMProviderTests {
         #expect(embeddingResponse.vector == [0.1, 0.2])
     }
 
+    @Test("로컬 provider는 구현된 embedding capability만 노출한다")
+    func localProviderOnlyExposesImplementedCapabilities() {
+        let descriptor = LLMProviderRegistry.shared.descriptor(for: .local)
+
+        #expect(descriptor?.supportedCapabilities == [.embedding])
+        #expect(LLMProviderRegistry.shared.textGenerationProvider(for: .local) == nil)
+        #expect(LLMProviderRegistry.shared.embeddingProvider(for: .local) != nil)
+    }
+
     @MainActor
     @Test("legacy 계정 공급자는 text generation adapter로 생성된다")
     func legacyAccountTextProviderCreation() async {
@@ -191,6 +200,28 @@ struct LLMProviderTests {
         }
     }
 
+    @Test("API key provider 요청 취소는 네트워크 오류로 바꾸지 않는다")
+    func apiKeyProviderKeepsCancellationError() async throws {
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .gpt,
+            keyProvider: StubAPIKeyProvider(keys: [.gpt: "sk-test"]),
+            transport: StubLLMAPITransport(error: CancellationError())
+        ))
+
+        var caughtCancellation = false
+        do {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .answer,
+                instructions: "규칙",
+                userContent: "질문",
+                modelID: "gpt-test"
+            ))
+        } catch is CancellationError {
+            caughtCancellation = true
+        }
+        #expect(caughtCancellation)
+    }
+
     @Test("API key 저장소는 OAuth와 다른 Keychain service namespace를 쓴다")
     func apiKeyStoreUsesDedicatedKeychainNamespace() {
         #expect(KeychainService.llmAPIService == "com.minto.app.llm-api")
@@ -214,6 +245,40 @@ struct LLMProviderTests {
         #expect(store.apiKey(for: .gpt) == "sk-test")
         #expect(store.deleteAPIKey(for: .gpt) == false)
         #expect(store.apiKey(for: .gpt) == "sk-test")
+    }
+
+    @Test("API key 저장과 삭제 성공은 변경 notification을 보낸다")
+    func apiKeyStorePostsChangeNotificationOnSuccess() {
+        let center = NotificationCenter()
+        let storage = StubAPIKeyStorageBackend(loadData: nil)
+        let store = LLMAPIKeyStore(serviceName: "test-llm-api", storage: storage, notificationCenter: center)
+        nonisolated(unsafe) var providers: [String] = []
+        let observer = center.addObserver(forName: .llmAPIKeyStoreDidChange, object: nil, queue: nil) { notification in
+            if let providerID = notification.userInfo?["providerID"] as? String {
+                providers.append(providerID)
+            }
+        }
+        defer { center.removeObserver(observer) }
+
+        #expect(store.saveAPIKey("sk-test", for: .gpt))
+        #expect(store.deleteAPIKey(for: .gpt))
+
+        #expect(providers == [LLMProviderID.gpt.rawValue, LLMProviderID.gpt.rawValue])
+    }
+
+    @Test("API key 저장 실패는 변경 notification을 보내지 않는다")
+    func apiKeyStoreDoesNotPostChangeNotificationOnFailedSave() {
+        let center = NotificationCenter()
+        let storage = StubAPIKeyStorageBackend(loadData: nil, saveResult: false)
+        let store = LLMAPIKeyStore(serviceName: "test-llm-api", storage: storage, notificationCenter: center)
+        nonisolated(unsafe) var notificationCount = 0
+        let observer = center.addObserver(forName: .llmAPIKeyStoreDidChange, object: nil, queue: nil) { _ in
+            notificationCount += 1
+        }
+        defer { center.removeObserver(observer) }
+
+        #expect(store.saveAPIKey("sk-test", for: .gpt) == false)
+        #expect(notificationCount == 0)
     }
 
     private static func jsonObject(from data: Data) throws -> [String: Any] {

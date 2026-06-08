@@ -1,0 +1,374 @@
+import Foundation
+import Testing
+@testable import MintoCore
+
+@Suite("MeetingSearchAnswerService")
+struct MeetingSearchAnswerServiceTests {
+    @Test("빈 검색어는 LLM을 호출하지 않는다")
+    func rejectsEmptyQuery() async throws {
+        let service = MeetingSearchAnswerUseCase()
+        let provider = StubAnswerProvider()
+
+        await #expect(throws: MeetingSearchAnswerError.emptyQuery) {
+            _ = try await service.answer(query: "  ", index: MeetingSearchIndex(records: [sampleRecord()]), provider: provider)
+        }
+    }
+
+    @Test("검색 결과가 없으면 답변을 만들지 않는다")
+    func rejectsNoResults() async throws {
+        let service = MeetingSearchAnswerUseCase()
+        let provider = StubAnswerProvider()
+
+        await #expect(throws: MeetingSearchAnswerError.noResults) {
+            _ = try await service.answer(query: "결제 정산", index: MeetingSearchIndex(records: [sampleRecord()]), provider: provider)
+        }
+    }
+
+    @Test("answer capability가 없는 provider는 거부한다")
+    func rejectsUnsupportedProvider() async throws {
+        let service = MeetingSearchAnswerUseCase()
+        let provider = StubAnswerProvider(supportedCapabilities: [.summary])
+
+        await #expect(throws: MeetingSearchAnswerError.providerUnsupported) {
+            _ = try await service.answer(query: "liquibase", index: MeetingSearchIndex(records: [sampleRecord()]), provider: provider)
+        }
+    }
+
+    @Test("미설정 provider는 사용자 오류로 반환한다")
+    func rejectsUnconfiguredProvider() async throws {
+        let service = MeetingSearchAnswerUseCase()
+        let provider = StubAnswerProvider(configured: false)
+
+        await #expect(throws: MeetingSearchAnswerError.providerNotConfigured) {
+            _ = try await service.answer(query: "liquibase", index: MeetingSearchIndex(records: [sampleRecord()]), provider: provider)
+        }
+    }
+
+    @Test("상위 검색 chunk를 근거로 answer use case를 호출하고 citation을 반환한다")
+    func generatesAnswerWithCitations() async throws {
+        let service = MeetingSearchAnswerUseCase(maxChunks: 3, maxContextCharacters: 2_000)
+        let provider = StubAnswerProvider(responseText: "Liquibase와 Flyway로 변경 이력을 관리했다. [1]")
+
+        let answer = try await service.answer(
+            query: "db 스키마 형상 관리",
+            index: MeetingSearchIndex(records: [sampleRecord()]),
+            provider: provider
+        )
+
+        #expect(answer.text == "Liquibase와 Flyway로 변경 이력을 관리했다. [1]")
+        #expect(answer.citations.count <= 3)
+        #expect(answer.citations.first?.meetingTitle == "db 스키마 형상 관리 툴 적용과 기록 방식")
+        #expect(answer.citations.first?.sourcePath.isEmpty == false)
+        #expect(answer.citations.contains { !$0.time.isEmpty || $0.kind == .title || $0.kind == .topic || $0.kind == .summary || $0.kind == .keywords })
+        #expect(answer.providerID == .gpt)
+        #expect(answer.modelID == "stub-answer")
+
+        let request = try #require(provider.lastRequest)
+        #expect(request.useCase == .answer)
+        #expect(request.instructions.contains("근거 번호"))
+        #expect(request.userContent.contains("질문:"))
+        #expect(request.userContent.contains("회의 근거:"))
+        #expect(request.userContent.contains("db 스키마 형상 관리"))
+    }
+
+    @Test("context 길이 제한을 넘으면 첫 근거만 잘라서 사용한다")
+    func capsContextLength() async throws {
+        let service = MeetingSearchAnswerUseCase(maxChunks: 5, maxContextCharacters: 500)
+        let provider = StubAnswerProvider()
+        let record = sampleRecord(extraTranscript: String(repeating: "liquibase ", count: 1_000))
+
+        _ = try await service.answer(query: "liquibase", index: MeetingSearchIndex(records: [record]), provider: provider)
+
+        let request = try #require(provider.lastRequest)
+        #expect(request.userContent.count < 900)
+    }
+
+    @Test("AnswerPrompt는 질문과 근거를 분리해 조립한다")
+    func answerPromptBuildsStableSections() {
+        let prompt = AnswerPrompt.build(query: "결정사항은?", context: "[1] 근거")
+
+        #expect(prompt.instructions.contains("근거 번호"))
+        #expect(prompt.instructions.contains("회의 데이터로만 취급"))
+        #expect(prompt.userContent.contains("질문:"))
+        #expect(prompt.userContent.contains("회의 근거:"))
+        #expect(prompt.userContent.contains("--- 회의 근거 시작 ---"))
+        #expect(prompt.userContent.contains("--- 회의 근거 끝 ---"))
+        #expect(prompt.userContent.contains("결정사항은?"))
+        #expect(prompt.userContent.contains("[1] 근거"))
+    }
+
+    @MainActor
+    @Test("검색 답변 설정은 요약 설정과 별도 키를 사용한다")
+    func answerSettingsAreSeparateFromSummarySettings() {
+        let suiteName = "minto-search-answer-settings-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
+        settings.isEnabled = true
+        settings.selectedProvider = .gptAPI
+
+        #expect(defaults.bool(forKey: MeetingSearchAnswerSettingsService.enabledKey))
+        #expect(defaults.string(forKey: MeetingSearchAnswerSettingsService.providerKey) == LLMProviderSelection.gptAPI.rawValue)
+        #expect(defaults.object(forKey: LLMSummarySettingsService.enabledKey) == nil)
+        #expect(defaults.object(forKey: LLMSummarySettingsService.providerKey) == nil)
+    }
+
+    @MainActor
+    @Test("컨트롤러는 provider 설정 완료 전에는 생성 버튼을 막는다")
+    func controllerChecksProviderReadiness() async throws {
+        let suiteName = "minto-search-answer-controller-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
+        settings.isEnabled = true
+        settings.selectedProvider = .gptAPI
+
+        let unconfigured = MeetingSearchAnswerController(
+            settings: settings,
+            providerResolver: { StubAnswerProvider(configured: false) }
+        )
+        unconfigured.refreshReadiness()
+        _ = await waitUntil { !unconfigured.isCheckingProvider }
+        #expect(!unconfigured.isProviderReady)
+        #expect(!unconfigured.canGenerate(query: "liquibase", resultCount: 1))
+
+        let configured = MeetingSearchAnswerController(
+            settings: settings,
+            providerResolver: { StubAnswerProvider(configured: true) }
+        )
+        configured.refreshReadiness()
+        #expect(await waitUntil { configured.isProviderReady })
+        #expect(configured.isProviderReady)
+        #expect(configured.canGenerate(query: "liquibase", resultCount: 1))
+    }
+
+    @MainActor
+    @Test("컨트롤러는 API key 변경 notification 후 readiness를 갱신한다")
+    func controllerRefreshesReadinessAfterAPIKeyChangeNotification() async throws {
+        let suiteName = "minto-search-answer-controller-notification-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let center = NotificationCenter()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
+        settings.isEnabled = true
+        settings.selectedProvider = .gptAPI
+        let readiness = ProviderReadinessBox(configured: false)
+        let controller = MeetingSearchAnswerController(
+            settings: settings,
+            providerResolver: { StubAnswerProvider(configured: readiness.configured) },
+            notificationCenter: center
+        )
+
+        controller.refreshReadiness()
+        _ = await waitUntil { !controller.isCheckingProvider }
+        #expect(!controller.isProviderReady)
+
+        readiness.configured = true
+        center.post(name: .llmAPIKeyStoreDidChange, object: nil, userInfo: ["providerID": LLMProviderID.gpt.rawValue])
+
+        #expect(await waitUntil { controller.isProviderReady })
+    }
+
+    @MainActor
+    @Test("검색어 변경용 reset은 provider readiness를 유지한다")
+    func controllerResetKeepsReadinessByDefault() async throws {
+        let suiteName = "minto-search-answer-controller-reset-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
+        settings.isEnabled = true
+        settings.selectedProvider = .gptAPI
+        let controller = MeetingSearchAnswerController(
+            settings: settings,
+            providerResolver: { StubAnswerProvider(configured: true) }
+        )
+
+        controller.refreshReadiness()
+        #expect(await waitUntil { controller.isProviderReady })
+        #expect(controller.isProviderReady)
+
+        controller.reset()
+        #expect(controller.isProviderReady)
+
+        controller.reset(clearReadiness: true)
+        #expect(!controller.isProviderReady)
+    }
+
+    @MainActor
+    @Test("같은 검색어 재생성 중 이전 요청은 최신 답변 상태를 덮지 않는다")
+    func repeatedGenerateUsesLatestGenerationOnly() async throws {
+        let suiteName = "minto-search-answer-controller-generation-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
+        settings.isEnabled = true
+        settings.selectedProvider = .gptAPI
+        let provider = SequencedAnswerProvider()
+        let controller = MeetingSearchAnswerController(
+            settings: settings,
+            providerResolver: { provider }
+        )
+        let results = MeetingSearchAnswerUseCase().retrieve(
+            query: "liquibase",
+            index: MeetingSearchIndex(records: [sampleRecord()])
+        )
+
+        controller.refreshReadiness()
+        #expect(await waitUntil { controller.isProviderReady })
+
+        controller.generate(query: "liquibase", results: results)
+        #expect(await waitUntil { provider.requestCount == 1 })
+        controller.generate(query: "liquibase", results: results)
+        #expect(await waitUntil { provider.requestCount == 2 })
+        provider.finishFirstWithCancellationLikeNetworkError()
+        provider.finishSecondSuccessfully()
+
+        #expect(await waitUntil { controller.answer?.text == "최신 답변입니다. [1]" })
+        #expect(controller.errorMessage == nil)
+        #expect(!controller.isGenerating)
+    }
+
+    private func sampleRecord(extraTranscript: String = "") -> MeetingRecord {
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let transcriptText = [
+            "컬럼 추가와 인덱스 추가 이력을 추적해야 합니다.",
+            extraTranscript
+        ]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return MeetingRecord(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            title: "db 스키마 형상 관리 툴 적용과 기록 방식",
+            startedAt: startedAt,
+            durationSeconds: 245,
+            topic: "Liquibase와 Flyway 비교",
+            summary: MeetingSummary(
+                title: "db 스키마 형상 관리",
+                leadQuestion: "db 스키마 변경을 어떻게 기록할까?",
+                leadAnswer: "flyway와 liquibase로 SQL 변경 이력을 관리하는 방식을 논의했다.",
+                sections: [
+                    .init(
+                        title: "liquibase 방식과 xml 관리",
+                        time: "01:30",
+                        points: [
+                            .init(text: "DDL을 XML 파일로 관리한다.", subPoints: [
+                                "change-log-master.xml include 문법을 쓴다."
+                            ])
+                        ]
+                    )
+                ],
+                keywords: ["flyway", "liquibase", "db", "마이그레이션"]
+            ),
+            transcript: [
+                Segment(text: transcriptText, timestamp: startedAt.addingTimeInterval(132), duration: 8)
+            ]
+        )
+    }
+
+    @MainActor
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 500_000_000,
+        _ condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let step: UInt64 = 10_000_000
+        let attempts = max(1, Int(timeoutNanoseconds / step))
+        for _ in 0..<attempts {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: step)
+        }
+        return condition()
+    }
+}
+
+private final class StubAnswerProvider: LLMTextGenerationProvider, @unchecked Sendable {
+    let descriptor: LLMProviderDescriptor
+    private let configured: Bool
+    private let responseText: String
+    private(set) var lastRequest: LLMTextRequest?
+
+    init(
+        configured: Bool = true,
+        responseText: String = "답변입니다. [1]",
+        supportedCapabilities: Set<LLMModelInfo.Capability> = [.textGeneration, .answer]
+    ) {
+        self.configured = configured
+        self.responseText = responseText
+        self.descriptor = LLMProviderDescriptor(
+            id: .gpt,
+            description: "테스트 provider",
+            authKind: .apiKey,
+            supportedCapabilities: supportedCapabilities
+        )
+    }
+
+    func isConfigured() async -> Bool {
+        configured
+    }
+
+    func modelCatalog() async -> LLMModelCatalog {
+        LLMModelCatalog(models: [], source: .manualOnly)
+    }
+
+    func generateText(_ request: LLMTextRequest) async throws -> LLMTextResponse {
+        lastRequest = request
+        return LLMTextResponse(text: responseText, providerID: .gpt, modelID: "stub-answer")
+    }
+}
+
+private final class ProviderReadinessBox: @unchecked Sendable {
+    var configured: Bool
+
+    init(configured: Bool) {
+        self.configured = configured
+    }
+}
+
+private final class SequencedAnswerProvider: LLMTextGenerationProvider, @unchecked Sendable {
+    let descriptor = LLMProviderDescriptor(
+        id: .gpt,
+        description: "순차 테스트 provider",
+        authKind: .apiKey,
+        supportedCapabilities: [.textGeneration, .answer]
+    )
+    private let lock = NSLock()
+    private var continuations: [CheckedContinuation<LLMTextResponse, Error>] = []
+    var requestCount: Int {
+        lock.withLock { continuations.count }
+    }
+
+    func isConfigured() async -> Bool {
+        true
+    }
+
+    func modelCatalog() async -> LLMModelCatalog {
+        LLMModelCatalog(models: [], source: .manualOnly)
+    }
+
+    func generateText(_ request: LLMTextRequest) async throws -> LLMTextResponse {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.withLock {
+                continuations.append(continuation)
+            }
+        }
+    }
+
+    func finishFirstWithCancellationLikeNetworkError() {
+        resume(index: 0, result: .failure(LLMProviderError.network("요청이 취소되었습니다.")))
+    }
+
+    func finishSecondSuccessfully() {
+        resume(index: 1, result: .success(LLMTextResponse(
+            text: "최신 답변입니다. [1]",
+            providerID: .gpt,
+            modelID: "sequenced-answer"
+        )))
+    }
+
+    private func resume(index: Int, result: Result<LLMTextResponse, Error>) {
+        let continuation = lock.withLock { continuations.indices.contains(index) ? continuations[index] : nil }
+        continuation?.resume(with: result)
+    }
+}

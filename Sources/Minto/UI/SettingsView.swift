@@ -17,6 +17,7 @@ public struct SettingsView: View {
     // LLM 교정 서비스 관찰
     @ObservedObject private var llmService = LLMCorrectionService.shared
     @ObservedObject private var summarySettings = LLMSummarySettingsService.shared
+    @ObservedObject private var answerSettings = MeetingSearchAnswerSettingsService.shared
     @ObservedObject private var copilot = CopilotOAuthService.shared
     @ObservedObject private var codex = CodexOAuthService.shared
     @ObservedObject private var glossaryStore = GlossaryStore.shared
@@ -26,7 +27,7 @@ public struct SettingsView: View {
     @State private var geminiEmail = GeminiOAuthService.shared.email
     @State private var isLoginLoading = false
     @State private var loginError: String? = nil
-    @State private var apiKeyInput = ""
+    @State private var apiKeyInputs: [LLMProviderID: String] = [:]
     @State private var apiModelCatalogs: [LLMProviderID: LLMModelCatalog] = [:]
     @State private var loadingAPIModelProviderIDs: Set<LLMProviderID> = []
     @State private var glossaryCanonicalInput = ""
@@ -94,14 +95,21 @@ public struct SettingsView: View {
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
-            apiKeyInput = ""
+            apiKeyInputs = [:]
             loginError = nil
         }
         .onChange(of: summarySettings.selectedProvider) { _, provider in
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
-            apiKeyInput = ""
+            apiKeyInputs = [:]
+            loginError = nil
+        }
+        .onChange(of: answerSettings.selectedProvider) { _, provider in
+            if provider != .none {
+                lastLLMProviderRaw = provider.rawValue
+            }
+            apiKeyInputs = [:]
             loginError = nil
         }
     }
@@ -234,6 +242,24 @@ public struct SettingsView: View {
             }
             .help("회의 종료 후 구조화된 회의록을 생성합니다. 전사 다듬기를 꺼도 사용할 수 있습니다.")
 
+            Toggle(isOn: searchAnswerEnabledBinding) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("검색 답변")
+                        .font(.callout.weight(.semibold))
+                    Text("저장된 회의 검색 결과를 근거로 질문에 답합니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .help("검색 결과 상위 근거를 선택한 AI 서비스로 보내 종합 답변을 생성합니다.")
+
+            if answerSettings.isEnabled {
+                searchAnswerProviderRow
+                Text("검색 답변은 상위 회의 근거를 선택한 AI 서비스로 전송합니다. 민감한 회의는 API provider 설정을 확인하세요.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+
             Text(aiProcessingStateMessage)
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -242,16 +268,29 @@ public struct SettingsView: View {
 
     private var aiConnectionSection: some View {
         Section("AI 연결") {
-            aiProviderRow
-            currentProviderModelPicker
-            if activeAIProvider.requiresWarning {
-                tosWarningRow
+            if generalAIEnabled {
+                aiProviderRow
+                currentProviderModelPicker
+                if activeAIProvider.requiresWarning {
+                    tosWarningRow
+                }
+                llmStatusRow
+                llmActionRow
+                if deviceCodeInProgress {
+                    deviceCodeRow
+                }
             }
-            llmStatusRow
-            llmActionRow
-            if deviceCodeInProgress {
-                deviceCodeRow
+
+            if answerSettings.isEnabled {
+                if generalAIEnabled, answerSettings.selectedProvider == activeAIProvider {
+                    Text("검색 답변도 위 AI 연결을 사용합니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    searchAnswerConnectionRows
+                }
             }
+
             if let err = loginError {
                 Text(err)
                     .font(.caption)
@@ -286,19 +325,43 @@ public struct SettingsView: View {
         )
     }
 
+    private var searchAnswerEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { answerSettings.isEnabled },
+            set: { enabled in
+                answerSettings.isEnabled = enabled
+                if enabled {
+                    answerSettings.selectedProvider = answerCapableProvider(from: activeAIProvider)
+                }
+            }
+        )
+    }
+
     private var aiProcessingEnabled: Bool {
+        llmService.selectedProvider != .none || summarySettings.isEnabled || answerSettings.isEnabled
+    }
+
+    private var generalAIEnabled: Bool {
         llmService.selectedProvider != .none || summarySettings.isEnabled
     }
 
     private var aiProcessingStateMessage: String {
-        switch (llmService.selectedProvider != .none, summarySettings.isEnabled) {
-        case (true, true):
+        switch (llmService.selectedProvider != .none, summarySettings.isEnabled, answerSettings.isEnabled) {
+        case (true, true, true):
+            return "전사를 다듬고, 회의록을 정리하며, 검색 결과를 AI로 종합합니다."
+        case (true, true, false):
             return "전사를 다듬고, 회의록도 자동으로 정리합니다."
-        case (true, false):
+        case (true, false, true):
+            return "전사를 다듬고, 검색 결과를 AI로 종합합니다."
+        case (true, false, false):
             return "전사는 다듬지만, 요약과 구조화는 생성하지 않습니다."
-        case (false, true):
+        case (false, true, true):
+            return "전사는 원문 그대로 저장하고, 회의록 정리와 검색 답변만 AI로 사용합니다."
+        case (false, true, false):
             return "전사는 원문 그대로 저장하고, 회의록 정리만 AI로 생성합니다."
-        case (false, false):
+        case (false, false, true):
+            return "저장된 회의 검색 결과만 AI로 종합합니다."
+        case (false, false, false):
             return "전사만 저장됩니다. 요약과 구조화는 생성되지 않습니다."
         }
     }
@@ -312,6 +375,8 @@ public struct SettingsView: View {
             lastLLMProviderRaw = llmService.selectedProvider.rawValue
         } else if summarySettings.selectedProvider != .none {
             lastLLMProviderRaw = summarySettings.selectedProvider.rawValue
+        } else if answerSettings.selectedProvider != .none {
+            lastLLMProviderRaw = answerSettings.selectedProvider.rawValue
         }
     }
 
@@ -495,30 +560,44 @@ public struct SettingsView: View {
         .help("AI 처리에 사용할 서비스를 선택합니다.")
     }
 
+    private var searchAnswerProviderRow: some View {
+        Picker("검색 답변 AI", selection: searchAnswerProviderBinding) {
+            ForEach(answerCapableProviderSelections, id: \.self) { provider in
+                Text(provider.label).tag(provider)
+            }
+        }
+        .help("저장된 회의 검색 근거를 종합할 AI 서비스를 별도로 선택합니다.")
+    }
+
     @ViewBuilder
     private var currentProviderModelPicker: some View {
-        switch activeAIProvider {
+        providerModelPicker(activeAIProvider, title: "AI 모델")
+    }
+
+    @ViewBuilder
+    private func providerModelPicker(_ provider: LLMProviderSelection, title: String) -> some View {
+        switch provider {
         case .gptAPI:
-            apiModelPicker(title: "AI 모델", providerID: .gpt, selection: $gptAPIModel)
+            apiModelPicker(title: title, providerID: .gpt, selection: $gptAPIModel)
         case .geminiAPI:
-            apiModelPicker(title: "AI 모델", providerID: .gemini, selection: $geminiAPIModel)
+            apiModelPicker(title: title, providerID: .gemini, selection: $geminiAPIModel)
         case .claudeAPI:
-            apiModelPicker(title: "AI 모델", providerID: .claude, selection: $claudeAPIModel)
+            apiModelPicker(title: title, providerID: .claude, selection: $claudeAPIModel)
         case .openRouterAPI:
-            apiModelPicker(title: "AI 모델", providerID: .openRouter, selection: $openRouterAPIModel)
+            apiModelPicker(title: title, providerID: .openRouter, selection: $openRouterAPIModel)
         case .codex:
-            Picker("AI 모델", selection: $codexModel) {
+            Picker(title, selection: $codexModel) {
                 ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
             Text("GPT 계정의 ‘자동’은 계정 플랜에 맞춰 안전한 모델을 선택합니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .gemini:
-            Picker("AI 모델", selection: $geminiModel) {
+            Picker(title, selection: $geminiModel) {
                 ForEach(GeminiOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
         case .copilot:
-            Picker("AI 모델", selection: $copilotModel) {
+            Picker(title, selection: $copilotModel) {
                 ForEach(CopilotOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
         case .none:
@@ -550,6 +629,69 @@ public struct SettingsView: View {
                 }
             }
         )
+    }
+
+    private var searchAnswerProviderBinding: Binding<LLMProviderSelection> {
+        Binding(
+            get: { answerCapableProvider(from: answerSettings.selectedProvider) },
+            set: {
+                let provider = answerCapableProvider(from: $0)
+                answerSettings.selectedProvider = provider
+                lastLLMProviderRaw = provider.rawValue
+            }
+        )
+    }
+
+    private var answerCapableProviderSelections: [LLMProviderSelection] {
+        LLMProviderSelection.allCases.filter { provider in
+            guard provider != .none,
+                  let providerID = provider.providerID,
+                  let descriptor = LLMProviderRegistry.shared.descriptor(for: providerID)
+            else { return false }
+            return descriptor.supportedCapabilities.contains(.answer)
+        }
+    }
+
+    private func answerCapableProvider(from provider: LLMProviderSelection) -> LLMProviderSelection {
+        guard provider != .none,
+              let providerID = provider.providerID,
+              LLMProviderRegistry.shared.descriptor(for: providerID)?.supportedCapabilities.contains(.answer) == true
+        else {
+            return .gptAPI
+        }
+        return provider
+    }
+
+    @ViewBuilder
+    private var searchAnswerConnectionRows: some View {
+        let provider = answerCapableProvider(from: answerSettings.selectedProvider)
+        if let providerID = provider.providerID {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("검색 답변 연결")
+                    .font(.callout.weight(.semibold))
+                Text("\(providerID.displayName)로 상위 회의 근거를 보내 답변을 만듭니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            providerModelPicker(provider, title: "검색 답변 모델")
+            apiKeyStatusRow(providerID)
+            apiKeySettingsRow(providerID)
+        }
+    }
+
+    private func apiKeyStatusRow(_ providerID: LLMProviderID) -> some View {
+        let hasKey = LLMAPIKeyStore.shared.hasAPIKey(for: providerID)
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(hasKey ? Color.green : Color.secondary.opacity(0.4))
+                .frame(width: 7, height: 7)
+            Text(providerID.displayName)
+                .font(.callout)
+            Spacer()
+            Text(hasKey ? "API 키 저장됨" : "API 키 필요")
+                .font(.caption)
+                .foregroundColor(hasKey ? .primary : .secondary)
+        }
     }
 
     private func apiModelPicker(
@@ -675,26 +817,27 @@ public struct SettingsView: View {
     }
 
     private func apiKeySettingsRow(_ providerID: LLMProviderID) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SecureField("\(providerID.displayName) API 키", text: $apiKeyInput)
+        let input = apiKeyInputs[providerID] ?? ""
+        return VStack(alignment: .leading, spacing: 8) {
+            SecureField("\(providerID.displayName) API 키", text: apiKeyInputBinding(for: providerID))
             HStack {
                 Button("API 키 저장") {
-                    let saved = LLMAPIKeyStore.shared.saveAPIKey(apiKeyInput, for: providerID)
+                    let saved = LLMAPIKeyStore.shared.saveAPIKey(input, for: providerID)
                     if saved {
-                        apiKeyInput = ""
+                        apiKeyInputs[providerID] = ""
                         loginError = nil
                         Task { await refreshAPIModelCatalog(for: providerID, force: true) }
                     } else {
                         loginError = "API 키를 Keychain에 저장하지 못했습니다. macOS 권한 상태를 확인하세요."
                     }
                 }
-                .disabled(apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 if LLMAPIKeyStore.shared.hasAPIKey(for: providerID) {
                     Button("API 키 삭제") {
                         let deleted = LLMAPIKeyStore.shared.deleteAPIKey(for: providerID)
                         if deleted {
-                            apiKeyInput = ""
+                            apiKeyInputs[providerID] = ""
                             apiModelCatalogs[providerID] = nil
                             loginError = nil
                         } else {
@@ -708,6 +851,13 @@ public struct SettingsView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
+    }
+
+    private func apiKeyInputBinding(for providerID: LLMProviderID) -> Binding<String> {
+        Binding(
+            get: { apiKeyInputs[providerID] ?? "" },
+            set: { apiKeyInputs[providerID] = $0 }
+        )
     }
 
     @ViewBuilder

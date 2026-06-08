@@ -20,15 +20,18 @@ public struct MeetingLibraryView: View {
     @ObservedObject private var store: MeetingStore
     @ObservedObject private var viewModel: TranscriptionViewModel
     @ObservedObject private var summaryService = SummaryService.shared
+    @ObservedObject private var answerSettings = MeetingSearchAnswerSettingsService.shared
     @ObservedObject private var relatedInfo = RelatedInfoService.shared
     @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
+    @StateObject private var searchAnswerController = MeetingSearchAnswerController()
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var showingLiveMeeting = false
     @State private var showingExportOptions = false
     @State private var showingConfluenceExport = false
     @State private var exportRecord: MeetingRecord?
+    @State private var isSearchAnswerExpanded = false
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -77,9 +80,16 @@ public struct MeetingLibraryView: View {
                 showingLiveMeeting = true
             }
             selectFirstAvailableIfNeeded()
+            searchAnswerController.refreshReadiness()
         }
-        .onChange(of: store.meetings) { _, _ in selectFirstAvailableIfNeeded() }
+        .onChange(of: store.meetings) { _, _ in
+            searchAnswerController.reset()
+            isSearchAnswerExpanded = false
+            selectFirstAvailableIfNeeded()
+        }
         .onChange(of: searchText) { _, _ in
+            searchAnswerController.reset()
+            isSearchAnswerExpanded = false
             if hasLiveMeeting {
                 showingLiveMeeting = true
                 selectedID = nil
@@ -100,6 +110,16 @@ public struct MeetingLibraryView: View {
                 showingLiveMeeting = false
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
+        }
+        .onChange(of: answerSettings.isEnabled) { _, _ in
+            searchAnswerController.reset(clearReadiness: true)
+            isSearchAnswerExpanded = false
+            searchAnswerController.refreshReadiness()
+        }
+        .onChange(of: answerSettings.selectedProvider) { _, _ in
+            searchAnswerController.reset(clearReadiness: true)
+            isSearchAnswerExpanded = false
+            searchAnswerController.refreshReadiness()
         }
         .confirmationDialog(
             "회의록 내보내기",
@@ -205,6 +225,7 @@ public struct MeetingLibraryView: View {
 
             if isSearching {
                 searchSummary
+                searchAnswerCard
                 suggestionChips
             }
 
@@ -299,6 +320,131 @@ public struct MeetingLibraryView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var searchAnswerCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Label("AI 답변", systemImage: "sparkles")
+                    .font(.system(size: 12, weight: .bold))
+                Spacer()
+                if searchAnswerController.isCheckingProvider {
+                    Text("확인 중")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                } else if !answerSettings.isEnabled || !searchAnswerController.isProviderReady {
+                    Button("AI 설정") { openSettingsWindow() }
+                        .font(.system(size: 11, weight: .semibold))
+                } else {
+                    Button(searchAnswerController.answer == nil ? "답변 만들기" : "다시 만들기") {
+                        isSearchAnswerExpanded = false
+                        searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                }
+            }
+
+            if searchAnswerController.isCheckingProvider {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("AI 설정 확인 중")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            } else if searchAnswerController.isGenerating {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("검색 결과를 종합하는 중")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            } else if let searchAnswer = searchAnswerController.answer, searchAnswer.query == trimmedSearch {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(searchAnswer.text)
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(isSearchAnswerExpanded ? nil : 5)
+                        .textSelection(.enabled)
+                    if !isSearchAnswerExpanded {
+                        Button("답변 펼치기") {
+                            isSearchAnswerExpanded = true
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .buttonStyle(.borderless)
+                    }
+                    searchAnswerCitationList(searchAnswer.citations)
+                    Button {
+                        copySearchAnswer(searchAnswer)
+                    } label: {
+                        Label("답변과 근거 복사", systemImage: "doc.on.doc")
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .buttonStyle(.borderless)
+                }
+            } else if let errorMessage = searchAnswerController.errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LibraryPalette.elevated)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func searchAnswerCitationList(_ citations: [MeetingSearchAnswerCitation]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(citations) { citation in
+                Button {
+                    selectSearchAnswerCitation(citation)
+                } label: {
+                    HStack(alignment: .top, spacing: 5) {
+                        Text("[\(citation.number)]")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.accentColor)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(citation.meetingTitle)
+                                .font(.system(size: 10, weight: .semibold))
+                                .lineLimit(1)
+                            Text(searchAnswerCitationMeta(citation))
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                            if !citation.preview.isEmpty {
+                                Text(citation.preview)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(2)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .help("근거 회의 열기")
+            }
+        }
+    }
+
+    private func searchAnswerCitationMeta(_ citation: MeetingSearchAnswerCitation) -> String {
+        var parts = [citation.kind.label]
+        if !citation.time.isEmpty {
+            parts.append(citation.time)
+        }
+        parts.append(citation.label)
+        return parts.joined(separator: " · ")
     }
 
     private var suggestionChips: some View {
@@ -1331,6 +1477,12 @@ public struct MeetingLibraryView: View {
         return MeetingSearchIndex(records: store.meetings).search(trimmedSearch, limit: Int.max)
     }
 
+    private func selectSearchAnswerCitation(_ citation: MeetingSearchAnswerCitation) {
+        selectedID = citation.meetingID
+        showingLiveMeeting = false
+        detailTab = citation.kind == .transcript ? .transcript : .summary
+    }
+
     private func primaryMatch(for record: MeetingRecord) -> MeetingSearchMatch {
         if isSearching, let result = meetingSearchResults.first(where: { $0.meetingID == record.id }) {
             return MeetingSearchMatch(badge: result.label, text: result.preview)
@@ -1612,6 +1764,17 @@ public struct MeetingLibraryView: View {
     private func copyMarkdown(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func copySearchAnswer(_ answer: MeetingSearchAnswer) {
+        let citationText = answer.citations.map { citation in
+            let meta = searchAnswerCitationMeta(citation)
+            return "[\(citation.number)] \(citation.meetingTitle) · \(meta)\n\(citation.preview)"
+        }
+        let text = ([answer.text, "근거", citationText.joined(separator: "\n\n")]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            .joined(separator: "\n\n")
+        copyMarkdown(text)
     }
 
     private func copyLiveSummary() {

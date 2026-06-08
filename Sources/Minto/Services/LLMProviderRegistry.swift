@@ -60,9 +60,9 @@ extension LLMProviderRegistry {
     public static let defaultDescriptors: [LLMProviderDescriptor] = [
         LLMProviderDescriptor(
             id: .local,
-            description: "회의 내용이 기기 밖으로 나가지 않아야 할 때 사용합니다.",
+            description: "저장된 회의를 기기 안에서 검색할 때 사용합니다.",
             authKind: .local,
-            supportedCapabilities: [.textGeneration, .correction, .summary, .answer, .embedding]
+            supportedCapabilities: [.embedding]
         ),
         LLMProviderDescriptor(
             id: .gpt,

@@ -147,7 +147,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
         } catch let error as CopilotError {
             throw map(copilotError: error)
         } catch is CancellationError {
-            throw LLMProviderError.network("요청이 취소되었습니다.")
+            throw CancellationError()
         } catch {
             throw LLMProviderError.network(error.localizedDescription)
         }

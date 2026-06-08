@@ -440,7 +440,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
         } catch let error as LLMProviderError {
             throw error
         } catch is CancellationError {
-            throw LLMProviderError.network("요청이 취소되었습니다.")
+            throw CancellationError()
         } catch {
             throw LLMProviderError.network(error.localizedDescription)
         }

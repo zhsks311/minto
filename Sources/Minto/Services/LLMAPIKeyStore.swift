@@ -1,6 +1,10 @@
 import Foundation
 import Security
 
+extension Notification.Name {
+    public static let llmAPIKeyStoreDidChange = Notification.Name("minto.llmAPIKeyStoreDidChange")
+}
+
 protocol LLMAPIKeyStorageBackend: Sendable {
     func load(account: String, service: String) -> Data?
     func save(account: String, data: Data, service: String) -> Bool
@@ -32,6 +36,7 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
 
     private let serviceName: String
     private let storage: any LLMAPIKeyStorageBackend
+    private let notificationCenter: NotificationCenter
     private let lock = NSLock()
     private var loadedProviderIDs: Set<LLMProviderID> = []
     private var cachedKeys: [LLMProviderID: String] = [:]
@@ -39,11 +44,17 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
     public init(serviceName: String = KeychainService.llmAPIService) {
         self.serviceName = serviceName
         self.storage = KeychainLLMAPIKeyStorageBackend()
+        self.notificationCenter = .default
     }
 
-    init(serviceName: String = KeychainService.llmAPIService, storage: any LLMAPIKeyStorageBackend) {
+    init(
+        serviceName: String = KeychainService.llmAPIService,
+        storage: any LLMAPIKeyStorageBackend,
+        notificationCenter: NotificationCenter = .default
+    ) {
         self.serviceName = serviceName
         self.storage = storage
+        self.notificationCenter = notificationCenter
     }
 
     public func apiKey(for providerID: LLMProviderID) -> String? {
@@ -95,6 +106,7 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
             loadedProviderIDs.insert(providerID)
             cachedKeys[providerID] = trimmed
         }
+        postDidChange(providerID)
         return true
     }
 
@@ -109,10 +121,19 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
             loadedProviderIDs.insert(providerID)
             cachedKeys.removeValue(forKey: providerID)
         }
+        postDidChange(providerID)
         return true
     }
 
     private func keychainAccount(for providerID: LLMProviderID) -> String {
         "llm-api-key-\(providerID.rawValue)"
+    }
+
+    private func postDidChange(_ providerID: LLMProviderID) {
+        notificationCenter.post(
+            name: .llmAPIKeyStoreDidChange,
+            object: self,
+            userInfo: ["providerID": providerID.rawValue]
+        )
     }
 }
