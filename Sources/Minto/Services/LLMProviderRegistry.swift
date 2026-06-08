@@ -1,0 +1,96 @@
+import Foundation
+
+public struct LLMProviderRegistry: Sendable {
+    public static let shared = LLMProviderRegistry()
+
+    public let descriptors: [LLMProviderDescriptor]
+
+    public init(descriptors: [LLMProviderDescriptor] = Self.defaultDescriptors) {
+        self.descriptors = descriptors
+    }
+
+    public func descriptor(for id: LLMProviderID) -> LLMProviderDescriptor? {
+        descriptors.first { $0.id == id }
+    }
+
+    public func providerID(forLegacyCorrectionProviderRawValue rawValue: String) -> LLMProviderID? {
+        switch rawValue {
+        case "gemini":
+            return .geminiAccount
+        case "copilot":
+            return .copilot
+        case "codex":
+            return .chatGPTAccount
+        default:
+            return nil
+        }
+    }
+
+    public func legacyCorrectionProviderRawValue(for id: LLMProviderID) -> String? {
+        switch id {
+        case .geminiAccount:
+            return "gemini"
+        case .copilot:
+            return "copilot"
+        case .chatGPTAccount:
+            return "codex"
+        case .local, .gpt, .gemini, .claude, .openRouter:
+            return nil
+        }
+    }
+}
+
+extension LLMProviderRegistry {
+    public static let defaultDescriptors: [LLMProviderDescriptor] = [
+        LLMProviderDescriptor(
+            id: .local,
+            description: "회의 내용이 기기 밖으로 나가지 않아야 할 때 사용합니다.",
+            authKind: .local,
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer, .embedding]
+        ),
+        LLMProviderDescriptor(
+            id: .gpt,
+            description: "OpenAI 공식 API 키로 교정, 요약, 질의응답을 실행합니다.",
+            authKind: .apiKey,
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer, .embedding]
+        ),
+        LLMProviderDescriptor(
+            id: .gemini,
+            description: "Google Gemini 공식 API 키로 교정, 요약, 질의응답을 실행합니다.",
+            authKind: .apiKey,
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer, .embedding]
+        ),
+        LLMProviderDescriptor(
+            id: .claude,
+            description: "Anthropic Claude API 키로 긴 회의 문맥을 정리합니다.",
+            authKind: .apiKey,
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer]
+        ),
+        LLMProviderDescriptor(
+            id: .openRouter,
+            description: "OpenRouter API 키로 여러 모델 중 하나를 선택합니다.",
+            authKind: .apiKey,
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer]
+        ),
+        LLMProviderDescriptor(
+            id: .copilot,
+            description: "GitHub Copilot 계정으로 교정과 요약을 실행합니다.",
+            authKind: .accountLogin,
+            supportedCapabilities: [.textGeneration, .correction, .summary]
+        ),
+        LLMProviderDescriptor(
+            id: .chatGPTAccount,
+            description: "GPT 계정 로그인으로 교정과 요약을 실행합니다.",
+            authKind: .accountLogin,
+            requiresWarning: true,
+            supportedCapabilities: [.textGeneration, .correction, .summary]
+        ),
+        LLMProviderDescriptor(
+            id: .geminiAccount,
+            description: "Gemini 계정 로그인으로 교정과 요약을 실행합니다.",
+            authKind: .accountLogin,
+            requiresWarning: true,
+            supportedCapabilities: [.textGeneration, .correction, .summary]
+        )
+    ]
+}

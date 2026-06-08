@@ -10,17 +10,29 @@ public final class LLMCorrectionService: ObservableObject {
         case copilot = "copilot"
         case codex   = "codex"
 
+        public var providerID: LLMProviderID? {
+            LLMProviderRegistry.shared.providerID(forLegacyCorrectionProviderRawValue: rawValue)
+        }
+
         public var label: String {
-            switch self {
-            case .none:    return "사용 안 함"
-            case .gemini:  return "Gemini (Google) ⚠️"
-            case .copilot: return "GitHub Copilot"
-            case .codex:   return "GPT 계정 로그인 ⚠️"
+            if self == .none { return "사용 안 함" }
+            guard let providerID else { return rawValue }
+            let descriptor = LLMProviderRegistry.shared.descriptor(for: providerID)
+            return descriptor?.displayName ?? providerID.displayName
+        }
+
+        public init?(providerID: LLMProviderID) {
+            guard let rawValue = LLMProviderRegistry.shared.legacyCorrectionProviderRawValue(for: providerID) else {
+                return nil
             }
+            self.init(rawValue: rawValue)
         }
 
         // ToS 회색 지대 경고 필요 여부
-        public var requiresWarning: Bool { self == .gemini || self == .codex }
+        public var requiresWarning: Bool {
+            guard let providerID else { return false }
+            return LLMProviderRegistry.shared.descriptor(for: providerID)?.requiresWarning ?? false
+        }
     }
 
     public static let shared = LLMCorrectionService()
