@@ -48,6 +48,13 @@
    - true streaming candidates route to continuous audio sessions.
    - Verify: current Apple final-only engines still route to one-shot without preview.
 
+8. Add hidden streaming session runner without connecting product runtime.
+   - `TranscriptionCoordinator`
+   - reject streaming start for one-shot plans.
+   - drive `StreamingTranscriptionSession.accept` / `finish`.
+   - record first partial latency, final latency, partial/final event count, accepted sample count, latest revision.
+   - Verify: stub streaming engine emits partial/final through coordinator and updates metrics.
+
 ## Non-goals
 
 - Do not add Nemotron or sherpa runtime integration in this step.
