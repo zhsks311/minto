@@ -253,6 +253,8 @@ struct VADBenchmarkTests {
             reference: allReferences.joined(separator: " "),
             hypothesis: allHypotheses.joined(separator: " ")
         )
+        let elapsedSeconds = Date().timeIntervalSince(startedAt)
+        let audioSeconds = chunkMetrics.reduce(0) { $0 + $1.durationSeconds }
         let metric = VADSTTBenchmarkMetric(
             vad: candidate.rawValue,
             engine: engineLabel,
@@ -271,7 +273,9 @@ struct VADBenchmarkTests {
             globalDistance: globalStats.distance,
             globalRefLen: globalStats.refLen,
             globalCER: globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0,
-            elapsedSeconds: Date().timeIntervalSince(startedAt),
+            audioSeconds: audioSeconds,
+            elapsedSeconds: elapsedSeconds,
+            rtf: audioSeconds > 0 ? elapsedSeconds / audioSeconds : 0,
             chunks: chunkMetrics
         )
         try Self.writeSTTMetricsIfNeeded(metric)
@@ -284,6 +288,7 @@ struct VADBenchmarkTests {
         false positive text     : \(metric.falsePositiveTranscriptionCount) chunks / \(metric.falsePositiveTranscriptChars) chars
         chunk CER               : \(String(format: "%.1f%%", metric.cer * 100)) (distance \(metric.distance) / ref \(metric.refLen))
         global CER              : \(String(format: "%.1f%%", metric.globalCER * 100)) (distance \(metric.globalDistance) / ref \(metric.globalRefLen))
+        RTF                     : \(String(format: "%.2f", metric.rtf))
         elapsed                 : \(String(format: "%.1f", metric.elapsedSeconds))s
         ==============================================
 
@@ -833,7 +838,9 @@ private struct VADSTTBenchmarkMetric: Codable {
     let globalDistance: Int
     let globalRefLen: Int
     let globalCER: Double
+    let audioSeconds: Double
     let elapsedSeconds: Double
+    let rtf: Double
     let chunks: [VADSTTChunkMetric]
 
     enum CodingKeys: String, CodingKey {
@@ -854,7 +861,9 @@ private struct VADSTTBenchmarkMetric: Codable {
         case globalDistance = "global_distance"
         case globalRefLen = "global_ref_len"
         case globalCER = "global_cer"
+        case audioSeconds = "audio_seconds"
         case elapsedSeconds = "elapsed_seconds"
+        case rtf
         case chunks
     }
 }

@@ -69,7 +69,9 @@ struct MeetingCorpusTests {
         let globalDistance: Int?
         let globalRefLen: Int?
         let globalCER: Double?
+        let audioSeconds: Double
         let elapsedSeconds: Double
+        let rtf: Double
         let windows: [MeetingWindowMetric]
 
         enum CodingKeys: String, CodingKey {
@@ -87,7 +89,9 @@ struct MeetingCorpusTests {
             case globalDistance = "global_distance"
             case globalRefLen = "global_ref_len"
             case globalCER = "global_cer"
+            case audioSeconds = "audio_seconds"
             case elapsedSeconds = "elapsed_seconds"
+            case rtf
             case windows
         }
     }
@@ -217,6 +221,9 @@ struct MeetingCorpusTests {
         }
 
         let microCER = Double(totalDistance) / Double(totalRefLen)
+        let elapsedSeconds = Date().timeIntervalSince(startedAt)
+        let audioSeconds = windowMetrics.reduce(0) { $0 + $1.durationSeconds }
+        let rtf = audioSeconds > 0 ? elapsedSeconds / audioSeconds : 0
         let globalReferenceText = allReferences.joined(separator: " ")
         let globalHypothesisText = allHypotheses.joined(separator: " ")
         let shouldSkipGlobalCER = ProcessInfo.processInfo.environment["MEETING_SKIP_SWIFT_GLOBAL_CER"] == "1"
@@ -272,7 +279,9 @@ struct MeetingCorpusTests {
                 globalDistance: globalDistance,
                 globalRefLen: globalRefLen,
                 globalCER: globalCERValue,
-                elapsedSeconds: Date().timeIntervalSince(startedAt),
+                audioSeconds: audioSeconds,
+                elapsedSeconds: elapsedSeconds,
+                rtf: rtf,
                 windows: windowMetrics
             )
             let encoder = JSONEncoder()
@@ -285,6 +294,7 @@ struct MeetingCorpusTests {
         창 수             : \(windowCount) (빈 출력 \(emptyCount)개)
         per-window  CER   : \(String(format: "%.1f%%", microCER * 100)) (Σ편집거리 \(totalDistance) / 참조 \(totalRefLen)자)
         \(globalSummary)
+        RTF               : \(String(format: "%.2f", rtf))
         ========================================
         ※ global이 per-window보다 낮으면 그 차이는 창 경계 드리프트(측정 아티팩트)다.
           방송 자막은 비verbatim이라 남는 CER에도 줄일 수 없는 바닥이 있다.
