@@ -79,7 +79,7 @@ scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> \
   --write
 ```
 
-To inspect empty final and high-CER windows:
+To inspect empty final and high-CER windows with duration and text density:
 
 ```bash
 scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> \
@@ -95,3 +95,6 @@ segments.csv
 ```
 
 The summary groups metric files by `engine_id` and reports weighted CER, sample macro CER, RTF, peak memory, empty finals, and false-positive transcript characters.
+
+The segment diagnostics include `Dur`, `Ref cps`, and `Hyp cps`.
+Use high `Ref cps` empty rows to find windows where the subtitle/reference is dense but the engine returned no final text.

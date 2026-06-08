@@ -215,6 +215,11 @@ def segment_diagnostics(metrics, min_cer, limit):
                 "metrics_file": metric.get("_path", ""),
             })
 
+    for row in rows:
+        duration = row["duration_seconds"]
+        row["reference_chars_per_second"] = row["reference_length"] / duration if duration else None
+        row["hypothesis_chars_per_second"] = row["hypothesis_length"] / duration if duration else None
+
     rows.sort(key=lambda row: (
         not row["empty"],
         -row["cer"],
@@ -260,20 +265,23 @@ def markdown_table(rows):
 
 def segment_markdown_table(rows):
     lines = [
-        "| Engine | Sample | # | Time | CER | Empty | Ref len | Hyp len | Reference | Hypothesis |",
-        "| --- | --- | ---: | --- | ---: | --- | ---: | ---: | --- | --- |",
+        "| Engine | Sample | # | Time | Dur | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | Reference | Hypothesis |",
+        "| --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {engine} | {sample} | {index} | {time} | {cer} | {empty} | {ref_len} | {hyp_len} | {reference} | {hypothesis} |".format(
+            "| {engine} | {sample} | {index} | {time} | {duration} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {reference} | {hypothesis} |".format(
                 engine=row["engine_id"],
                 sample=row["sample_id"],
                 index=row["index"],
                 time=f"{row['start_seconds']:.1f}-{row['end_seconds']:.1f}s",
+                duration=fmt_float(row["duration_seconds"]),
                 cer=fmt_percent(row["cer"]),
                 empty="yes" if row["empty"] else "no",
                 ref_len=row["reference_length"],
+                ref_cps=fmt_float(row["reference_chars_per_second"]),
                 hyp_len=row["hypothesis_length"],
+                hyp_cps=fmt_float(row["hypothesis_chars_per_second"]),
                 reference=escape_markdown_cell(row["reference"]),
                 hypothesis=escape_markdown_cell(row["hypothesis"]),
             )
@@ -312,7 +320,9 @@ def write_segment_csv(path, rows):
         "cer",
         "empty",
         "reference_length",
+        "reference_chars_per_second",
         "hypothesis_length",
+        "hypothesis_chars_per_second",
         "distance",
         "reference",
         "hypothesis",
