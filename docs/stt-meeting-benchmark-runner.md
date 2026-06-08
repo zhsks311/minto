@@ -57,3 +57,18 @@ Reason: full-meeting Levenshtein over concatenated text can become very expensiv
 - per-segment CER
 
 Use `--skip-swift-global-cer never` only for short runs or when the global text size is known to be safe.
+
+## Summarize results
+
+```bash
+scripts/summarize_stt_benchmarks.py tmp/stt-meeting-benchmarks/<timestamp> --write
+```
+
+This writes:
+
+```text
+summary.md
+summary.csv
+```
+
+The summary groups metric files by `engine_id` and reports weighted CER, sample macro CER, RTF, peak memory, empty finals, and false-positive transcript characters.

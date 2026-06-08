@@ -94,6 +94,7 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - `MeetingCorpusTests`, `VADBenchmarkTests`의 STT 측정, `StreamingChunkBenchmarkTests`는 같은 top-level schema로 JSON을 쓴다.
 - `peak_memory_mb`는 macOS `getrusage` 기반 peak RSS 스냅샷으로 기록한다.
 - `scripts/run_meeting_stt_benchmarks.py`로 `sample/meeting` 샘플과 엔진을 순차 실행할 수 있다.
+- `scripts/summarize_stt_benchmarks.py`로 실행 결과를 엔진별 weighted CER/RTF/peak memory 표로 요약할 수 있다.
 
 **작업**
 
