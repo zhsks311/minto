@@ -215,6 +215,7 @@ struct MeetingCorpusTests {
                 audioSeconds: audioSeconds,
                 elapsedSeconds: elapsedSeconds,
                 rtf: rtf,
+                peakMemoryMB: STTBenchmarkProcessMetrics.peakResidentMemoryMB(),
                 metadata: [
                     "total_window_count": "\(windows.count)",
                     "window_seconds": "\(Self.windowSeconds)",

@@ -211,6 +211,7 @@ struct StreamingChunkBenchmarkTests {
             audioSeconds: finalAudioSeconds,
             elapsedSeconds: elapsedSeconds,
             rtf: finalAudioSeconds > 0 ? elapsedSeconds / finalAudioSeconds : 0,
+            peakMemoryMB: STTBenchmarkProcessMetrics.peakResidentMemoryMB(),
             metadata: [
                 "preview_step_seconds": "\(Self.previewStepSeconds)",
                 "preview_context_seconds": "\(Self.previewContextSeconds)",

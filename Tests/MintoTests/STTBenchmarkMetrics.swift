@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct STTBenchmarkRunMetric: Encodable {
     let schemaVersion: Int
@@ -273,6 +274,17 @@ enum STTBenchmarkTextMetrics {
 
     static func hypothesisLength(_ segments: [STTBenchmarkSegmentMetric]) -> Int {
         segments.reduce(0) { $0 + $1.hypothesisLength }
+    }
+}
+
+enum STTBenchmarkProcessMetrics {
+    static func peakResidentMemoryMB() -> Double? {
+        var usage = rusage()
+        guard getrusage(RUSAGE_SELF, &usage) == 0 else { return nil }
+
+        // Darwin reports ru_maxrss in bytes. Linux reports kilobytes, but these
+        // benchmark tests target the local macOS app runtime.
+        return Double(usage.ru_maxrss) / 1_048_576.0
     }
 }
 

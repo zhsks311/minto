@@ -67,4 +67,11 @@ struct STTBenchmarkMetricsTests {
     func textMetricsUseNormalizedCharacterContract() {
         #expect(STTBenchmarkTextMetrics.normalizedLength("가 나,다.") == 3)
     }
+
+    @Test("peak resident memory is available on macOS benchmark runs")
+    func peakResidentMemoryIsAvailable() throws {
+        let memoryMB = try #require(STTBenchmarkProcessMetrics.peakResidentMemoryMB())
+
+        #expect(memoryMB > 0)
+    }
 }

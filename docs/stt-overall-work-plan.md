@@ -92,7 +92,7 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - 진행 중이다. 엔진 논쟁을 끝내려면 먼저 측정 형식을 고정해야 한다.
 - `STTBenchmarkRunMetric` / `STTBenchmarkSegmentMetric` schema v1을 추가했다.
 - `MeetingCorpusTests`, `VADBenchmarkTests`의 STT 측정, `StreamingChunkBenchmarkTests`는 같은 top-level schema로 JSON을 쓴다.
-- `peak_memory_mb` 필드는 schema에 포함했지만, 실제 peak memory 측정은 아직 연결하지 않았다.
+- `peak_memory_mb`는 macOS `getrusage` 기반 peak RSS 스냅샷으로 기록한다.
 
 **작업**
 

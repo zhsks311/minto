@@ -280,6 +280,7 @@ struct VADBenchmarkTests {
             audioSeconds: audioSeconds,
             elapsedSeconds: elapsedSeconds,
             rtf: audioSeconds > 0 ? elapsedSeconds / audioSeconds : 0,
+            peakMemoryMB: STTBenchmarkProcessMetrics.peakResidentMemoryMB(),
             metadata: [
                 "vad": candidate.rawValue,
                 "raw_chunk_count": "\(rawChunks.count)",
