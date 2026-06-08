@@ -15,7 +15,7 @@ public final class LLMCorrectionService: ObservableObject {
             case .none:    return "사용 안 함"
             case .gemini:  return "Gemini (Google) ⚠️"
             case .copilot: return "GitHub Copilot"
-            case .codex:   return "OpenAI Codex ⚠️"
+            case .codex:   return "GPT 계정 로그인 ⚠️"
             }
         }
 
