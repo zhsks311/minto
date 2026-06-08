@@ -124,6 +124,11 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - 120초 전체 7샘플에서 `speech padding=0.12초`, `repair pad=1.0초`를 3회 반복했다. 결과 위치는 `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair100`, `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair100-repeat2`, `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair100-repeat3`.
 - repair 반복 결과: weighted CER 34.2%, 33.8%, 33.9%; Full Global CER 16.2%, 16.8%, 16.9%; empty 6, 5, 5; false-positive text 41 chars 고정; RTF 0.122, 0.128, 0.119; peak memory 904.4MB, 912.7MB, 1238.3MB.
 - 해석: empty-only repair는 120초 기준에서 기준 조건과 전체 padding 1.0초보다 명확히 낫다. 다만 peak memory가 한 번 크게 튀었고, false-positive text는 줄지 않았다. 따라서 기본 제품 기능으로 바로 넣지 말고 short3 full-duration에서 empty 감소, CER, RTF, peak memory를 재검증한다.
+- short3 full-duration에서도 `speech padding=0.12초`, `repair pad=1.0초`를 확인했다. 결과 위치는 `/private/tmp/minto2-vad-full-silero-060-gap11-repair100-short3`.
+- short3 repair 결과: weighted CER 30.7%, macro CER 29.3%, covered global CER 22.4%, Full Global CER 14.8%, empty 9, false-positive text 35 chars, RTF 0.140, peak memory 420.8MB.
+- 같은 short3 기준선 `repair 없음`: weighted CER 37.9%, macro CER 35.1%, covered global CER 28.8%, Full Global CER 21.9%, empty 42, false-positive text 22 chars, RTF 0.113, peak memory 419.3MB.
+- 샘플별 Full Global CER는 `본회의_20260428` 17.2%에서 13.0%, `본회의_20260508` 8.2%에서 6.8%, `재정경제기획위원회_20260430` 30.8%에서 19.6%로 모두 개선됐다.
+- repair 시도/채택은 38회/29회였다. empty final은 크게 줄었지만 false-positive text와 RTF는 증가했다. 따라서 제품 기본값이 아니라 `sample/meeting` 전체 full-duration 검증으로 승격한다.
 
 Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
 
@@ -615,9 +620,9 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 
 ## 바로 다음 작업 순서
 
-1. `speech padding=0.12초`, `repair pad=1.0초`를 short3 full-duration으로 재검증한다.
-2. short3에서 기준 대비 Full Global CER, empty final, peak memory가 모두 통과하면 `sample/meeting` 전체 full-duration을 순차 실행한다.
-3. repair가 통과하면 제품 코드에는 기본값이 아니라 feature flag와 안전 조건으로 붙인다.
+1. short3에서 통과한 `speech padding=0.12초`, `repair pad=1.0초`를 `sample/meeting` 전체 full-duration으로 순차 실행한다.
+2. 전체 샘플에서 기준 대비 weighted CER, empty final, false-positive text, RTF, peak memory를 비교한다. 긴 샘플은 Swift global CER를 skip하되 segment diagnostics를 남긴다.
+3. 전체 샘플에서도 통과하면 제품 코드에는 기본값이 아니라 feature flag와 안전 조건으로 붙인다.
    - 첫 전사 결과가 empty일 때만 retry한다.
    - VAD speech chunk, 충분한 RMS, 충분한 chunk duration, retry 1회 제한 같은 조건을 둔다.
    - retry 결과가 비어 있거나 low confidence면 기존 preview/final 안정성 규칙을 유지한다.

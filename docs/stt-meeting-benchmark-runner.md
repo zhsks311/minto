@@ -301,3 +301,23 @@ Recent 120s segmentation sweep, all with `threshold=0.6` and `merge gap=1.1`:
 Decision: do not promote `merge max 20` and do not spend a full-duration short3 run on it yet.
 Weighted CER improved in all three repeats, but `Full Global CER` did not improve consistently and empty finals did not drop.
 For VAD policy selection, prefer `Full Global CER` over chunk-only weighted CER because missed speech outside emitted chunks is counted only in the full-reference comparison.
+
+Full-duration short3 repair check:
+
+Scope: `본회의_20260428`, `본회의_20260508`, `재정경제기획위원회_20260430`, full duration, Silero `threshold=0.6`, `merge gap=1.1`, `merge max=15`, WhisperKit turbo.
+
+| Candidate | Weighted CER | Macro CER | Global CER | Full Global CER | Empty | FP chars | RTF | Peak MB | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| repair off | 37.9% | 35.1% | 28.8% | 21.9% | 42 | 22 | 0.113 | 419.3 | baseline |
+| empty repair 1.00 | 30.7% | 29.3% | 22.4% | 14.8% | 9 | 35 | 0.140 | 420.8 | promote to all7 full check |
+
+Sample-level `Full Global CER`:
+
+| Sample | Repair off | Empty repair 1.00 | Empty off -> repair | Repair accepted |
+| --- | ---: | ---: | ---: | ---: |
+| 본회의_20260428 | 17.2% | 13.0% | 8 -> 2 | 4/6 |
+| 본회의_20260508 | 8.2% | 6.8% | 5 -> 1 | 4/5 |
+| 재정경제기획위원회_20260430 | 30.8% | 19.6% | 29 -> 6 | 21/27 |
+
+Decision: `empty repair 1.00` is not a product default yet. It passed short3 on CER and empty finals, but RTF rose from `0.113` to `0.140` and false-positive text rose from `22` to `35` chars.
+Next run it on all seven full-duration samples with memory-safe sequential execution.
