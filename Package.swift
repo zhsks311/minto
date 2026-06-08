@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.10.0"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.12.4"),
         // 원격 MCP 서버(Notion) OAuth 2.1(DCR+PKCE)·툴 호출용 공식 SDK. pre-1.0이라 minor 고정.
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", .upToNextMinor(from: "0.12.1")),
     ],
@@ -41,7 +42,10 @@ let package = Package(
         ),
         .testTarget(
             name: "MintoTests",
-            dependencies: ["MintoCore"],
+            dependencies: [
+                "MintoCore",
+                .product(name: "FluidAudio", package: "FluidAudio"),
+            ],
             path: "Tests/MintoTests"
         )
     ]

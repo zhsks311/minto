@@ -1,6 +1,9 @@
 import Foundation
 import Testing
 @testable import MintoCore
+#if canImport(FluidAudio)
+import FluidAudio
+#endif
 
 @MainActor
 @Suite("VAD Benchmark (Manual Only)", .serialized)
@@ -51,6 +54,17 @@ struct VADBenchmarkTests {
         positiveDoubleEnv("VAD_SHORT_UTTERANCE_SEC", default: 1.0)
     }
 
+    private static var sileroThreshold: Float {
+        Float(positiveDoubleEnv("SILERO_VAD_THRESHOLD", default: 0.5))
+    }
+
+    private static var fluidAudioModelDirectory: URL {
+        if let value = ProcessInfo.processInfo.environment["FLUIDAUDIO_MODEL_DIR"], !value.isEmpty {
+            return URL(fileURLWithPath: value)
+        }
+        return URL(fileURLWithPath: "/private/tmp/minto2-fluidaudio-models", isDirectory: true)
+    }
+
     @Test("sample/meeting VAD baseline metrics")
     func vadBaselineMetrics() async throws {
         guard ProcessInfo.processInfo.environment["RUN_VAD_BENCH"] == "1" else { return }
@@ -61,27 +75,25 @@ struct VADBenchmarkTests {
             return
         }
 
-        let candidate = Self.candidate
-        guard candidate == .energy else {
-            let metrics = Self.unavailableMetrics(
-                candidate: candidate,
-                reason: "FluidAudio Silero VAD is not linked yet. Add the FluidAudio package before running VAD_ENGINE=silero."
-            )
-            try Self.writeMetricsIfNeeded(metrics)
-            print("[VADBench] \(candidate.rawValue) unavailable: \(metrics.error ?? "")")
-            return
-        }
-
         let samples = try Self.readWAVSamples(from: Self.audioURL)
         let totalSeconds = min(Double(samples.count) / Double(Self.sampleRate), Self.maxSeconds)
         let captions = try Self.parseSMI(from: Self.smiURL)
-        let captionIntervals = captions
-            .filter { $0.start < totalSeconds && $0.end > 0 }
-            .map { Interval(start: max(0, $0.start), end: min(totalSeconds, $0.end)) }
-            .filter { $0.end > $0.start }
-        let referenceIntervals = Self.mergedIntervals(captionIntervals)
-        let shortReferenceIntervals = captionIntervals.filter {
-            $0.end - $0.start <= Self.shortUtteranceSeconds
+        let candidate = Self.candidate
+
+        if candidate == .silero {
+            let finalChunks = try await Self.sileroChunks(from: samples, totalSeconds: totalSeconds)
+            let metrics = Self.buildMetrics(
+                candidate: candidate,
+                captions: captions,
+                totalSeconds: totalSeconds,
+                finalChunks: finalChunks,
+                previewChunks: []
+            )
+            try Self.writeMetricsIfNeeded(metrics)
+            Self.printMetrics(metrics, audioName: Self.audioURL.lastPathComponent)
+            #expect(metrics.available, "Silero VAD benchmark should be available when FluidAudio is linked")
+            #expect(!finalChunks.isEmpty, "Silero VAD should produce baseline chunks for sample speech")
+            return
         }
 
         let detector: any VoiceActivityDetector = VADProcessor()
@@ -110,6 +122,36 @@ struct VADBenchmarkTests {
         }
         try? await Task.sleep(nanoseconds: 100_000_000)
 
+        let metrics = Self.buildMetrics(
+            candidate: candidate,
+            captions: captions,
+            totalSeconds: totalSeconds,
+            finalChunks: finalChunks,
+            previewChunks: previewChunks
+        )
+        try Self.writeMetricsIfNeeded(metrics)
+        Self.printMetrics(metrics, audioName: Self.audioURL.lastPathComponent)
+
+        #expect(metrics.referenceSpeechSeconds > 0, "VAD benchmark reference speech should not be empty")
+        #expect(!finalChunks.isEmpty, "Energy VAD should produce baseline chunks for sample speech")
+    }
+
+    private static func buildMetrics(
+        candidate: Candidate,
+        captions: [Caption],
+        totalSeconds: Double,
+        finalChunks: [VADChunkMetric],
+        previewChunks: [VADChunkMetric]
+    ) -> VADBenchmarkMetric {
+        let captionIntervals = captions
+            .filter { $0.start < totalSeconds && $0.end > 0 }
+            .map { Interval(start: max(0, $0.start), end: min(totalSeconds, $0.end)) }
+            .filter { $0.end > $0.start }
+        let referenceIntervals = Self.mergedIntervals(captionIntervals)
+        let shortReferenceIntervals = captionIntervals.filter {
+            $0.end - $0.start <= Self.shortUtteranceSeconds
+        }
+
         let finalIntervals = Self.mergedIntervals(finalChunks.map { Interval(start: $0.startSeconds, end: $0.endSeconds) })
         let referenceSpeechSeconds = Self.totalDuration(referenceIntervals)
         let finalSpeechSeconds = Self.totalDuration(finalIntervals)
@@ -120,7 +162,7 @@ struct VADBenchmarkTests {
             finalIntervals.contains { $0.overlaps(interval) }
         }.count
 
-        let metrics = VADBenchmarkMetric(
+        return VADBenchmarkMetric(
             vad: candidate.rawValue,
             available: true,
             error: nil,
@@ -143,50 +185,58 @@ struct VADBenchmarkTests {
             chunks: finalChunks,
             previews: previewChunks
         )
-        try Self.writeMetricsIfNeeded(metrics)
+    }
 
+    private static func printMetrics(_ metrics: VADBenchmarkMetric, audioName: String) {
         print("""
 
-        === VAD Benchmark [\(candidate.rawValue)] ===
-        audio                  : \(Self.audioURL.lastPathComponent)
-        seconds                : \(String(format: "%.1f", totalSeconds))
-        chunks / previews      : \(finalChunks.count) / \(previewChunks.count)
-        speech recall          : \(String(format: "%.1f%%", metrics.speechRecall * 100)) (\(String(format: "%.1f", coveredSpeechSeconds))/\(String(format: "%.1f", referenceSpeechSeconds))s)
-        false positive seconds : \(String(format: "%.1f", falsePositiveSeconds))s (ratio \(String(format: "%.1f%%", metrics.falsePositiveRatio * 100)))
-        missed speech seconds  : \(String(format: "%.1f", missedSpeechSeconds))s
-        short recall           : \(coveredShortCount)/\(shortReferenceIntervals.count) <= \(String(format: "%.1f", Self.shortUtteranceSeconds))s
+        === VAD Benchmark [\(metrics.vad)] ===
+        audio                  : \(audioName)
+        seconds                : \(String(format: "%.1f", metrics.seconds))
+        chunks / previews      : \(metrics.chunkCount) / \(metrics.previewCount)
+        speech recall          : \(String(format: "%.1f%%", metrics.speechRecall * 100)) (\(String(format: "%.1f", metrics.coveredSpeechSeconds))/\(String(format: "%.1f", metrics.referenceSpeechSeconds))s)
+        false positive seconds : \(String(format: "%.1f", metrics.falsePositiveSeconds))s (ratio \(String(format: "%.1f%%", metrics.falsePositiveRatio * 100)))
+        missed speech seconds  : \(String(format: "%.1f", metrics.missedSpeechSeconds))s
+        short recall           : \(metrics.shortCoveredCount)/\(metrics.shortReferenceCount) <= \(String(format: "%.1f", metrics.shortUtteranceSeconds))s
         ================================
 
         """)
-
-        #expect(referenceSpeechSeconds > 0, "VAD benchmark reference speech should not be empty")
-        #expect(!finalChunks.isEmpty, "Energy VAD should produce baseline chunks for sample speech")
     }
 
-    private static func unavailableMetrics(candidate: Candidate, reason: String) -> VADBenchmarkMetric {
-        VADBenchmarkMetric(
-            vad: candidate.rawValue,
-            available: false,
-            error: reason,
-            sample: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
-            seconds: 0,
-            frameSeconds: Self.frameSeconds,
-            chunkCount: 0,
-            previewCount: 0,
-            finalSpeechSeconds: 0,
-            referenceSpeechSeconds: 0,
-            coveredSpeechSeconds: 0,
-            missedSpeechSeconds: 0,
-            falsePositiveSeconds: 0,
-            speechRecall: 0,
-            falsePositiveRatio: 0,
-            shortUtteranceSeconds: Self.shortUtteranceSeconds,
-            shortReferenceCount: 0,
-            shortCoveredCount: 0,
-            shortRecall: 0,
-            chunks: [],
-            previews: []
+    private static func sileroChunks(from samples: [Float], totalSeconds: Double) async throws -> [VADChunkMetric] {
+        #if canImport(FluidAudio)
+        let sampleLimit = min(samples.count, Int(totalSeconds * Double(Self.sampleRate)))
+        let limitedSamples = Array(samples.prefix(sampleLimit))
+        var segmentation = VadSegmentationConfig.default
+        segmentation.minSpeechDuration = 0.25
+        segmentation.minSilenceDuration = 0.4
+        segmentation.maxSpeechDuration = 14.0
+        segmentation.speechPadding = 0.12
+
+        let manager = try await VadManager(
+            config: VadConfig(defaultThreshold: Self.sileroThreshold),
+            modelDirectory: Self.fluidAudioModelDirectory
         )
+        let segments = try await manager.segmentSpeech(limitedSamples, config: segmentation)
+        return segments.enumerated().compactMap { index, segment in
+            let startSample = max(0, segment.startSample(sampleRate: Self.sampleRate))
+            let endSample = min(sampleLimit, segment.endSample(sampleRate: Self.sampleRate))
+            guard endSample > startSample else { return nil }
+            return VADChunkMetric(
+                index: index,
+                startSeconds: Double(startSample) / Double(Self.sampleRate),
+                endSeconds: Double(endSample) / Double(Self.sampleRate),
+                durationSeconds: Double(endSample - startSample) / Double(Self.sampleRate),
+                trailingSilence: 0,
+                isPreview: false,
+                sampleCount: endSample - startSample
+            )
+        }
+        #else
+        throw NSError(domain: "VADBench", code: 5, userInfo: [
+            NSLocalizedDescriptionKey: "FluidAudio is not linked"
+        ])
+        #endif
     }
 
     nonisolated private static func metric(for chunk: AudioChunk, index: Int) -> VADChunkMetric {
