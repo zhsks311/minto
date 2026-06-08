@@ -91,6 +91,17 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - `logProbNil` variant는 안전한 해법이 아니다. 2개 probe 중 1개는 여전히 empty였고, 1개는 텍스트가 나오지만 avgLogprob가 매우 낮고 문장이 심하게 깨졌다.
 - 해석: empty final은 단순 VAD 누락이 아니다. 일부는 WhisperKit/turbo decode의 저신뢰 fallback 문제이고, 일부는 compute path 또는 반복 실행 상태에 따라 흔들린다. 전역 threshold 완화보다 probe 반복 측정, compute path 비교, padding/segmentation 조정이 다음 순서다.
 
+`scripts/run_whisper_empty_probe_matrix.py`로 service-empty 3개 probe의 variant/path matrix도 고정했다.
+
+- 결과 위치: `/private/tmp/minto2-whisper-empty-probe-matrix-20260608`.
+- direct baseline: empty 1/3. 이전 수동 실행과 달라져 단일 run으로 판단하면 안 된다.
+- direct `logProbNil`: empty 0/3이지만 preview text가 심하게 깨진다. 전역 완화 후보로 부적합하다.
+- direct `tempFallback0`: empty 3/3. fallback 제거는 기각한다.
+- direct `windowClip0`: empty 3/3. window clip time 0은 기각한다.
+- service baseline: empty 2/3. production path에서도 같은 probe의 empty가 재현된다.
+- baseline 반복 결과 위치: `/private/tmp/minto2-whisper-empty-probe-baseline-repeat-20260608`.
+- baseline 3회 반복: direct는 label별 empty 3/3, 2/3, 3/3이고, service는 3/3, 3/3, 1/3이다. 따라서 다음 실험은 최소 3회 반복 또는 전체 sample metric으로 판단해야 한다.
+
 같은 runner로 Apple 엔진 smoke도 확인했다.
 
 - `sf_speech_on_device`: 현재 시스템에서 "Apple 음성 인식 권한이 거부" 상태라 1샘플 smoke가 load 단계에서 실패했다.
@@ -558,11 +569,11 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 
 ## 바로 다음 작업 순서
 
-1. `WHISPER_DIAG_LABELS`로 service-empty 3개 probe를 baseline, `logProbNil`, `tempFallback0`, `windowClip0`에서 반복 측정해 재현성과 부작용을 분리한다.
-2. `STTService` 기본 compute path와 direct CPU-only path 차이를 같은 probe로 반복 실행해 ANE/CoreML 비결정성인지 판단한다.
-3. speech padding, min speech duration, chunk merge 정책을 작은 sweep으로 다시 돌려 empty final과 false-positive text가 동시에 줄어드는지 본다.
-4. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
-5. low VAD overlap empty row와 high VAD overlap empty row를 분리해 VAD miss와 WhisperKit decode failure를 따로 센다.
+1. Silero speech padding, min speech duration, chunk merge 정책을 작은 sweep으로 다시 돌려 empty final과 false-positive text가 동시에 줄어드는지 본다.
+2. probe matrix는 후보마다 최소 3회 반복하고, 단일 run의 empty/non-empty만으로 채택하지 않는다.
+3. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
+4. low VAD overlap empty row와 high VAD overlap empty row를 분리해 VAD miss와 WhisperKit decode failure를 따로 센다.
+5. decode threshold 전역 완화는 g2와 non-speech probe까지 통과하기 전에는 적용하지 않는다.
 6. SFSpeech 권한/Dictation 상태를 복구한 뒤 같은 120초 runner로 다시 smoke를 돌린다.
 7. macOS 26+ 환경에서 SpeechAnalyzer 한국어 asset 상태를 확인하고 같은 120초 runner로 smoke를 돌린다.
 8. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.

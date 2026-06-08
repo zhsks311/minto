@@ -128,6 +128,28 @@ Useful knobs:
 - `WHISPER_DIAG_MAX_CLIPS=1`: smoke a subset before a full diagnostic run.
 - `WHISPER_DIAG_VARIANT=logProbNil`: compare decode variants without changing production defaults.
 
+To run the fixed service-empty probes as a matrix and write a manifest, logs, CSV, and Markdown summary:
+
+```bash
+scripts/run_whisper_empty_probe_matrix.py \
+  --output-root /private/tmp/minto2-whisper-empty-probe-matrix-20260608 \
+  --model-folder /Users/d66hjkxwt9/Documents/huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-large-v3-v20240930_turbo \
+  --paths direct,service \
+  --variants baseline,logProbNil,tempFallback0,windowClip0 \
+  --repeats 1
+```
+
+For baseline nondeterminism checks, use repeated baseline runs:
+
+```bash
+scripts/run_whisper_empty_probe_matrix.py \
+  --output-root /private/tmp/minto2-whisper-empty-probe-baseline-repeat-20260608 \
+  --model-folder /Users/d66hjkxwt9/Documents/huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-large-v3-v20240930_turbo \
+  --paths direct,service \
+  --variants baseline \
+  --repeats 3
+```
+
 ## VAD benchmark run
 
 Run Energy VAD over every `sample/meeting` pair:
