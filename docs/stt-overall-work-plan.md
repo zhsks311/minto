@@ -565,6 +565,7 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
   - 현재는 `NemotronSidecarClient`로 localhost HTTP 계약을 추가했다.
   - 현재는 `scripts/nemotron_sidecar_mock.py`로 실제 MLX 모델 없이 HTTP 계약을 smoke할 수 있다.
   - 현재는 `scripts/nemotron_mlx_sidecar.py`로 같은 계약을 실제 `mlx-audio` worker에 연결하는 scaffold를 추가했다.
+  - 현재는 `scripts/nemotron_sidecar_bench.py`로 실행 중인 sidecar를 `sample/meeting` WAV+SMI 기준으로 측정할 수 있다.
   - `/health`와 `/transcribe`를 사용한다.
   - audio payload는 16kHz mono Float32 little-endian base64다.
 - 처음에는 final chunk 전용으로만 붙인다.
@@ -573,6 +574,7 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - peak memory와 cold start latency를 필수 metric으로 기록한다.
 - mock worker 결과는 CER 근거가 아니라 sidecar 운영 계약 검증 근거로만 사용한다.
 - 실제 MLX worker도 앱에 연결하기 전에는 dependency check와 model preload/cold-start 측정을 먼저 분리한다.
+- sidecar benchmark runner는 per-window CER, global CER, client latency, server RTF, peak memory, health before/after를 JSON으로 남긴다.
 
 **검증**
 
@@ -702,7 +704,7 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 14. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
 15. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
 16. `StreamingTranscriptionEngine` protocol, `TranscriptionCoordinatorPlan`, hidden streaming runner/metric scaffold, `SpeechAnalyzerStreamingEngine` hidden PoC는 추가했다. 다음은 지원 환경에서 `RUN_SPEECH_ANALYZER_STREAMING_POC=1` smoke로 실제 event를 확인한다.
-17. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다. 현재 Swift HTTP client 계약, dependency-free mock worker, 실제 `mlx-audio` worker scaffold는 추가됐다. 다음은 준비된 MLX 환경에서 cold/warm/timeout metric과 `sample/meeting` 전체 CER를 기록한다.
+17. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다. 현재 Swift HTTP client 계약, dependency-free mock worker, 실제 `mlx-audio` worker scaffold, `sample/meeting` HTTP benchmark runner는 추가됐다. 다음은 준비된 MLX 환경에서 cold/warm/timeout metric과 `sample/meeting` 전체 CER를 기록한다.
 18. diarization은 audio offset 보존 작업 이후 offline PoC로 시작한다.
 
 ## 당장 하지 않을 것

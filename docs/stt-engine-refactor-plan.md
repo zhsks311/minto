@@ -80,6 +80,12 @@
    - Convert the Swift f32le payload to a temporary 16kHz mono WAV before calling MLX Audio.
    - Keep model loading lazy by default; use `--preload` for explicit cold-start measurement.
    - Verify without model loading via `--help`, `--check-dependencies`, and Python compile checks; real CER validation requires a prepared MLX environment.
+13. Add a sidecar benchmark runner for `sample/meeting`.
+   - `scripts/nemotron_sidecar_bench.py`
+   - Read 16kHz meeting WAV windows without loading entire long files into memory.
+   - Send the same f32le base64 payload as the Swift client.
+   - Record per-window CER, global CER, client latency, sidecar RTF, peak memory, and health before/after.
+   - Verify with the mock worker only as a contract smoke; real CER evidence requires the MLX worker.
 
 ## Non-goals
 
