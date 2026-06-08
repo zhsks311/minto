@@ -105,6 +105,14 @@ struct VADBenchmarkTests {
         nonNegativeDoubleEnv("VAD_STT_REPAIR_PAD_SEC") ?? 0
     }
 
+    private static var sttRepairMinChunkSeconds: Double? {
+        nonNegativeDoubleEnv("VAD_STT_REPAIR_MIN_CHUNK_SEC")
+    }
+
+    private static var sttRepairMinAudioDB: Double? {
+        doubleEnv("VAD_STT_REPAIR_MIN_AUDIO_DB")
+    }
+
     private static var shouldSkipSwiftGlobalCER: Bool {
         ProcessInfo.processInfo.environment["VAD_SKIP_SWIFT_GLOBAL_CER"] == "1"
     }
@@ -220,6 +228,7 @@ struct VADBenchmarkTests {
         var repairAttemptCount = 0
         var repairAcceptedCount = 0
         var repairAcceptedFalsePositiveCount = 0
+        var repairGuardSkippedCount = 0
         var chunkMetrics: [STTBenchmarkSegmentMetric] = []
         var allReferences: [String] = []
         var allHypotheses: [String] = []
@@ -240,23 +249,34 @@ struct VADBenchmarkTests {
             var repairStartSeconds: Double?
             var repairEndSeconds: Double?
             var repairAudioDB: Double?
+            var repairGuardPassed: Bool?
+            var repairGuardReason: String?
             if Self.sttRepairPadSeconds > 0,
                hypothesis.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                repairAttempted = true
-                repairAttemptCount += 1
-                let repairStartSample = max(0, Int((chunk.startSeconds - Self.sttRepairPadSeconds) * Double(Self.sampleRate)))
-                let repairEndSample = min(samples.count, Int((chunk.endSeconds + Self.sttRepairPadSeconds) * Double(Self.sampleRate)))
-                if repairEndSample > repairStartSample {
-                    let repairClip = Array(samples[repairStartSample..<repairEndSample])
-                    repairStartSeconds = Double(repairStartSample) / Double(Self.sampleRate)
-                    repairEndSeconds = Double(repairEndSample) / Double(Self.sampleRate)
-                    repairAudioDB = Double(STTAudioUtilities.dbLevel(repairClip))
-                    let repairResult = try await service.transcribe(pcmSamples: repairClip)
-                    let repairedHypothesis = repairResult.segment.text
-                    if !repairedHypothesis.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        hypothesis = repairedHypothesis
-                        repairAccepted = true
-                        repairAcceptedCount += 1
+                repairGuardReason = Self.repairGuardFailureReason(
+                    durationSeconds: chunk.durationSeconds,
+                    audioDB: audioDB
+                )
+                repairGuardPassed = repairGuardReason == nil
+                if repairGuardPassed == false {
+                    repairGuardSkippedCount += 1
+                } else {
+                    repairAttempted = true
+                    repairAttemptCount += 1
+                    let repairStartSample = max(0, Int((chunk.startSeconds - Self.sttRepairPadSeconds) * Double(Self.sampleRate)))
+                    let repairEndSample = min(samples.count, Int((chunk.endSeconds + Self.sttRepairPadSeconds) * Double(Self.sampleRate)))
+                    if repairEndSample > repairStartSample {
+                        let repairClip = Array(samples[repairStartSample..<repairEndSample])
+                        repairStartSeconds = Double(repairStartSample) / Double(Self.sampleRate)
+                        repairEndSeconds = Double(repairEndSample) / Double(Self.sampleRate)
+                        repairAudioDB = Double(STTAudioUtilities.dbLevel(repairClip))
+                        let repairResult = try await service.transcribe(pcmSamples: repairClip)
+                        let repairedHypothesis = repairResult.segment.text
+                        if !repairedHypothesis.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            hypothesis = repairedHypothesis
+                            repairAccepted = true
+                            repairAcceptedCount += 1
+                        }
                     }
                 }
             }
@@ -304,7 +324,9 @@ struct VADBenchmarkTests {
                 },
                 repairAudioDB: repairAudioDB,
                 repairReferencePresent: repairAttempted ? stats.refLen > 0 : nil,
-                repairFalsePositive: repairAttempted ? repairFalsePositive : nil
+                repairFalsePositive: repairAttempted ? repairFalsePositive : nil,
+                repairGuardPassed: repairGuardPassed,
+                repairGuardReason: repairGuardReason
             ))
         }
 
@@ -364,6 +386,9 @@ struct VADBenchmarkTests {
                 "stt_repair_attempt_count": "\(repairAttemptCount)",
                 "stt_repair_accepted_count": "\(repairAcceptedCount)",
                 "stt_repair_accepted_false_positive_count": "\(repairAcceptedFalsePositiveCount)",
+                "stt_repair_guard_skipped_count": "\(repairGuardSkippedCount)",
+                "stt_repair_min_chunk_seconds": Self.formatOptionalConfig(Self.sttRepairMinChunkSeconds),
+                "stt_repair_min_audio_db": Self.formatOptionalConfig(Self.sttRepairMinAudioDB),
                 "skip_swift_global_cer": "\(Self.shouldSkipSwiftGlobalCER)",
             ],
             segments: chunkMetrics
@@ -381,6 +406,7 @@ struct VADBenchmarkTests {
         chunks measured         : \(metric.measuredUnitCount)/\(metric.totalUnitCount) (raw \(rawChunks.count))
         merge gap / max         : \(Self.formatOptionalSeconds(Self.benchmarkConfig.chunkMergeGapSeconds)) / \(String(format: "%.1f", Self.benchmarkConfig.chunkMergeMaxSeconds))s
         repair pad / accepted   : \(String(format: "%.1f", Self.sttRepairPadSeconds))s / \(repairAcceptedCount)/\(repairAttemptCount)
+        repair guard skipped    : \(repairGuardSkippedCount)
         repair false positives  : \(repairAcceptedFalsePositiveCount)
         empty final count       : \(metric.emptyFinalCount)
         false positive text     : \(metric.falsePositiveTranscriptCount) chunks / \(metric.falsePositiveTranscriptChars) chars
@@ -671,9 +697,35 @@ struct VADBenchmarkTests {
         return value
     }
 
+    private static func doubleEnv(_ key: String) -> Double? {
+        guard let rawValue = ProcessInfo.processInfo.environment[key],
+              let value = Double(rawValue) else {
+            return nil
+        }
+        return value
+    }
+
+    private static func repairGuardFailureReason(durationSeconds: Double, audioDB: Double) -> String? {
+        var reasons: [String] = []
+        if let minChunkSeconds = Self.sttRepairMinChunkSeconds,
+           durationSeconds < minChunkSeconds {
+            reasons.append("duration")
+        }
+        if let minAudioDB = Self.sttRepairMinAudioDB,
+           audioDB < minAudioDB {
+            reasons.append("audio_db")
+        }
+        return reasons.isEmpty ? nil : reasons.joined(separator: "+")
+    }
+
     private static func formatOptionalSeconds(_ value: Double?) -> String {
         guard let value else { return "disabled" }
         return String(format: "%.1f", value)
+    }
+
+    private static func formatOptionalConfig(_ value: Double?) -> String {
+        guard let value else { return "disabled" }
+        return "\(value)"
     }
 
     private struct SMIDocument: Decodable {

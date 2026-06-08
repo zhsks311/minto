@@ -204,6 +204,8 @@ struct STTBenchmarkSegmentMetric: Encodable {
     let repairAudioDB: Double?
     let repairReferencePresent: Bool?
     let repairFalsePositive: Bool?
+    let repairGuardPassed: Bool?
+    let repairGuardReason: String?
 
     enum CodingKeys: String, CodingKey {
         case index
@@ -229,6 +231,8 @@ struct STTBenchmarkSegmentMetric: Encodable {
         case repairAudioDB = "repair_audio_db"
         case repairReferencePresent = "repair_reference_present"
         case repairFalsePositive = "repair_false_positive"
+        case repairGuardPassed = "repair_guard_passed"
+        case repairGuardReason = "repair_guard_reason"
     }
 
     init(
@@ -254,7 +258,9 @@ struct STTBenchmarkSegmentMetric: Encodable {
         repairDurationSeconds: Double? = nil,
         repairAudioDB: Double? = nil,
         repairReferencePresent: Bool? = nil,
-        repairFalsePositive: Bool? = nil
+        repairFalsePositive: Bool? = nil,
+        repairGuardPassed: Bool? = nil,
+        repairGuardReason: String? = nil
     ) {
         self.index = index
         self.startSeconds = startSeconds
@@ -279,6 +285,8 @@ struct STTBenchmarkSegmentMetric: Encodable {
         self.repairAudioDB = repairAudioDB
         self.repairReferencePresent = repairReferencePresent
         self.repairFalsePositive = repairFalsePositive
+        self.repairGuardPassed = repairGuardPassed
+        self.repairGuardReason = repairGuardReason
     }
 }
 

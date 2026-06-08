@@ -94,7 +94,9 @@ struct STTBenchmarkMetricsTests {
             repairDurationSeconds: 12,
             repairAudioDB: -26.5,
             repairReferencePresent: true,
-            repairFalsePositive: false
+            repairFalsePositive: false,
+            repairGuardPassed: true,
+            repairGuardReason: nil
         )
 
         let data = try JSONEncoder().encode(metric)
@@ -110,6 +112,7 @@ struct STTBenchmarkMetricsTests {
         #expect(object["repair_audio_db"] as? Double == -26.5)
         #expect(object["repair_reference_present"] as? Bool == true)
         #expect(object["repair_false_positive"] as? Bool == false)
+        #expect(object["repair_guard_passed"] as? Bool == true)
     }
 
     @Test("peak resident memory is available on macOS benchmark runs")

@@ -223,6 +223,8 @@ def summarize_by_engine(metrics):
             merge_gap_seconds,
             merge_max_seconds,
             repair_pad_seconds,
+            repair_min_chunk_seconds,
+            repair_min_audio_db,
         ) = key
         total_distance = sum(int(item.get("distance") or 0) for item in items)
         total_ref = sum(int(item.get("reference_length") or 0) for item in items)
@@ -263,6 +265,8 @@ def summarize_by_engine(metrics):
             "chunk_merge_gap_seconds": merge_gap_seconds,
             "chunk_merge_max_seconds": merge_max_seconds,
             "stt_repair_pad_seconds": repair_pad_seconds,
+            "stt_repair_min_chunk_seconds": repair_min_chunk_seconds,
+            "stt_repair_min_audio_db": repair_min_audio_db,
             "sample_count": len(items),
             "weighted_micro_cer": total_distance / total_ref if total_ref else None,
             "sample_macro_cer": sum(macro_values) / len(macro_values) if macro_values else None,
@@ -295,10 +299,14 @@ def summary_group_key(metric):
             metadata.get("chunk_merge_gap_seconds", ""),
             metadata.get("chunk_merge_max_seconds", ""),
             metadata.get("stt_repair_pad_seconds", ""),
+            metadata.get("stt_repair_min_chunk_seconds", ""),
+            metadata.get("stt_repair_min_audio_db", ""),
         )
 
     return (
         metric["engine_id"],
+        "",
+        "",
         "",
         "",
         "",
@@ -352,6 +360,8 @@ def segment_diagnostics(metrics, min_cer, vad_metrics=None, vad_engine="energy")
                 "repair_audio_db": float_or_none(segment.get("repair_audio_db")),
                 "repair_reference_present": repair_reference_present,
                 "repair_false_positive": repair_false_positive,
+                "repair_guard_passed": segment.get("repair_guard_passed"),
+                "repair_guard_reason": segment.get("repair_guard_reason"),
                 "reference": segment.get("reference") or "",
                 "hypothesis": segment.get("hypothesis") or "",
                 "metrics_file": metric.get("_path", ""),
@@ -501,6 +511,9 @@ def escape_markdown_cell(value):
 
 
 def repair_status(row):
+    if row.get("repair_guard_passed") is False:
+        reason = row.get("repair_guard_reason") or "guard"
+        return f"guarded:{reason}"
     if row.get("repair_attempted") is None:
         return "n/a"
     if row.get("repair_accepted"):
@@ -550,8 +563,8 @@ def vad_markdown_table(rows):
     full_header = " Full Global CER |" if show_full_reference else ""
     full_separator = " ---: |" if show_full_reference else ""
     lines = [
-        f"| Engine | VAD | Energy offset | Silero threshold | Silero pad | Merge gap | Merge max | Repair pad | Samples | Weighted CER | Macro CER | Global CER |{full_header} RTF | Peak MB | Empty | FP chars |",
-        f"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |{full_separator} ---: | ---: | ---: | ---: |",
+        f"| Engine | VAD | Energy offset | Silero threshold | Silero pad | Merge gap | Merge max | Repair pad | Repair min dur | Repair min dB | Samples | Weighted CER | Macro CER | Global CER |{full_header} RTF | Peak MB | Empty | FP chars |",
+        f"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |{full_separator} ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         full_value = (
@@ -561,7 +574,7 @@ def vad_markdown_table(rows):
             if show_full_reference else ""
         )
         lines.append(
-            "| {engine} | {vad} | {energy_offset} | {silero_threshold} | {silero_pad} | {merge_gap} | {merge_max} | {repair_pad} | {samples} | {weighted} | {macro} | {global_cer} |{full_value} {rtf} | {peak} | {empty} | {fp} |".format(
+            "| {engine} | {vad} | {energy_offset} | {silero_threshold} | {silero_pad} | {merge_gap} | {merge_max} | {repair_pad} | {repair_min_dur} | {repair_min_db} | {samples} | {weighted} | {macro} | {global_cer} |{full_value} {rtf} | {peak} | {empty} | {fp} |".format(
                 engine=row["engine_id"],
                 vad=row["vad"] or "n/a",
                 energy_offset=fmt_config(row["energy_noise_offset_db"]),
@@ -570,6 +583,8 @@ def vad_markdown_table(rows):
                 merge_gap=fmt_config(row["chunk_merge_gap_seconds"]),
                 merge_max=fmt_config(row["chunk_merge_max_seconds"]),
                 repair_pad=fmt_config(row["stt_repair_pad_seconds"]),
+                repair_min_dur=fmt_config(row["stt_repair_min_chunk_seconds"]),
+                repair_min_db=fmt_config(row["stt_repair_min_audio_db"]),
                 samples=row["sample_count"],
                 weighted=fmt_percent(row["weighted_micro_cer"]),
                 macro=fmt_percent(row["sample_macro_cer"]),
@@ -586,12 +601,12 @@ def vad_markdown_table(rows):
 
 def segment_markdown_table(rows):
     lines = [
-        "| Engine | Sample | # | Time | Dur | dB | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | Repair | Repair dur | Repair dB | Repair ref | Repair FP | VAD overlap | Bucket | VAD gap | VAD chunks | Reference | Hypothesis |",
-        "| --- | --- | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | --- | ---: | --- | ---: | --- | --- | --- |",
+        "| Engine | Sample | # | Time | Dur | dB | CER | Empty | Ref len | Ref cps | Hyp len | Hyp cps | Repair | Repair guard | Repair dur | Repair dB | Repair ref | Repair FP | VAD overlap | Bucket | VAD gap | VAD chunks | Reference | Hypothesis |",
+        "| --- | --- | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | --- | --- | ---: | --- | ---: | --- | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {engine} | {sample} | {index} | {time} | {duration} | {audio_db} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {repair} | {repair_duration} | {repair_db} | {repair_ref} | {repair_fp} | {vad_overlap} | {bucket} | {vad_gap} | {vad_chunks} | {reference} | {hypothesis} |".format(
+            "| {engine} | {sample} | {index} | {time} | {duration} | {audio_db} | {cer} | {empty} | {ref_len} | {ref_cps} | {hyp_len} | {hyp_cps} | {repair} | {repair_guard} | {repair_duration} | {repair_db} | {repair_ref} | {repair_fp} | {vad_overlap} | {bucket} | {vad_gap} | {vad_chunks} | {reference} | {hypothesis} |".format(
                 engine=row["engine_id"],
                 sample=row["sample_id"],
                 index=row["index"],
@@ -605,6 +620,7 @@ def segment_markdown_table(rows):
                 hyp_len=row["hypothesis_length"],
                 hyp_cps=fmt_float(row["hypothesis_chars_per_second"]),
                 repair=repair_status(row),
+                repair_guard=fmt_bool(row["repair_guard_passed"]),
                 repair_duration=fmt_float(row["repair_duration_seconds"]),
                 repair_db=fmt_float(row["repair_audio_db"]),
                 repair_ref=fmt_bool(row["repair_reference_present"]),
@@ -655,6 +671,8 @@ def write_csv(path, rows):
         "chunk_merge_gap_seconds",
         "chunk_merge_max_seconds",
         "stt_repair_pad_seconds",
+        "stt_repair_min_chunk_seconds",
+        "stt_repair_min_audio_db",
         "sample_count",
         "weighted_micro_cer",
         "sample_macro_cer",
@@ -698,6 +716,8 @@ def write_segment_csv(path, rows):
         "repair_audio_db",
         "repair_reference_present",
         "repair_false_positive",
+        "repair_guard_passed",
+        "repair_guard_reason",
         "vad_overlap_seconds",
         "vad_overlap_ratio",
         "vad_bucket",

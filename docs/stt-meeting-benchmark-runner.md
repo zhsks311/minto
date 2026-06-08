@@ -281,6 +281,23 @@ scripts/run_meeting_vad_benchmarks.py \
 This is a benchmark-only knob. It does not change the normal product path unless product code later adds the same retry policy behind explicit safety conditions.
 Judge it with `Full Global CER`, empty final count, false-positive transcript chars, RTF, and peak memory.
 
+To test a narrower benchmark-only repair guard, skip retry for very short or very low-energy empty chunks:
+
+```bash
+WHISPER_MODEL_FOLDER=/path/to/openai_whisper-large-v3-v20240930_turbo \
+scripts/run_meeting_vad_benchmarks.py \
+  --mode stt \
+  --engines silero \
+  --stt-engine whisper_accurate \
+  --max-seconds 120 \
+  --vad-stt-max-chunks 0 \
+  --silero-threshold 0.6 \
+  --merge-gap-sec 1.1 \
+  --vad-stt-repair-pad-sec 1.0 \
+  --vad-stt-repair-min-chunk-sec 2.0 \
+  --vad-stt-repair-min-audio-db -35
+```
+
 Recent 120s segmentation sweep, all with `threshold=0.6` and `merge gap=1.1`:
 
 | Candidate | Weighted CER | Full Global CER | Empty | FP chars | RTF | Peak MB | Result |
@@ -322,6 +339,21 @@ Repair telemetry smoke:
 - Result root: `/private/tmp/minto2-vad-stt-telemetry-smoke`.
 - Result: 11 chunks, repair attempted 3, accepted 2, repair false positives 0, empty final 1.
 - `segments.md` now shows per-chunk source `dB`, repair status, repair duration, repair `dB`, whether the repair chunk had reference text, and whether the accepted repair was a false positive.
+
+Repair guard candidate check:
+
+Scope: all seven `sample/meeting` samples, first 120s, Silero `threshold=0.6`, `merge gap=1.1`, `repair pad=1.0`, guard `min chunk=2.0s`, `min audio=-35dB`.
+
+| Run | Weighted CER | Full Global CER | Empty | FP chars | RTF | Peak MB | Repair attempted | Accepted | Guard skipped |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| guard repeat1 | 33.9% | 17.1% | 5 | 41 | 0.166 | 526.1 | 5 | 5 | 5 |
+| guard repeat2 | 34.4% | 15.5% | 7 | 41 | 0.258 | 520.6 | 4 | 2 | 5 |
+| guard repeat3 | 34.3% | 15.6% | 7 | 41 | 0.160 | 751.0 | 6 | 4 | 5 |
+| guard mean | 34.2% | 16.1% | 6.3 | 41 | 0.194 | 599.2 | 5.0 | 3.7 | 5.0 |
+
+Decision: keep this as a candidate, but do not promote it to short3 yet.
+It consistently skips five obvious low-energy/short retries and keeps repair false positives at zero in the 120s runs.
+However, compared with the previous no-guard `repair pad=1.0` mean, empty finals are slightly worse and RTF is not clearly better, so this guard needs either another threshold candidate or a controlled repeat against no-guard in the same run batch.
 
 Full-duration short3 repair check:
 
