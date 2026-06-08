@@ -69,6 +69,11 @@
    - request audio format: 16kHz mono Float32 little-endian encoded as base64.
    - response fields: text, model id, audio seconds, elapsed seconds, RTF, peak memory.
    - Verify: request contract, response parsing, and HTTP failure handling are unit-tested without starting a worker.
+11. Add a Nemotron sidecar mock worker before running the real MLX model.
+   - `scripts/nemotron_sidecar_mock.py`
+   - Keep it dependency-free so contract, timeout, warming, and metric handling can be tested without loading a large model.
+   - The mock is not an ASR benchmark and must not be used as CER evidence.
+   - Verify: run `/health` and `/transcribe` over localhost, then stop the worker in the same smoke command.
 
 ## Non-goals
 
