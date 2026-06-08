@@ -6,12 +6,29 @@ public final class LLMCorrectionService: ObservableObject {
 
     public enum Provider: String, CaseIterable {
         case none    = "none"
+        case gptAPI = "gpt_api"
+        case geminiAPI = "gemini_api"
+        case claudeAPI = "claude_api"
+        case openRouterAPI = "openrouter_api"
         case gemini  = "gemini"
         case copilot = "copilot"
         case codex   = "codex"
 
         public var providerID: LLMProviderID? {
-            LLMProviderRegistry.shared.providerID(forLegacyCorrectionProviderRawValue: rawValue)
+            switch self {
+            case .none:
+                return nil
+            case .gptAPI:
+                return .gpt
+            case .geminiAPI:
+                return .gemini
+            case .claudeAPI:
+                return .claude
+            case .openRouterAPI:
+                return .openRouter
+            case .gemini, .copilot, .codex:
+                return LLMProviderRegistry.shared.providerID(forLegacyCorrectionProviderRawValue: rawValue)
+            }
         }
 
         public var label: String {
@@ -22,10 +39,25 @@ public final class LLMCorrectionService: ObservableObject {
         }
 
         public init?(providerID: LLMProviderID) {
-            guard let rawValue = LLMProviderRegistry.shared.legacyCorrectionProviderRawValue(for: providerID) else {
+            switch providerID {
+            case .gpt:
+                self = .gptAPI
+            case .gemini:
+                self = .geminiAPI
+            case .claude:
+                self = .claudeAPI
+            case .openRouter:
+                self = .openRouterAPI
+            case .copilot, .chatGPTAccount, .geminiAccount:
+                guard let rawValue = LLMProviderRegistry.shared.legacyCorrectionProviderRawValue(for: providerID),
+                      let provider = Self(rawValue: rawValue)
+                else {
+                    return nil
+                }
+                self = provider
+            case .local:
                 return nil
             }
-            self.init(rawValue: rawValue)
         }
 
         // ToS 회색 지대 경고 필요 여부
@@ -70,7 +102,7 @@ public final class LLMCorrectionService: ObservableObject {
 
         guard let provider = selectedTextProvider() else { return nil }
 
-        fputs("[LLM] correcting via \(provider.descriptor.id.rawValue): \"\(text)\"\n", stderr)
+        fputs("[LLM] correcting via \(provider.descriptor.id.rawValue) (inputChars=\(text.count), contextChars=\(context.count))\n", stderr)
         do {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: .correction,
@@ -78,7 +110,7 @@ public final class LLMCorrectionService: ObservableObject {
                 userContent: userContent
             ))
             let corrected = response.text
-            fputs("[LLM] corrected → \"\(corrected)\"\n", stderr)
+            fputs("[LLM] correction completed via \(provider.descriptor.id.rawValue) (outputChars=\(corrected.count))\n", stderr)
             return corrected
         } catch {
             fputs("[LLM] correction failed via \(provider.descriptor.id.rawValue): \(error.localizedDescription)\n", stderr)
@@ -90,28 +122,54 @@ public final class LLMCorrectionService: ObservableObject {
 
     public var isLoggedIn: Bool {
         switch selectedProvider {
-        case .none:    return false
-        case .gemini:  return GeminiOAuthService.shared.isLoggedIn
-        case .copilot: return CopilotOAuthService.shared.isLoggedIn
-        case .codex:   return CodexOAuthService.shared.isLoggedIn
+        case .none:
+            return false
+        case .gptAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .gpt)
+        case .geminiAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .gemini)
+        case .claudeAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .claude)
+        case .openRouterAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .openRouter)
+        case .gemini:
+            return GeminiOAuthService.shared.isLoggedIn
+        case .copilot:
+            return CopilotOAuthService.shared.isLoggedIn
+        case .codex:
+            return CodexOAuthService.shared.isLoggedIn
         }
     }
 
     public var loginEmail: String {
         switch selectedProvider {
-        case .none:    return ""
-        case .gemini:  return GeminiOAuthService.shared.email
-        case .copilot: return CopilotOAuthService.shared.email
-        case .codex:   return ""
+        case .none, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
+            return ""
+        case .gemini:
+            return GeminiOAuthService.shared.email
+        case .copilot:
+            return CopilotOAuthService.shared.email
         }
     }
 
     public func logout() {
         switch selectedProvider {
-        case .none:    break
-        case .gemini:  GeminiOAuthService.shared.logout()
-        case .copilot: CopilotOAuthService.shared.logout()
-        case .codex:   CodexOAuthService.shared.logout()
+        case .none:
+            break
+        case .gptAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .gpt)
+        case .geminiAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .gemini)
+        case .claudeAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .claude)
+        case .openRouterAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .openRouter)
+        case .gemini:
+            GeminiOAuthService.shared.logout()
+        case .copilot:
+            CopilotOAuthService.shared.logout()
+        case .codex:
+            CodexOAuthService.shared.logout()
         }
     }
 }

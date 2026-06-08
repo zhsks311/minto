@@ -40,7 +40,10 @@ public struct LLMProviderRegistry: Sendable {
     }
 
     public func textGenerationProvider(for id: LLMProviderID) -> (any LLMTextGenerationProvider)? {
-        LegacyAccountLLMTextProvider(providerID: id, registry: self)
+        if let legacyProvider = LegacyAccountLLMTextProvider(providerID: id, registry: self) {
+            return legacyProvider
+        }
+        return LLMAPIKeyTextProvider(providerID: id, registry: self)
     }
 }
 

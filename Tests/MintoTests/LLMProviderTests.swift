@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import MintoCore
 
@@ -74,7 +75,7 @@ struct LLMProviderTests {
         #expect(chatGPTProvider?.descriptor.id == .chatGPTAccount)
         #expect(geminiProvider?.descriptor.id == .geminiAccount)
         #expect(copilotProvider?.descriptor.id == .copilot)
-        #expect(gptAPIProvider == nil)
+        #expect(gptAPIProvider?.descriptor.id == .gpt)
 
         let catalog = await chatGPTProvider?.modelCatalog()
         #expect(catalog?.source == .bundledFallback)
@@ -92,5 +93,200 @@ struct LLMProviderTests {
 
         LLMCorrectionService.shared.selectedProvider = .none
         #expect(LLMCorrectionService.shared.selectedTextProvider() == nil)
+    }
+
+    @Test("API key 공급자는 키 미설정 시 기본 모델 카탈로그를 제공한다")
+    func apiKeyProviderCatalogFallbackWithoutKey() async throws {
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .claude,
+            keyProvider: StubAPIKeyProvider(keys: [:]),
+            transport: StubLLMAPITransport(data: Data("{}".utf8))
+        ))
+
+        #expect(await provider.isConfigured() == false)
+        let catalog = await provider.modelCatalog()
+        #expect(catalog.source == .bundledFallback)
+        #expect(catalog.models.first?.id == "claude-sonnet-4-20250514")
+        #expect(catalog.manualModelHelpURL != nil)
+        #expect(catalog.warning?.contains("API 키") == true)
+    }
+
+    @Test("OpenAI API provider는 Responses API 요청을 만든다")
+    func openAIAPIProviderBuildsResponsesRequest() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"output_text":"정리됨","model":"gpt-test"}"#.utf8))
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .gpt,
+            keyProvider: StubAPIKeyProvider(keys: [.gpt: "sk-test"]),
+            transport: transport
+        ))
+
+        let response = try await provider.generateText(LLMTextRequest(
+            useCase: .correction,
+            instructions: "규칙",
+            userContent: "원문",
+            modelID: "gpt-test"
+        ))
+
+        let request = try #require(transport.requests.first)
+        #expect(request.url?.absoluteString == "https://api.openai.com/v1/responses")
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer sk-test")
+        #expect(response.text == "정리됨")
+        #expect(response.modelID == "gpt-test")
+
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        #expect(body["model"] as? String == "gpt-test")
+        #expect(body["instructions"] as? String == "규칙")
+        #expect(body["input"] as? String == "원문")
+        #expect(body["store"] as? Bool == false)
+    }
+
+    @Test("API key provider HTTP 상태는 공통 오류로 매핑된다")
+    func apiKeyProviderMapsHTTPStatus() async throws {
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .openRouter,
+            keyProvider: StubAPIKeyProvider(keys: [.openRouter: "or-test"]),
+            transport: StubLLMAPITransport(data: Data("rate limit".utf8), statusCode: 429)
+        ))
+
+        await #expect(throws: LLMProviderError.rateLimited) {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .answer,
+                instructions: "답변",
+                userContent: "질문",
+                modelID: "openai/gpt-5.2"
+            ))
+        }
+    }
+
+    @Test("API key provider 모델 목록 인증 실패는 사용자가 알 수 있는 경고로 표시된다")
+    func apiKeyProviderCatalogUnauthorizedWarning() async throws {
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .gpt,
+            keyProvider: StubAPIKeyProvider(keys: [.gpt: "sk-test"]),
+            transport: StubLLMAPITransport(data: Data("unauthorized".utf8), statusCode: 401)
+        ))
+
+        let catalog = await provider.modelCatalog()
+        #expect(catalog.source == .bundledFallback)
+        #expect(catalog.warning?.contains("API 키") == true)
+        #expect(catalog.warning?.contains("권한") == true)
+    }
+
+    @Test("API key provider 네트워크 오류는 공통 오류로 매핑된다")
+    func apiKeyProviderMapsTransportError() async throws {
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .gpt,
+            keyProvider: StubAPIKeyProvider(keys: [.gpt: "sk-test"]),
+            transport: StubLLMAPITransport(error: StubTransportError())
+        ))
+
+        await #expect(throws: LLMProviderError.network("timeout")) {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .correction,
+                instructions: "규칙",
+                userContent: "원문",
+                modelID: "gpt-test"
+            ))
+        }
+    }
+
+    @Test("API key 저장소는 OAuth와 다른 Keychain service namespace를 쓴다")
+    func apiKeyStoreUsesDedicatedKeychainNamespace() {
+        #expect(KeychainService.llmAPIService == "com.minto.app.llm-api")
+    }
+
+    @Test("API key 저장 실패는 cache를 저장됨 상태로 갱신하지 않는다")
+    func apiKeyStoreDoesNotCacheFailedSave() {
+        let storage = StubAPIKeyStorageBackend(loadData: nil, saveResult: false)
+        let store = LLMAPIKeyStore(serviceName: "test-llm-api", storage: storage)
+
+        #expect(store.saveAPIKey("sk-test", for: .gpt) == false)
+        #expect(store.apiKey(for: .gpt) == nil)
+        #expect(store.hasAPIKey(for: .gpt) == false)
+    }
+
+    @Test("API key 삭제 실패는 cache를 삭제됨 상태로 갱신하지 않는다")
+    func apiKeyStoreDoesNotClearCacheOnFailedDelete() {
+        let storage = StubAPIKeyStorageBackend(loadData: Data("sk-test".utf8), deleteResult: false)
+        let store = LLMAPIKeyStore(serviceName: "test-llm-api", storage: storage)
+
+        #expect(store.apiKey(for: .gpt) == "sk-test")
+        #expect(store.deleteAPIKey(for: .gpt) == false)
+        #expect(store.apiKey(for: .gpt) == "sk-test")
+    }
+
+    private static func jsonObject(from data: Data) throws -> [String: Any] {
+        try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+}
+
+private struct StubAPIKeyProvider: LLMAPIKeyProviding {
+    let keys: [LLMProviderID: String]
+
+    func apiKey(for providerID: LLMProviderID) -> String? {
+        keys[providerID]
+    }
+
+    func hasAPIKey(for providerID: LLMProviderID) -> Bool {
+        keys[providerID] != nil
+    }
+}
+
+private final class StubLLMAPITransport: LLMAPITransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private let data: Data
+    private let statusCode: Int
+    private let error: (any Error)?
+    private(set) var requests: [URLRequest] = []
+
+    init(data: Data = Data("{}".utf8), statusCode: Int = 200, error: (any Error)? = nil) {
+        self.data = data
+        self.statusCode = statusCode
+        self.error = error
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        if let error {
+            throw error
+        }
+        lock.withLock {
+            requests.append(request)
+        }
+        let response = HTTPURLResponse(
+            url: request.url ?? URL(string: "https://example.com")!,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        return (data, response)
+    }
+}
+
+private struct StubTransportError: LocalizedError {
+    var errorDescription: String? { "timeout" }
+}
+
+private final class StubAPIKeyStorageBackend: LLMAPIKeyStorageBackend, @unchecked Sendable {
+    private let loadData: Data?
+    private let saveResult: Bool
+    private let deleteResult: Bool
+
+    init(loadData: Data?, saveResult: Bool = true, deleteResult: Bool = true) {
+        self.loadData = loadData
+        self.saveResult = saveResult
+        self.deleteResult = deleteResult
+    }
+
+    func load(account: String, service: String) -> Data? {
+        loadData
+    }
+
+    func save(account: String, data: Data, service: String) -> Bool {
+        saveResult
+    }
+
+    func delete(account: String, service: String) -> Bool {
+        deleteResult
     }
 }

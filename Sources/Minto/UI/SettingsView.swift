@@ -9,6 +9,10 @@ public struct SettingsView: View {
     @AppStorage("codexModel") private var codexModel = "auto"
     @AppStorage("geminiModel") private var geminiModel = "gemini-2.5-flash"
     @AppStorage("copilotModel") private var copilotModel = "gpt-4o"
+    @AppStorage("gptAPIModel") private var gptAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gpt)
+    @AppStorage("geminiAPIModel") private var geminiAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gemini)
+    @AppStorage("claudeAPIModel") private var claudeAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .claude)
+    @AppStorage("openRouterAPIModel") private var openRouterAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .openRouter)
 
     // LLM 교정 서비스 관찰
     @ObservedObject private var llmService = LLMCorrectionService.shared
@@ -20,6 +24,9 @@ public struct SettingsView: View {
     @State private var geminiEmail = GeminiOAuthService.shared.email
     @State private var isLoginLoading = false
     @State private var loginError: String? = nil
+    @State private var apiKeyInput = ""
+    @State private var apiModelCatalogs: [LLMProviderID: LLMModelCatalog] = [:]
+    @State private var loadingAPIModelProviderIDs: Set<LLMProviderID> = []
 
     // 외부 연동(Notion MCP OAuth·Confluence token).
     @ObservedObject private var notionMCP = NotionMCPService.shared
@@ -75,6 +82,8 @@ public struct SettingsView: View {
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
+            apiKeyInput = ""
+            loginError = nil
         }
     }
 
@@ -312,11 +321,19 @@ public struct SettingsView: View {
     @ViewBuilder
     private var currentProviderModelPicker: some View {
         switch llmService.selectedProvider {
+        case .gptAPI:
+            apiModelPicker(title: "교정 모델", providerID: .gpt, selection: $gptAPIModel)
+        case .geminiAPI:
+            apiModelPicker(title: "교정 모델", providerID: .gemini, selection: $geminiAPIModel)
+        case .claudeAPI:
+            apiModelPicker(title: "교정 모델", providerID: .claude, selection: $claudeAPIModel)
+        case .openRouterAPI:
+            apiModelPicker(title: "교정 모델", providerID: .openRouter, selection: $openRouterAPIModel)
         case .codex:
             Picker("교정 모델", selection: $codexModel) {
                 ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
-            Text("Codex의 ‘자동’은 계정 플랜에 맞춰 안전한 모델을 선택합니다.")
+            Text("GPT 계정의 ‘자동’은 계정 플랜에 맞춰 안전한 모델을 선택합니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .gemini:
@@ -330,6 +347,76 @@ public struct SettingsView: View {
         case .none:
             EmptyView()
         }
+    }
+
+    private func apiModelPicker(
+        title: String,
+        providerID: LLMProviderID,
+        selection: Binding<String>
+    ) -> some View {
+        let catalog = apiModelCatalogs[providerID]
+            ?? LLMAPIKeyTextProvider.bundledModelCatalog(for: providerID)
+        return VStack(alignment: .leading, spacing: 6) {
+            Picker(title, selection: selection) {
+                ForEach(catalog.models, id: \.id) { model in
+                    Text(model.displayName).tag(model.id)
+                }
+            }
+            TextField("모델 ID 직접 입력", text: selection)
+                .textFieldStyle(.roundedBorder)
+            HStack(spacing: 6) {
+                Text(modelCatalogStatusText(catalog, providerID: providerID))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                if loadingAPIModelProviderIDs.contains(providerID) {
+                    ProgressView()
+                        .scaleEffect(0.65)
+                }
+                if let url = LLMAPIKeyTextProvider.modelHelpURL(for: providerID) {
+                    Link("모델 확인", destination: url)
+                        .font(.caption)
+                }
+                if LLMAPIKeyStore.shared.hasAPIKey(for: providerID) {
+                    Button("새로고침") {
+                        Task { await refreshAPIModelCatalog(for: providerID, force: true) }
+                    }
+                    .font(.caption)
+                }
+            }
+            if let warning = catalog.warning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+        .task(id: providerID) {
+            await refreshAPIModelCatalog(for: providerID, force: false)
+        }
+    }
+
+    private func modelCatalogStatusText(_ catalog: LLMModelCatalog, providerID: LLMProviderID) -> String {
+        switch catalog.source {
+        case .live:
+            return "API 키로 확인한 모델 목록입니다. 원하는 모델 ID도 직접 입력할 수 있습니다."
+        case .bundledFallback:
+            if LLMAPIKeyStore.shared.hasAPIKey(for: providerID) {
+                return "기본 추천 모델입니다. 모델 확인 링크에서 최신 ID를 확인해 직접 입력할 수 있습니다."
+            }
+            return "API 키를 저장하면 모델 목록을 확인합니다. 지금은 기본 추천 모델을 표시합니다."
+        case .manualOnly:
+            return "모델 ID를 직접 입력하세요."
+        }
+    }
+
+    @MainActor
+    private func refreshAPIModelCatalog(for providerID: LLMProviderID, force: Bool) async {
+        guard force || apiModelCatalogs[providerID] == nil else { return }
+        guard let provider = LLMAPIKeyTextProvider(providerID: providerID) else { return }
+
+        loadingAPIModelProviderIDs.insert(providerID)
+        let catalog = await provider.modelCatalog()
+        apiModelCatalogs[providerID] = catalog
+        loadingAPIModelProviderIDs.remove(providerID)
     }
 
     private var tosWarningRow: some View {
@@ -349,7 +436,7 @@ public struct SettingsView: View {
             Circle()
                 .fill(currentProviderLoggedIn ? Color.green : Color.secondary.opacity(0.4))
                 .frame(width: 7, height: 7)
-            Text(currentProviderLoggedIn ? "로그인됨" : "미연결")
+            Text(currentProviderStatusText)
                 .font(.callout)
                 .foregroundColor(currentProviderLoggedIn ? .primary : .secondary)
             if currentProviderLoggedIn, !currentEmail.isEmpty {
@@ -362,7 +449,9 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var llmActionRow: some View {
-        if currentProviderLoggedIn {
+        if let providerID = currentAPIKeyProviderID {
+            apiKeySettingsRow(providerID)
+        } else if currentProviderLoggedIn {
             Button("로그아웃") {
                 llmService.logout()
                 refreshGeminiState()
@@ -379,6 +468,42 @@ public struct SettingsView: View {
                 ProgressView().scaleEffect(0.8)
                 Text("로그인 중...").font(.callout).foregroundColor(.secondary)
             }
+        }
+    }
+
+    private func apiKeySettingsRow(_ providerID: LLMProviderID) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SecureField("\(providerID.displayName) API 키", text: $apiKeyInput)
+            HStack {
+                Button("API 키 저장") {
+                    let saved = LLMAPIKeyStore.shared.saveAPIKey(apiKeyInput, for: providerID)
+                    if saved {
+                        apiKeyInput = ""
+                        loginError = nil
+                        Task { await refreshAPIModelCatalog(for: providerID, force: true) }
+                    } else {
+                        loginError = "API 키를 Keychain에 저장하지 못했습니다. macOS 권한 상태를 확인하세요."
+                    }
+                }
+                .disabled(apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if LLMAPIKeyStore.shared.hasAPIKey(for: providerID) {
+                    Button("API 키 삭제") {
+                        let deleted = LLMAPIKeyStore.shared.deleteAPIKey(for: providerID)
+                        if deleted {
+                            apiKeyInput = ""
+                            apiModelCatalogs[providerID] = nil
+                            loginError = nil
+                        } else {
+                            loginError = "API 키를 Keychain에서 삭제하지 못했습니다. macOS 권한 상태를 확인하세요."
+                        }
+                    }
+                    .foregroundColor(.red)
+                }
+            }
+            Text("API 키는 이 Mac의 Keychain에만 저장됩니다. 회의 원문은 선택한 공급자의 API로 전송됩니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -418,19 +543,40 @@ public struct SettingsView: View {
 
     private var currentProviderLoggedIn: Bool {
         switch llmService.selectedProvider {
-        case .none:    return false
-        case .gemini:  return geminiLoggedIn
-        case .copilot: return copilot.isLoggedIn
-        case .codex:   return codex.isLoggedIn
+        case .none:
+            return false
+        case .gptAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .gpt)
+        case .geminiAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .gemini)
+        case .claudeAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .claude)
+        case .openRouterAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .openRouter)
+        case .gemini:
+            return geminiLoggedIn
+        case .copilot:
+            return copilot.isLoggedIn
+        case .codex:
+            return codex.isLoggedIn
         }
+    }
+
+    private var currentProviderStatusText: String {
+        if currentAPIKeyProviderID != nil {
+            return currentProviderLoggedIn ? "API 키 저장됨" : "API 키 필요"
+        }
+        return currentProviderLoggedIn ? "로그인됨" : "미연결"
     }
 
     private var currentEmail: String {
         switch llmService.selectedProvider {
-        case .none:    return ""
-        case .gemini:  return geminiEmail
-        case .copilot: return copilot.email
-        case .codex:   return ""
+        case .none, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
+            return ""
+        case .gemini:
+            return geminiEmail
+        case .copilot:
+            return copilot.email
         }
     }
 
@@ -439,6 +585,21 @@ public struct SettingsView: View {
         case .copilot: return copilot.isPolling
         case .codex:   return codex.isPolling
         default:       return false
+        }
+    }
+
+    private var currentAPIKeyProviderID: LLMProviderID? {
+        switch llmService.selectedProvider {
+        case .gptAPI:
+            return .gpt
+        case .geminiAPI:
+            return .gemini
+        case .claudeAPI:
+            return .claude
+        case .openRouterAPI:
+            return .openRouter
+        case .none, .gemini, .copilot, .codex:
+            return nil
         }
     }
 
@@ -455,7 +616,7 @@ public struct SettingsView: View {
     private func startLogin() {
         isLoginLoading = true
         switch llmService.selectedProvider {
-        case .none:
+        case .none, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI:
             isLoginLoading = false
         case .gemini:
             Task {
