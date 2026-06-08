@@ -191,3 +191,7 @@ scripts/summarize_stt_benchmarks.py tmp/vad-meeting-benchmarks/<timestamp> --wri
 ```
 
 When the metric files include VAD metadata, the summary groups by VAD config instead of merging every result into the same STT engine row.
+
+For VAD chunk STT comparisons, use `Full Global CER` as the primary VAD decision metric.
+The regular `Global CER` is computed only from references inside emitted VAD chunks, so missed speech outside those chunks is not counted as deletion.
+`Full Global CER` compares the whole benchmark-window reference against the concatenated VAD chunk hypotheses.

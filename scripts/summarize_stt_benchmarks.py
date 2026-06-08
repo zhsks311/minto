@@ -225,6 +225,14 @@ def summarize_by_engine(metrics):
             for item in items
             if item.get("global_cer") is not None
         ]
+        full_reference_distance = sum(
+            int(item.get("full_reference_global_distance") or 0)
+            for item in items
+        )
+        full_reference_length = sum(
+            int(item.get("full_reference_global_reference_length") or 0)
+            for item in items
+        )
         rows.append({
             "engine_id": engine_id,
             "engine_label": items[0].get("engine_label", engine_id),
@@ -239,6 +247,12 @@ def summarize_by_engine(metrics):
             "weighted_micro_cer": total_distance / total_ref if total_ref else None,
             "sample_macro_cer": sum(macro_values) / len(macro_values) if macro_values else None,
             "global_cer_mean": sum(global_values) / len(global_values) if global_values else None,
+            "full_reference_global_cer": (
+                full_reference_distance / full_reference_length
+                if full_reference_length else None
+            ),
+            "full_reference_global_distance": full_reference_distance if full_reference_length else None,
+            "full_reference_global_reference_length": full_reference_length if full_reference_length else None,
             "empty_final_count": sum(int(item.get("empty_final_count") or 0) for item in items),
             "false_positive_chars": sum(int(item.get("false_positive_transcript_chars") or 0) for item in items),
             "rtf": total_elapsed / total_audio if total_audio else None,
@@ -437,18 +451,28 @@ def markdown_table(rows):
     if any(row.get("vad") for row in rows):
         return vad_markdown_table(rows)
 
+    show_full_reference = any(row.get("full_reference_global_cer") is not None for row in rows)
+    full_header = " Full Global CER |" if show_full_reference else ""
+    full_separator = " ---: |" if show_full_reference else ""
     lines = [
-        "| Engine | Samples | Weighted CER | Macro CER | Global CER | RTF | Peak MB | Empty | FP chars |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        f"| Engine | Samples | Weighted CER | Macro CER | Global CER |{full_header} RTF | Peak MB | Empty | FP chars |",
+        f"| --- | ---: | ---: | ---: | ---: |{full_separator} ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
+        full_value = (
+            " {full_global_cer} |".format(
+                full_global_cer=fmt_percent(row["full_reference_global_cer"])
+            )
+            if show_full_reference else ""
+        )
         lines.append(
-            "| {engine} | {samples} | {weighted} | {macro} | {global_cer} | {rtf} | {peak} | {empty} | {fp} |".format(
+            "| {engine} | {samples} | {weighted} | {macro} | {global_cer} |{full_value} {rtf} | {peak} | {empty} | {fp} |".format(
                 engine=row["engine_id"],
                 samples=row["sample_count"],
                 weighted=fmt_percent(row["weighted_micro_cer"]),
                 macro=fmt_percent(row["sample_macro_cer"]),
                 global_cer=fmt_percent(row["global_cer_mean"]),
+                full_value=full_value,
                 rtf=fmt_float(row["rtf"]),
                 peak=fmt_float(row["peak_memory_mb"]),
                 empty=row["empty_final_count"],
@@ -459,13 +483,22 @@ def markdown_table(rows):
 
 
 def vad_markdown_table(rows):
+    show_full_reference = any(row.get("full_reference_global_cer") is not None for row in rows)
+    full_header = " Full Global CER |" if show_full_reference else ""
+    full_separator = " ---: |" if show_full_reference else ""
     lines = [
-        "| Engine | VAD | Energy offset | Silero threshold | Merge gap | Merge max | Samples | Weighted CER | Macro CER | Global CER | RTF | Peak MB | Empty | FP chars |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        f"| Engine | VAD | Energy offset | Silero threshold | Merge gap | Merge max | Samples | Weighted CER | Macro CER | Global CER |{full_header} RTF | Peak MB | Empty | FP chars |",
+        f"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |{full_separator} ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
+        full_value = (
+            " {full_global_cer} |".format(
+                full_global_cer=fmt_percent(row["full_reference_global_cer"])
+            )
+            if show_full_reference else ""
+        )
         lines.append(
-            "| {engine} | {vad} | {energy_offset} | {silero_threshold} | {merge_gap} | {merge_max} | {samples} | {weighted} | {macro} | {global_cer} | {rtf} | {peak} | {empty} | {fp} |".format(
+            "| {engine} | {vad} | {energy_offset} | {silero_threshold} | {merge_gap} | {merge_max} | {samples} | {weighted} | {macro} | {global_cer} |{full_value} {rtf} | {peak} | {empty} | {fp} |".format(
                 engine=row["engine_id"],
                 vad=row["vad"] or "n/a",
                 energy_offset=row["energy_noise_offset_db"] or "n/a",
@@ -476,6 +509,7 @@ def vad_markdown_table(rows):
                 weighted=fmt_percent(row["weighted_micro_cer"]),
                 macro=fmt_percent(row["sample_macro_cer"]),
                 global_cer=fmt_percent(row["global_cer_mean"]),
+                full_value=full_value,
                 rtf=fmt_float(row["rtf"]),
                 peak=fmt_float(row["peak_memory_mb"]),
                 empty=row["empty_final_count"],
@@ -552,6 +586,9 @@ def write_csv(path, rows):
         "weighted_micro_cer",
         "sample_macro_cer",
         "global_cer_mean",
+        "full_reference_global_cer",
+        "full_reference_global_distance",
+        "full_reference_global_reference_length",
         "empty_final_count",
         "false_positive_chars",
         "rtf",

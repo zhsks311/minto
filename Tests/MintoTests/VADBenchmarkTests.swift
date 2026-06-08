@@ -259,6 +259,10 @@ struct VADBenchmarkTests {
             reference: allReferences.joined(separator: " "),
             hypothesis: allHypotheses.joined(separator: " ")
         )
+        let fullReferenceGlobalStats = Self.cerStats(
+            reference: Self.referenceText(captions: captions, start: 0, end: totalSeconds),
+            hypothesis: allHypotheses.joined(separator: " ")
+        )
         let elapsedSeconds = Date().timeIntervalSince(startedAt)
         let audioSeconds = chunkMetrics.reduce(0) { $0 + $1.durationSeconds }
         let metric = STTBenchmarkRunMetric(
@@ -279,6 +283,11 @@ struct VADBenchmarkTests {
             globalDistance: globalStats.distance,
             globalReferenceLength: globalStats.refLen,
             globalCER: globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0,
+            fullReferenceGlobalDistance: fullReferenceGlobalStats.distance,
+            fullReferenceGlobalReferenceLength: fullReferenceGlobalStats.refLen,
+            fullReferenceGlobalCER: fullReferenceGlobalStats.refLen > 0
+                ? Double(fullReferenceGlobalStats.distance) / Double(fullReferenceGlobalStats.refLen)
+                : 0,
             emptyFinalCount: emptyCount,
             falsePositiveTranscriptCount: falsePositiveTranscriptionCount,
             falsePositiveTranscriptChars: falsePositiveTranscriptChars,
@@ -309,7 +318,8 @@ struct VADBenchmarkTests {
         empty final count       : \(metric.emptyFinalCount)
         false positive text     : \(metric.falsePositiveTranscriptCount) chunks / \(metric.falsePositiveTranscriptChars) chars
         chunk CER               : \(String(format: "%.1f%%", metric.microCER * 100)) (distance \(metric.distance) / ref \(metric.referenceLength))
-        global CER              : \(String(format: "%.1f%%", (metric.globalCER ?? 0) * 100)) (distance \(metric.globalDistance ?? 0) / ref \(metric.globalReferenceLength ?? 0))
+        covered global CER      : \(String(format: "%.1f%%", (metric.globalCER ?? 0) * 100)) (distance \(metric.globalDistance ?? 0) / ref \(metric.globalReferenceLength ?? 0))
+        full reference CER      : \(String(format: "%.1f%%", (metric.fullReferenceGlobalCER ?? 0) * 100)) (distance \(metric.fullReferenceGlobalDistance ?? 0) / ref \(metric.fullReferenceGlobalReferenceLength ?? 0))
         RTF                     : \(String(format: "%.2f", metric.rtf))
         elapsed                 : \(String(format: "%.1f", metric.elapsedSeconds))s
         ==============================================

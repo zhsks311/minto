@@ -271,6 +271,14 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - 실행 주의: WhisperKit/CoreML STT smoke는 E5RT cache를 `~/Library/Caches/swiftpm-testing-helper`에 쓰므로 샌드박스 안에서는 `.pixelBufferFailed`로 실패할 수 있다. 같은 명령을 샌드박스 밖에서 실행하면 통과했다.
 - 요약 주의: VAD chunk STT 결과는 같은 `engine_id`라도 VAD config가 다르면 별도 후보로 봐야 한다. `scripts/summarize_stt_benchmarks.py`는 VAD metadata가 있는 결과를 VAD/threshold/merge config별로 분리해 요약한다.
 
+**현재 7샘플 120초 결과**
+
+- 재현 조건: `sample/meeting` 7개 샘플 첫 120초, `openai_whisper-large-v3-v20240930_turbo`, 로컬 `WHISPER_MODEL_FOLDER`, Energy default vs Silero `threshold=0.5`, `merge gap=1.1초`.
+- Energy default: weighted CER 52.0%, covered global CER 43.0%, Full Global CER 47.8%, RTF 0.136, peak 1078.8MB, empty final 8, false-positive text 78 chars.
+- Silero + gap merge: weighted CER 39.7%, covered global CER 30.5%, Full Global CER 22.5%, RTF 0.120, peak 1238.9MB, empty final 12, false-positive text 42 chars.
+- 해석: 전체 reference 기준으로 missed speech를 deletion 처리해도 Silero가 크게 이긴다. 다만 empty final은 8개에서 12개로 늘고 peak memory도 약 160MB 증가했다. Silero는 기본값 후보로 승격하되, 바로 기본값으로 바꾸기 전에 empty final 원인과 threshold/merge sweep을 추가로 본다.
+- 측정 주의: VAD별 chunk가 다르면 기존 `global_cer`는 emitted chunk reference만 비교하므로 missed speech를 벌점 처리하지 못한다. VAD 후보 결정에는 `full_reference_global_cer`를 우선한다.
+
 **검증**
 
 - short utterance recall
@@ -278,7 +286,8 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - false-positive transcript chars
 - empty final count
 - per-chunk CER
-- global CER
+- covered global CER
+- Full Global CER
 - stop/drain 누락 여부
 - 전체 샘플 VAD recall과 short recall
 - STT 실패 segment의 VAD overlap bucket 분포

@@ -58,6 +58,7 @@ struct STTBenchmarkMetricsTests {
         #expect(object.keys.contains("micro_cer"))
         #expect(object.keys.contains("macro_cer"))
         #expect(object["global_cer"] is NSNull)
+        #expect(object["full_reference_global_cer"] is NSNull)
         #expect(object["peak_memory_mb"] is NSNull)
         #expect(object["streaming"] is NSNull)
         #expect((object["segments"] as? [[String: Any]])?.first?["reference_length"] as? Int == 3)

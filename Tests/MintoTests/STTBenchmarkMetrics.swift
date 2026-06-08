@@ -20,6 +20,9 @@ struct STTBenchmarkRunMetric: Encodable {
     let globalDistance: Int?
     let globalReferenceLength: Int?
     let globalCER: Double?
+    let fullReferenceGlobalDistance: Int?
+    let fullReferenceGlobalReferenceLength: Int?
+    let fullReferenceGlobalCER: Double?
     let emptyFinalCount: Int
     let falsePositiveTranscriptCount: Int
     let falsePositiveTranscriptChars: Int
@@ -52,6 +55,9 @@ struct STTBenchmarkRunMetric: Encodable {
         globalDistance: Int?,
         globalReferenceLength: Int?,
         globalCER: Double?,
+        fullReferenceGlobalDistance: Int? = nil,
+        fullReferenceGlobalReferenceLength: Int? = nil,
+        fullReferenceGlobalCER: Double? = nil,
         emptyFinalCount: Int,
         falsePositiveTranscriptCount: Int = 0,
         falsePositiveTranscriptChars: Int = 0,
@@ -83,6 +89,9 @@ struct STTBenchmarkRunMetric: Encodable {
         self.globalDistance = globalDistance
         self.globalReferenceLength = globalReferenceLength
         self.globalCER = globalCER
+        self.fullReferenceGlobalDistance = fullReferenceGlobalDistance
+        self.fullReferenceGlobalReferenceLength = fullReferenceGlobalReferenceLength
+        self.fullReferenceGlobalCER = fullReferenceGlobalCER
         self.emptyFinalCount = emptyFinalCount
         self.falsePositiveTranscriptCount = falsePositiveTranscriptCount
         self.falsePositiveTranscriptChars = falsePositiveTranscriptChars
@@ -116,6 +125,9 @@ struct STTBenchmarkRunMetric: Encodable {
         case globalDistance = "global_distance"
         case globalReferenceLength = "global_reference_length"
         case globalCER = "global_cer"
+        case fullReferenceGlobalDistance = "full_reference_global_distance"
+        case fullReferenceGlobalReferenceLength = "full_reference_global_reference_length"
+        case fullReferenceGlobalCER = "full_reference_global_cer"
         case emptyFinalCount = "empty_final_count"
         case falsePositiveTranscriptCount = "false_positive_transcript_count"
         case falsePositiveTranscriptChars = "false_positive_transcript_chars"
@@ -150,6 +162,9 @@ struct STTBenchmarkRunMetric: Encodable {
         try container.encodeOptional(globalDistance, forKey: .globalDistance)
         try container.encodeOptional(globalReferenceLength, forKey: .globalReferenceLength)
         try container.encodeOptional(globalCER, forKey: .globalCER)
+        try container.encodeOptional(fullReferenceGlobalDistance, forKey: .fullReferenceGlobalDistance)
+        try container.encodeOptional(fullReferenceGlobalReferenceLength, forKey: .fullReferenceGlobalReferenceLength)
+        try container.encodeOptional(fullReferenceGlobalCER, forKey: .fullReferenceGlobalCER)
         try container.encode(emptyFinalCount, forKey: .emptyFinalCount)
         try container.encode(falsePositiveTranscriptCount, forKey: .falsePositiveTranscriptCount)
         try container.encode(falsePositiveTranscriptChars, forKey: .falsePositiveTranscriptChars)
