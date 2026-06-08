@@ -311,7 +311,11 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - 결과: 1/1 성공, measured chunk 594/594(raw 643), weighted CER 49.3%, macro CER 49.3%, global CER skip, RTF 0.126, peak memory 1021.4MB, empty final 87, false-positive text 103 chars, wall time 857.2초.
 - 해석: 첫 긴 샘플에서도 속도는 실시간보다 충분히 빠르지만 정확도는 short3보다 악화됐다. empty final 비율은 87/594, 약 14.6%로 short3의 42/285, 약 14.7%와 거의 같다. 따라서 문제는 특정 짧은 파일 하나의 우연이 아니라 Silero chunk + WhisperKit decode 조합에서 반복되는 empty final 패턴으로 본다.
 - segment 진단: `segments.md` 상위 항목은 대부분 reference density가 높은 13.8초 chunk에서 hypothesis가 완전히 빈 경우다. VAD가 무음을 잘못 넣은 false positive라기보다, speech chunk가 WhisperKit final empty로 빠지는 문제를 우선 의심한다.
-- 다음 판단: 나머지 긴 3개 샘플은 `--sort duration`과 `--skip-swift-global-cer auto`로 개별 또는 duration 순서 실행한다. 긴 샘플에서는 우선 micro/macro CER, empty final, FP chars, RTF, peak memory를 보고, Full Global CER는 작은 범위나 segment bucket으로 보완한다.
+- 실제 full-duration long2 재현 조건: `haengan_20260526` 7378초, Silero `threshold=0.6`, `merge gap=1.1초`, WhisperKit turbo, `--skip-swift-global-cer auto`.
+- 결과 위치: `/private/tmp/minto2-vad-full-silero-060-gap11-haengan`.
+- 결과: 1/1 성공, measured chunk 681/681(raw 889), weighted CER 40.3%, macro CER 40.3%, global CER skip, RTF 0.124, peak memory 1120.4MB, empty final 55, false-positive text 149 chars, wall time 851.1초.
+- 해석: long2는 long1보다 CER와 empty final 비율이 낮다. empty final 비율은 55/681, 약 8.1%다. 다만 `segments.md` 상위 항목은 long1과 마찬가지로 reference가 있는 chunk가 완전히 빈 hypothesis로 끝난 케이스가 반복된다.
+- 다음 판단: 나머지 긴 2개 샘플은 `--sort duration`과 `--skip-swift-global-cer auto`로 개별 또는 duration 순서 실행한다. 긴 샘플에서는 우선 micro/macro CER, empty final, FP chars, RTF, peak memory를 보고, Full Global CER는 작은 범위나 segment bucket으로 보완한다.
 
 **검증**
 
@@ -526,7 +530,7 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 
 ## 바로 다음 작업 순서
 
-1. 남은 긴 3개 샘플을 Silero `threshold=0.6`, `merge gap=1.1초`, `--sort duration`, `--skip-swift-global-cer auto`로 순차 실행한다.
+1. 남은 긴 2개 샘플을 Silero `threshold=0.6`, `merge gap=1.1초`, `--sort duration`, `--skip-swift-global-cer auto`로 순차 실행한다.
 2. long-sample 결과는 micro/macro CER, empty final, false-positive text, RTF, peak memory부터 비교하고, Full Global CER는 작은 범위나 segment bucket으로 보완한다.
 3. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
 4. `segments.md`와 `segment_buckets.md`에서 low VAD overlap empty row와 high VAD overlap empty row를 분리해 원인을 나눈다.
