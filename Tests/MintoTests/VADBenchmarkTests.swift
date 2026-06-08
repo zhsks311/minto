@@ -65,6 +65,14 @@ struct VADBenchmarkTests {
         return URL(fileURLWithPath: "/private/tmp/minto2-fluidaudio-models", isDirectory: true)
     }
 
+    private static var maxSTTChunks: Int {
+        guard let value = ProcessInfo.processInfo.environment["VAD_STT_MAX_CHUNKS"].flatMap(Int.init),
+              value >= 0 else {
+            return 6
+        }
+        return value
+    }
+
     @Test("sample/meeting VAD baseline metrics")
     func vadBaselineMetrics() async throws {
         guard ProcessInfo.processInfo.environment["RUN_VAD_BENCH"] == "1" else { return }
@@ -96,31 +104,7 @@ struct VADBenchmarkTests {
             return
         }
 
-        let detector: any VoiceActivityDetector = VADProcessor()
-        nonisolated(unsafe) var finalChunks: [VADChunkMetric] = []
-        nonisolated(unsafe) var previewChunks: [VADChunkMetric] = []
-
-        detector.onChunk = { chunk in
-            finalChunks.append(Self.metric(for: chunk, index: finalChunks.count))
-        }
-        detector.onPreviewChunk = { chunk in
-            previewChunks.append(Self.metric(for: chunk, index: previewChunks.count))
-        }
-
-        let frameSize = max(1, Int(Self.frameSeconds * Double(Self.sampleRate)))
-        let sampleLimit = min(samples.count, Int(totalSeconds * Double(Self.sampleRate)))
-        var cursor = 0
-        while cursor < sampleLimit {
-            let end = min(sampleLimit, cursor + frameSize)
-            detector.process(samples: Array(samples[cursor..<end]))
-            cursor = end
-        }
-
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        if let pending = await detector.flushPending() {
-            finalChunks.append(Self.metric(for: pending, index: finalChunks.count))
-        }
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        let (finalChunks, previewChunks) = await Self.energyChunks(from: samples, totalSeconds: totalSeconds)
 
         let metrics = Self.buildMetrics(
             candidate: candidate,
@@ -134,6 +118,123 @@ struct VADBenchmarkTests {
 
         #expect(metrics.referenceSpeechSeconds > 0, "VAD benchmark reference speech should not be empty")
         #expect(!finalChunks.isEmpty, "Energy VAD should produce baseline chunks for sample speech")
+    }
+
+    @Test("sample/meeting VAD chunk STT CER metrics")
+    func vadChunkSTTCER() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_VAD_STT_BENCH"] == "1" else {
+            return
+        }
+
+        guard FileManager.default.fileExists(atPath: Self.audioURL.path),
+              FileManager.default.fileExists(atPath: Self.smiURL.path) else {
+            print("[VADSTTBench] 자료 없음 - skip (\(Self.audioURL.path), \(Self.smiURL.path))")
+            return
+        }
+
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+        let totalSeconds = min(Double(samples.count) / Double(Self.sampleRate), Self.maxSeconds)
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let candidate = Self.candidate
+        let allChunks: [VADChunkMetric]
+        switch candidate {
+        case .energy:
+            allChunks = await Self.energyChunks(from: samples, totalSeconds: totalSeconds).final
+        case .silero:
+            allChunks = try await Self.sileroChunks(from: samples, totalSeconds: totalSeconds)
+        }
+        let targetChunks = Self.maxSTTChunks > 0 ? Array(allChunks.prefix(Self.maxSTTChunks)) : allChunks
+        guard !targetChunks.isEmpty else {
+            Issue.record("VAD STT benchmark chunks should not be empty")
+            return
+        }
+
+        let service = try await STTBenchmarkEngineSupport.loadService()
+        guard case .loaded = service.modelState else {
+            Issue.record("엔진 로드 실패: \(service.modelState)")
+            return
+        }
+
+        let engineLabel = STTBenchmarkEngineSupport.displayName(for: service)
+        let startedAt = Date()
+        var totalDistance = 0
+        var totalRefLen = 0
+        var emptyCount = 0
+        var falsePositiveTranscriptionCount = 0
+        var falsePositiveTranscriptChars = 0
+        var chunkMetrics: [VADSTTChunkMetric] = []
+
+        for (index, chunk) in targetChunks.enumerated() {
+            let startSample = max(0, Int(chunk.startSeconds * Double(Self.sampleRate)))
+            let endSample = min(samples.count, Int(chunk.endSeconds * Double(Self.sampleRate)))
+            guard endSample > startSample else { continue }
+
+            let reference = Self.referenceText(captions: captions, start: chunk.startSeconds, end: chunk.endSeconds)
+            let clip = Array(samples[startSample..<endSample])
+            let chunkStartedAt = Date()
+            let result = try await service.transcribe(pcmSamples: clip)
+            let elapsedSeconds = Date().timeIntervalSince(chunkStartedAt)
+            let hypothesis = result.segment.text
+            let stats = Self.cerStats(reference: reference, hypothesis: hypothesis)
+            let normalizedHypLen = Self.normalizedCharacters(hypothesis).count
+            let empty = hypothesis.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if empty {
+                emptyCount += 1
+            }
+            if stats.refLen == 0, normalizedHypLen > 0 {
+                falsePositiveTranscriptionCount += 1
+                falsePositiveTranscriptChars += normalizedHypLen
+            }
+            totalDistance += stats.distance
+            totalRefLen += stats.refLen
+            chunkMetrics.append(VADSTTChunkMetric(
+                index: index,
+                startSeconds: chunk.startSeconds,
+                endSeconds: chunk.endSeconds,
+                durationSeconds: chunk.durationSeconds,
+                reference: reference,
+                hypothesis: hypothesis,
+                distance: stats.distance,
+                refLen: stats.refLen,
+                cer: stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0,
+                elapsedSeconds: elapsedSeconds,
+                rtf: chunk.durationSeconds > 0 ? elapsedSeconds / chunk.durationSeconds : 0,
+                empty: empty
+            ))
+        }
+
+        let metric = VADSTTBenchmarkMetric(
+            vad: candidate.rawValue,
+            engine: engineLabel,
+            sample: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
+            seconds: totalSeconds,
+            totalChunkCount: allChunks.count,
+            measuredChunkCount: chunkMetrics.count,
+            emptyCount: emptyCount,
+            falsePositiveTranscriptionCount: falsePositiveTranscriptionCount,
+            falsePositiveTranscriptChars: falsePositiveTranscriptChars,
+            distance: totalDistance,
+            refLen: totalRefLen,
+            cer: totalRefLen > 0 ? Double(totalDistance) / Double(totalRefLen) : 0,
+            elapsedSeconds: Date().timeIntervalSince(startedAt),
+            chunks: chunkMetrics
+        )
+        try Self.writeSTTMetricsIfNeeded(metric)
+        print("""
+
+        === VAD STT Benchmark [\(candidate.rawValue) -> \(engineLabel)] ===
+        chunks measured         : \(metric.measuredChunkCount)/\(metric.totalChunkCount)
+        empty final count       : \(metric.emptyCount)
+        false positive text     : \(metric.falsePositiveTranscriptionCount) chunks / \(metric.falsePositiveTranscriptChars) chars
+        chunk CER               : \(String(format: "%.1f%%", metric.cer * 100)) (distance \(metric.distance) / ref \(metric.refLen))
+        elapsed                 : \(String(format: "%.1f", metric.elapsedSeconds))s
+        ==============================================
+
+        """)
+
+        #expect(metric.measuredChunkCount > 0)
+        #expect(metric.refLen > 0)
     }
 
     private static func buildMetrics(
@@ -239,6 +340,38 @@ struct VADBenchmarkTests {
         #endif
     }
 
+    private static func energyChunks(
+        from samples: [Float],
+        totalSeconds: Double
+    ) async -> (final: [VADChunkMetric], previews: [VADChunkMetric]) {
+        let detector: any VoiceActivityDetector = VADProcessor()
+        nonisolated(unsafe) var finalChunks: [VADChunkMetric] = []
+        nonisolated(unsafe) var previewChunks: [VADChunkMetric] = []
+
+        detector.onChunk = { chunk in
+            finalChunks.append(Self.metric(for: chunk, index: finalChunks.count))
+        }
+        detector.onPreviewChunk = { chunk in
+            previewChunks.append(Self.metric(for: chunk, index: previewChunks.count))
+        }
+
+        let frameSize = max(1, Int(Self.frameSeconds * Double(Self.sampleRate)))
+        let sampleLimit = min(samples.count, Int(totalSeconds * Double(Self.sampleRate)))
+        var cursor = 0
+        while cursor < sampleLimit {
+            let end = min(sampleLimit, cursor + frameSize)
+            detector.process(samples: Array(samples[cursor..<end]))
+            cursor = end
+        }
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        if let pending = await detector.flushPending() {
+            finalChunks.append(Self.metric(for: pending, index: finalChunks.count))
+        }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        return (finalChunks, previewChunks)
+    }
+
     nonisolated private static func metric(for chunk: AudioChunk, index: Int) -> VADChunkMetric {
         let start = chunk.startSeconds ?? 0
         let end = chunk.endSeconds ?? start + chunk.durationSeconds
@@ -266,6 +399,24 @@ struct VADBenchmarkTests {
         try data.write(to: outputDirectory.appendingPathComponent("\(metrics.sample)_vad_\(metrics.vad)_metrics.json"))
     }
 
+    private static func writeSTTMetricsIfNeeded(_ metrics: VADSTTBenchmarkMetric) throws {
+        guard let outputDirectory = ProcessInfo.processInfo.environment["VAD_STT_OUTPUT_DIR"]
+            .flatMap({ $0.isEmpty ? nil : URL(fileURLWithPath: $0) })
+            ?? ProcessInfo.processInfo.environment["VAD_OUTPUT_DIR"]
+                .flatMap({ $0.isEmpty ? nil : URL(fileURLWithPath: $0) }) else {
+            return
+        }
+
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(metrics)
+        let engine = metrics.engine
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+        try data.write(to: outputDirectory.appendingPathComponent("\(metrics.sample)_vad_\(metrics.vad)_stt_\(engine).json"))
+    }
+
     private static func positiveDoubleEnv(_ key: String, default defaultValue: Double) -> Double {
         guard let rawValue = ProcessInfo.processInfo.environment[key],
               let value = Double(rawValue),
@@ -291,6 +442,13 @@ struct VADBenchmarkTests {
         return doc.smiList
             .filter { !$0.cc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.start < $1.start }
+    }
+
+    private static func referenceText(captions: [Caption], start: Double, end: Double) -> String {
+        captions
+            .filter { min($0.end, end) > max($0.start, start) }
+            .map(\.cc)
+            .joined(separator: " ")
     }
 
     private static func readWAVSamples(from url: URL) throws -> [Float] {
@@ -403,6 +561,37 @@ struct VADBenchmarkTests {
             return total + max(0, detection.end - detection.start - covered)
         }
     }
+
+    private static func cerStats(reference: String, hypothesis: String) -> (distance: Int, refLen: Int) {
+        let ref = normalizedCharacters(reference)
+        let hyp = normalizedCharacters(hypothesis)
+        return (editDistance(ref, hyp), ref.count)
+    }
+
+    private static func normalizedCharacters(_ text: String) -> [Character] {
+        Array(text.filter { !$0.isWhitespace && !$0.isPunctuation })
+    }
+
+    private static func editDistance<T: Equatable>(_ a: [T], _ b: [T]) -> Int {
+        let m = a.count
+        let n = b.count
+        if m == 0 { return n }
+        if n == 0 { return m }
+
+        var dp = Array(0...n)
+        for i in 1...m {
+            var previous = dp[0]
+            dp[0] = i
+            for j in 1...n {
+                let old = dp[j]
+                dp[j] = a[i - 1] == b[j - 1]
+                    ? previous
+                    : Swift.min(previous, Swift.min(dp[j], dp[j - 1])) + 1
+                previous = old
+            }
+        }
+        return dp[n]
+    }
 }
 
 private struct VADBenchmarkMetric: Codable {
@@ -470,6 +659,70 @@ private struct VADChunkMetric: Codable {
         case trailingSilence = "trailing_silence"
         case isPreview = "is_preview"
         case sampleCount = "sample_count"
+    }
+}
+
+private struct VADSTTBenchmarkMetric: Codable {
+    let vad: String
+    let engine: String
+    let sample: String
+    let seconds: Double
+    let totalChunkCount: Int
+    let measuredChunkCount: Int
+    let emptyCount: Int
+    let falsePositiveTranscriptionCount: Int
+    let falsePositiveTranscriptChars: Int
+    let distance: Int
+    let refLen: Int
+    let cer: Double
+    let elapsedSeconds: Double
+    let chunks: [VADSTTChunkMetric]
+
+    enum CodingKeys: String, CodingKey {
+        case vad
+        case engine
+        case sample
+        case seconds
+        case totalChunkCount = "total_chunk_count"
+        case measuredChunkCount = "measured_chunk_count"
+        case emptyCount = "empty_count"
+        case falsePositiveTranscriptionCount = "false_positive_transcription_count"
+        case falsePositiveTranscriptChars = "false_positive_transcript_chars"
+        case distance
+        case refLen = "ref_len"
+        case cer
+        case elapsedSeconds = "elapsed_seconds"
+        case chunks
+    }
+}
+
+private struct VADSTTChunkMetric: Codable {
+    let index: Int
+    let startSeconds: Double
+    let endSeconds: Double
+    let durationSeconds: Double
+    let reference: String
+    let hypothesis: String
+    let distance: Int
+    let refLen: Int
+    let cer: Double
+    let elapsedSeconds: Double
+    let rtf: Double
+    let empty: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case index
+        case startSeconds = "start_seconds"
+        case endSeconds = "end_seconds"
+        case durationSeconds = "duration_seconds"
+        case reference
+        case hypothesis
+        case distance
+        case refLen = "ref_len"
+        case cer
+        case elapsedSeconds = "elapsed_seconds"
+        case rtf
+        case empty
     }
 }
 
