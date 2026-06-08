@@ -143,6 +143,8 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - 첫 guard 후보도 120초 전체 7샘플에서 3회 반복했다. 조건은 `repair pad=1.0초`, `min chunk=2.0초`, `min audio=-35dB`다.
 - guard 반복 결과: weighted CER 33.9%, 34.4%, 34.3%; Full Global CER 17.1%, 15.5%, 15.6%; empty 5, 7, 7; false-positive text 41 chars 고정; RTF 0.166, 0.258, 0.160; peak memory 526.1MB, 520.6MB, 751.0MB.
 - guard는 세 run 모두 5개 retry를 skip했고 repair false-positive는 0이었다. 하지만 no-guard `repair pad=1.0초` 평균 대비 empty final은 약간 나쁘고 RTF도 명확히 좋아지지 않았다. 따라서 short3 full-duration으로 승격하지 않고, 같은 batch에서 no-guard 대조 또는 다른 guard threshold 후보를 먼저 본다.
+- 약한 guard 후보 A도 120초 전체 7샘플에서 1회 확인했다. 조건은 `min chunk=1.0초`, `min audio=-45dB`다. 결과는 weighted CER 36.0%, Full Global CER 18.4%, empty 7, false-positive text 41 chars, RTF 0.158, peak 605.3MB, retry 9회, accepted 6회, guard skipped 4회였다.
+- 후보 A는 no-guard보다 retry를 조금 줄였지만 empty final을 줄이지 못했고, 기존 `2.0초/-35dB` guard repeat1보다 CER/empty가 나쁘다. 따라서 현재는 repeat2/repeat3를 돌리지 않고 prune한다.
 
 Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
 
@@ -635,8 +637,8 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 ## 바로 다음 작업 순서
 
 1. repair guard 후보는 바로 short3로 올리지 않는다. `min chunk=2.0초`, `min audio=-35dB`는 retry 비용을 줄였지만 empty/RTF 개선이 충분히 명확하지 않다.
-2. 같은 batch에서 no-guard repair 대조군을 다시 3회 돌리거나, 더 약한 guard 후보를 먼저 비교한다.
-   - 후보 A: `min chunk=1.0초`, `min audio=-45dB`
+2. 같은 batch에서 no-guard repair 대조군을 다시 3회 돌리거나, 남은 guard 후보를 비교한다.
+   - 후보 A: `min chunk=1.0초`, `min audio=-45dB`는 1회 결과가 약해 현재 prune
    - 후보 B: `min chunk=2.0초`, `min audio=-45dB`
    - 후보 C: `min chunk=1.0초`, `min audio=-35dB`
 3. guard 후보가 120초 repeat에서 CER/empty 개선을 유지하면서 false-positive text, RTF, peak memory를 줄이면 short3 full-duration으로 올린다.

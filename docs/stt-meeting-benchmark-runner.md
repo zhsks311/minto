@@ -355,6 +355,20 @@ Decision: keep this as a candidate, but do not promote it to short3 yet.
 It consistently skips five obvious low-energy/short retries and keeps repair false positives at zero in the 120s runs.
 However, compared with the previous no-guard `repair pad=1.0` mean, empty finals are slightly worse and RTF is not clearly better, so this guard needs either another threshold candidate or a controlled repeat against no-guard in the same run batch.
 
+Weaker guard candidate A:
+
+Scope: all seven `sample/meeting` samples, first 120s, Silero `threshold=0.6`, `merge gap=1.1`, `repair pad=1.0`, guard `min chunk=1.0s`, `min audio=-45dB`.
+
+| Candidate | Weighted CER | Full Global CER | Empty | FP chars | RTF | Peak MB | Repair attempted | Accepted | Guard skipped | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| no-guard reference run | 36.4% | 18.9% | 7 | 41 | 0.174 | 729.1 | 11 | 4 | 0 | reference only |
+| guard `2.0s/-35dB` repeat1 | 33.9% | 17.1% | 5 | 41 | 0.166 | 526.1 | 5 | 5 | 5 | stronger guard |
+| guard `1.0s/-45dB` repeat1 | 36.0% | 18.4% | 7 | 41 | 0.158 | 605.3 | 9 | 6 | 4 | prune |
+
+Decision: prune `1.0s/-45dB` for now.
+It is less aggressive, but it keeps too many retry attempts while not reducing empty finals in the first run.
+Do not spend repeat2/repeat3 on this candidate unless a later no-guard control batch shows the comparison was unfair.
+
 Full-duration short3 repair check:
 
 Scope: `본회의_20260428`, `본회의_20260508`, `재정경제기획위원회_20260430`, full duration, Silero `threshold=0.6`, `merge gap=1.1`, `merge max=15`, WhisperKit turbo.
