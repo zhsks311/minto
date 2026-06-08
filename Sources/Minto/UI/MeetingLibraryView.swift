@@ -571,8 +571,9 @@ public struct MeetingLibraryView: View {
 
                 if detailTab == .summary {
                     leadSummary(record)
-                    meetingOutcomes(record.summary)
+                    meetingTableOfContents(record.summary.sections)
                     meetingNotes(record.summary.sections)
+                    meetingOutcomes(record.summary)
                 } else if detailTab == .transcript {
                     transcriptBlock(record.transcript, emptyText: "전사 내용이 없습니다.", record: record)
                 } else {
@@ -871,52 +872,36 @@ public struct MeetingLibraryView: View {
     }
 
     @ViewBuilder
+    private func meetingTableOfContents(_ sections: [MeetingSummary.Section]) -> some View {
+        let lines = meetingTableOfContentsText(sections)
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionTitle("목차", systemImage: "list.number")
+                markdownText(lines)
+                    .font(.system(size: detailBodyFontSize))
+                    .lineSpacing(detailLineSpacing)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            .padding(18)
+            .background(LibraryPalette.elevated)
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    @ViewBuilder
     private func meetingNotes(_ sections: [MeetingSummary.Section]) -> some View {
-        if !sections.isEmpty {
+        let notes = meetingNotesText(sections)
+        if !notes.isEmpty {
             VStack(alignment: .leading, spacing: detailCardSpacing) {
                 sectionTitle("회의 내용 정리", systemImage: "doc.text")
-                ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                    VStack(alignment: .leading, spacing: detailItemSpacing) {
-                        HStack(spacing: 8) {
-                            Text(section.title.isEmpty ? "섹션" : section.title)
-                                .font(.system(size: detailSectionTitleFontSize, weight: .bold))
-                            if !section.time.isEmpty {
-                                Text(section.time)
-                                    .font(.system(size: detailTimestampFontSize, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        ForEach(Array(section.points.enumerated()), id: \.offset) { _, point in
-                            VStack(alignment: .leading, spacing: detailSubItemSpacing) {
-                                if !point.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Text("•")
-                                            .font(.system(size: detailBodyFontSize, weight: .bold))
-                                            .foregroundColor(.secondary)
-                                        markdownText(point.text)
-                                            .font(.system(size: detailBodyFontSize))
-                                            .lineSpacing(detailLineSpacing)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                }
-                                ForEach(Array(point.subPoints.enumerated()), id: \.offset) { _, subPoint in
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Text("–")
-                                            .font(.system(size: detailSubBodyFontSize, weight: .medium))
-                                            .foregroundColor(.secondary)
-                                        markdownText(subPoint)
-                                            .font(.system(size: detailSubBodyFontSize))
-                                            .foregroundColor(detailSubTextColor)
-                                            .lineSpacing(detailLineSpacing)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    .padding(.leading, 18)
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                markdownText(notes)
+                    .font(.system(size: detailBodyFontSize))
+                    .foregroundColor(detailSubTextColor)
+                    .lineSpacing(detailLineSpacing)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
             .padding(18)
             .background(LibraryPalette.elevated)
@@ -1279,6 +1264,44 @@ public struct MeetingLibraryView: View {
         if !owner.isEmpty { parts.append("담당: \(owner)") }
         if !due.isEmpty { parts.append("기한: \(due)") }
         return parts.joined(separator: " · ")
+    }
+
+    private func meetingTableOfContentsText(_ sections: [MeetingSummary.Section]) -> String {
+        sections.enumerated().compactMap { index, section in
+            let title = cleanedSectionTitle(section.title, fallbackIndex: index)
+            let time = section.time.trimmingCharacters(in: .whitespacesAndNewlines)
+            return time.isEmpty ? title : "\(title)  \(time)"
+        }
+        .joined(separator: "\n")
+    }
+
+    private func meetingNotesText(_ sections: [MeetingSummary.Section]) -> String {
+        sections.enumerated().compactMap { index, section in
+            let title = cleanedSectionTitle(section.title, fallbackIndex: index)
+            let time = section.time.trimmingCharacters(in: .whitespacesAndNewlines)
+            var lines = [time.isEmpty ? "**\(title)**" : "**\(title)**  \(time)"]
+
+            for point in section.points {
+                let pointText = point.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !pointText.isEmpty {
+                    lines.append("• \(pointText)")
+                }
+                for subPoint in point.subPoints {
+                    let subText = subPoint.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !subText.isEmpty {
+                        lines.append("  - \(subText)")
+                    }
+                }
+            }
+
+            return lines.count > 1 ? lines.joined(separator: "\n") : nil
+        }
+        .joined(separator: "\n\n")
+    }
+
+    private func cleanedSectionTitle(_ title: String, fallbackIndex: Int) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "\(fallbackIndex + 1). 섹션" : trimmed
     }
 
     private func selectFirstAvailableIfNeeded(preferFirstResult: Bool = false) {
