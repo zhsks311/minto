@@ -32,10 +32,15 @@
 - 60초 VAD chunk -> WhisperKit turbo STT smoke:
   - energy: 5/5 chunks, CER 33.0%, empty final 1, false-positive text 1 chunk / 13 chars
   - Silero: 8/8 chunks, CER 56.9%, empty final 1, false-positive text 1 chunk / 1 char
+- 추가 Silero tuning smoke:
+  - `VAD_MERGE_GAP_SEC=1.1`, `VAD_MERGE_MAX_SEC=15`: 8 raw chunks -> 6 chunks, CER 54.5%, empty final 1, false-positive text 0
+  - `SILERO_VAD_THRESHOLD=0.7` + 같은 merge: 11 raw chunks -> 6 chunks, CER 58.5%, empty final 1, false-positive text 0
 - 해석:
   - Silero는 짧은 발화 recall을 확실히 올린다.
   - 그러나 더 잘게/더 많이 자르면서 WhisperKit chunk CER가 악화될 수 있다.
-  - 따라서 Silero는 바로 기본값으로 바꾸지 말고, threshold/padding/min-silence 튜닝과 final chunk merge 정책을 같이 실험해야 한다.
+  - gap merge는 false-positive text와 처리 chunk 수를 줄이지만, CER를 energy 기준보다 낮추지는 못했다.
+  - threshold 0.7은 chunk를 줄이는 방향으로 동작하지 않았고 STT CER도 개선하지 못했다.
+  - 따라서 Silero는 바로 기본값으로 바꾸지 말고, full sample 기준의 chunk merge/min-duration/ASR-aware segmentation을 더 실험해야 한다.
 
 ## 원칙
 
