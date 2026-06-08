@@ -54,78 +54,6 @@ struct MeetingCorpusTests {
     /// 앱 VAD의 침묵 컷(1.5초)과 정렬해, 긴 침묵을 가로질러 병합하는 것을 막는다.
     private static let maxGapSeconds: Double = 1.5
 
-    private struct MeetingCorpusMetric: Codable {
-        let engine: String
-        let model: String
-        let supportsPreview: Bool
-        let sample: String
-        let windowSeconds: Double
-        let totalWindowCount: Int
-        let measuredWindowCount: Int
-        let emptyCount: Int
-        let perWindowDistance: Int
-        let perWindowRefLen: Int
-        let perWindowCER: Double
-        let globalDistance: Int?
-        let globalRefLen: Int?
-        let globalCER: Double?
-        let audioSeconds: Double
-        let elapsedSeconds: Double
-        let rtf: Double
-        let windows: [MeetingWindowMetric]
-
-        enum CodingKeys: String, CodingKey {
-            case engine
-            case model
-            case supportsPreview = "supports_preview"
-            case sample
-            case windowSeconds = "window_seconds"
-            case totalWindowCount = "total_window_count"
-            case measuredWindowCount = "window_count"
-            case emptyCount = "empty_count"
-            case perWindowDistance = "per_window_distance"
-            case perWindowRefLen = "per_window_ref_len"
-            case perWindowCER = "per_window_cer"
-            case globalDistance = "global_distance"
-            case globalRefLen = "global_ref_len"
-            case globalCER = "global_cer"
-            case audioSeconds = "audio_seconds"
-            case elapsedSeconds = "elapsed_seconds"
-            case rtf
-            case windows
-        }
-    }
-
-    private struct MeetingWindowMetric: Codable {
-        let index: Int
-        let startSeconds: Double
-        let endSeconds: Double
-        let durationSeconds: Double
-        let reference: String
-        let hypothesis: String
-        let distance: Int
-        let refLen: Int
-        let cer: Double
-        let elapsedSeconds: Double
-        let rtf: Double
-        let empty: Bool
-
-        enum CodingKeys: String, CodingKey {
-            case index
-            case startSeconds = "start_seconds"
-            case endSeconds = "end_seconds"
-            case durationSeconds = "duration_seconds"
-            case reference
-            case hypothesis
-            case distance
-            case refLen = "ref_len"
-            case cer
-            case elapsedSeconds = "elapsed_seconds"
-            case rtf
-            case empty
-        }
-    }
-
     @Test("국회 회의 코퍼스 창 단위 CER 측정")
     func meetingCorpusCER() async throws {
         guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1" else { return }
@@ -170,7 +98,7 @@ struct MeetingCorpusTests {
         // (per-window micro-average는 그런 경우 양쪽 창을 모두 깎아 dissimilarity를 부풀린다.)
         var allReferences: [String] = []
         var allHypotheses: [String] = []
-        var windowMetrics: [MeetingWindowMetric] = []
+        var windowMetrics: [STTBenchmarkSegmentMetric] = []
         for (index, window) in targetWindows.enumerated() {
             let startSample = max(0, Int(window.start * Double(Self.sampleRate)))
             let endSample = min(samples.count, Int(window.end * Double(Self.sampleRate)))
@@ -193,15 +121,16 @@ struct MeetingCorpusTests {
             allHypotheses.append(hypothesis)
             let windowCER = stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0
             let durationSeconds = window.end - window.start
-            windowMetrics.append(MeetingWindowMetric(
+            windowMetrics.append(STTBenchmarkSegmentMetric(
                 index: index,
                 startSeconds: window.start,
                 endSeconds: window.end,
                 durationSeconds: durationSeconds,
                 reference: window.text,
                 hypothesis: hypothesis,
+                referenceLength: stats.refLen,
+                hypothesisLength: STTBenchmarkTextMetrics.normalizedLength(hypothesis),
                 distance: stats.distance,
-                refLen: stats.refLen,
                 cer: windowCER,
                 elapsedSeconds: windowElapsedSeconds,
                 rtf: durationSeconds > 0 ? windowElapsedSeconds / durationSeconds : 0,
@@ -264,25 +193,34 @@ struct MeetingCorpusTests {
                 encoding: .utf8
             )
 
-            let metrics = MeetingCorpusMetric(
-                engine: service.speechEngineID.rawValue,
-                model: service.speechEngineID.whisperVariant == nil ? "" : service.modelVariant,
+            let metrics = STTBenchmarkRunMetric(
+                benchmarkKind: "meeting_corpus_window",
+                engineID: service.speechEngineID.rawValue,
+                engineLabel: engineLabel,
+                modelID: service.speechEngineID.whisperVariant == nil ? "" : service.modelVariant,
+                sampleID: sample,
                 supportsPreview: service.supportsPreviewTranscription,
-                sample: sample,
-                windowSeconds: Self.windowSeconds,
-                totalWindowCount: windows.count,
-                measuredWindowCount: windowCount,
-                emptyCount: emptyCount,
-                perWindowDistance: totalDistance,
-                perWindowRefLen: totalRefLen,
-                perWindowCER: microCER,
+                benchmarkSeconds: audioSeconds,
+                totalUnitCount: windows.count,
+                measuredUnitCount: windowCount,
+                referenceLength: totalRefLen,
+                hypothesisLength: STTBenchmarkTextMetrics.hypothesisLength(windowMetrics),
+                distance: totalDistance,
+                microCER: microCER,
+                macroCER: STTBenchmarkTextMetrics.macroCER(windowMetrics),
                 globalDistance: globalDistance,
-                globalRefLen: globalRefLen,
+                globalReferenceLength: globalRefLen,
                 globalCER: globalCERValue,
+                emptyFinalCount: emptyCount,
                 audioSeconds: audioSeconds,
                 elapsedSeconds: elapsedSeconds,
                 rtf: rtf,
-                windows: windowMetrics
+                metadata: [
+                    "total_window_count": "\(windows.count)",
+                    "window_seconds": "\(Self.windowSeconds)",
+                    "global_cer_skipped": shouldSkipGlobalCER ? "true" : "false",
+                ],
+                segments: windowMetrics
             )
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

@@ -204,7 +204,7 @@ struct VADBenchmarkTests {
         var emptyCount = 0
         var falsePositiveTranscriptionCount = 0
         var falsePositiveTranscriptChars = 0
-        var chunkMetrics: [VADSTTChunkMetric] = []
+        var chunkMetrics: [STTBenchmarkSegmentMetric] = []
         var allReferences: [String] = []
         var allHypotheses: [String] = []
 
@@ -233,15 +233,16 @@ struct VADBenchmarkTests {
             totalRefLen += stats.refLen
             allReferences.append(reference)
             allHypotheses.append(hypothesis)
-            chunkMetrics.append(VADSTTChunkMetric(
+            chunkMetrics.append(STTBenchmarkSegmentMetric(
                 index: index,
                 startSeconds: chunk.startSeconds,
                 endSeconds: chunk.endSeconds,
                 durationSeconds: chunk.durationSeconds,
                 reference: reference,
                 hypothesis: hypothesis,
+                referenceLength: stats.refLen,
+                hypothesisLength: normalizedHypLen,
                 distance: stats.distance,
-                refLen: stats.refLen,
                 cer: stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0,
                 elapsedSeconds: elapsedSeconds,
                 rtf: chunk.durationSeconds > 0 ? elapsedSeconds / chunk.durationSeconds : 0,
@@ -255,47 +256,61 @@ struct VADBenchmarkTests {
         )
         let elapsedSeconds = Date().timeIntervalSince(startedAt)
         let audioSeconds = chunkMetrics.reduce(0) { $0 + $1.durationSeconds }
-        let metric = VADSTTBenchmarkMetric(
-            vad: candidate.rawValue,
-            engine: engineLabel,
-            config: Self.benchmarkConfig,
-            sample: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
-            seconds: totalSeconds,
-            rawChunkCount: rawChunks.count,
-            totalChunkCount: allChunks.count,
-            measuredChunkCount: chunkMetrics.count,
-            emptyCount: emptyCount,
-            falsePositiveTranscriptionCount: falsePositiveTranscriptionCount,
-            falsePositiveTranscriptChars: falsePositiveTranscriptChars,
+        let metric = STTBenchmarkRunMetric(
+            benchmarkKind: "vad_chunk_stt",
+            engineID: service.speechEngineID.rawValue,
+            engineLabel: engineLabel,
+            modelID: service.speechEngineID.whisperVariant == nil ? "" : service.modelVariant,
+            sampleID: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
+            supportsPreview: service.supportsPreviewTranscription,
+            benchmarkSeconds: totalSeconds,
+            totalUnitCount: allChunks.count,
+            measuredUnitCount: chunkMetrics.count,
+            referenceLength: totalRefLen,
+            hypothesisLength: STTBenchmarkTextMetrics.hypothesisLength(chunkMetrics),
             distance: totalDistance,
-            refLen: totalRefLen,
-            cer: totalRefLen > 0 ? Double(totalDistance) / Double(totalRefLen) : 0,
+            microCER: totalRefLen > 0 ? Double(totalDistance) / Double(totalRefLen) : 0,
+            macroCER: STTBenchmarkTextMetrics.macroCER(chunkMetrics),
             globalDistance: globalStats.distance,
-            globalRefLen: globalStats.refLen,
+            globalReferenceLength: globalStats.refLen,
             globalCER: globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0,
+            emptyFinalCount: emptyCount,
+            falsePositiveTranscriptCount: falsePositiveTranscriptionCount,
+            falsePositiveTranscriptChars: falsePositiveTranscriptChars,
             audioSeconds: audioSeconds,
             elapsedSeconds: elapsedSeconds,
             rtf: audioSeconds > 0 ? elapsedSeconds / audioSeconds : 0,
-            chunks: chunkMetrics
+            metadata: [
+                "vad": candidate.rawValue,
+                "raw_chunk_count": "\(rawChunks.count)",
+                "total_chunk_count": "\(allChunks.count)",
+                "measured_chunk_count": "\(chunkMetrics.count)",
+                "chunk_merge_gap_seconds": Self.formatOptionalSeconds(Self.benchmarkConfig.chunkMergeGapSeconds),
+                "chunk_merge_max_seconds": "\(Self.benchmarkConfig.chunkMergeMaxSeconds)",
+                "silero_threshold": "\(Self.benchmarkConfig.sileroThreshold)",
+                "silero_min_speech_seconds": "\(Self.benchmarkConfig.sileroMinSpeechSeconds)",
+                "silero_min_silence_seconds": "\(Self.benchmarkConfig.sileroMinSilenceSeconds)",
+            ],
+            segments: chunkMetrics
         )
         try Self.writeSTTMetricsIfNeeded(metric)
         print("""
 
         === VAD STT Benchmark [\(candidate.rawValue) -> \(engineLabel)] ===
-        chunks measured         : \(metric.measuredChunkCount)/\(metric.totalChunkCount) (raw \(metric.rawChunkCount))
-        merge gap / max         : \(Self.formatOptionalSeconds(metric.config.chunkMergeGapSeconds)) / \(String(format: "%.1f", metric.config.chunkMergeMaxSeconds))s
-        empty final count       : \(metric.emptyCount)
-        false positive text     : \(metric.falsePositiveTranscriptionCount) chunks / \(metric.falsePositiveTranscriptChars) chars
-        chunk CER               : \(String(format: "%.1f%%", metric.cer * 100)) (distance \(metric.distance) / ref \(metric.refLen))
-        global CER              : \(String(format: "%.1f%%", metric.globalCER * 100)) (distance \(metric.globalDistance) / ref \(metric.globalRefLen))
+        chunks measured         : \(metric.measuredUnitCount)/\(metric.totalUnitCount) (raw \(rawChunks.count))
+        merge gap / max         : \(Self.formatOptionalSeconds(Self.benchmarkConfig.chunkMergeGapSeconds)) / \(String(format: "%.1f", Self.benchmarkConfig.chunkMergeMaxSeconds))s
+        empty final count       : \(metric.emptyFinalCount)
+        false positive text     : \(metric.falsePositiveTranscriptCount) chunks / \(metric.falsePositiveTranscriptChars) chars
+        chunk CER               : \(String(format: "%.1f%%", metric.microCER * 100)) (distance \(metric.distance) / ref \(metric.referenceLength))
+        global CER              : \(String(format: "%.1f%%", (metric.globalCER ?? 0) * 100)) (distance \(metric.globalDistance ?? 0) / ref \(metric.globalReferenceLength ?? 0))
         RTF                     : \(String(format: "%.2f", metric.rtf))
         elapsed                 : \(String(format: "%.1f", metric.elapsedSeconds))s
         ==============================================
 
         """)
 
-        #expect(metric.measuredChunkCount > 0)
-        #expect(metric.refLen > 0)
+        #expect(metric.measuredUnitCount > 0)
+        #expect(metric.referenceLength > 0)
     }
 
     private static func buildMetrics(
@@ -519,7 +534,7 @@ struct VADBenchmarkTests {
         try data.write(to: outputDirectory.appendingPathComponent("\(metrics.sample)_vad_\(metrics.vad)_metrics.json"))
     }
 
-    private static func writeSTTMetricsIfNeeded(_ metrics: VADSTTBenchmarkMetric) throws {
+    private static func writeSTTMetricsIfNeeded(_ metrics: STTBenchmarkRunMetric) throws {
         guard let outputDirectory = ProcessInfo.processInfo.environment["VAD_STT_OUTPUT_DIR"]
             .flatMap({ $0.isEmpty ? nil : URL(fileURLWithPath: $0) })
             ?? ProcessInfo.processInfo.environment["VAD_OUTPUT_DIR"]
@@ -531,10 +546,11 @@ struct VADBenchmarkTests {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(metrics)
-        let engine = metrics.engine
+        let engine = metrics.engineLabel
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: " ", with: "_")
-        try data.write(to: outputDirectory.appendingPathComponent("\(metrics.sample)_vad_\(metrics.vad)_stt_\(engine).json"))
+        let vad = metrics.metadata["vad"] ?? "unknown"
+        try data.write(to: outputDirectory.appendingPathComponent("\(metrics.sampleID)_vad_\(vad)_stt_\(engine).json"))
     }
 
     private static func positiveDoubleEnv(_ key: String, default defaultValue: Double) -> Double {
@@ -817,84 +833,6 @@ private struct VADChunkMetric: Codable {
         case trailingSilence = "trailing_silence"
         case isPreview = "is_preview"
         case sampleCount = "sample_count"
-    }
-}
-
-private struct VADSTTBenchmarkMetric: Codable {
-    let vad: String
-    let engine: String
-    let config: VADBenchmarkConfigMetric
-    let sample: String
-    let seconds: Double
-    let rawChunkCount: Int
-    let totalChunkCount: Int
-    let measuredChunkCount: Int
-    let emptyCount: Int
-    let falsePositiveTranscriptionCount: Int
-    let falsePositiveTranscriptChars: Int
-    let distance: Int
-    let refLen: Int
-    let cer: Double
-    let globalDistance: Int
-    let globalRefLen: Int
-    let globalCER: Double
-    let audioSeconds: Double
-    let elapsedSeconds: Double
-    let rtf: Double
-    let chunks: [VADSTTChunkMetric]
-
-    enum CodingKeys: String, CodingKey {
-        case vad
-        case engine
-        case config
-        case sample
-        case seconds
-        case rawChunkCount = "raw_chunk_count"
-        case totalChunkCount = "total_chunk_count"
-        case measuredChunkCount = "measured_chunk_count"
-        case emptyCount = "empty_count"
-        case falsePositiveTranscriptionCount = "false_positive_transcription_count"
-        case falsePositiveTranscriptChars = "false_positive_transcript_chars"
-        case distance
-        case refLen = "ref_len"
-        case cer
-        case globalDistance = "global_distance"
-        case globalRefLen = "global_ref_len"
-        case globalCER = "global_cer"
-        case audioSeconds = "audio_seconds"
-        case elapsedSeconds = "elapsed_seconds"
-        case rtf
-        case chunks
-    }
-}
-
-private struct VADSTTChunkMetric: Codable {
-    let index: Int
-    let startSeconds: Double
-    let endSeconds: Double
-    let durationSeconds: Double
-    let reference: String
-    let hypothesis: String
-    let distance: Int
-    let refLen: Int
-    let cer: Double
-    let elapsedSeconds: Double
-    let rtf: Double
-    let empty: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case index
-        case startSeconds = "start_seconds"
-        case endSeconds = "end_seconds"
-        case durationSeconds = "duration_seconds"
-        case reference
-        case hypothesis
-        case distance
-        case refLen = "ref_len"
-        case cer
-        case elapsedSeconds = "elapsed_seconds"
-        case rtf
-        case empty
     }
 }
 

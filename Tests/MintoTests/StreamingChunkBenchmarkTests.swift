@@ -42,104 +42,6 @@ struct StreamingChunkBenchmarkTests {
         positiveDoubleEnv("STREAM_FINAL_WINDOW_SEC", default: 5.0)
     }
 
-    private struct StreamingBenchmarkMetric: Codable {
-        let engine: String
-        let model: String
-        let supportsPreview: Bool
-        let sample: String
-        let seconds: Double
-        let previewStepSeconds: Double
-        let previewContextSeconds: Double
-        let finalWindowSeconds: Double
-        let previewEvents: Int
-        let previewNonEmpty: Int
-        let previewRevisions: Int
-        let previewEditDistanceTotal: Int
-        let avgPreviewRevisionDistance: Double
-        let firstPreviewAudioSeconds: Double?
-        let finalEvents: Int
-        let emptyFinals: Int
-        let previewRTFP50: Double
-        let previewRTFP95: Double
-        let finalRTFP50: Double
-        let finalRTFP95: Double
-        let lastPreviewFinalEditDistance: Int
-        let globalDistance: Int
-        let globalRefLen: Int
-        let globalCER: Double
-        let previewTimeline: [PreviewMetric]
-        let finalWindows: [FinalMetric]
-
-        enum CodingKeys: String, CodingKey {
-            case engine
-            case model
-            case supportsPreview = "supports_preview"
-            case sample
-            case seconds
-            case previewStepSeconds = "preview_step_seconds"
-            case previewContextSeconds = "preview_context_seconds"
-            case finalWindowSeconds = "final_window_seconds"
-            case previewEvents = "preview_events"
-            case previewNonEmpty = "preview_non_empty"
-            case previewRevisions = "preview_revisions"
-            case previewEditDistanceTotal = "preview_edit_distance_total"
-            case avgPreviewRevisionDistance = "avg_preview_revision_distance"
-            case firstPreviewAudioSeconds = "first_preview_audio_seconds"
-            case finalEvents = "final_events"
-            case emptyFinals = "empty_finals"
-            case previewRTFP50 = "preview_rtf_p50"
-            case previewRTFP95 = "preview_rtf_p95"
-            case finalRTFP50 = "final_rtf_p50"
-            case finalRTFP95 = "final_rtf_p95"
-            case lastPreviewFinalEditDistance = "last_preview_final_edit_distance"
-            case globalDistance = "global_distance"
-            case globalRefLen = "global_ref_len"
-            case globalCER = "global_cer"
-            case previewTimeline = "preview_timeline"
-            case finalWindows = "final_windows"
-        }
-    }
-
-    private struct PreviewMetric: Codable {
-        let index: Int
-        let audioSeconds: Double
-        let contextStartSeconds: Double
-        let contextEndSeconds: Double
-        let text: String
-        let rtf: Double
-        let revisionDistance: Int?
-
-        enum CodingKeys: String, CodingKey {
-            case index
-            case audioSeconds = "audio_seconds"
-            case contextStartSeconds = "context_start_seconds"
-            case contextEndSeconds = "context_end_seconds"
-            case text
-            case rtf
-            case revisionDistance = "revision_distance"
-        }
-    }
-
-    private struct FinalMetric: Codable {
-        let index: Int
-        let startSeconds: Double
-        let endSeconds: Double
-        let text: String
-        let rtf: Double
-        let empty: Bool
-        let previewFinalDistance: Int?
-
-        enum CodingKeys: String, CodingKey {
-            case index
-            case startSeconds = "start_seconds"
-            case endSeconds = "end_seconds"
-            case text
-            case rtf
-            case empty
-            case previewFinalDistance = "preview_final_distance"
-        }
-    }
-
     @Test("rolling preview/final chunk CER and latency metrics")
     func rollingPreviewFinalBenchmark() async throws {
         guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
@@ -173,15 +75,21 @@ struct StreamingChunkBenchmarkTests {
         var lastPreviewText = ""
         var lastPreviewForFinal = ""
         var previewRTFs: [Double] = []
-        var previewTimeline: [PreviewMetric] = []
+        var previewTimeline: [STTBenchmarkPreviewSegmentMetric] = []
 
         var finalEvents = 0
         var emptyFinals = 0
         var finalRTFs: [Double] = []
+        var finalElapsedSeconds: [Double] = []
         var allFinalTexts: [String] = []
         var lastPreviewFinalDistanceTotal = 0
-        var finalWindows: [FinalMetric] = []
+        var finalWindows: [STTBenchmarkSegmentMetric] = []
+        var totalFinalDistance = 0
+        var totalFinalRefLen = 0
+        var falsePositiveFinalCount = 0
+        var falsePositiveFinalChars = 0
 
+        let benchmarkStartedAt = Date()
         var t = Self.previewStepSeconds
         while t <= totalSeconds {
             previewEvents += 1
@@ -208,7 +116,7 @@ struct StreamingChunkBenchmarkTests {
                     lastPreviewText = text
                     lastPreviewForFinal = text
                 }
-                previewTimeline.append(PreviewMetric(
+                previewTimeline.append(STTBenchmarkPreviewSegmentMetric(
                     index: previewEvents - 1,
                     audioSeconds: t,
                     contextStartSeconds: contextStart,
@@ -224,26 +132,40 @@ struct StreamingChunkBenchmarkTests {
                 let finalClip = Self.slice(samples, start: finalStart, end: t)
                 let finalMeasured = try await Self.transcribeMeasured(service: service, samples: finalClip)
                 let finalText = finalMeasured.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let finalReference = Self.referenceText(captions: captions, start: finalStart, end: t)
+                let finalStats = Self.cerStats(reference: finalReference, hypothesis: finalText)
+                let finalHypLength = STTBenchmarkTextMetrics.normalizedLength(finalText)
                 finalEvents += 1
                 finalRTFs.append(finalMeasured.rtf)
+                finalElapsedSeconds.append(finalMeasured.elapsedSeconds)
                 if finalText.isEmpty {
                     emptyFinals += 1
                 }
-                var previewFinalDistance: Int?
+                if finalStats.refLen == 0, finalHypLength > 0 {
+                    falsePositiveFinalCount += 1
+                    falsePositiveFinalChars += finalHypLength
+                }
                 if !lastPreviewForFinal.isEmpty || !finalText.isEmpty {
                     let distance = Self.editDistance(Array(lastPreviewForFinal), Array(finalText))
                     lastPreviewFinalDistanceTotal += distance
-                    previewFinalDistance = distance
                 }
+                totalFinalDistance += finalStats.distance
+                totalFinalRefLen += finalStats.refLen
                 allFinalTexts.append(finalText)
-                finalWindows.append(FinalMetric(
+                finalWindows.append(STTBenchmarkSegmentMetric(
                     index: finalEvents - 1,
                     startSeconds: finalStart,
                     endSeconds: t,
-                    text: finalText,
+                    durationSeconds: t - finalStart,
+                    reference: finalReference,
+                    hypothesis: finalText,
+                    referenceLength: finalStats.refLen,
+                    hypothesisLength: finalHypLength,
+                    distance: finalStats.distance,
+                    cer: finalStats.refLen > 0 ? Double(finalStats.distance) / Double(finalStats.refLen) : 0,
+                    elapsedSeconds: finalMeasured.elapsedSeconds,
                     rtf: finalMeasured.rtf,
-                    empty: finalText.isEmpty,
-                    previewFinalDistance: previewFinalDistance
+                    empty: finalText.isEmpty
                 ))
                 lastPreviewForFinal = ""
             }
@@ -260,34 +182,59 @@ struct StreamingChunkBenchmarkTests {
         let previewRTFP95 = Self.percentile(previewRTFs, 0.95)
         let finalRTFP50 = Self.percentile(finalRTFs, 0.50)
         let finalRTFP95 = Self.percentile(finalRTFs, 0.95)
+        let finalLatencySeconds = Self.percentile(finalElapsedSeconds, 0.50)
+        let finalAudioSeconds = finalWindows.reduce(0) { $0 + $1.durationSeconds }
+        let elapsedSeconds = Date().timeIntervalSince(benchmarkStartedAt)
+        let microCER = totalFinalRefLen > 0 ? Double(totalFinalDistance) / Double(totalFinalRefLen) : 0
 
-        try Self.writeStreamingMetricsIfNeeded(StreamingBenchmarkMetric(
-            engine: service.speechEngineID.rawValue,
-            model: service.speechEngineID.whisperVariant == nil ? "" : service.modelVariant,
+        try Self.writeStreamingMetricsIfNeeded(STTBenchmarkRunMetric(
+            benchmarkKind: "rolling_preview_final",
+            engineID: service.speechEngineID.rawValue,
+            engineLabel: engineLabel,
+            modelID: service.speechEngineID.whisperVariant == nil ? "" : service.modelVariant,
+            sampleID: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
             supportsPreview: service.supportsPreviewTranscription,
-            sample: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
-            seconds: totalSeconds,
-            previewStepSeconds: Self.previewStepSeconds,
-            previewContextSeconds: Self.previewContextSeconds,
-            finalWindowSeconds: Self.finalWindowSeconds,
-            previewEvents: previewEvents,
-            previewNonEmpty: previewNonEmpty,
-            previewRevisions: previewRevisions,
-            previewEditDistanceTotal: previewEditDistanceTotal,
-            avgPreviewRevisionDistance: avgPreviewRevisionDistance,
-            firstPreviewAudioSeconds: firstPreviewAt,
-            finalEvents: finalEvents,
-            emptyFinals: emptyFinals,
-            previewRTFP50: previewRTFP50,
-            previewRTFP95: previewRTFP95,
-            finalRTFP50: finalRTFP50,
-            finalRTFP95: finalRTFP95,
-            lastPreviewFinalEditDistance: lastPreviewFinalDistanceTotal,
+            benchmarkSeconds: totalSeconds,
+            totalUnitCount: finalEvents,
+            measuredUnitCount: finalWindows.count,
+            referenceLength: totalFinalRefLen,
+            hypothesisLength: STTBenchmarkTextMetrics.hypothesisLength(finalWindows),
+            distance: totalFinalDistance,
+            microCER: microCER,
+            macroCER: STTBenchmarkTextMetrics.macroCER(finalWindows),
             globalDistance: stats.distance,
-            globalRefLen: stats.refLen,
+            globalReferenceLength: stats.refLen,
             globalCER: globalCER,
-            previewTimeline: previewTimeline,
-            finalWindows: finalWindows
+            emptyFinalCount: emptyFinals,
+            falsePositiveTranscriptCount: falsePositiveFinalCount,
+            falsePositiveTranscriptChars: falsePositiveFinalChars,
+            audioSeconds: finalAudioSeconds,
+            elapsedSeconds: elapsedSeconds,
+            rtf: finalAudioSeconds > 0 ? elapsedSeconds / finalAudioSeconds : 0,
+            metadata: [
+                "preview_step_seconds": "\(Self.previewStepSeconds)",
+                "preview_context_seconds": "\(Self.previewContextSeconds)",
+                "final_window_seconds": "\(Self.finalWindowSeconds)",
+                "preview_edit_distance_total": "\(previewEditDistanceTotal)",
+                "avg_preview_revision_distance": "\(avgPreviewRevisionDistance)",
+                "preview_rtf_p50": "\(previewRTFP50)",
+                "preview_rtf_p95": "\(previewRTFP95)",
+                "final_rtf_p50": "\(finalRTFP50)",
+                "final_rtf_p95": "\(finalRTFP95)",
+                "last_preview_final_edit_distance": "\(lastPreviewFinalDistanceTotal)",
+            ],
+            streaming: STTBenchmarkStreamingSummary(
+                firstPartialLatencySeconds: firstPreviewAt,
+                partialRevisionCount: previewRevisions,
+                finalLatencySeconds: finalLatencySeconds,
+                finalCER: globalCER,
+                unstablePartialRatio: previewEvents > 0 ? Double(previewRevisions) / Double(previewEvents) : 0,
+                previewEvents: previewEvents,
+                previewNonEmpty: previewNonEmpty,
+                finalEvents: finalEvents
+            ),
+            segments: finalWindows,
+            previewSegments: previewTimeline
         ))
 
         print("""
@@ -392,15 +339,19 @@ struct StreamingChunkBenchmarkTests {
         #expect(rawStats.distance == normalizedStats.distance, "normalization should not alter transcript characters")
     }
 
-    private static func transcribeMeasured(service: STTService, samples: [Float]) async throws -> (text: String, rtf: Double) {
+    private static func transcribeMeasured(service: STTService, samples: [Float]) async throws -> (
+        text: String,
+        elapsedSeconds: Double,
+        rtf: Double
+    ) {
         let startedAt = Date()
         let result = try await service.transcribe(pcmSamples: samples)
         let elapsed = max(0.001, Date().timeIntervalSince(startedAt))
         let audioDuration = max(0.001, Double(samples.count) / Double(sampleRate))
-        return (result.segment.text, elapsed / audioDuration)
+        return (result.segment.text, elapsed, elapsed / audioDuration)
     }
 
-    private static func writeStreamingMetricsIfNeeded(_ metrics: StreamingBenchmarkMetric) throws {
+    private static func writeStreamingMetricsIfNeeded(_ metrics: STTBenchmarkRunMetric) throws {
         guard let outputDirectory = ProcessInfo.processInfo.environment["STREAMING_OUTPUT_DIR"]
             .flatMap({ $0.isEmpty ? nil : URL(fileURLWithPath: $0) }) else {
             return
@@ -410,7 +361,7 @@ struct StreamingChunkBenchmarkTests {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(metrics)
-        try data.write(to: outputDirectory.appendingPathComponent("\(metrics.sample)_streaming_metrics.json"))
+        try data.write(to: outputDirectory.appendingPathComponent("\(metrics.sampleID)_streaming_metrics.json"))
     }
 
     private static func positiveDoubleEnv(_ key: String, default defaultValue: Double) -> Double {
