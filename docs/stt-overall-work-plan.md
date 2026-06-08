@@ -1,362 +1,412 @@
-# STT overall work plan
+# STT 전체 작업 계획
+
+작성일: 2026-06-08
 
 ## 목적
 
-비싼 회의록 앱을 대체할 수 있도록, Minto의 전사 파이프라인을 무료/로컬 우선 구조로 개선한다.
+Minto의 전사 파이프라인을 비싼 회의록 앱 대체가 가능한 무료/로컬 우선 구조로 개선한다.
 
 핵심 목표는 네 가지다.
 
-- 한국어 회의 CER를 낮춘다.
-- 실시간처럼 보이는 preview/final 경험을 안정화한다.
-- 로컬 실행 비용과 메모리 폭주를 통제한다.
-- 사용자가 원하면 개인 OAuth 또는 로컬 LLM으로 회의록 후처리를 붙일 수 있게 한다.
+- 한국어 회의 전사의 CER를 낮춘다.
+- 사용 중에는 실시간처럼 보이고, 녹음 종료 시에는 final이 안정적으로 남게 한다.
+- 모델별 메모리와 지연 시간을 숫자로 관리한다.
+- 회의록 정리 단계는 개인 OAuth LLM 또는 로컬 LLM을 선택할 수 있게 하되, STT 정확도 평가와 섞지 않는다.
 
-## 현재 판단
+## 현재 구조 판단
 
-- 기본값은 당장 바꾸지 않는다.
-- WhisperKit turbo는 안정 fallback으로 유지한다.
-- SpeechAnalyzer는 macOS 26 이상에서 가장 먼저 제품 통합을 검증할 후보다.
-- Nemotron MLX는 정확도 후보지만, Python sidecar와 메모리 관리가 먼저 검증돼야 한다.
-- sherpa 계열은 true streaming 구조 참고용이다. 현재 한국어 CER 기준으로 기본 엔진 후보는 아니다.
-- true streaming은 모든 모델에 억지로 적용하지 않는다. 내부 cache/session을 유지하는 엔진에만 `accept`, `finish`, `reset` lifecycle을 붙인다.
+현재 main 반영 이후 구조는 예전보다 좋아졌다. 그래서 다음 작업은 대수술보다 "측정 가능한 개선" 중심으로 가야 한다.
 
-## 2026-06-08 진행 상태
+- `STTService`는 이미 facade 역할을 한다.
+- `SpeechTranscriptionEngine` 경계가 있고, WhisperKit / SpeechAnalyzer / SFSpeech 구현이 분리되어 있다.
+- WhisperKit turbo는 현재 기본 fallback으로 유지하는 것이 맞다.
+- `VoiceActivityDetector` 경계와 `VADProcessor.flushPending()`이 이미 들어와 있다.
+- `TranscriptionViewModel`은 preview와 final을 분리해 다루지만, true streaming session 구조는 아직 없다.
+- Silero VAD는 테스트 타깃 PoC로만 보는 것이 맞다. 짧은 발화 recall은 좋아졌지만, chunk가 잘게 쪼개지면서 WhisperKit final CER가 나빠질 수 있다.
+- SpeechAnalyzer는 macOS 26 이상에서 가장 유력한 Apple-native 후보지만, 지원 OS/asset/locale fallback이 제품 통합 비용이다.
+- Nemotron MLX는 정확도 연구 후보이지, 지금 바로 앱 기본 엔진으로 넣을 후보는 아니다. Python sidecar, peak memory, crash isolation 검증이 먼저다.
 
-- `SpeechTranscriptionEngine` 경계로 STT 구현을 분리했고, WhisperKit turbo 기본 경로는 유지했다.
-- `sample/meeting` window benchmark와 rolling preview/final streaming benchmark를 JSON metric으로 저장할 수 있게 했다.
-- `VoiceActivityDetector` 경계를 만들고, 기존 energy VAD의 `flushPending()` 및 audio offset을 테스트로 고정했다.
-- FluidAudio Silero VAD를 test target PoC로 추가했다. production 기본 VAD로는 아직 올리지 않는다.
-- 120초 VAD-only smoke:
-  - energy: speech recall 58.6%, false positive ratio 53.3%, short recall 2/6
-  - Silero: speech recall 77.1%, false positive ratio 46.0%, short recall 6/6
-- 60초 VAD chunk -> WhisperKit turbo STT smoke:
-  - energy: 5/5 chunks, CER 33.0%, empty final 1, false-positive text 1 chunk / 13 chars
-  - Silero: 8/8 chunks, CER 56.9%, empty final 1, false-positive text 1 chunk / 1 char
-- 추가 Silero tuning smoke:
-  - `VAD_MERGE_GAP_SEC=1.1`, `VAD_MERGE_MAX_SEC=15`: 8 raw chunks -> 6 chunks, CER 54.5%, empty final 1, false-positive text 0
-  - `SILERO_VAD_THRESHOLD=0.7` + 같은 merge: 11 raw chunks -> 6 chunks, CER 58.5%, empty final 1, false-positive text 0
-- 해석:
-  - Silero는 짧은 발화 recall을 확실히 올린다.
-  - 그러나 더 잘게/더 많이 자르면서 WhisperKit chunk CER가 악화될 수 있다.
-  - gap merge는 false-positive text와 처리 chunk 수를 줄이지만, CER를 energy 기준보다 낮추지는 못했다.
-  - threshold 0.7은 chunk를 줄이는 방향으로 동작하지 않았고 STT CER도 개선하지 못했다.
-  - 따라서 Silero는 바로 기본값으로 바꾸지 말고, full sample 기준의 chunk merge/min-duration/ASR-aware segmentation을 더 실험해야 한다.
+## 중요한 전제
 
-## 원칙
+true streaming은 일부 streaming 지원 엔진에만 적용한다.
 
-1. 정확도 개선과 가독성 개선을 분리한다.
-   - CER 개선: STT 엔진, VAD, chunking 문제다.
-   - 읽기 좋은 회의록: normalization, LLM correction, paragraph merge 문제다.
+- WhisperKit, SFSpeech file/request, Nemotron offline sidecar는 기본적으로 one-shot final 엔진으로 취급한다.
+- WhisperKit의 rolling preview는 "반복 재전사 기반 preview"이지 true streaming은 아니다.
+- SpeechAnalyzer, sherpa streaming, FluidAudio StreamingEouAsrManager 같은 엔진만 `accept(samples:)`, `finish()`, `reset()` lifecycle 후보로 본다.
+- 하나의 protocol에 모든 엔진을 억지로 맞추지 않는다. one-shot 경로와 streaming 경로를 분리해야 기존 안정성을 지킬 수 있다.
 
-2. one-shot 엔진과 true streaming 엔진을 분리한다.
-   - one-shot: WhisperKit, SFSpeech file/request 방식, Nemotron offline sidecar.
-   - streaming: SpeechAnalyzer, sherpa streaming, FluidAudio streaming ASR처럼 session 상태를 유지하는 엔진.
+## 목표 아키텍처
 
-3. 기본값 변경은 숫자로 결정한다.
-   - `sample/meeting` 전체 CER
-   - first partial latency
-   - final latency / RTF
-   - partial revision count
-   - empty final count
-   - short utterance recall
-   - peak memory
-   - crash-free long run
+현재 구조를 다음 형태로 확장한다.
 
-4. 제품 구조는 fallback 가능한 형태로 둔다.
-   - 새 엔진이 실패하면 WhisperKit으로 돌아갈 수 있어야 한다.
-   - 모델 다운로드, 권한, OS availability 실패가 UI에서 설명돼야 한다.
+> AudioSource
+> → VAD/Segmenter
+> → TranscriptionCoordinator
+> → one-shot engine 또는 streaming engine
+> → TranscriptAssembler
+> → 원문 transcript store
+> → normalizer / LLM correction / export
 
-## Phase 0. 현재 작업트리 안정화
+역할은 이렇게 나눈다.
 
-### 목표
+- `STTService`: 앱이 보는 facade. 엔진 선택, 로딩 상태, fallback, cache recovery를 담당한다.
+- `SpeechTranscriptionEngine`: 기존 one-shot final 전사 경계. WhisperKit, SFSpeech, Nemotron sidecar가 이쪽이다.
+- `StreamingTranscriptionEngine`: 새로 추가할 streaming 전용 경계. true streaming 엔진만 구현한다.
+- `VoiceActivityDetector`: 음성 구간 후보를 만드는 경계. Energy VAD와 Silero VAD를 비교한다.
+- `TranscriptAssembler`: preview/final 전환, empty final, partial revision을 안정화한다.
+- `TranscriptNormalizer`: 저장/export용 문단 정리. CER 개선과 별도로 평가한다.
+- `MeetingNoteProcessor`: 개인 OAuth LLM 또는 로컬 LLM 후처리. STT 엔진과 분리한다.
 
-현재 `experiment/stt-engine-poc` 브랜치에 걸려 있는 STT 엔진 분리 WIP를 컴파일 가능한 상태로 마무리한다.
+## 우선순위
 
-### 작업
+### P0. 현재 브랜치 안정화
 
-- `STTService`를 facade로 정리한다.
-- `SpeechTranscriptionEngine` protocol을 실제 엔진 구현의 공통 경계로 둔다.
-- `WhisperKitSTTEngine`, `SpeechAnalyzerSTTEngine`, `SFSpeechOnDeviceSTTEngine`이 각자 load/transcribe를 책임지게 한다.
-- `STTService` 안에 남은 옛 WhisperKit/SpeechAnalyzer/SFSpeech 구현 중복을 제거한다.
-- `WHISPER_MODEL_FOLDER` 로컬 모델 override는 유지한다.
+**목표**
 
-### 검증
+- 현재 작업트리를 컴파일 가능한 상태로 고정한다.
+- WhisperKit turbo 기본 경로가 유지되는지 확인한다.
+- VAD/STT benchmark에 per-chunk CER와 global CER를 모두 남긴다.
+
+**작업**
+
+- `VADBenchmarkTests`의 global CER 추가 변경을 마무리한다.
+- 전체 테스트를 한 번 통과시킨다.
+- benchmark JSON schema에 `cer`와 `global_cer`의 의미를 명시한다.
+- 현재 미추적 보고서/디자인 파일은 별도 작업으로 남기고 섞지 않는다.
+
+**검증**
 
 - `swift test --disable-sandbox`
-- `RUN_STT_TESTS=1 STT_ENGINE=whisper_accurate WHISPER_MODEL_FOLDER=... MEETING_MAX_WINDOWS=1 swift test --filter MeetingCorpusTests/meetingCorpusCER --disable-sandbox`
-- 기존 default engine이 `openai_whisper-large-v3-v20240930_turbo`로 유지되는지 확인
+- `RUN_STT_TESTS=1 RUN_VAD_STT_BENCH=1 ... VAD_ENGINE=energy ... swift test --filter VADBenchmarkTests/vadChunkSTTCER --disable-sandbox`
+- `RUN_STT_TESTS=1 RUN_VAD_STT_BENCH=1 ... VAD_ENGINE=silero ... swift test --filter VADBenchmarkTests/vadChunkSTTCER --disable-sandbox`
 
-### 성공 기준
+**성공 기준**
 
-- 앱 호출부는 `STTService`를 그대로 사용한다.
-- 기본 WhisperKit 전사 결과가 1-window smoke에서 기존 baseline과 크게 어긋나지 않는다.
-- 새 엔진 추가가 `STTService` 대수술 없이 가능해진다.
+- 기존 기본 엔진이 `openai_whisper-large-v3-v20240930_turbo`로 유지된다.
+- VAD별 결과가 같은 JSON schema로 저장된다.
+- Silero가 좋거나 나쁘다는 결론을 per-chunk CER 하나로 내리지 않는다.
 
-## Phase 1. 측정 하니스 표준화
+### P1. 측정 하니스 표준화
 
-### 목표
+**목표**
 
-엔진마다 다른 방식으로 나온 숫자를 같은 표로 비교할 수 있게 만든다.
+- 엔진별 결과를 같은 조건에서 비교한다.
+- 120초 샘플, 전체 샘플, streaming chunk 실험을 섞지 않는다.
 
-### 작업
+**작업**
 
-- `STT_ENGINE` 기반 테스트 선택을 유지한다.
-- `sample/meeting` 전체를 대상으로 engine별 결과 JSON을 같은 schema로 저장한다.
-- 각 window마다 다음 값을 저장한다.
-  - reference text
-  - hypothesis text
-  - CER
-  - elapsed seconds
-  - RTF
-  - empty 여부
+- 모든 STT benchmark output에 공통 필드를 둔다.
   - engine id
   - model id
-- streaming 후보는 추가로 다음 값을 저장한다.
+  - sample id
+  - reference length
+  - hypothesis length
+  - micro CER
+  - macro CER
+  - global CER
+  - empty final count
+  - false-positive text count
+  - elapsed seconds
+  - RTF
+  - peak memory
+- streaming 후보는 추가로 다음 필드를 둔다.
   - first partial latency
   - partial revision count
   - final latency
   - final CER
-- peak memory는 별도 runner에서 수집한다.
+  - unstable partial ratio
+- benchmark 결과는 `tmp/`에 저장하고, 요약만 `docs/`에 남긴다.
 
-### 검증
+**검증**
 
-- WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device가 같은 output schema를 생성한다.
-- 일부 engine이 preview를 지원하지 않아도 테스트가 실패하지 않고 `supports_preview=false`로 기록된다.
+- WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device가 같은 schema를 생성한다.
+- preview 미지원 엔진은 실패하지 않고 `supports_preview=false`로 기록된다.
 
-### 성공 기준
+**성공 기준**
 
-- "이 엔진이 낫다"는 말을 숫자와 파일로 재현할 수 있다.
-- 전체 샘플, 120초 샘플, streaming chunk 실험이 서로 섞이지 않는다.
+- "이 모델이 낫다"는 판단을 같은 샘플, 같은 metric으로 재현할 수 있다.
 
-## Phase 2. SpeechAnalyzer 제품 통합 검증
+### P2. VAD와 segmentation 개선
 
-### 목표
+**목표**
 
-macOS 26 이상에서 SpeechAnalyzer를 실제 후보로 쓸 수 있는지 검증한다.
+- 짧은 발화와 stop 직전 발화 누락을 줄인다.
+- 잡음 chunk 증가로 hallucination이 늘지 않게 한다.
 
-### 작업
+**작업**
 
-- SpeechAnalyzer engine을 `STTService` 선택지로 완성한다.
-- availability gate를 명확히 한다.
+- Energy VAD를 현재 기본값으로 유지한다.
+- Silero VAD는 후보 adapter로 유지하고, 기본값 변경은 보류한다.
+- short utterance probe set을 만든다.
+  - 0.5초 미만
+  - 0.8초 전후
+  - 짧은 대답
+  - 말 끝이 바로 녹음 종료되는 케이스
+- `flushPending()`이 stop 직전 발화를 보존하는지 테스트한다.
+- chunk merge 정책을 분리한다.
+  - min duration
+  - max duration
+  - merge gap
+  - speech probability threshold
+- ASR-aware segmentation을 실험한다. VAD recall이 좋아도 STT CER가 나빠지면 기본값으로 올리지 않는다.
+
+**검증**
+
+- short utterance recall
+- false-positive chunk count
+- false-positive transcript chars
+- empty final count
+- per-chunk CER
+- global CER
+- stop/drain 누락 여부
+
+**성공 기준**
+
+- 짧은 발화 recall이 올라간다.
+- global CER가 악화되지 않는다.
+- false-positive transcript가 늘지 않는다.
+
+### P3. preview/final 상태 안정화
+
+**목표**
+
+- 사용자가 보던 preview가 final empty 때문에 조용히 사라지지 않게 한다.
+- 녹음 종료 flow를 cancel-first가 아니라 drain-first로 만든다.
+
+**작업**
+
+- `TranscriptionViewModel`의 stop flow를 명시적으로 정리한다.
+  - audio stop 요청
+  - VAD `flushPending()`
+  - final chunk drain
+  - correction batch flush
+  - summary flush
+  - task cancel
+- preview가 있고 final이 empty인 경우 상태 전이를 고정한다.
+- final이 들어온 뒤에만 preview를 clear한다.
+- empty final을 metric으로 남긴다.
+
+**검증**
+
+- stop 직전 0.5초 발화가 저장되는지 확인한다.
+- preview-only 상태가 다음 final 또는 clear event까지 유지되는지 확인한다.
+- 녹음 종료 후 correction/summary 누락이 없는지 확인한다.
+
+**성공 기준**
+
+- 짧은 마지막 말이 사라지지 않는다.
+- final empty 때문에 UI가 비어 보이지 않는다.
+
+### P4. SpeechAnalyzer 제품 통합 검증
+
+**목표**
+
+- macOS 26 이상에서는 SpeechAnalyzer를 가장 먼저 검증한다.
+- 단, 기본값 변경은 전체 샘플 수치와 fallback 안정성을 본 뒤 결정한다.
+
+**작업**
+
+- SpeechAnalyzer engine을 final-only 경로로 먼저 안정화한다.
+- availability gate를 제품 UX에 연결한다.
   - OS 버전
-  - 한국어 locale 지원
-  - language asset availability
-  - 권한/설정 실패 메시지
-- preview 정책을 별도로 둔다.
-  - 처음에는 final-only로 붙인다.
-  - volatile partial은 바로 UI에 넣지 않는다.
-  - partial을 쓸 경우 debounce와 revision 안정화 규칙을 둔다.
+  - Korean locale 지원
+  - language asset 설치 상태
+  - 권한 상태
+- volatile partial은 바로 UI 기본값으로 쓰지 않는다.
+- unsupported 환경은 WhisperKit fallback으로 간다.
 
-### 검증
+**검증**
 
 - `sample/meeting` 전체 CER
 - 10분 이상 긴 파일 batch
-- 실제 앱 녹음 종료 drain
-- OS 미지원 환경 fallback
+- asset 미설치 상태
+- OS 미지원 상태
+- 실제 앱 녹음 종료 flow
 
-### 성공 기준
+**성공 기준**
 
-- 지원되는 Mac에서는 WhisperKit보다 CER 또는 latency가 명확히 좋다.
-- 지원되지 않는 Mac에서는 조용히 WhisperKit fallback으로 돌아간다.
-- preview/final 전환에서 텍스트가 사라지지 않는다.
+- 지원 환경에서 WhisperKit turbo보다 CER 또는 latency가 명확히 좋다.
+- 미지원 환경에서 조용히 실패하지 않고 설명 가능한 fallback이 동작한다.
 
-## Phase 3. VAD 개선과 짧은 발화 누락 방지
+### P5. true streaming 경로 추가
 
-### 목표
+**목표**
 
-STT 모델 이전에 "무엇을 전사에 넣을지"를 개선한다.
+- streaming 지원 엔진만 session lifecycle을 사용한다.
+- one-shot 엔진의 기존 경로를 흔들지 않는다.
 
-### 작업
+**작업**
 
-- `VoiceActivityDetector` protocol을 만든다.
-- 기존 `VADProcessor`를 `EnergyVADProcessor` 역할로 유지한다.
-- FluidAudio Silero VAD는 별도 adapter로 PoC한다.
-- `flushPending()` 계약을 테스트로 고정한다.
-- 0.8초 / 0.5초 미만 발화 probe set을 만든다.
-- threshold 변경은 바로 제품 기본값으로 넣지 않고 A/B한다.
-
-### 검증
-
-- short utterance recall
-- false positive chunk count
-- hallucination 증가 여부
-- final empty count
-- stop 직전 발화 보존 여부
-- 전체 CER 변화
-
-### 성공 기준
-
-- 짧은 대답과 stop 직전 발화 누락이 줄어든다.
-- 잡음 chunk 증가로 hallucination이 늘어나지 않는다.
-
-## Phase 4. true streaming 구조 도입
-
-### 목표
-
-streaming 지원 엔진만 session 기반 lifecycle로 다룰 수 있게 한다.
-
-### 작업
-
-- `SpeechTranscriptionEngine` 옆에 streaming 전용 protocol을 추가한다.
-  - `startSession`
+- `StreamingTranscriptionEngine` protocol을 추가한다.
+  - `startSession()`
   - `accept(samples:)`
   - `finish()`
   - `resetSession()`
   - partial callback
   - final callback
-- one-shot 엔진은 이 protocol을 구현하지 않는다.
-- `TranscriptionViewModel`은 engine capability에 따라 경로를 나눈다.
-  - one-shot: 현재 VAD final chunk + optional preview
-  - streaming: continuous samples + engine final event
-- rolling window preview와 true streaming partial을 metric에서 분리한다.
+- `STTService` 또는 별도 coordinator에서 engine capability에 따라 경로를 나눈다.
+  - one-shot: VAD chunk final + optional rolling preview
+  - streaming: continuous samples + engine partial/final event
+- rolling preview metric과 true streaming metric을 분리한다.
+- 참고 구현은 SpeechAnalyzer streaming, sherpa streaming, FluidAudio streaming 구조를 본다.
 
-### 검증
+**검증**
 
 - first partial latency
 - partial revision count
+- final latency
 - final CER
-- stop/drain 누락
 - long session memory growth
+- stop/drain 누락
 
-### 성공 기준
+**성공 기준**
 
 - streaming-capable engine은 chunk 재전사 없이 partial/final을 낸다.
-- one-shot engine의 기존 안정성은 유지된다.
+- one-shot engine은 기존 성능과 안정성을 유지한다.
 
-## Phase 5. Nemotron MLX sidecar 검증
+### P6. Nemotron MLX sidecar 연구
 
-### 목표
+**목표**
 
-Nemotron을 "기본값 후보"가 아니라 "고정확도 연구 엔진"으로 안전하게 검증한다.
+- Nemotron을 앱 기본 엔진이 아니라 고정확도 연구 엔진으로 검증한다.
+- Python/MLX로 붙일 때의 현실성을 숫자로 판단한다.
 
-### 작업
+**작업**
 
-- Python/MLX sidecar를 앱 밖 프로세스로 둔다.
-- Swift 앱은 stdin/stdout, HTTP localhost, 또는 Unix domain socket으로 요청한다.
-- 초기에는 final chunk 전용으로만 붙인다.
-- 모델은 8-bit 우선으로 메모리 상한을 둔다.
-- worker warm-up, queue limit, timeout, crash restart 정책을 둔다.
+- Python sidecar를 앱 밖 프로세스로 둔다.
+- Swift 앱은 localhost HTTP, stdin/stdout, 또는 Unix domain socket 중 하나로 요청한다.
+- 처음에는 final chunk 전용으로만 붙인다.
+- 8-bit 모델을 우선 검증한다.
+- worker warm-up, queue limit, timeout, crash restart를 둔다.
+- peak memory를 필수 metric으로 기록한다.
 
-### 검증
+**검증**
 
 - `sample/meeting` 전체 CER
-- 5초/15초 current VAD chunk CER
-- 60초 offline chunk CER와 차이
+- current VAD chunk CER
+- 60초 offline chunk CER와 실제 앱 chunk CER 차이
+- cold start latency
+- warm start latency
 - peak memory
-- worker cold start / warm start latency
-- 30분 이상 반복 실행
+- 30분 반복 실행
 
-### 성공 기준
+**성공 기준**
 
 - WhisperKit/SpeechAnalyzer 대비 CER 이득이 실제 앱 chunk에서도 유지된다.
-- peak memory가 사용자 Mac에서 안전한 범위에 들어온다.
+- 메모리 사용량이 사용자 Mac에서 안전하다.
 - sidecar 장애가 앱 UI를 멈추지 않는다.
 
-## Phase 6. transcript normalization과 회의록 품질
+**중단 기준**
 
-### 목표
+- peak memory가 과도하다.
+- Python dependency 설치와 모델 관리가 사용자가 감당하기 어렵다.
+- crash isolation이 안 된다.
+- 정확도 이득이 전체 샘플에서 재현되지 않는다.
 
-30초 처리 chunk가 그대로 회의록 줄이 되는 문제를 줄이고, 전사 결과를 읽기 쉬운 회의록으로 바꾼다.
+### P7. transcript normalization과 회의록 후처리
 
-### 작업
+**목표**
 
-- 저장/export 전용 `TranscriptNormalizer` pure function을 추가한다.
-- STT 원문 segment와 표시/export paragraph를 분리한다.
-- LLM correction은 STT 정확도 지표와 섞지 않는다.
-- 개인 OAuth 또는 로컬 LLM 선택지를 후처리 단계에 둔다.
+- STT 원문과 사용자에게 보여줄 회의록 문단을 분리한다.
+- 30초 처리 chunk가 그대로 회의록 줄이 되는 문제를 줄인다.
 
-### 검증
+**작업**
 
-- 원문 보존
+- `TranscriptNormalizer`를 pure function으로 둔다.
+- 원문 segment는 그대로 보존한다.
+- 저장/export 문단만 병합, 줄바꿈, 문장 정리를 적용한다.
+- LLM correction은 별도 단계로 둔다.
+- 개인 OAuth LLM과 로컬 LLM을 후처리 옵션으로 둔다.
+
+**검증**
+
+- 원문 보존 여부
 - normalized paragraph 수
-- 너무 긴 줄/짧은 줄 비율
-- export 결과 수동 QA
+- 너무 긴 줄/너무 짧은 줄 비율
+- export 수동 QA
 - LLM 실패 시 원문 fallback
 
-### 성공 기준
+**성공 기준**
 
-- 전사 원문은 잃지 않는다.
-- 사용자가 보는 회의록은 chunk 경계보다 문장/주제 흐름에 가깝다.
+- CER는 그대로여도 읽기 좋은 회의록이 된다.
+- STT 정확도 개선과 회의록 가독성 개선을 분리해 설명할 수 있다.
 
-## Phase 7. diarization PoC
+### P8. diarization PoC
 
-### 목표
+**목표**
 
-회의록 앱 체감 품질에 중요한 "누가 말했는가"를 별도 축으로 검증한다.
+- 회의록 앱에서 중요한 "누가 말했는가"를 STT 다음 축으로 검증한다.
 
-### 작업
+**작업**
 
-- `AudioChunk`와 `Segment`에 audio offset을 보존한다.
-- 회의 종료 후 offline diarization을 먼저 붙인다.
+- audio offset을 모든 segment에 보존한다.
+- offline diarization을 먼저 붙인다.
 - speaker timeline과 transcript segment를 overlap으로 매칭한다.
-- 실시간 diarization은 offline 품질 확인 뒤 후순위로 둔다.
+- streaming diarization은 후순위로 둔다.
 
-### 검증
+**검증**
 
 - speaker segment 수
 - speaker switch 탐지
 - transcript-speaker overlap matching
 - 수동 label 샘플 품질
 
-### 성공 기준
+**성공 기준**
 
 - speaker label이 틀려서 회의록을 망치지 않는다.
-- 최소한 저장/export 단계에서 유용한 speaker 구분을 제공한다.
-
-## 우선순위
-
-### P0. 지금 바로 해야 할 것
-
-- 현재 STT 엔진 분리 WIP를 완성하고 테스트 통과.
-- 기존 WhisperKit turbo 기본 경로 보존.
-
-### P1. 다음으로 해야 할 것
-
-- 측정 하니스 표준화.
-- SpeechAnalyzer final-only 제품 통합 검증.
-- VAD flush/short utterance 테스트 고정.
-
-### P2. 숫자 보고 결정할 것
-
-- Silero VAD를 기본 VAD로 승격할지.
-- SpeechAnalyzer를 지원 OS에서 추천/default로 올릴지.
-- Nemotron sidecar를 연구 엔진에서 사용자 선택지로 올릴지.
-
-### P3. 후순위
-
-- true streaming protocol과 streaming UI.
-- offline diarization.
-- FluidAudio ASR 후보 추가 benchmark.
+- 저장/export 단계에서 최소한 유용한 speaker 구분을 제공한다.
 
 ## 기본값 변경 기준
 
-기본 STT 엔진은 다음 조건을 모두 만족할 때만 바꾼다.
+STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 
 - `sample/meeting` 전체 micro CER가 WhisperKit turbo보다 명확히 낮다.
-- first final latency가 현재 사용성을 해치지 않는다.
+- 같은 샘플에서 global CER도 개선된다.
+- first final latency와 RTF가 현재 UX를 해치지 않는다.
 - peak memory가 장시간 회의에서 안전하다.
-- 미지원 OS/권한/모델 오류에서 fallback이 확실하다.
-- 앱 UI에서 preview/final 상태가 흔들리지 않는다.
+- 미지원 OS, 권한, 모델 오류에서 fallback이 확실하다.
+- preview/final 상태가 흔들리지 않는다.
+- 짧은 발화 누락률이 증가하지 않는다.
 
-## 중단 기준
+## 채택 판단표
 
-아래 조건이면 해당 방향은 기본값 후보에서 제외하고 fallback 또는 연구 트랙으로 낮춘다.
+| 후보 | 지금 역할 | 바로 default 가능 여부 | 다음 판단 기준 |
+| --- | --- | --- | --- |
+| WhisperKit turbo | 기본 fallback | 유지 | global CER/empty final baseline 고정 |
+| SpeechAnalyzer | macOS 26+ 1순위 후보 | 아직 보류 | 전체 CER, asset/locale fallback, final-only 안정성 |
+| SFSpeech on-device | Apple-native 보조 후보 | 보류 | 긴 파일 안정성, 권한/asset 상태, 정확도 |
+| Silero VAD | VAD 후보 | 보류 | short recall 이득과 global CER 동시 개선 |
+| Nemotron MLX | 연구 후보 | 불가 | peak memory, sidecar 안정성, 전체 CER 재현 |
+| sherpa/FluidAudio streaming ASR | streaming 구조 참고 | 불가 | 한국어 CER와 실제 streaming 지표 |
 
-- 전체 CER가 좋아도 짧은 발화 누락이 증가한다.
-- peak memory 때문에 사용자 Mac이 불안정해질 가능성이 크다.
-- sidecar crash가 앱 전사 흐름을 멈춘다.
-- preview가 final보다 자주 사라지거나 뒤집힌다.
-- 모델/언어 asset 설치 실패를 사용자가 이해할 수 없게 만든다.
+## 다음 커밋 단위
 
-## 예상 커밋 단위
-
-1. `refactor: split STT engine implementations`
-2. `test: standardize STT benchmark metrics`
-3. `feat: add SpeechAnalyzer engine integration`
+1. `test: add global CER to VAD STT metrics`
+2. `docs: record VAD global CER findings`
+3. `test: standardize STT benchmark schema`
 4. `test: add short utterance VAD probes`
-5. `feat: add VAD engine boundary`
-6. `test: benchmark Silero VAD candidate`
-7. `test: add Nemotron sidecar benchmark runner`
-8. `feat: add transcript normalizer`
-9. `feat: preserve audio offsets for transcript segments`
-10. `test: add offline diarization PoC`
+5. `fix: drain pending VAD chunk before stopping recording`
+6. `fix: stabilize preview state when final STT is empty`
+7. `feat: add SpeechAnalyzer final-only integration guard`
+8. `feat: add streaming transcription capability boundary`
+9. `test: add Nemotron sidecar benchmark runner`
+10. `feat: add transcript normalizer`
+11. `test: add offline diarization PoC`
+
+## 당장 하지 않을 것
+
+- Silero VAD를 바로 기본값으로 바꾸지 않는다.
+- Nemotron을 앱 내부 Swift 엔진처럼 바로 붙이지 않는다.
+- WhisperKit을 true streaming 엔진처럼 포장하지 않는다.
+- LLM correction 결과를 CER 개선으로 보고하지 않는다.
+- 120초 샘플 결과만 보고 default를 바꾸지 않는다.
+
+## 최종 제품 방향
+
+가장 현실적인 제품 구조는 다음이다.
+
+- macOS 26 이상: SpeechAnalyzer를 우선 후보로 제시하고, 실패하면 WhisperKit turbo fallback.
+- macOS 14-25: WhisperKit turbo를 안정 기본값으로 유지하고, SFSpeech on-device는 선택지로 검증.
+- 고정확도 실험 모드: Nemotron MLX sidecar를 사용자가 명시적으로 켤 수 있게 검토.
+- 전사 이후: 원문 보존 + normalizer + 개인 OAuth LLM/로컬 LLM 회의록 정리.
+- 장기 목표: true streaming 엔진이 충분히 정확해질 때만 session 기반 실시간 경로를 제품 기본 경험으로 승격.
