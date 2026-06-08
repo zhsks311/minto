@@ -101,6 +101,10 @@ struct VADBenchmarkTests {
         return value
     }
 
+    private static var sttRepairPadSeconds: Double {
+        nonNegativeDoubleEnv("VAD_STT_REPAIR_PAD_SEC") ?? 0
+    }
+
     private static var shouldSkipSwiftGlobalCER: Bool {
         ProcessInfo.processInfo.environment["VAD_SKIP_SWIFT_GLOBAL_CER"] == "1"
     }
@@ -213,6 +217,8 @@ struct VADBenchmarkTests {
         var emptyCount = 0
         var falsePositiveTranscriptionCount = 0
         var falsePositiveTranscriptChars = 0
+        var repairAttemptCount = 0
+        var repairAcceptedCount = 0
         var chunkMetrics: [STTBenchmarkSegmentMetric] = []
         var allReferences: [String] = []
         var allHypotheses: [String] = []
@@ -226,8 +232,23 @@ struct VADBenchmarkTests {
             let clip = Array(samples[startSample..<endSample])
             let chunkStartedAt = Date()
             let result = try await service.transcribe(pcmSamples: clip)
+            var hypothesis = result.segment.text
+            if Self.sttRepairPadSeconds > 0,
+               hypothesis.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                repairAttemptCount += 1
+                let repairStartSample = max(0, Int((chunk.startSeconds - Self.sttRepairPadSeconds) * Double(Self.sampleRate)))
+                let repairEndSample = min(samples.count, Int((chunk.endSeconds + Self.sttRepairPadSeconds) * Double(Self.sampleRate)))
+                if repairEndSample > repairStartSample {
+                    let repairClip = Array(samples[repairStartSample..<repairEndSample])
+                    let repairResult = try await service.transcribe(pcmSamples: repairClip)
+                    let repairedHypothesis = repairResult.segment.text
+                    if !repairedHypothesis.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        hypothesis = repairedHypothesis
+                        repairAcceptedCount += 1
+                    }
+                }
+            }
             let elapsedSeconds = Date().timeIntervalSince(chunkStartedAt)
-            let hypothesis = result.segment.text
             let stats = Self.cerStats(reference: reference, hypothesis: hypothesis)
             let normalizedHypLen = Self.normalizedCharacters(hypothesis).count
             let empty = hypothesis.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -310,6 +331,10 @@ struct VADBenchmarkTests {
                 "silero_threshold": "\(Self.benchmarkConfig.sileroThreshold)",
                 "silero_min_speech_seconds": "\(Self.benchmarkConfig.sileroMinSpeechSeconds)",
                 "silero_min_silence_seconds": "\(Self.benchmarkConfig.sileroMinSilenceSeconds)",
+                "silero_speech_padding_seconds": "\(Self.benchmarkConfig.sileroSpeechPaddingSeconds)",
+                "stt_repair_pad_seconds": "\(Self.sttRepairPadSeconds)",
+                "stt_repair_attempt_count": "\(repairAttemptCount)",
+                "stt_repair_accepted_count": "\(repairAcceptedCount)",
                 "skip_swift_global_cer": "\(Self.shouldSkipSwiftGlobalCER)",
             ],
             segments: chunkMetrics
@@ -326,6 +351,7 @@ struct VADBenchmarkTests {
         === VAD STT Benchmark [\(candidate.rawValue) -> \(engineLabel)] ===
         chunks measured         : \(metric.measuredUnitCount)/\(metric.totalUnitCount) (raw \(rawChunks.count))
         merge gap / max         : \(Self.formatOptionalSeconds(Self.benchmarkConfig.chunkMergeGapSeconds)) / \(String(format: "%.1f", Self.benchmarkConfig.chunkMergeMaxSeconds))s
+        repair pad / accepted   : \(String(format: "%.1f", Self.sttRepairPadSeconds))s / \(repairAcceptedCount)/\(repairAttemptCount)
         empty final count       : \(metric.emptyFinalCount)
         false positive text     : \(metric.falsePositiveTranscriptCount) chunks / \(metric.falsePositiveTranscriptChars) chars
         chunk CER               : \(String(format: "%.1f%%", metric.microCER * 100)) (distance \(metric.distance) / ref \(metric.referenceLength))

@@ -51,6 +51,12 @@ def parse_args():
     parser.add_argument("--merge-gap-sec", type=float, default=None)
     parser.add_argument("--merge-max-sec", type=float, default=None)
     parser.add_argument("--vad-stt-max-chunks", type=int, default=None)
+    parser.add_argument(
+        "--vad-stt-repair-pad-sec",
+        type=float,
+        default=None,
+        help="In STT mode, retry an empty VAD chunk once with this many seconds of audio added on both sides.",
+    )
     parser.add_argument("--energy-noise-offset-db", type=float, default=None)
     parser.add_argument("--silero-threshold", type=float, default=None)
     parser.add_argument("--silero-min-speech-sec", type=float, default=None)
@@ -179,6 +185,7 @@ def make_env(args, vad_engine, wav_name, smi_name, output_dir):
     set_optional(env, "VAD_MERGE_GAP_SEC", args.merge_gap_sec)
     set_optional(env, "VAD_MERGE_MAX_SEC", args.merge_max_sec)
     set_optional(env, "VAD_STT_MAX_CHUNKS", args.vad_stt_max_chunks)
+    set_optional(env, "VAD_STT_REPAIR_PAD_SEC", args.vad_stt_repair_pad_sec)
     set_optional(env, "ENERGY_VAD_NOISE_OFFSET_DB", args.energy_noise_offset_db)
     set_optional(env, "SILERO_VAD_THRESHOLD", args.silero_threshold)
     set_optional(env, "SILERO_MIN_SPEECH_SEC", args.silero_min_speech_sec)
@@ -283,6 +290,7 @@ def main():
         "sample_count": len(pairs),
         "max_seconds": args.max_seconds,
         "skip_swift_global_cer": args.skip_swift_global_cer,
+        "vad_stt_repair_pad_sec": args.vad_stt_repair_pad_sec,
         "configuration": args.configuration,
         "sort": args.sort,
         "dry_run": args.dry_run,

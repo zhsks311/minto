@@ -261,6 +261,24 @@ scripts/run_meeting_vad_benchmarks.py \
   --merge-gap-sec 1.1
 ```
 
+To test targeted empty-final boundary repair in VAD chunk STT mode, retry only empty STT chunks with a wider source-audio boundary:
+
+```bash
+WHISPER_MODEL_FOLDER=/path/to/openai_whisper-large-v3-v20240930_turbo \
+scripts/run_meeting_vad_benchmarks.py \
+  --mode stt \
+  --engines silero \
+  --stt-engine whisper_accurate \
+  --max-seconds 120 \
+  --vad-stt-max-chunks 0 \
+  --silero-threshold 0.6 \
+  --merge-gap-sec 1.1 \
+  --vad-stt-repair-pad-sec 1.0
+```
+
+This is a benchmark-only knob. It does not change the normal product path unless product code later adds the same retry policy behind explicit safety conditions.
+Judge it with `Full Global CER`, empty final count, false-positive transcript chars, RTF, and peak memory.
+
 Recent 120s segmentation sweep, all with `threshold=0.6` and `merge gap=1.1`:
 
 | Candidate | Weighted CER | Full Global CER | Empty | FP chars | RTF | Peak MB | Result |
@@ -268,6 +286,7 @@ Recent 120s segmentation sweep, all with `threshold=0.6` and `merge gap=1.1`:
 | baseline: padding 0.12, min speech 0.25, merge max 15 | 36.9% | 19.9% | 9 | 41 | 0.107 | 849.0 | current candidate |
 | speech padding 0.30 | 40.5% | 24.0% | 10 | 41 | 0.109 | 802.8 | reject |
 | speech padding 1.00 mean of 3 | 38.2% | 20.4% | 7.7 | 18 | 0.105 | 1143.1 | reject as default; targeted repair candidate |
+| padding 0.12 + empty repair 1.00 mean of 3 | 34.0% | 16.6% | 5.3 | 41 | 0.123 | 1018.5 | short3 full candidate |
 | min speech 0.50 | 37.0% | 20.1% | 8 | 41 | 0.111 | 719.0 | weak, not default |
 | merge max 20 | 34.0% | 19.5% | 9 | 41 | 0.097 | 687.3 | repeat check required |
 

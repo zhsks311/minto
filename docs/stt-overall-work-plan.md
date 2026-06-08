@@ -120,6 +120,10 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - `speech padding=1.0초` 반복 결과: weighted CER 37.3%, 39.8%, 37.6%; Full Global CER 19.6%, 21.5%, 20.0%; empty 8, 8, 7; false-positive text 18 chars 고정; peak memory 1066.6MB, 1123.0MB, 1239.7MB.
 - 기준 조건 `speech padding=0.12초`: weighted CER 36.9%, Full Global CER 19.9%, empty 9, false-positive text 41 chars, peak 849.0MB.
 - 해석: `speech padding=1.0초`는 empty와 false-positive text를 줄이지만, Full Global CER 평균이 20.4%로 기준보다 나쁘고 peak memory도 크게 오른다. 따라서 기본 VAD padding으로 승격하지 않는다. 대신 empty가 의심되는 chunk에만 제한적으로 재전사할 수 있는 targeted boundary repair 후보로 남긴다.
+- benchmark-only targeted boundary repair를 추가했다. `VAD_STT_REPAIR_PAD_SEC`가 0보다 클 때만, 첫 전사 결과가 empty인 chunk를 앞뒤로 확장해 한 번 더 전사한다. 제품 기본 경로와 일반 benchmark 기본값은 바뀌지 않는다.
+- 120초 전체 7샘플에서 `speech padding=0.12초`, `repair pad=1.0초`를 3회 반복했다. 결과 위치는 `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair100`, `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair100-repeat2`, `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair100-repeat3`.
+- repair 반복 결과: weighted CER 34.2%, 33.8%, 33.9%; Full Global CER 16.2%, 16.8%, 16.9%; empty 6, 5, 5; false-positive text 41 chars 고정; RTF 0.122, 0.128, 0.119; peak memory 904.4MB, 912.7MB, 1238.3MB.
+- 해석: empty-only repair는 120초 기준에서 기준 조건과 전체 padding 1.0초보다 명확히 낫다. 다만 peak memory가 한 번 크게 튀었고, false-positive text는 줄지 않았다. 따라서 기본 제품 기능으로 바로 넣지 말고 short3 full-duration에서 empty 감소, CER, RTF, peak memory를 재검증한다.
 
 Silero segmentation small sweep도 같은 7개 120초 기준선에서 확인했다.
 
@@ -317,6 +321,7 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 
 - Energy VAD를 현재 기본값으로 유지한다.
 - Silero VAD는 후보 adapter로만 붙인다.
+- empty final이 난 chunk만 원본 audio boundary를 확장해 한 번 재전사하는 targeted boundary repair를 검증한다.
 - short utterance probe set을 유지한다.
   - 0.5초 미만
   - 0.8초 전후
@@ -412,6 +417,8 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - 짧은 발화 recall이 오른다.
 - global CER가 악화되지 않는다.
 - false-positive transcript가 늘지 않는다.
+- empty-only repair가 전체 padding보다 낮은 CER와 낮은 empty final을 유지한다.
+- repair retry가 peak memory와 latency를 장시간 회의에서 위험하게 만들지 않는다.
 
 ### P4. 녹음 종료와 후처리 안정성
 
@@ -601,25 +608,32 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 | SpeechAnalyzer | macOS 26+ 1순위 후보 | 아직 보류 | 전체 CER, asset/locale fallback, final-only 안정성 |
 | SFSpeech on-device | Apple-native 보조 후보 | 보류 | 긴 파일 안정성, 권한/asset 상태, 1분 제한 확인 |
 | Silero VAD | VAD 후보 | 보류 | empty final 원인 분해 후 전체 CER 재측정 |
+| Empty-only boundary repair | VAD chunk STT 보정 후보 | 보류 | short3 full-duration CER, empty final, peak memory 재검증 |
 | Nemotron MLX | 고정확도 연구 후보 | 불가 | peak memory, sidecar 안정성, 전체 CER 재현 |
 | FluidAudio ASR | streaming/Swift 구조 참고 후보 | 불가 | 한국어 CER, RTF, memory, 실제 streaming 지표 |
 | diarization | 회의록 UX 후보 | 불가 | speaker label 품질과 transcript 매칭 안정성 |
 
 ## 바로 다음 작업 순서
 
-1. `merge max=20초` 후보를 120초 기준에서 최소 3회 반복하고, 변동폭이 작으면 short3 full-duration으로 재검증한다.
-2. probe matrix는 후보마다 최소 3회 반복하고, 단일 run의 empty/non-empty만으로 채택하지 않는다.
-3. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
-4. low VAD overlap empty row와 high VAD overlap empty row를 분리해 VAD miss와 WhisperKit decode failure를 따로 센다.
-5. decode threshold 전역 완화는 g2와 non-speech probe까지 통과하기 전에는 적용하지 않는다.
-6. SFSpeech 권한/Dictation 상태를 복구한 뒤 같은 120초 runner로 다시 smoke를 돌린다.
-7. macOS 26+ 환경에서 SpeechAnalyzer 한국어 asset 상태를 확인하고 같은 120초 runner로 smoke를 돌린다.
-8. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.
-9. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
-10. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
-11. `StreamingTranscriptionEngine` protocol과 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
-12. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다.
-13. diarization은 audio offset 보존 작업 이후 offline PoC로 시작한다.
+1. `speech padding=0.12초`, `repair pad=1.0초`를 short3 full-duration으로 재검증한다.
+2. short3에서 기준 대비 Full Global CER, empty final, peak memory가 모두 통과하면 `sample/meeting` 전체 full-duration을 순차 실행한다.
+3. repair가 통과하면 제품 코드에는 기본값이 아니라 feature flag와 안전 조건으로 붙인다.
+   - 첫 전사 결과가 empty일 때만 retry한다.
+   - VAD speech chunk, 충분한 RMS, 충분한 chunk duration, retry 1회 제한 같은 조건을 둔다.
+   - retry 결과가 비어 있거나 low confidence면 기존 preview/final 안정성 규칙을 유지한다.
+4. probe matrix는 후보마다 최소 3회 반복하고, 단일 run의 empty/non-empty만으로 채택하지 않는다.
+5. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
+6. low VAD overlap empty row와 high VAD overlap empty row를 분리해 VAD miss와 WhisperKit decode failure를 따로 센다.
+7. decode threshold 전역 완화는 g2와 non-speech probe까지 통과하기 전에는 적용하지 않는다.
+8. true streaming은 `StreamingTranscriptionEngine`을 지원하는 엔진에만 적용하고, WhisperKit one-shot 경로는 기존 `SpeechTranscriptionEngine`으로 유지한다.
+9. SFSpeech 권한/Dictation 상태를 복구한 뒤 같은 120초 runner로 다시 smoke를 돌린다.
+10. macOS 26+ 환경에서 SpeechAnalyzer 한국어 asset 상태를 확인하고 같은 120초 runner로 smoke를 돌린다.
+11. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.
+12. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
+13. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
+14. `StreamingTranscriptionEngine` protocol과 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
+15. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다.
+16. diarization은 audio offset 보존 작업 이후 offline PoC로 시작한다.
 
 ## 당장 하지 않을 것
 

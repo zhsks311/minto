@@ -213,8 +213,10 @@ def summarize_by_engine(metrics):
             vad,
             energy_noise_offset_db,
             silero_threshold,
+            silero_speech_padding_seconds,
             merge_gap_seconds,
             merge_max_seconds,
+            repair_pad_seconds,
         ) = key
         total_distance = sum(int(item.get("distance") or 0) for item in items)
         total_ref = sum(int(item.get("reference_length") or 0) for item in items)
@@ -251,8 +253,10 @@ def summarize_by_engine(metrics):
             "vad": vad,
             "energy_noise_offset_db": energy_noise_offset_db,
             "silero_threshold": silero_threshold,
+            "silero_speech_padding_seconds": silero_speech_padding_seconds,
             "chunk_merge_gap_seconds": merge_gap_seconds,
             "chunk_merge_max_seconds": merge_max_seconds,
+            "stt_repair_pad_seconds": repair_pad_seconds,
             "sample_count": len(items),
             "weighted_micro_cer": total_distance / total_ref if total_ref else None,
             "sample_macro_cer": sum(macro_values) / len(macro_values) if macro_values else None,
@@ -281,12 +285,16 @@ def summary_group_key(metric):
             vad,
             metadata.get("energy_noise_offset_db", "") if vad == "energy" else "",
             metadata.get("silero_threshold", "") if vad == "silero" else "",
+            metadata.get("silero_speech_padding_seconds", "") if vad == "silero" else "",
             metadata.get("chunk_merge_gap_seconds", ""),
             metadata.get("chunk_merge_max_seconds", ""),
+            metadata.get("stt_repair_pad_seconds", ""),
         )
 
     return (
         metric["engine_id"],
+        "",
+        "",
         "",
         "",
         "",
@@ -497,8 +505,8 @@ def vad_markdown_table(rows):
     full_header = " Full Global CER |" if show_full_reference else ""
     full_separator = " ---: |" if show_full_reference else ""
     lines = [
-        f"| Engine | VAD | Energy offset | Silero threshold | Merge gap | Merge max | Samples | Weighted CER | Macro CER | Global CER |{full_header} RTF | Peak MB | Empty | FP chars |",
-        f"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |{full_separator} ---: | ---: | ---: | ---: |",
+        f"| Engine | VAD | Energy offset | Silero threshold | Silero pad | Merge gap | Merge max | Repair pad | Samples | Weighted CER | Macro CER | Global CER |{full_header} RTF | Peak MB | Empty | FP chars |",
+        f"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |{full_separator} ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         full_value = (
@@ -508,13 +516,15 @@ def vad_markdown_table(rows):
             if show_full_reference else ""
         )
         lines.append(
-            "| {engine} | {vad} | {energy_offset} | {silero_threshold} | {merge_gap} | {merge_max} | {samples} | {weighted} | {macro} | {global_cer} |{full_value} {rtf} | {peak} | {empty} | {fp} |".format(
+            "| {engine} | {vad} | {energy_offset} | {silero_threshold} | {silero_pad} | {merge_gap} | {merge_max} | {repair_pad} | {samples} | {weighted} | {macro} | {global_cer} |{full_value} {rtf} | {peak} | {empty} | {fp} |".format(
                 engine=row["engine_id"],
                 vad=row["vad"] or "n/a",
                 energy_offset=fmt_config(row["energy_noise_offset_db"]),
                 silero_threshold=fmt_config(row["silero_threshold"]),
+                silero_pad=fmt_config(row["silero_speech_padding_seconds"]),
                 merge_gap=fmt_config(row["chunk_merge_gap_seconds"]),
                 merge_max=fmt_config(row["chunk_merge_max_seconds"]),
+                repair_pad=fmt_config(row["stt_repair_pad_seconds"]),
                 samples=row["sample_count"],
                 weighted=fmt_percent(row["weighted_micro_cer"]),
                 macro=fmt_percent(row["sample_macro_cer"]),
@@ -590,8 +600,10 @@ def write_csv(path, rows):
         "vad",
         "energy_noise_offset_db",
         "silero_threshold",
+        "silero_speech_padding_seconds",
         "chunk_merge_gap_seconds",
         "chunk_merge_max_seconds",
+        "stt_repair_pad_seconds",
         "sample_count",
         "weighted_micro_cer",
         "sample_macro_cer",
