@@ -55,6 +55,13 @@
    - record first partial latency, final latency, partial/final event count, accepted sample count, latest revision.
    - Verify: stub streaming engine emits partial/final through coordinator and updates metrics.
 
+9. Add hidden SpeechAnalyzer streaming PoC engine.
+   - `SpeechAnalyzerStreamingEngine`
+   - Convert 16kHz mono Float32 chunks into `AnalyzerInput`.
+   - Use `SpeechTranscriber` progressive results as partial/final streaming events.
+   - Keep `SpeechEngineID.speechAnalyzer.supportsTrueStreaming == false` until product assembly policy is ready.
+   - Verify: compile/default tests pass; manual smoke reports local Korean availability before running.
+
 ## Non-goals
 
 - Do not add Nemotron or sherpa runtime integration in this step.
