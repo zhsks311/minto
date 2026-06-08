@@ -416,8 +416,8 @@ public struct MeetingLibraryView: View {
                             .foregroundColor(.secondary)
                             .lineLimit(2)
                     }
-                } else if !record.summary.leadAnswer.isEmpty {
-                    markdownText(record.summary.leadAnswer)
+                } else if !summaryPreviewText(record.summary).isEmpty {
+                    markdownText(summaryPreviewText(record.summary))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .lineLimit(2)
@@ -571,6 +571,7 @@ public struct MeetingLibraryView: View {
 
                 if detailTab == .summary {
                     leadSummary(record)
+                    meetingOutcomes(record.summary)
                     meetingNotes(record.summary.sections)
                 } else if detailTab == .transcript {
                     transcriptBlock(record.transcript, emptyText: "전사 내용이 없습니다.", record: record)
@@ -746,6 +747,127 @@ public struct MeetingLibraryView: View {
         .background(LibraryPalette.elevated)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private func meetingOutcomes(_ summary: MeetingSummary) -> some View {
+        let decisions = visibleDecisions(summary.decisions)
+        let actions = visibleActionItems(summary.actionItems)
+        let questions = visibleOpenQuestions(summary.openQuestions)
+
+        if !decisions.isEmpty || !actions.isEmpty || !questions.isEmpty {
+            VStack(alignment: .leading, spacing: 16) {
+                if !decisions.isEmpty {
+                    outcomeGroup(title: "결정사항", systemImage: "checkmark.seal", copyText: summary.decisionsMarkdown()) {
+                        ForEach(Array(decisions.enumerated()), id: \.offset) { _, decision in
+                            outcomeTextRow(time: decision.time, text: decision.text)
+                        }
+                    }
+                }
+
+                if !decisions.isEmpty && (!actions.isEmpty || !questions.isEmpty) {
+                    Divider()
+                }
+
+                if !actions.isEmpty {
+                    outcomeGroup(title: "할 일", systemImage: "checklist", copyText: summary.actionItemsMarkdown()) {
+                        ForEach(Array(actions.enumerated()), id: \.offset) { _, item in
+                            actionItemRow(item)
+                        }
+                    }
+                }
+
+                if !actions.isEmpty && !questions.isEmpty {
+                    Divider()
+                }
+
+                if !questions.isEmpty {
+                    outcomeGroup(title: "미해결 질문", systemImage: "questionmark.circle", copyText: summary.openQuestionsMarkdown()) {
+                        ForEach(Array(questions.enumerated()), id: \.offset) { _, question in
+                            outcomeTextRow(time: question.time, text: question.text)
+                        }
+                    }
+                }
+            }
+            .padding(18)
+            .background(LibraryPalette.elevated)
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func outcomeGroup<Content: View>(
+        title: String,
+        systemImage: String,
+        copyText: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                sectionTitle(title, systemImage: systemImage)
+                Spacer()
+                Button {
+                    copyMarkdown(copyText)
+                } label: {
+                    Label("복사", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(copyText.isEmpty)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+        }
+    }
+
+    private func outcomeTextRow(time: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("•")
+                .font(.system(size: detailBodyFontSize, weight: .bold))
+                .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                if !time.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    timeBadge(time)
+                }
+                markdownText(text)
+                    .font(.system(size: detailBodyFontSize))
+                    .lineSpacing(detailLineSpacing)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func actionItemRow(_ item: MeetingSummary.ActionItem) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "square")
+                .font(.system(size: detailSubBodyFontSize, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 5) {
+                if !item.time.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    timeBadge(item.time)
+                }
+                markdownText(item.task)
+                    .font(.system(size: detailBodyFontSize))
+                    .lineSpacing(detailLineSpacing)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                let meta = actionMetadata(item)
+                if !meta.isEmpty {
+                    Text(meta)
+                        .font(.system(size: detailTimestampFontSize, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    private func timeBadge(_ time: String) -> some View {
+        Text(time.trimmingCharacters(in: .whitespacesAndNewlines))
+            .font(.system(size: detailTimestampFontSize, weight: .bold, design: .monospaced))
+            .foregroundColor(.secondary)
     }
 
     @ViewBuilder
@@ -1033,6 +1155,7 @@ public struct MeetingLibraryView: View {
         guard !query.isEmpty else { return true }
         return displayTitle(for: record).localizedCaseInsensitiveContains(query)
             || record.topic.localizedCaseInsensitiveContains(query)
+            || outcomeSearchText(record.summary).localizedCaseInsensitiveContains(query)
             || record.summary.markdown().localizedCaseInsensitiveContains(query)
             || record.transcript.contains { $0.text.localizedCaseInsensitiveContains(query) }
     }
@@ -1045,6 +1168,15 @@ public struct MeetingLibraryView: View {
             }
             if record.topic.localizedCaseInsensitiveContains(query) {
                 return MeetingSearchMatch(badge: "주제", text: record.topic)
+            }
+            if let decision = visibleDecisions(record.summary.decisions).first(where: { $0.text.localizedCaseInsensitiveContains(query) }) {
+                return MeetingSearchMatch(badge: decision.time.isEmpty ? "결정" : decision.time, text: "결정: \(decision.text)")
+            }
+            if let item = visibleActionItems(record.summary.actionItems).first(where: { actionItemMatches($0, query: query) }) {
+                return MeetingSearchMatch(badge: item.time.isEmpty ? "할 일" : item.time, text: "할 일: \(item.task)")
+            }
+            if let question = visibleOpenQuestions(record.summary.openQuestions).first(where: { $0.text.localizedCaseInsensitiveContains(query) }) {
+                return MeetingSearchMatch(badge: question.time.isEmpty ? "질문" : question.time, text: "질문: \(question.text)")
             }
             if let section = record.summary.sections.first(where: { section in
                 section.title.localizedCaseInsensitiveContains(query)
@@ -1077,6 +1209,9 @@ public struct MeetingLibraryView: View {
         let keywordText = record.summary.keywords.prefix(5).joined(separator: " ")
         if !keywordText.isEmpty { return compactRelatedQuery(keywordText) }
 
+        let outcomeText = outcomeSearchText(record.summary)
+        if !outcomeText.isEmpty { return compactRelatedQuery(outcomeText) }
+
         let summaryText = record.summary.leadAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
         if !summaryText.isEmpty { return compactRelatedQuery(summaryText) }
 
@@ -1092,6 +1227,58 @@ public struct MeetingLibraryView: View {
         guard !normalized.isEmpty else { return "" }
         if normalized.count <= 120 { return normalized }
         return String(normalized.prefix(120))
+    }
+
+    private func summaryPreviewText(_ summary: MeetingSummary) -> String {
+        let lead = summary.leadAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !lead.isEmpty { return lead }
+        if let decision = visibleDecisions(summary.decisions).first {
+            return "결정: \(decision.text)"
+        }
+        if let action = visibleActionItems(summary.actionItems).first {
+            return "할 일: \(action.task)"
+        }
+        if let question = visibleOpenQuestions(summary.openQuestions).first {
+            return "질문: \(question.text)"
+        }
+        return ""
+    }
+
+    private func outcomeSearchText(_ summary: MeetingSummary) -> String {
+        var parts: [String] = []
+        parts.append(contentsOf: visibleDecisions(summary.decisions).map(\.text))
+        parts.append(contentsOf: visibleActionItems(summary.actionItems).flatMap { item in
+            [item.task, item.owner, item.due].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        })
+        parts.append(contentsOf: visibleOpenQuestions(summary.openQuestions).map(\.text))
+        return parts.joined(separator: " ")
+    }
+
+    private func visibleDecisions(_ decisions: [MeetingSummary.Decision]) -> [MeetingSummary.Decision] {
+        decisions.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func visibleActionItems(_ items: [MeetingSummary.ActionItem]) -> [MeetingSummary.ActionItem] {
+        items.filter { !$0.task.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func visibleOpenQuestions(_ questions: [MeetingSummary.OpenQuestion]) -> [MeetingSummary.OpenQuestion] {
+        questions.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func actionItemMatches(_ item: MeetingSummary.ActionItem, query: String) -> Bool {
+        item.task.localizedCaseInsensitiveContains(query)
+            || item.owner.localizedCaseInsensitiveContains(query)
+            || item.due.localizedCaseInsensitiveContains(query)
+    }
+
+    private func actionMetadata(_ item: MeetingSummary.ActionItem) -> String {
+        let owner = item.owner.trimmingCharacters(in: .whitespacesAndNewlines)
+        let due = item.due.trimmingCharacters(in: .whitespacesAndNewlines)
+        var parts: [String] = []
+        if !owner.isEmpty { parts.append("담당: \(owner)") }
+        if !due.isEmpty { parts.append("기한: \(due)") }
+        return parts.joined(separator: " · ")
     }
 
     private func selectFirstAvailableIfNeeded(preferFirstResult: Bool = false) {
@@ -1201,6 +1388,11 @@ public struct MeetingLibraryView: View {
     private func copyTranscript(_ record: MeetingRecord) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(record.transcript.map(\.text).joined(separator: "\n"), forType: .string)
+    }
+
+    private func copyMarkdown(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     private func copyLiveSummary() {

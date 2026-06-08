@@ -46,6 +46,9 @@ struct SummaryServiceTests {
     func parsesValidJSON() {
         let raw = #"""
         {"title":"제목","leadQuestion":"핵심 질문?","leadAnswer":"핵심 답변","keywords":["kw1","kw2"],
+         "decisions":[{"text":"DB 형상 관리는 flyway를 우선 검토","time":"00:40"}],
+         "actionItems":[{"task":"마이그레이션 테스트 케이스 정리","owner":"민수","due":"다음 회의","time":"01:20"}],
+         "openQuestions":[{"text":"운영 DB 적용 절차는 추가 확인 필요","time":"02:10"}],
          "sections":[{"title":"1. 주제","time":"00:30","points":[{"text":"카테고리","subPoints":["세부1","세부2"]}]}]}
         """#
         let s = SummaryService.parseStructured(raw)
@@ -53,6 +56,12 @@ struct SummaryServiceTests {
         #expect(s?.leadQuestion == "핵심 질문?")
         #expect(s?.leadAnswer == "핵심 답변")
         #expect(s?.keywords == ["kw1", "kw2"])
+        #expect(s?.decisions.first?.text == "DB 형상 관리는 flyway를 우선 검토")
+        #expect(s?.decisions.first?.time == "00:40")
+        #expect(s?.actionItems.first?.task == "마이그레이션 테스트 케이스 정리")
+        #expect(s?.actionItems.first?.owner == "민수")
+        #expect(s?.actionItems.first?.due == "다음 회의")
+        #expect(s?.openQuestions.first?.text == "운영 DB 적용 절차는 추가 확인 필요")
         #expect(s?.sections.count == 1)
         #expect(s?.sections.first?.title == "1. 주제")
         #expect(s?.sections.first?.time == "00:30")
@@ -88,11 +97,20 @@ struct SummaryServiceTests {
             leadAnswer: "핵심 답변",
             sections: [.init(title: "1. 주제", time: "01:20",
                              points: [.init(text: "카테고리", subPoints: ["세부1"])])],
-            keywords: ["k1"]
+            keywords: ["k1"],
+            decisions: [.init(text: "방식 A로 진행", time: "00:30")],
+            actionItems: [.init(task: "테스트 작성", owner: "민수", due: "금요일", time: "00:45")],
+            openQuestions: [.init(text: "배포 순서 확인", time: "01:10")]
         )
         let md = s.markdown()
         #expect(md.contains("> 핵심 질문?"))
         #expect(md.contains("**핵심 답변**"))
+        #expect(md.contains("## 결정사항"))
+        #expect(md.contains("- `00:30` 방식 A로 진행"))
+        #expect(md.contains("## 할 일"))
+        #expect(md.contains("- [ ] `00:45` 테스트 작성 _(담당: 민수 · 기한: 금요일)_"))
+        #expect(md.contains("## 미해결 질문"))
+        #expect(md.contains("- `01:10` 배포 순서 확인"))
         #expect(md.contains("### 1. 주제"))
         #expect(md.contains("`01:20`"))
         #expect(md.contains("- 카테고리"))

@@ -60,6 +60,9 @@ struct SummaryPromptTests {
         #expect(p.instructions.contains("JSON"))
         #expect(p.instructions.contains("sections"))
         #expect(p.instructions.contains("leadAnswer"))
+        #expect(p.instructions.contains("decisions"))
+        #expect(p.instructions.contains("actionItems"))
+        #expect(p.instructions.contains("openQuestions"))
         #expect(p.instructions.contains("날조 금지"))
     }
 
