@@ -13,6 +13,26 @@ struct VADProcessorTests {
         }
     }
 
+    @Test("VADProcessor는 VoiceActivityDetector 계약으로 사용할 수 있다")
+    func vadProcessorConformsToVoiceActivityDetector() async throws {
+        let detector: any VoiceActivityDetector = VADProcessor()
+        nonisolated(unsafe) var chunks: [AudioChunk] = []
+        detector.onChunk = { chunks.append($0) }
+
+        let calibrationSamples = [Float](repeating: 0.01, count: frameSize)
+        for _ in 0..<10 {
+            detector.process(samples: calibrationSamples)
+        }
+        detector.process(samples: [Float](repeating: 0.5, count: 12_800))
+
+        let chunk = await detector.flushPending()
+
+        #expect(chunk != nil, "detector protocol should expose stop-time drain")
+        #expect(chunks.isEmpty, "flushPending should not emit through onChunk")
+
+        detector.reset()
+    }
+
     @Test("순수 침묵: 청크 미방출")
     func silentInputDoesNotFlush() async {
         let vad = VADProcessor()

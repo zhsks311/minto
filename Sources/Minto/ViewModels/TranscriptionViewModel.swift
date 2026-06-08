@@ -25,7 +25,7 @@ public final class TranscriptionViewModel: ObservableObject {
     private var timerTask: Task<Void, Never>?
     private var chunkContinuation: AsyncStream<AudioChunk>.Continuation?
     private let audioSource: AudioSourceProtocol = MicrophoneSource()
-    private let vadProcessor = VADProcessor()
+    private let vadProcessor: any VoiceActivityDetector = VADProcessor()
     private var state = TranscriptionState()
     private var recordingStartDate: Date?
 
