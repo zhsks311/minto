@@ -288,6 +288,14 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - 해석: 현재 최선 후보는 `threshold=0.6`, `merge gap=1.1초`다. 0.5보다 Full Global CER와 empty final이 모두 좋아졌고, 0.7은 속도는 빠르지만 Full Global CER가 밀린다. merge gap 1.8초는 1.1초 대비 실질 이득이 없다.
 - 다음 판단: Silero `threshold=0.6`, `merge gap=1.1초`를 feature-flagged adapter 후보로 구현하고, 전체 길이 또는 더 긴 window에서 반복 실행해 ANE/CoreML 비결정성에도 이 우위가 유지되는지 본다.
 
+**현재 코드 반영 방향**
+
+- Silero는 바로 기본값으로 바꾸지 않고 `MINTO_VAD_ENGINE=silero` 환경값으로만 켠다.
+- 로컬 FluidAudio/Silero 모델 bundle이 없으면 기존 Energy VAD로 fallback한다.
+- 현재 후보 기본값은 `threshold=0.6`, `merge gap=1.1초`다.
+- app 기본 경로는 기존 Energy VAD를 유지한다. 따라서 기본 녹음 UX는 이번 실험 코드만으로 바뀌지 않는다.
+- feature flag로 붙인 뒤 `sample/meeting` 전체 길이 VAD chunk STT를 다시 돌려 Full Global CER, empty final, false-positive text, peak memory를 확인한다.
+
 **검증**
 
 - short utterance recall
@@ -501,17 +509,18 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 
 ## 바로 다음 작업 순서
 
-1. WhisperKit turbo를 `sample/meeting` 전체 duration으로 순차 실행한다.
-2. SFSpeech 권한/Dictation 상태를 복구한 뒤 같은 120초 runner로 다시 smoke를 돌린다.
-3. macOS 26+ 환경에서 SpeechAnalyzer 한국어 asset 상태를 확인하고 같은 120초 runner로 smoke를 돌린다.
-4. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.
-5. `segments.md`와 `segment_buckets.md`에서 low VAD overlap empty row와 high VAD overlap empty row를 분리해 원인을 나눈다.
-6. VAD runner로 energy와 Silero 후보를 비교하되, VAD recall만 보지 말고 VAD chunk STT의 per-chunk CER와 global CER를 함께 본다.
-7. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
-8. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
-9. `StreamingTranscriptionEngine` protocol과 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
-10. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다.
-11. diarization은 audio offset 보존 작업 이후 offline PoC로 시작한다.
+1. Silero feature flag adapter를 컴파일/테스트로 고정한다.
+2. Silero `threshold=0.6`, `merge gap=1.1초`로 `sample/meeting` 전체 길이 VAD chunk STT를 순차 실행한다.
+3. WhisperKit turbo window baseline도 `sample/meeting` 전체 duration으로 순차 실행해 VAD chunk STT와 final-only 기준선을 분리한다.
+4. `segments.md`와 `segment_buckets.md`에서 low VAD overlap empty row와 high VAD overlap empty row를 분리해 원인을 나눈다.
+5. SFSpeech 권한/Dictation 상태를 복구한 뒤 같은 120초 runner로 다시 smoke를 돌린다.
+6. macOS 26+ 환경에서 SpeechAnalyzer 한국어 asset 상태를 확인하고 같은 120초 runner로 smoke를 돌린다.
+7. Apple 엔진 smoke가 통과한 환경에서 `sample/meeting` 전체를 WhisperKit turbo, SpeechAnalyzer, SFSpeech on-device 기준으로 안전한 동시성에서 다시 측정한다.
+8. SpeechAnalyzer final-only 제품 gate를 UI/설정 상태와 연결한다.
+9. correction/summary/export 종료 flow 회귀 테스트를 추가한다.
+10. `StreamingTranscriptionEngine` protocol과 `TranscriptionCoordinator` 설계를 문서화한 뒤, streaming 지원 엔진 하나만 hidden PoC로 붙인다.
+11. Nemotron MLX sidecar는 별도 worker로 benchmark만 붙이고, 앱 기본 엔진 후보와 분리한다.
+12. diarization은 audio offset 보존 작업 이후 offline PoC로 시작한다.
 
 ## 당장 하지 않을 것
 

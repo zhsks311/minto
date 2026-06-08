@@ -70,7 +70,7 @@ public final class TranscriptionViewModel: ObservableObject {
         self.init(
             sttService: STTService(),
             audioSource: MicrophoneSource(),
-            vadProcessor: VADProcessor()
+            vadProcessor: VoiceActivityDetectorFactory.makeDefault()
         )
     }
 

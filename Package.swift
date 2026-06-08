@@ -15,6 +15,7 @@ let package = Package(
             name: "MintoCore",
             dependencies: [
                 .product(name: "WhisperKit", package: "WhisperKit"),
+                .product(name: "FluidAudio", package: "FluidAudio"),
                 .product(name: "MCP", package: "swift-sdk"),
             ],
             path: "Sources/Minto",
