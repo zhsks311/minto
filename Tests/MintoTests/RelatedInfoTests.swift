@@ -240,6 +240,109 @@ struct ConfluenceParseTests {
     }
 }
 
+@Suite("Confluence 내보내기 변환")
+struct ConfluenceExportTests {
+
+    @Test("공간 키 조회 응답에서 space id를 찾는다")
+    func parsesSpaceID() {
+        let json = """
+        {
+          "results": [
+            { "id": "12345", "key": "ENG", "name": "Engineering" }
+          ]
+        }
+        """
+
+        #expect(ConfluenceService.parseSpaceID(Data(json.utf8), matchingKey: "eng") == "12345")
+        #expect(ConfluenceService.parseSpaceID(Data(json.utf8), matchingKey: "HR") == nil)
+        #expect(ConfluenceService.parseSpaceID(Data("{\"results\":[]}".utf8), matchingKey: "ENG") == nil)
+    }
+
+    @Test("Markdown을 Confluence storage HTML로 변환한다")
+    func convertsMarkdownToStorageHTML() {
+        let markdown = """
+        # 회의록
+
+        ## 결정사항
+        - `00:12` **Liquibase** 사용
+        - [ ] API token 확인
+
+        전사 <원문> & 문맥
+        """
+
+        let html = ConfluenceService.storageHTML(fromMarkdown: markdown)
+
+        #expect(html.contains("<h1>회의록</h1>"))
+        #expect(html.contains("<h2>결정사항</h2>"))
+        #expect(html.contains("<li><code>00:12</code> <strong>Liquibase</strong> 사용</li>"))
+        #expect(html.contains("<li>[ ] API token 확인</li>"))
+        #expect(html.contains("<p>전사 &lt;원문&gt; &amp; 문맥</p>"))
+    }
+
+    @Test("v2 페이지 생성 payload는 spaceId와 optional parentId를 포함한다")
+    func createsV2PagePayload() throws {
+        let data = try ConfluenceService.createPagePayload(
+            title: "회의록",
+            markdown: "# 제목",
+            spaceID: "98765",
+            parentID: " 54321 "
+        )
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let body = try #require(json["body"] as? [String: Any])
+
+        #expect(json["status"] as? String == "current")
+        #expect(json["title"] as? String == "회의록")
+        #expect(json["spaceId"] as? String == "98765")
+        #expect(json["parentId"] as? String == "54321")
+        #expect(body["representation"] as? String == "storage")
+        #expect((body["value"] as? String)?.contains("<h1>제목</h1>") == true)
+    }
+
+    @Test("부모 페이지 ID가 비어 있으면 payload에서 제외한다")
+    func omitsBlankParentID() throws {
+        let data = try ConfluenceService.createPagePayload(
+            title: "회의록",
+            markdown: "# 제목",
+            spaceID: "98765",
+            parentID: "   "
+        )
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(json["parentId"] == nil)
+    }
+
+    @Test("생성 응답에서 열 수 있는 URL을 조립한다")
+    func parsesPublishedPageURL() throws {
+        let json = """
+        {
+          "id": "10001",
+          "title": "회의록",
+          "_links": {
+            "base": "https://acme.atlassian.net/wiki",
+            "webui": "/spaces/ENG/pages/10001"
+          }
+        }
+        """
+
+        let page = try #require(ConfluenceService.parsePublishedPage(Data(json.utf8), fallbackBase: "https://fallback/wiki"))
+
+        #expect(page.id == "10001")
+        #expect(page.title == "회의록")
+        #expect(page.url == "https://acme.atlassian.net/wiki/spaces/ENG/pages/10001")
+    }
+
+    @Test("Confluence Cloud URL은 https atlassian.net만 허용한다")
+    func validatesAllowedCloudBaseURL() {
+        #expect(ConfluenceService.isAllowedCloudBaseURL("https://acme.atlassian.net"))
+        #expect(ConfluenceService.isAllowedCloudBaseURL("https://team-prod.atlassian.net/"))
+        #expect(!ConfluenceService.isAllowedCloudBaseURL("http://acme.atlassian.net"))
+        #expect(!ConfluenceService.isAllowedCloudBaseURL("https://evil.example.com"))
+        #expect(!ConfluenceService.isAllowedCloudBaseURL("https://atlassian.net"))
+        #expect(!ConfluenceService.isAllowedCloudBaseURL("https://acme.atlassian.net.evil.example"))
+        #expect(!ConfluenceService.isAllowedCloudBaseURL("https://acme.atlassian.net/wiki"))
+    }
+}
+
 @Suite("Confluence 자격·URL 정규화")
 @MainActor
 struct ConfluenceConfigTests {

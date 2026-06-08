@@ -23,6 +23,50 @@ public final class ConfluenceService: ObservableObject {
         }
     }
 
+    public struct PublishedPage: Sendable, Equatable {
+        public let id: String
+        public let title: String
+        public let url: String
+    }
+
+    public enum ExportError: Error, LocalizedError, Sendable, Equatable {
+        case notConfigured
+        case invalidDestination
+        case spaceNotFound(String)
+        case badResponse
+        case httpStatus(Int)
+        case unauthorized
+        case forbidden
+        case contentTooLarge
+        case rateLimited
+        case network
+
+        public var errorDescription: String? {
+            switch self {
+            case .notConfigured:
+                return "Confluence 연결 정보가 필요합니다."
+            case .invalidDestination:
+                return "내보낼 공간 키를 확인하세요."
+            case .spaceNotFound(let spaceKey):
+                return "Confluence 공간을 찾지 못했습니다: \(spaceKey)"
+            case .badResponse:
+                return "Confluence 응답을 이해하지 못했습니다."
+            case .httpStatus(let status):
+                return "Confluence 내보내기가 실패했습니다. HTTP \(status)"
+            case .unauthorized:
+                return "Confluence 토큰이나 이메일을 다시 확인하세요."
+            case .forbidden:
+                return "이 공간에 페이지를 만들 권한이 없습니다."
+            case .contentTooLarge:
+                return "회의록이 너무 커서 Confluence에 보낼 수 없습니다."
+            case .rateLimited:
+                return "Confluence 요청이 잠시 제한되었습니다. 잠시 후 다시 시도하세요."
+            case .network:
+                return "Confluence에 연결하지 못했습니다."
+            }
+        }
+    }
+
     static let baseURLKey = "confluenceBaseURL"
     static let emailKey = "confluenceEmail"
     private let keychainKey = "confluence"
@@ -129,9 +173,107 @@ public final class ConfluenceService: ObservableObject {
         return documents
     }
 
+    public func publishPage(
+        title: String,
+        markdown: String,
+        spaceKey: String,
+        parentID: String? = nil
+    ) async throws -> PublishedPage {
+        guard let token = apiToken, let email, let baseURL else {
+            throw ExportError.notConfigured
+        }
+        let cleanedSpaceKey = spaceKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedSpaceKey.isEmpty, !cleanedTitle.isEmpty, Self.isAllowedCloudBaseURL(baseURL) else {
+            throw ExportError.invalidDestination
+        }
+
+        let spaceID = try await resolveSpaceID(spaceKey: cleanedSpaceKey, token: token, email: email, baseURL: baseURL)
+
+        guard let url = URL(string: "\(baseURL)/wiki/api/v2/pages") else {
+            throw ExportError.invalidDestination
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("no-check", forHTTPHeaderField: "X-Atlassian-Token")
+        let credential = Data("\(email):\(token)".utf8).base64EncodedString()
+        request.setValue("Basic \(credential)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try Self.createPagePayload(
+            title: cleanedTitle,
+            markdown: markdown,
+            spaceID: spaceID,
+            parentID: parentID
+        )
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw ExportError.badResponse }
+            guard (200...299).contains(http.statusCode) else {
+                FileHandle.standardError.write(Data("[Confluence] 내보내기 HTTP \(http.statusCode)\n".utf8))
+                throw Self.exportError(forHTTPStatus: http.statusCode)
+            }
+            guard let page = Self.parsePublishedPage(data, fallbackBase: "\(baseURL)/wiki") else {
+                throw ExportError.badResponse
+            }
+            return page
+        } catch let error as ExportError {
+            throw error
+        } catch {
+            let code = (error as? URLError)?.code.rawValue ?? -1
+            FileHandle.standardError.write(Data("[Confluence] 내보내기 네트워크 오류(code=\(code))\n".utf8))
+            throw ExportError.network
+        }
+    }
+
+    private func resolveSpaceID(
+        spaceKey: String,
+        token: String,
+        email: String,
+        baseURL: String
+    ) async throws -> String {
+        var components = URLComponents(string: "\(baseURL)/wiki/api/v2/spaces")
+        components?.queryItems = [
+            URLQueryItem(name: "keys", value: spaceKey),
+            URLQueryItem(name: "limit", value: "1")
+        ]
+        guard let url = components?.url else {
+            throw ExportError.invalidDestination
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 12
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let credential = Data("\(email):\(token)".utf8).base64EncodedString()
+        request.setValue("Basic \(credential)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw ExportError.badResponse }
+            guard (200...299).contains(http.statusCode) else {
+                FileHandle.standardError.write(Data("[Confluence] 공간 조회 HTTP \(http.statusCode)\n".utf8))
+                throw Self.exportError(forHTTPStatus: http.statusCode)
+            }
+            guard let spaceID = Self.parseSpaceID(data, matchingKey: spaceKey) else {
+                throw ExportError.spaceNotFound(spaceKey)
+            }
+            return spaceID
+        } catch let error as ExportError {
+            throw error
+        } catch {
+            let code = (error as? URLError)?.code.rawValue ?? -1
+            FileHandle.standardError.write(Data("[Confluence] 공간 조회 네트워크 오류(code=\(code))\n".utf8))
+            throw ExportError.network
+        }
+    }
+
     private func searchHits(_ query: String, limit: Int) async -> [ConfluenceSearchHit] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let token = apiToken, let email, let baseURL, !trimmedQuery.isEmpty else { return [] }
+        guard let token = apiToken, let email, let baseURL, !trimmedQuery.isEmpty,
+              Self.isAllowedCloudBaseURL(baseURL) else { return [] }
         let cql = Self.cqlQuery(for: trimmedQuery)
 
         var components = URLComponents(string: "\(baseURL)/wiki/rest/api/search")
@@ -207,6 +349,87 @@ public final class ConfluenceService: ObservableObject {
         return "text ~ \"\(escaped)\""
     }
 
+    nonisolated static func isAllowedCloudBaseURL(_ baseURL: String) -> Bool {
+        guard let components = URLComponents(string: baseURL),
+              components.scheme == "https",
+              components.path.isEmpty || components.path == "/",
+              let host = components.host?.lowercased(),
+              host.hasSuffix(".atlassian.net") else {
+            return false
+        }
+        return host.split(separator: ".").count >= 3
+    }
+
+    nonisolated static func createPagePayload(
+        title: String,
+        markdown: String,
+        spaceID: String,
+        parentID: String?
+    ) throws -> Data {
+        var payload: [String: Any] = [
+            "status": "current",
+            "title": title,
+            "spaceId": spaceID,
+            "body": [
+                "representation": "storage",
+                "value": storageHTML(fromMarkdown: markdown)
+            ]
+        ]
+        let cleanedParentID = parentID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !cleanedParentID.isEmpty {
+            payload["parentId"] = cleanedParentID
+        }
+        return try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+    }
+
+    nonisolated static func storageHTML(fromMarkdown markdown: String) -> String {
+        let lines = markdown.components(separatedBy: .newlines)
+        var html: [String] = []
+        var listOpen = false
+
+        func closeListIfNeeded() {
+            if listOpen {
+                html.append("</ul>")
+                listOpen = false
+            }
+        }
+
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else {
+                closeListIfNeeded()
+                continue
+            }
+            if line.hasPrefix("### ") {
+                closeListIfNeeded()
+                html.append("<h3>\(inlineHTML(String(line.dropFirst(4))))</h3>")
+            } else if line.hasPrefix("## ") {
+                closeListIfNeeded()
+                html.append("<h2>\(inlineHTML(String(line.dropFirst(3))))</h2>")
+            } else if line.hasPrefix("# ") {
+                closeListIfNeeded()
+                html.append("<h1>\(inlineHTML(String(line.dropFirst(2))))</h1>")
+            } else if line.hasPrefix("- [ ] ") {
+                if !listOpen {
+                    html.append("<ul>")
+                    listOpen = true
+                }
+                html.append("<li>[ ] \(inlineHTML(String(line.dropFirst(6))))</li>")
+            } else if line.hasPrefix("- ") {
+                if !listOpen {
+                    html.append("<ul>")
+                    listOpen = true
+                }
+                html.append("<li>\(inlineHTML(String(line.dropFirst(2))))</li>")
+            } else {
+                closeListIfNeeded()
+                html.append("<p>\(inlineHTML(line))</p>")
+            }
+        }
+        closeListIfNeeded()
+        return html.joined(separator: "\n")
+    }
+
     // MARK: - 파싱(테스트 대상)
 
     /// Confluence `/wiki/rest/api/search` 응답을 RelatedDoc 배열로 변환한다.
@@ -226,6 +449,32 @@ public final class ConfluenceService: ObservableObject {
         guard let html else { return nil }
         let text = htmlToPlainText(html)
         return text.isEmpty ? nil : text
+    }
+
+    nonisolated static func parseSpaceID(_ data: Data, matchingKey requestedKey: String) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = json["results"] as? [[String: Any]] else {
+            return nil
+        }
+        let requested = requestedKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let match = results.first { item in
+            guard let key = item["key"] as? String else { return false }
+            return key.compare(requested, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }
+        return match?["id"] as? String
+    }
+
+    nonisolated static func parsePublishedPage(_ data: Data, fallbackBase: String) -> PublishedPage? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let id = json["id"] as? String else {
+            return nil
+        }
+        let title = (json["title"] as? String) ?? "(제목 없음)"
+        let links = json["_links"] as? [String: Any]
+        let base = (links?["base"] as? String) ?? fallbackBase
+        let webui = (links?["webui"] as? String) ?? "/pages/viewpage.action?pageId=\(id)"
+        let url = webui.hasPrefix("http") ? webui : base + (webui.hasPrefix("/") ? webui : "/" + webui)
+        return PublishedPage(id: id, title: title, url: url)
     }
 
     nonisolated public static func contextBlock(from documents: [ContextDocument], maxCharacters: Int = 3500) -> String {
@@ -346,6 +595,60 @@ public final class ConfluenceService: ObservableObject {
             decoded.replaceSubrange(fullRange, with: String(Character(scalar)))
         }
         return decoded
+    }
+
+    nonisolated private static func escapeHTML(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
+    }
+
+    nonisolated private static func exportError(forHTTPStatus status: Int) -> ExportError {
+        switch status {
+        case 401:
+            return .unauthorized
+        case 403:
+            return .forbidden
+        case 413:
+            return .contentTooLarge
+        case 429:
+            return .rateLimited
+        default:
+            return .httpStatus(status)
+        }
+    }
+
+    nonisolated private static func inlineHTML(_ markdown: String) -> String {
+        var text = escapeHTML(markdown)
+        text = replaceDelimited(text, delimiter: "**", openTag: "<strong>", closeTag: "</strong>")
+        text = replaceDelimited(text, delimiter: "`", openTag: "<code>", closeTag: "</code>")
+        return text
+    }
+
+    nonisolated private static func replaceDelimited(
+        _ text: String,
+        delimiter: String,
+        openTag: String,
+        closeTag: String
+    ) -> String {
+        var remaining = text[...]
+        var output = ""
+
+        while let start = remaining.range(of: delimiter) {
+            output += String(remaining[..<start.lowerBound])
+            let afterStart = remaining[start.upperBound...]
+            guard let end = afterStart.range(of: delimiter) else {
+                output += String(remaining[start.lowerBound...])
+                return output
+            }
+            output += openTag + String(afterStart[..<end.lowerBound]) + closeTag
+            remaining = afterStart[end.upperBound...]
+        }
+        output += String(remaining)
+        return output
     }
 }
 

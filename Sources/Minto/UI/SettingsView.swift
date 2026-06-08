@@ -317,22 +317,39 @@ public struct SettingsView: View {
     }
 
     private var confluenceSettingsBody: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: confluence.isConfigured ? "link.circle.fill" : "link.circle")
                     .font(.caption)
                     .foregroundColor(confluence.isConfigured ? .green : .secondary)
                 Text(confluence.isConfigured
-                     ? "회의 목록 관련 문서 검색과 회의 시작의 Confluence 문맥 조회에 함께 사용됩니다."
-                     : "연결하면 회의 목록 관련 문서 검색과 회의 시작의 Confluence 문맥 조회에서 함께 사용됩니다.")
+                     ? "관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기에 사용됩니다."
+                     : "연결하면 관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기를 사용할 수 있습니다.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Label("연결 준비", systemImage: "key.fill")
+                    .font(.caption.weight(.semibold))
+                Text("Atlassian 계정에서 API token을 만든 뒤 사이트 URL, 이메일, token을 입력하세요. Confluence에 내보내려면 페이지 작성 권한이 필요합니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Link(destination: URL(string: "https://id.atlassian.com/manage-profile/security/api-tokens")!) {
+                    Label("API token 만들기", systemImage: "arrow.up.right.square")
+                }
+                .font(.caption.weight(.semibold))
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
             TextField("사이트 URL (https://회사.atlassian.net)", text: $confluenceBaseURL)
                 .textContentType(.URL)
             TextField("이메일", text: $confluenceEmail)
-            SecureField("API token", text: $confluenceTokenInput)
+            SecureField(confluence.isConfigured ? "새 API token 입력" : "API token", text: $confluenceTokenInput)
             HStack {
                 Button("저장") {
                     confluence.setAPIToken(confluenceTokenInput)
@@ -348,7 +365,7 @@ public struct SettingsView: View {
                     .foregroundColor(.red)
                 }
             }
-            Text("id.atlassian.com의 API tokens에서 토큰을 발급하세요.")
+            Text("토큰은 이 Mac의 Keychain에만 저장됩니다. 사이트 URL과 이메일은 연결 상태 표시와 API 호출에만 사용됩니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

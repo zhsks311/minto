@@ -26,6 +26,9 @@ public struct MeetingLibraryView: View {
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var showingLiveMeeting = false
+    @State private var showingExportOptions = false
+    @State private var showingConfluenceExport = false
+    @State private var exportRecord: MeetingRecord?
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -96,6 +99,39 @@ public struct MeetingLibraryView: View {
             } else if !viewModel.isRecording {
                 showingLiveMeeting = false
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
+            }
+        }
+        .confirmationDialog(
+            "회의록 내보내기",
+            isPresented: $showingExportOptions,
+            titleVisibility: .visible
+        ) {
+            if let exportRecord {
+                Button("Markdown 파일로 저장") {
+                    MeetingExporter.save(MeetingResult.from(exportRecord))
+                }
+                Button("전체 내용 복사") {
+                    copyFullMeeting(exportRecord)
+                }
+                if confluence.isConfigured {
+                    Button("Confluence로 내보내기") {
+                        showingConfluenceExport = true
+                    }
+                } else {
+                    Button("Confluence 설정 열기") {
+                        openSettingsWindow()
+                    }
+                }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text(confluence.isConfigured
+                 ? "파일로 저장하거나 연결된 Confluence 공간에 새 페이지로 만들 수 있습니다."
+                 : "Confluence 내보내기는 설정의 검색 소스에서 Confluence를 연결한 뒤 사용할 수 있습니다.")
+        }
+        .sheet(isPresented: $showingConfluenceExport) {
+            if let exportRecord {
+                ConfluenceExportSheet(record: exportRecord, confluence: confluence)
             }
         }
     }
@@ -621,7 +657,10 @@ public struct MeetingLibraryView: View {
                 Spacer()
                 readingModeButton
 
-                Button { MeetingExporter.save(MeetingResult.from(record)) } label: {
+                Button {
+                    exportRecord = record
+                    showingExportOptions = true
+                } label: {
                     Label("내보내기", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.bordered)
@@ -1583,5 +1622,145 @@ public struct MeetingLibraryView: View {
     private func copyLiveTranscript() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(liveSegments.map(\.text).joined(separator: "\n"), forType: .string)
+    }
+
+    private func openSettingsWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+}
+
+private struct ConfluenceExportSheet: View {
+    let record: MeetingRecord
+    @ObservedObject var confluence: ConfluenceService
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("confluenceExportSpaceKey") private var savedSpaceKey = ""
+    @AppStorage("confluenceExportParentID") private var savedParentID = ""
+    @State private var pageTitle: String
+    @State private var isPublishing = false
+    @State private var publishedPage: ConfluenceService.PublishedPage?
+    @State private var errorMessage: String?
+
+    init(record: MeetingRecord, confluence: ConfluenceService) {
+        self.record = record
+        self.confluence = confluence
+        let title = record.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        _pageTitle = State(initialValue: title.isEmpty ? "회의록" : title)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Confluence로 내보내기")
+                    .font(.system(size: 20, weight: .bold))
+                Text("선택한 공간에 회의록 페이지를 새로 만듭니다.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                labeledField("페이지 제목") {
+                    TextField("페이지 제목", text: $pageTitle)
+                }
+                labeledField("공간 키") {
+                    TextField("예: ENG", text: $savedSpaceKey)
+                }
+                labeledField("부모 페이지 ID") {
+                    TextField("비우면 공간 최상위에 생성", text: $savedParentID)
+                }
+
+                Text("공간 키는 Confluence URL의 `/spaces/ENG`에서 `ENG`에 해당합니다. 부모 페이지 ID는 내보낼 위치를 지정할 때만 입력하세요.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let publishedPage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("내보내기가 완료되었습니다.", systemImage: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.system(size: 13, weight: .semibold))
+                    Button {
+                        if let url = URL(string: publishedPage.url) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    } label: {
+                        Label("Confluence에서 열기", systemImage: "arrow.up.right.square")
+                    }
+                }
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 13))
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Button("닫기") { dismiss() }
+                Spacer()
+                Button {
+                    publish()
+                } label: {
+                    if isPublishing {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("내보내는 중")
+                        }
+                    } else {
+                        Label("내보내기", systemImage: "square.and.arrow.up")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canPublish)
+            }
+        }
+        .padding(22)
+        .frame(width: 460)
+    }
+
+    private var canPublish: Bool {
+        confluence.isConfigured
+            && !isPublishing
+            && !pageTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !savedSpaceKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func labeledField<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+            content()
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func publish() {
+        errorMessage = nil
+        publishedPage = nil
+        isPublishing = true
+        let markdown = MeetingExporter.markdown(for: MeetingResult.from(record))
+        let title = pageTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let spaceKey = savedSpaceKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parentID = savedParentID.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task { @MainActor in
+            do {
+                publishedPage = try await confluence.publishPage(
+                    title: title,
+                    markdown: markdown,
+                    spaceKey: spaceKey,
+                    parentID: parentID.isEmpty ? nil : parentID
+                )
+            } catch {
+                errorMessage = (error as? LocalizedError)?.errorDescription
+                    ?? "Confluence 내보내기에 실패했습니다."
+            }
+            isPublishing = false
+        }
     }
 }
