@@ -98,7 +98,7 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         case .whisperFast:
             return "정확도보다 빠른 초안이 먼저 필요할 때"
         case .speechAnalyzer:
-            return "macOS 26 이상에서 Apple 최신 인식을 시험할 때"
+            return "Apple 최신 음성 인식 엔진을 사용할 때"
         case .sfSpeechOnDevice:
             return "Apple 기본 받아쓰기 엔진을 쓰고 싶을 때"
         }
@@ -128,9 +128,9 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         case .whisperFast:
             return ["가벼움", "초안용"]
         case .speechAnalyzer:
-            return ["Apple 엔진", "macOS 26+"]
+            return ["macOS 26+"]
         case .sfSpeechOnDevice:
-            return ["온디바이스 전용", "권한/언어 파일"]
+            return ["macOS 10.15+"]
         }
     }
 
@@ -141,7 +141,7 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return "macOS 26+"
         case .sfSpeechOnDevice:
-            return "macOS 10.15+ · 권한과 한국어 언어 파일 필요"
+            return "macOS 10.15+"
         }
     }
 
@@ -232,7 +232,7 @@ public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
         case .localAI:
             return "회의록 품질과 안정성이 가장 중요할 때"
         case .speechAnalyzer:
-            return "macOS 26 이상에서 Apple 최신 인식을 시험할 때"
+            return "Apple 최신 음성 인식 엔진을 사용할 때"
         case .sfSpeechOnDevice:
             return "Apple 기본 받아쓰기 엔진을 쓰고 싶을 때"
         }
@@ -252,11 +252,9 @@ public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
     public var choiceChips: [String] {
         switch self {
         case .localAI:
-            return ["기본 권장", "모델 선택"]
-        case .speechAnalyzer:
-            return ["Apple 엔진", "macOS 26+"]
-        case .sfSpeechOnDevice:
-            return ["온디바이스 전용", "권한/언어 파일"]
+            return []
+        case .speechAnalyzer, .sfSpeechOnDevice:
+            return []
         }
     }
 
@@ -267,7 +265,7 @@ public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
         case .speechAnalyzer:
             return "macOS 26+"
         case .sfSpeechOnDevice:
-            return "macOS 10.15+ · 권한과 한국어 언어 파일 필요"
+            return "macOS 10.15+"
         }
     }
 
