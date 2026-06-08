@@ -203,6 +203,11 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - 짧은 마지막 말이 사라지지 않는다.
 - final empty 때문에 UI가 비어 보이지 않는다.
 
+**현재 고정된 테스트**
+
+- `stopRecordingAndDrain()`은 VAD 잔여 청크를 final 전사까지 drain한다.
+- final STT가 empty이면 기존 preview를 즉시 지우지 않는다.
+
 ### P4. SpeechAnalyzer 제품 통합 검증
 
 **목표**

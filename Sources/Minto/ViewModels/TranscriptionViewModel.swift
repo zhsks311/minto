@@ -2,6 +2,22 @@ import Foundation
 import SwiftUI
 
 @MainActor
+protocol TranscriptionSTTServicing: AnyObject {
+    var modelState: ModelState { get }
+    var modelVariant: String { get }
+    var speechEngineID: SpeechEngineID { get }
+    var supportsPreviewTranscription: Bool { get }
+    var onModelStateChange: ((ModelState) -> Void)? { get set }
+
+    func loadEngine(_ engineID: SpeechEngineID) async
+    func loadModel(variant: String) async
+    func recoverModelCacheAndReload(variant: String) async
+    func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult
+}
+
+extension STTService: TranscriptionSTTServicing {}
+
+@MainActor
 public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Published
@@ -18,14 +34,14 @@ public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Private
 
-    private let sttService = STTService()
+    private let sttService: any TranscriptionSTTServicing
     private let llmService = LLMCorrectionService.shared
     private var transcriptionTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
     private var chunkContinuation: AsyncStream<AudioChunk>.Continuation?
-    private let audioSource: AudioSourceProtocol = MicrophoneSource()
-    private let vadProcessor: any VoiceActivityDetector = VADProcessor()
+    private let audioSource: AudioSourceProtocol
+    private let vadProcessor: any VoiceActivityDetector
     private var state = TranscriptionState()
     private var recordingStartDate: Date?
 
@@ -50,9 +66,25 @@ public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Init
 
-    public init() {
+    public convenience init() {
+        self.init(
+            sttService: STTService(),
+            audioSource: MicrophoneSource(),
+            vadProcessor: VADProcessor()
+        )
+    }
+
+    init(
+        sttService: any TranscriptionSTTServicing,
+        audioSource: AudioSourceProtocol,
+        vadProcessor: any VoiceActivityDetector
+    ) {
+        self.sttService = sttService
+        self.audioSource = audioSource
+        self.vadProcessor = vadProcessor
+
         // STTService 상태 변화 → ViewModel @Published 전파
-        sttService.onModelStateChange = { [weak self] state in
+        self.sttService.onModelStateChange = { [weak self] state in
             self?.modelState = state
         }
     }
