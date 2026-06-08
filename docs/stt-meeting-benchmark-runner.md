@@ -263,4 +263,16 @@ Recent 120s segmentation sweep, all with `threshold=0.6` and `merge gap=1.1`:
 | baseline: padding 0.12, min speech 0.25, merge max 15 | 36.9% | 19.9% | 9 | 41 | 0.107 | 849.0 | current candidate |
 | speech padding 0.30 | 40.5% | 24.0% | 10 | 41 | 0.109 | 802.8 | reject |
 | min speech 0.50 | 37.0% | 20.1% | 8 | 41 | 0.111 | 719.0 | weak, not default |
-| merge max 20 | 34.0% | 19.5% | 9 | 41 | 0.097 | 687.3 | repeat/full candidate |
+| merge max 20 | 34.0% | 19.5% | 9 | 41 | 0.097 | 687.3 | repeat check required |
+
+`merge max 20` repeat check, same 7 samples and 120s scope:
+
+| Run | Weighted CER | Full Global CER | Empty | FP chars | RTF | Peak MB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| repeat1 | 34.0% | 19.5% | 9 | 41 | 0.097 | 687.3 |
+| repeat2 | 36.0% | 21.6% | 10 | 41 | 0.099 | 930.2 |
+| repeat3 | 34.1% | 19.5% | 9 | 41 | 0.124 | 911.4 |
+
+Decision: do not promote `merge max 20` and do not spend a full-duration short3 run on it yet.
+Weighted CER improved in all three repeats, but `Full Global CER` did not improve consistently and empty finals did not drop.
+For VAD policy selection, prefer `Full Global CER` over chunk-only weighted CER because missed speech outside emitted chunks is counted only in the full-reference comparison.
