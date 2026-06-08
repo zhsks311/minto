@@ -6,12 +6,17 @@ extension Notification.Name {
 }
 
 protocol LLMAPIKeyStorageBackend: Sendable {
+    func exists(account: String, service: String) -> Bool
     func load(account: String, service: String) -> Data?
     func save(account: String, data: Data, service: String) -> Bool
     func delete(account: String, service: String) -> Bool
 }
 
 struct KeychainLLMAPIKeyStorageBackend: LLMAPIKeyStorageBackend {
+    func exists(account: String, service: String) -> Bool {
+        KeychainService.exists(provider: account, service: service)
+    }
+
     func load(account: String, service: String) -> Data? {
         KeychainService.load(provider: account, service: service)
     }
@@ -39,6 +44,7 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
     private let notificationCenter: NotificationCenter
     private let lock = NSLock()
     private var loadedProviderIDs: Set<LLMProviderID> = []
+    private var knownProviderStatus: [LLMProviderID: Bool] = [:]
     private var cachedKeys: [LLMProviderID: String] = [:]
 
     public init(serviceName: String = KeychainService.llmAPIService) {
@@ -72,6 +78,7 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
 
         lock.withLock {
             loadedProviderIDs.insert(providerID)
+            knownProviderStatus[providerID] = (key != nil)
             if let key {
                 cachedKeys[providerID] = key
             } else {
@@ -82,7 +89,24 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
     }
 
     public func hasAPIKey(for providerID: LLMProviderID) -> Bool {
-        apiKey(for: providerID) != nil
+        if let cached = lock.withLock({ () -> Bool? in
+            if loadedProviderIDs.contains(providerID) {
+                return cachedKeys[providerID] != nil
+            }
+            return knownProviderStatus[providerID]
+        }) {
+            return cached
+        }
+
+        let exists = storage.exists(account: keychainAccount(for: providerID), service: serviceName)
+        lock.withLock {
+            knownProviderStatus[providerID] = exists
+            if !exists {
+                loadedProviderIDs.insert(providerID)
+                cachedKeys.removeValue(forKey: providerID)
+            }
+        }
+        return exists
     }
 
     @discardableResult
@@ -104,6 +128,7 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
 
         lock.withLock {
             loadedProviderIDs.insert(providerID)
+            knownProviderStatus[providerID] = true
             cachedKeys[providerID] = trimmed
         }
         postDidChange(providerID)
@@ -119,6 +144,7 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
 
         lock.withLock {
             loadedProviderIDs.insert(providerID)
+            knownProviderStatus[providerID] = false
             cachedKeys.removeValue(forKey: providerID)
         }
         postDidChange(providerID)

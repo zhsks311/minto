@@ -39,6 +39,13 @@ final class KeychainTokenStorage: TokenStorage, @unchecked Sendable {
         return token
     }
 
+    func hasToken() -> Bool {
+        if let cached = lock.withLock({ cachedToken }) {
+            return cached != nil
+        }
+        return KeychainService.exists(provider: keychainKey)
+    }
+
     func clear() {
         lock.withLock {
             cachedToken = .some(nil)

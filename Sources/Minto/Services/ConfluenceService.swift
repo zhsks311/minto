@@ -80,16 +80,19 @@ public final class ConfluenceService: ObservableObject {
     public init(session: URLSession = .shared, defaults: UserDefaults = .standard) {
         self.session = session
         self.defaults = defaults
-        let token = Self.loadAPIToken(keychainKey: keychainKey)
-        self.cachedAPIToken = token
-        self.hasToken = (token != nil)
+        self.cachedAPIToken = nil
+        self.hasToken = KeychainService.exists(provider: keychainKey)
     }
 
     // MARK: - 자격 관리
 
     /// 토큰 원문은 외부로 노출하지 않는다(로그·UI 유출 방지). search() 내부에서만 사용.
     private var apiToken: String? {
-        cachedAPIToken
+        if let cachedAPIToken { return cachedAPIToken }
+        let token = Self.loadAPIToken(keychainKey: keychainKey)
+        cachedAPIToken = token
+        hasToken = (token != nil)
+        return token
     }
 
     private static func loadAPIToken(keychainKey: String) -> String? {

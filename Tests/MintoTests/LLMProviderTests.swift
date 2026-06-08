@@ -227,6 +227,29 @@ struct LLMProviderTests {
         #expect(KeychainService.llmAPIService == "com.minto.app.llm-api")
     }
 
+    @Test("API key 존재 확인은 비밀값을 로드하지 않는다")
+    func apiKeyStoreChecksExistenceWithoutLoadingSecret() {
+        let storage = StubAPIKeyStorageBackend(loadData: Data("sk-test".utf8), existsResult: true)
+        let store = LLMAPIKeyStore(serviceName: "test-llm-api", storage: storage)
+
+        #expect(store.hasAPIKey(for: .gpt))
+        #expect(storage.existsCallCount == 1)
+        #expect(storage.loadCallCount == 0)
+
+        #expect(store.apiKey(for: .gpt) == "sk-test")
+        #expect(storage.loadCallCount == 1)
+    }
+
+    @Test("API key item이 있어도 빈 값이면 상태 cache를 미설정으로 내린다")
+    func apiKeyStoreInvalidStoredValueClearsKnownStatusAfterLoad() {
+        let storage = StubAPIKeyStorageBackend(loadData: Data("   ".utf8), existsResult: true)
+        let store = LLMAPIKeyStore(serviceName: "test-llm-api", storage: storage)
+
+        #expect(store.hasAPIKey(for: .gpt))
+        #expect(store.apiKey(for: .gpt) == nil)
+        #expect(store.hasAPIKey(for: .gpt) == false)
+    }
+
     @Test("API key 저장 실패는 cache를 저장됨 상태로 갱신하지 않는다")
     func apiKeyStoreDoesNotCacheFailedSave() {
         let storage = StubAPIKeyStorageBackend(loadData: nil, saveResult: false)
@@ -333,18 +356,33 @@ private struct StubTransportError: LocalizedError {
 }
 
 private final class StubAPIKeyStorageBackend: LLMAPIKeyStorageBackend, @unchecked Sendable {
+    private let lock = NSLock()
     private let loadData: Data?
+    private let existsResult: Bool
     private let saveResult: Bool
     private let deleteResult: Bool
+    private(set) var existsCallCount = 0
+    private(set) var loadCallCount = 0
 
-    init(loadData: Data?, saveResult: Bool = true, deleteResult: Bool = true) {
+    init(loadData: Data?, existsResult: Bool? = nil, saveResult: Bool = true, deleteResult: Bool = true) {
         self.loadData = loadData
+        self.existsResult = existsResult ?? (loadData != nil)
         self.saveResult = saveResult
         self.deleteResult = deleteResult
     }
 
+    func exists(account: String, service: String) -> Bool {
+        lock.withLock {
+            existsCallCount += 1
+        }
+        return existsResult
+    }
+
     func load(account: String, service: String) -> Data? {
-        loadData
+        lock.withLock {
+            loadCallCount += 1
+        }
+        return loadData
     }
 
     func save(account: String, data: Data, service: String) -> Bool {

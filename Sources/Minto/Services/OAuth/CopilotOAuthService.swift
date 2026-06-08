@@ -73,8 +73,19 @@ public final class CopilotOAuthService: ObservableObject {
         }
     }
 
-    public var isLoggedIn: Bool { credentials != nil }
-    public var email: String { credentials?.email ?? "" }
+    public var isLoggedIn: Bool {
+        if let cached = cachedCredentials {
+            return cached != nil
+        }
+        return KeychainService.exists(provider: kKeychainKey)
+    }
+
+    public var email: String {
+        if case .some(.some(let credentials)) = cachedCredentials {
+            return credentials.email
+        }
+        return ""
+    }
 
     // MARK: - Login
 

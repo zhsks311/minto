@@ -31,7 +31,7 @@ public final class NotionMCPService: ObservableObject {
 
     private init() {
         self.isConnected = false
-        self.isConnected = (tokenStorage.load() != nil)
+        self.isConnected = tokenStorage.hasToken()
     }
 
     // MARK: - Client 생성
@@ -74,7 +74,7 @@ public final class NotionMCPService: ObservableObject {
         guard toolList.tools.contains(where: { $0.name == Self.fetchToolName }) else {
             throw NotionMCPError.fetchToolUnavailable
         }
-        isConnected = tokenStorage.load() != nil
+        isConnected = tokenStorage.hasToken()
     }
 
     /// Keychain 토큰을 삭제하고 연결 상태를 해제한다.

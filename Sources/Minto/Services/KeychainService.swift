@@ -40,6 +40,16 @@ public enum KeychainService {
         return result as? Data
     }
 
+    public static func exists(provider: String, service: String = oauthService) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: provider,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
     @discardableResult
     public static func delete(provider: String, service: String = oauthService) -> OSStatus {
         let query: [String: Any] = [

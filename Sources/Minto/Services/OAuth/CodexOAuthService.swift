@@ -59,7 +59,12 @@ public final class CodexOAuthService: ObservableObject {
         }
     }
 
-    public var isLoggedIn: Bool { credentials != nil }
+    public var isLoggedIn: Bool {
+        if let cached = cachedCredentials {
+            return cached != nil
+        }
+        return KeychainService.exists(provider: kKeychainKey)
+    }
 
     // MARK: - Login
 
