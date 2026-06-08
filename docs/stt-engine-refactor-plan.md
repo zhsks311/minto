@@ -62,9 +62,17 @@
    - Keep `SpeechEngineID.speechAnalyzer.supportsTrueStreaming == false` until product assembly policy is ready.
    - Verify: compile/default tests pass; manual smoke reports local Korean availability before running.
 
+10. Add Nemotron sidecar HTTP client contract outside product runtime.
+   - `NemotronSidecarClient`
+   - health check endpoint: `/health`.
+   - final-chunk transcription endpoint: `/transcribe`.
+   - request audio format: 16kHz mono Float32 little-endian encoded as base64.
+   - response fields: text, model id, audio seconds, elapsed seconds, RTF, peak memory.
+   - Verify: request contract, response parsing, and HTTP failure handling are unit-tested without starting a worker.
+
 ## Non-goals
 
-- Do not add Nemotron or sherpa runtime integration in this step.
+- Do not connect Nemotron or sherpa runtime integration to product paths in this step.
 - Do not change VAD behavior.
 - Do not change the default engine.
 - Do not connect true streaming abstractions to app runtime until a streaming engine PoC is selected.
