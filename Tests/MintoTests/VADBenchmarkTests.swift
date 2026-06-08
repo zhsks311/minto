@@ -58,6 +58,30 @@ struct VADBenchmarkTests {
         Float(positiveDoubleEnv("SILERO_VAD_THRESHOLD", default: 0.5))
     }
 
+    private static var sileroMinSpeechSeconds: Double {
+        positiveDoubleEnv("SILERO_MIN_SPEECH_SEC", default: 0.25)
+    }
+
+    private static var sileroMinSilenceSeconds: Double {
+        positiveDoubleEnv("SILERO_MIN_SILENCE_SEC", default: 0.4)
+    }
+
+    private static var sileroSpeechPaddingSeconds: Double {
+        nonNegativeDoubleEnv("SILERO_SPEECH_PADDING_SEC") ?? 0.12
+    }
+
+    private static var sileroMaxSpeechSeconds: Double {
+        positiveDoubleEnv("SILERO_MAX_SPEECH_SEC", default: 14.0)
+    }
+
+    private static var chunkMergeGapSeconds: Double? {
+        nonNegativeDoubleEnv("VAD_MERGE_GAP_SEC")
+    }
+
+    private static var chunkMergeMaxSeconds: Double {
+        positiveDoubleEnv("VAD_MERGE_MAX_SEC", default: 15.0)
+    }
+
     private static var fluidAudioModelDirectory: URL {
         if let value = ProcessInfo.processInfo.environment["FLUIDAUDIO_MODEL_DIR"], !value.isEmpty {
             return URL(fileURLWithPath: value)
@@ -71,6 +95,18 @@ struct VADBenchmarkTests {
             return 6
         }
         return value
+    }
+
+    private static var benchmarkConfig: VADBenchmarkConfigMetric {
+        VADBenchmarkConfigMetric(
+            sileroThreshold: Double(Self.sileroThreshold),
+            sileroMinSpeechSeconds: Self.sileroMinSpeechSeconds,
+            sileroMinSilenceSeconds: Self.sileroMinSilenceSeconds,
+            sileroSpeechPaddingSeconds: Self.sileroSpeechPaddingSeconds,
+            sileroMaxSpeechSeconds: Self.sileroMaxSpeechSeconds,
+            chunkMergeGapSeconds: Self.chunkMergeGapSeconds,
+            chunkMergeMaxSeconds: Self.chunkMergeMaxSeconds
+        )
     }
 
     @Test("sample/meeting VAD baseline metrics")
@@ -89,11 +125,13 @@ struct VADBenchmarkTests {
         let candidate = Self.candidate
 
         if candidate == .silero {
-            let finalChunks = try await Self.sileroChunks(from: samples, totalSeconds: totalSeconds)
+            let rawFinalChunks = try await Self.sileroChunks(from: samples, totalSeconds: totalSeconds)
+            let finalChunks = Self.prepareFinalChunks(rawFinalChunks)
             let metrics = Self.buildMetrics(
                 candidate: candidate,
                 captions: captions,
                 totalSeconds: totalSeconds,
+                rawChunkCount: rawFinalChunks.count,
                 finalChunks: finalChunks,
                 previewChunks: []
             )
@@ -104,12 +142,14 @@ struct VADBenchmarkTests {
             return
         }
 
-        let (finalChunks, previewChunks) = await Self.energyChunks(from: samples, totalSeconds: totalSeconds)
+        let (rawFinalChunks, previewChunks) = await Self.energyChunks(from: samples, totalSeconds: totalSeconds)
+        let finalChunks = Self.prepareFinalChunks(rawFinalChunks)
 
         let metrics = Self.buildMetrics(
             candidate: candidate,
             captions: captions,
             totalSeconds: totalSeconds,
+            rawChunkCount: rawFinalChunks.count,
             finalChunks: finalChunks,
             previewChunks: previewChunks
         )
@@ -137,13 +177,14 @@ struct VADBenchmarkTests {
         let totalSeconds = min(Double(samples.count) / Double(Self.sampleRate), Self.maxSeconds)
         let captions = try Self.parseSMI(from: Self.smiURL)
         let candidate = Self.candidate
-        let allChunks: [VADChunkMetric]
+        let rawChunks: [VADChunkMetric]
         switch candidate {
         case .energy:
-            allChunks = await Self.energyChunks(from: samples, totalSeconds: totalSeconds).final
+            rawChunks = await Self.energyChunks(from: samples, totalSeconds: totalSeconds).final
         case .silero:
-            allChunks = try await Self.sileroChunks(from: samples, totalSeconds: totalSeconds)
+            rawChunks = try await Self.sileroChunks(from: samples, totalSeconds: totalSeconds)
         }
+        let allChunks = Self.prepareFinalChunks(rawChunks)
         let targetChunks = Self.maxSTTChunks > 0 ? Array(allChunks.prefix(Self.maxSTTChunks)) : allChunks
         guard !targetChunks.isEmpty else {
             Issue.record("VAD STT benchmark chunks should not be empty")
@@ -207,8 +248,10 @@ struct VADBenchmarkTests {
         let metric = VADSTTBenchmarkMetric(
             vad: candidate.rawValue,
             engine: engineLabel,
+            config: Self.benchmarkConfig,
             sample: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
             seconds: totalSeconds,
+            rawChunkCount: rawChunks.count,
             totalChunkCount: allChunks.count,
             measuredChunkCount: chunkMetrics.count,
             emptyCount: emptyCount,
@@ -224,7 +267,8 @@ struct VADBenchmarkTests {
         print("""
 
         === VAD STT Benchmark [\(candidate.rawValue) -> \(engineLabel)] ===
-        chunks measured         : \(metric.measuredChunkCount)/\(metric.totalChunkCount)
+        chunks measured         : \(metric.measuredChunkCount)/\(metric.totalChunkCount) (raw \(metric.rawChunkCount))
+        merge gap / max         : \(Self.formatOptionalSeconds(metric.config.chunkMergeGapSeconds)) / \(String(format: "%.1f", metric.config.chunkMergeMaxSeconds))s
         empty final count       : \(metric.emptyCount)
         false positive text     : \(metric.falsePositiveTranscriptionCount) chunks / \(metric.falsePositiveTranscriptChars) chars
         chunk CER               : \(String(format: "%.1f%%", metric.cer * 100)) (distance \(metric.distance) / ref \(metric.refLen))
@@ -241,6 +285,7 @@ struct VADBenchmarkTests {
         candidate: Candidate,
         captions: [Caption],
         totalSeconds: Double,
+        rawChunkCount: Int,
         finalChunks: [VADChunkMetric],
         previewChunks: [VADChunkMetric]
     ) -> VADBenchmarkMetric {
@@ -267,8 +312,10 @@ struct VADBenchmarkTests {
             vad: candidate.rawValue,
             available: true,
             error: nil,
+            config: Self.benchmarkConfig,
             sample: Self.audioURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_full", with: ""),
             seconds: totalSeconds,
+            rawChunkCount: rawChunkCount,
             frameSeconds: Self.frameSeconds,
             chunkCount: finalChunks.count,
             previewCount: previewChunks.count,
@@ -294,7 +341,8 @@ struct VADBenchmarkTests {
         === VAD Benchmark [\(metrics.vad)] ===
         audio                  : \(audioName)
         seconds                : \(String(format: "%.1f", metrics.seconds))
-        chunks / previews      : \(metrics.chunkCount) / \(metrics.previewCount)
+        chunks / previews      : \(metrics.chunkCount) / \(metrics.previewCount) (raw \(metrics.rawChunkCount))
+        merge gap / max        : \(Self.formatOptionalSeconds(metrics.config.chunkMergeGapSeconds)) / \(String(format: "%.1f", metrics.config.chunkMergeMaxSeconds))s
         speech recall          : \(String(format: "%.1f%%", metrics.speechRecall * 100)) (\(String(format: "%.1f", metrics.coveredSpeechSeconds))/\(String(format: "%.1f", metrics.referenceSpeechSeconds))s)
         false positive seconds : \(String(format: "%.1f", metrics.falsePositiveSeconds))s (ratio \(String(format: "%.1f%%", metrics.falsePositiveRatio * 100)))
         missed speech seconds  : \(String(format: "%.1f", metrics.missedSpeechSeconds))s
@@ -309,10 +357,10 @@ struct VADBenchmarkTests {
         let sampleLimit = min(samples.count, Int(totalSeconds * Double(Self.sampleRate)))
         let limitedSamples = Array(samples.prefix(sampleLimit))
         var segmentation = VadSegmentationConfig.default
-        segmentation.minSpeechDuration = 0.25
-        segmentation.minSilenceDuration = 0.4
-        segmentation.maxSpeechDuration = 14.0
-        segmentation.speechPadding = 0.12
+        segmentation.minSpeechDuration = Self.sileroMinSpeechSeconds
+        segmentation.minSilenceDuration = Self.sileroMinSilenceSeconds
+        segmentation.maxSpeechDuration = Self.sileroMaxSpeechSeconds
+        segmentation.speechPadding = Self.sileroSpeechPaddingSeconds
 
         let manager = try await VadManager(
             config: VadConfig(defaultThreshold: Self.sileroThreshold),
@@ -372,6 +420,61 @@ struct VADBenchmarkTests {
         return (finalChunks, previewChunks)
     }
 
+    private static func prepareFinalChunks(_ chunks: [VADChunkMetric]) -> [VADChunkMetric] {
+        guard let mergeGapSeconds = Self.chunkMergeGapSeconds else {
+            return chunks
+        }
+        return Self.mergeChunks(chunks, maxGapSeconds: mergeGapSeconds, maxDurationSeconds: Self.chunkMergeMaxSeconds)
+    }
+
+    private static func mergeChunks(
+        _ chunks: [VADChunkMetric],
+        maxGapSeconds: Double,
+        maxDurationSeconds: Double
+    ) -> [VADChunkMetric] {
+        let sorted = chunks.sorted {
+            if $0.startSeconds == $1.startSeconds {
+                return $0.endSeconds < $1.endSeconds
+            }
+            return $0.startSeconds < $1.startSeconds
+        }
+        guard var current = sorted.first else { return [] }
+        var merged: [VADChunkMetric] = []
+
+        for next in sorted.dropFirst() {
+            let gap = max(0, next.startSeconds - current.endSeconds)
+            let mergedStart = min(current.startSeconds, next.startSeconds)
+            let mergedEnd = max(current.endSeconds, next.endSeconds)
+            let mergedDuration = mergedEnd - mergedStart
+            if gap <= maxGapSeconds, mergedDuration <= maxDurationSeconds {
+                current = VADChunkMetric(
+                    index: current.index,
+                    startSeconds: mergedStart,
+                    endSeconds: mergedEnd,
+                    durationSeconds: mergedDuration,
+                    trailingSilence: max(current.trailingSilence, next.trailingSilence),
+                    isPreview: false,
+                    sampleCount: max(0, Int((mergedDuration * Double(Self.sampleRate)).rounded()))
+                )
+            } else {
+                merged.append(current)
+                current = next
+            }
+        }
+        merged.append(current)
+        return merged.enumerated().map { index, chunk in
+            VADChunkMetric(
+                index: index,
+                startSeconds: chunk.startSeconds,
+                endSeconds: chunk.endSeconds,
+                durationSeconds: chunk.durationSeconds,
+                trailingSilence: chunk.trailingSilence,
+                isPreview: chunk.isPreview,
+                sampleCount: chunk.sampleCount
+            )
+        }
+    }
+
     nonisolated private static func metric(for chunk: AudioChunk, index: Int) -> VADChunkMetric {
         let start = chunk.startSeconds ?? 0
         let end = chunk.endSeconds ?? start + chunk.durationSeconds
@@ -424,6 +527,20 @@ struct VADBenchmarkTests {
             return defaultValue
         }
         return value
+    }
+
+    private static func nonNegativeDoubleEnv(_ key: String) -> Double? {
+        guard let rawValue = ProcessInfo.processInfo.environment[key],
+              let value = Double(rawValue),
+              value >= 0 else {
+            return nil
+        }
+        return value
+    }
+
+    private static func formatOptionalSeconds(_ value: Double?) -> String {
+        guard let value else { return "disabled" }
+        return String(format: "%.1f", value)
     }
 
     private struct SMIDocument: Decodable {
@@ -598,8 +715,10 @@ private struct VADBenchmarkMetric: Codable {
     let vad: String
     let available: Bool
     let error: String?
+    let config: VADBenchmarkConfigMetric
     let sample: String
     let seconds: Double
+    let rawChunkCount: Int
     let frameSeconds: Double
     let chunkCount: Int
     let previewCount: Int
@@ -621,8 +740,10 @@ private struct VADBenchmarkMetric: Codable {
         case vad
         case available
         case error
+        case config
         case sample
         case seconds
+        case rawChunkCount = "raw_chunk_count"
         case frameSeconds = "frame_seconds"
         case chunkCount = "chunk_count"
         case previewCount = "preview_count"
@@ -639,6 +760,26 @@ private struct VADBenchmarkMetric: Codable {
         case shortRecall = "short_recall"
         case chunks
         case previews
+    }
+}
+
+private struct VADBenchmarkConfigMetric: Codable {
+    let sileroThreshold: Double
+    let sileroMinSpeechSeconds: Double
+    let sileroMinSilenceSeconds: Double
+    let sileroSpeechPaddingSeconds: Double
+    let sileroMaxSpeechSeconds: Double
+    let chunkMergeGapSeconds: Double?
+    let chunkMergeMaxSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case sileroThreshold = "silero_threshold"
+        case sileroMinSpeechSeconds = "silero_min_speech_seconds"
+        case sileroMinSilenceSeconds = "silero_min_silence_seconds"
+        case sileroSpeechPaddingSeconds = "silero_speech_padding_seconds"
+        case sileroMaxSpeechSeconds = "silero_max_speech_seconds"
+        case chunkMergeGapSeconds = "chunk_merge_gap_seconds"
+        case chunkMergeMaxSeconds = "chunk_merge_max_seconds"
     }
 }
 
@@ -665,8 +806,10 @@ private struct VADChunkMetric: Codable {
 private struct VADSTTBenchmarkMetric: Codable {
     let vad: String
     let engine: String
+    let config: VADBenchmarkConfigMetric
     let sample: String
     let seconds: Double
+    let rawChunkCount: Int
     let totalChunkCount: Int
     let measuredChunkCount: Int
     let emptyCount: Int
@@ -681,8 +824,10 @@ private struct VADSTTBenchmarkMetric: Codable {
     enum CodingKeys: String, CodingKey {
         case vad
         case engine
+        case config
         case sample
         case seconds
+        case rawChunkCount = "raw_chunk_count"
         case totalChunkCount = "total_chunk_count"
         case measuredChunkCount = "measured_chunk_count"
         case emptyCount = "empty_count"
