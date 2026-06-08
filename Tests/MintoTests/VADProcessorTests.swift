@@ -223,4 +223,31 @@ struct VADProcessorTests {
         #expect(chunk == nil, "speech shorter than minSpeechDuration should not be drained")
         #expect(emittedChunks.isEmpty, "too-short flush should not emit through onChunk")
     }
+
+    @Test("flushPending: 짧은 발화 probe set은 0.5초 경계를 지킨다")
+    func flushPendingShortUtteranceProbeSet() async throws {
+        let probes: [(label: String, sampleCount: Int, shouldDrain: Bool)] = [
+            ("0.49s", 7_840, false),
+            ("0.50s", 8_000, true),
+            ("0.80s", 12_800, true)
+        ]
+
+        for probe in probes {
+            let vad = VADProcessor()
+            nonisolated(unsafe) var emittedChunks: [AudioChunk] = []
+            vad.onChunk = { emittedChunks.append($0) }
+
+            calibrate(vad)
+            vad.process(samples: [Float](repeating: 0.5, count: probe.sampleCount))
+
+            let chunk = await vad.flushPending()
+
+            #expect((chunk != nil) == probe.shouldDrain, "\(probe.label) probe drain expectation mismatch")
+            #expect(emittedChunks.isEmpty, "\(probe.label) probe should not emit through onChunk")
+            if probe.shouldDrain, let chunk {
+                let expectedDuration = Double(probe.sampleCount) / 16_000.0
+                #expect(abs(chunk.durationSeconds - expectedDuration) < 0.01)
+            }
+        }
+    }
 }
