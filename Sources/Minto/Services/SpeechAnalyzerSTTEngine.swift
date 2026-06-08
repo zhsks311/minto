@@ -38,12 +38,7 @@ final class SpeechAnalyzerSTTEngine: SpeechTranscriptionEngine {
         let audioFile = try AVAudioFile(forReading: url)
         let transcriber = SpeechTranscriber(locale: STTAudioUtilities.koreanLocale, preset: .transcription)
         let options = SpeechAnalyzer.Options(priority: .userInitiated, modelRetention: .whileInUse)
-        let analyzer = try await SpeechAnalyzer(
-            inputAudioFile: audioFile,
-            modules: [transcriber],
-            options: options,
-            finishAfterFile: true
-        )
+        let analyzer = SpeechAnalyzer(modules: [transcriber], options: options)
 
         let resultTask = Task<String, Error> {
             var fullText = ""
@@ -60,7 +55,19 @@ final class SpeechAnalyzerSTTEngine: SpeechTranscriptionEngine {
             return fullText.isEmpty ? latestText : fullText
         }
 
-        try await analyzer.start(inputAudioFile: audioFile, finishAfterFile: true)
+        do {
+            let lastSampleTime = try await analyzer.analyzeSequence(from: audioFile)
+            if let lastSampleTime {
+                try await analyzer.finalizeAndFinish(through: lastSampleTime)
+            } else {
+                await analyzer.cancelAndFinishNow()
+            }
+        } catch {
+            resultTask.cancel()
+            await analyzer.cancelAndFinishNow()
+            throw error
+        }
+
         let text = try await resultTask.value
         return STTAudioUtilities.transcriptionResult(
             text: text.trimmingCharacters(in: .whitespacesAndNewlines),

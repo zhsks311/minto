@@ -1,7 +1,8 @@
 import Testing
+import Foundation
+@testable import MintoCore
 
 #if compiler(>=6.3) && canImport(Speech)
-import Foundation
 import Speech
 #endif
 
@@ -48,7 +49,40 @@ struct SpeechAnalyzerAvailabilityTests {
         #endif
     }
 
+    @MainActor
+    @Test("SpeechAnalyzer 파일 전사 smoke")
+    func speechAnalyzerFileTranscriptionSmoke() async throws {
+        guard Self.isEnabled else { return }
+
+        #if compiler(>=6.3) && canImport(Speech)
+        guard #available(macOS 26.0, *) else {
+            return
+        }
+
+        let service = STTService()
+        await service.loadEngine(.speechAnalyzer)
+
+        guard case .loaded = service.modelState else {
+            Issue.record("SpeechAnalyzer 로드 실패: \(service.modelState)")
+            return
+        }
+
+        let samples = Self.sineWave(seconds: 2)
+        let result = try await service.transcribe(pcmSamples: samples)
+
+        #expect(result.isFinal)
+        #endif
+    }
+
     private static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["RUN_SPEECH_ANALYZER_POC"] == "1"
+    }
+
+    private static func sineWave(seconds: Int, hz: Float = 440, amplitude: Float = 0.3) -> [Float] {
+        let sampleRate = 16_000
+        let count = sampleRate * seconds
+        return (0..<count).map { index in
+            amplitude * sin(2 * .pi * hz * Float(index) / Float(sampleRate))
+        }
     }
 }
