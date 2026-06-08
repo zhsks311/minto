@@ -65,6 +65,7 @@ public final class TranscriptionViewModel: ObservableObject {
     private var correctionTask: Task<Void, Never>?
     // 진행 중 증분 요약 Task. drop-if-running(진행 중이면 이번 배치 skip)으로 호출·종료지연을 바운드한다.
     private var summaryTask: Task<Void, Never>?
+    private var transcriptTimelineStartDate: Date?
 
     // MARK: - Init
 
@@ -203,7 +204,8 @@ public final class TranscriptionViewModel: ObservableObject {
                     do {
                         let result = try await self.sttService.transcribe(pcmSamples: chunk.samples)
                         guard !Task.isCancelled else { return }
-                        self.pendingSegment = result.segment.text.isEmpty ? nil : result.segment
+                        let positioned = self.positionedResult(result, for: chunk)
+                        self.pendingSegment = positioned.segment.text.isEmpty ? nil : positioned.segment
                     } catch { /* preview 실패는 무시 */ }
                 }
             }
@@ -326,6 +328,7 @@ public final class TranscriptionViewModel: ObservableObject {
         correctionTask = nil
         summaryTask?.cancel()
         summaryTask = nil
+        transcriptTimelineStartDate = nil
         isFinalizingMeeting = false
     }
 
@@ -369,16 +372,48 @@ public final class TranscriptionViewModel: ObservableObject {
         let result = try await sttService.transcribe(pcmSamples: chunk.samples)
         guard result.segment.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let repairSamples = emptyFinalRepairSamples(for: chunk) else {
-            return result
+            return positionedResult(result, for: chunk)
         }
 
         let repaired = try await sttService.transcribe(pcmSamples: repairSamples)
         guard !repaired.segment.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return result
+            return positionedResult(result, for: chunk)
         }
 
         fputs("[VM] STT empty final repaired samples=\(repairSamples.count)\n", stderr)
-        return repaired
+        return positionedResult(repaired, for: chunk)
+    }
+
+    private func positionedResult(_ result: TranscriptionResult, for chunk: AudioChunk) -> TranscriptionResult {
+        let segment = result.segment
+        let timestamp: Date
+        if let startSeconds = chunk.startSeconds,
+           let timelineStart = transcriptTimelineStartDate {
+            timestamp = timelineStart.addingTimeInterval(startSeconds)
+        } else {
+            timestamp = segment.timestamp
+        }
+
+        let duration: TimeInterval
+        if let startSeconds = chunk.startSeconds,
+           let endSeconds = chunk.endSeconds,
+           endSeconds > startSeconds {
+            duration = endSeconds - startSeconds
+        } else if chunk.durationSeconds > 0 {
+            duration = chunk.durationSeconds
+        } else {
+            duration = segment.duration
+        }
+
+        return TranscriptionResult(
+            segment: Segment(
+                id: segment.id,
+                text: segment.text,
+                timestamp: timestamp,
+                duration: duration
+            ),
+            isFinal: result.isFinal
+        )
     }
 
     private func emptyFinalRepairSamples(for chunk: AudioChunk) -> [Float]? {
@@ -420,6 +455,7 @@ public final class TranscriptionViewModel: ObservableObject {
 
     private func startTimer() {
         recordingStartDate = Date()
+        transcriptTimelineStartDate = recordingStartDate
         timerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 200_000_000)  // 0.2s

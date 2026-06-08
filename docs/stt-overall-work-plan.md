@@ -490,6 +490,7 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 - LLM provider가 `none`이어도 누적 요약이 있으면 최종 요약은 평문 fallback으로 끝난다.
 - 요약이 없어도 전사가 있으면 저장 record와 Markdown export는 전사를 보존한다.
 - 새 회의 시작은 `startNewRecordingSession()`을 통해 이전 회의 전사와 preview를 비운 뒤 녹음을 시작한다.
+- preview/final segment의 timestamp와 duration은 STT 완료 시각이 아니라 VAD chunk의 `startSeconds`/`endSeconds` offset을 따른다.
 
 **남은 작업**
 
@@ -645,6 +646,8 @@ true streaming은 일부 streaming 지원 엔진에만 적용한다.
 **작업**
 
 - audio offset을 모든 segment에 보존한다.
+  - 현재 live preview/final segment는 VAD chunk offset을 timestamp/duration으로 반영한다.
+  - 다음은 benchmark/imported transcript와 diarization output도 같은 timeline 기준으로 맞춘다.
 - offline diarization을 먼저 붙인다.
 - speaker timeline과 transcript segment를 overlap으로 매칭한다.
 - FluidAudio diarization 또는 다른 local diarization 후보를 benchmark 전용으로 비교한다.

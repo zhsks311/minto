@@ -59,6 +59,7 @@ struct TranscriptionViewModelStopTests {
         let stt = StubSTTService(resultText: "마지막 발화")
         let viewModel = TranscriptionViewModel(sttService: stt, audioSource: audioSource, vadProcessor: vad)
 
+        let testStartedAt = Date()
         viewModel.startRecording()
         vad.pendingChunk = AudioChunk(
             samples: [Float](repeating: 0.5, count: 8_000),
@@ -76,7 +77,42 @@ struct TranscriptionViewModelStopTests {
         #expect(vad.flushCount == 1)
         #expect(stt.transcribedSampleCounts == [8_000])
         #expect(viewModel.committedSegments.map(\.text) == ["마지막 발화"])
+        let segment = try #require(viewModel.committedSegments.first)
+        #expect(segment.duration == 0.5)
+        let offset = segment.timestamp.timeIntervalSince(testStartedAt)
+        #expect(offset >= 0.9 && offset <= 1.5)
 
+        viewModel.clearTranscript()
+    }
+
+    @Test("preview chunk도 오디오 offset 기반 timestamp와 duration을 사용한다")
+    func previewChunkUsesAudioOffset() async throws {
+        let audioSource = StubAudioSource()
+        let vad = StubVoiceActivityDetector()
+        let stt = StubSTTService(resultText: "미리보기 발화")
+        let viewModel = TranscriptionViewModel(sttService: stt, audioSource: audioSource, vadProcessor: vad)
+
+        let testStartedAt = Date()
+        viewModel.startRecording()
+        vad.onPreviewChunk?(
+            AudioChunk(
+                samples: [Float](repeating: 0.5, count: 8_000),
+                durationSeconds: 0.5,
+                trailingSilence: 0,
+                isPreview: true,
+                startSeconds: 3.0,
+                endSeconds: 3.75
+            )
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let pending = try #require(viewModel.pendingSegment)
+        #expect(pending.text == "미리보기 발화")
+        #expect(pending.duration == 0.75)
+        let offset = pending.timestamp.timeIntervalSince(testStartedAt)
+        #expect(offset >= 2.9 && offset <= 3.5)
+
+        await viewModel.stopRecordingAndDrain()
         viewModel.clearTranscript()
     }
 
@@ -140,6 +176,8 @@ struct TranscriptionViewModelStopTests {
 
         #expect(stt.transcribedSampleCounts == [8_000, 16_000])
         #expect(viewModel.committedSegments.map(\.text) == ["복구된 발화"])
+        let segment = try #require(viewModel.committedSegments.first)
+        #expect(segment.duration == 0.5)
 
         viewModel.clearTranscript()
     }
