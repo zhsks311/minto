@@ -50,5 +50,6 @@ python3 scripts/nemotron_sidecar_mock.py --port 8765
 ## 다음 단계
 
 - 실제 `mlx-audio` Nemotron worker도 같은 HTTP 계약을 구현한다.
+- 실제 worker 문서: `docs/nemotron-mlx-sidecar.md`
 - 앱 연결 전에는 cold start latency, warm latency, timeout, peak memory를 먼저 기록한다.
 - meeting CER 비교는 mock이 아니라 실제 worker와 `sample/meeting` 전체 기준으로만 판단한다.

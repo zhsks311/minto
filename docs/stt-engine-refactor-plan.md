@@ -74,6 +74,12 @@
    - Keep it dependency-free so contract, timeout, warming, and metric handling can be tested without loading a large model.
    - The mock is not an ASR benchmark and must not be used as CER evidence.
    - Verify: run `/health` and `/transcribe` over localhost, then stop the worker in the same smoke command.
+12. Add a real Nemotron MLX worker scaffold on the same HTTP contract.
+   - `scripts/nemotron_mlx_sidecar.py`
+   - Use `mlx_audio.stt.load(modelID)` and `model.generate(wavPath)` for final chunk one-shot transcription.
+   - Convert the Swift f32le payload to a temporary 16kHz mono WAV before calling MLX Audio.
+   - Keep model loading lazy by default; use `--preload` for explicit cold-start measurement.
+   - Verify without model loading via `--help`, `--check-dependencies`, and Python compile checks; real CER validation requires a prepared MLX environment.
 
 ## Non-goals
 
