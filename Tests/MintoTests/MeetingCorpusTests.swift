@@ -38,7 +38,6 @@ struct MeetingCorpusTests {
         rawDir.appendingPathComponent(ProcessInfo.processInfo.environment["MEETING_SMI"] ?? "haengan_20260526_smi.json")
     }
 
-    private static let model = "openai_whisper-large-v3-v20240930_turbo"
     private static let sampleRate = 16_000
 
     /// 연속 자막을 이 길이(초)에 도달할 때까지 병합해 한 창으로 만든다.
@@ -78,15 +77,16 @@ struct MeetingCorpusTests {
 
         let samples = try Self.readWAVSamples(from: Self.audioURL)
 
-        let service = STTService()
-        await service.loadModel(variant: Self.model)
+        let service = try await STTBenchmarkEngineSupport.loadService()
         guard case .loaded = service.modelState else {
-            Issue.record("모델 로드 실패: \(service.modelState)")
+            Issue.record("엔진 로드 실패: \(service.modelState)")
             return
         }
+        let engineLabel = STTBenchmarkEngineSupport.displayName(for: service)
 
-        print("\n=== Meeting Corpus CER [\(Self.model)] (window=\(Self.windowSeconds)s, \(targetWindows.count)/\(windows.count) windows) ===")
+        print("\n=== Meeting Corpus CER [\(engineLabel)] (window=\(Self.windowSeconds)s, \(targetWindows.count)/\(windows.count) windows) ===")
 
+        let startedAt = Date()
         // micro-average: 총 편집거리 / 총 참조글자. 길이가 제각각인 창에서 짧은 창의
         // 노이즈(3글자 창의 1오류=33%)가 큰 분모에 희석돼 macro-average보다 안정적이다.
         var totalDistance = 0
@@ -129,13 +129,53 @@ struct MeetingCorpusTests {
         }
 
         let microCER = Double(totalDistance) / Double(totalRefLen)
-        let globalStats = Self.cerStats(reference: allRefText, hypothesis: allHypText)
-        let globalCER = globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0
+        let outputDirectory = ProcessInfo.processInfo.environment["MEETING_OUTPUT_DIR"]
+            .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+        if let outputDirectory {
+            try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+            let sample = Self.audioURL
+                .deletingPathExtension()
+                .lastPathComponent
+                .replacingOccurrences(of: "_full", with: "")
+            try allRefText.write(
+                to: outputDirectory.appendingPathComponent("\(sample)_ref.txt"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try allHypText.write(
+                to: outputDirectory.appendingPathComponent("\(sample)_hyp.txt"),
+                atomically: true,
+                encoding: .utf8
+            )
+            var metrics = STTBenchmarkEngineSupport.metricsMetadata(for: service)
+            metrics.merge([
+                "sample": sample,
+                "window_seconds": Self.windowSeconds,
+                "window_count": windowCount,
+                "empty_count": emptyCount,
+                "per_window_distance": totalDistance,
+                "per_window_ref_len": totalRefLen,
+                "per_window_cer": microCER,
+                "elapsed_seconds": Date().timeIntervalSince(startedAt)
+            ]) { _, new in new }
+            let data = try JSONSerialization.data(withJSONObject: metrics, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: outputDirectory.appendingPathComponent("\(sample)_metrics.json"))
+        }
+
+        let shouldSkipGlobalCER = ProcessInfo.processInfo.environment["MEETING_SKIP_SWIFT_GLOBAL_CER"] == "1"
+        let globalSummary: String
+        if shouldSkipGlobalCER {
+            globalSummary = "global(전체) CER  : skipped (external UTF-8 Levenshtein aggregation)"
+        } else {
+            let globalStats = Self.cerStats(reference: allRefText, hypothesis: allHypText)
+            let globalCER = globalStats.refLen > 0 ? Double(globalStats.distance) / Double(globalStats.refLen) : 0
+            globalSummary = "global(전체) CER  : \(String(format: "%.1f%%", globalCER * 100)) (전체 이어붙여 1회 정렬)  → 유사도 \(String(format: "%.1f%%", (1 - globalCER) * 100))"
+        }
         print("""
         ────────────────────────────────────────
         창 수             : \(windowCount) (빈 출력 \(emptyCount)개)
         per-window  CER   : \(String(format: "%.1f%%", microCER * 100)) (Σ편집거리 \(totalDistance) / 참조 \(totalRefLen)자)
-        global(전체) CER  : \(String(format: "%.1f%%", globalCER * 100)) (전체 이어붙여 1회 정렬)  → 유사도 \(String(format: "%.1f%%", (1 - globalCER) * 100))
+        \(globalSummary)
         ========================================
         ※ global이 per-window보다 낮으면 그 차이는 창 경계 드리프트(측정 아티팩트)다.
           방송 자막은 비verbatim이라 남는 CER에도 줄일 수 없는 바닥이 있다.
@@ -158,9 +198,8 @@ struct MeetingCorpusTests {
         guard FileManager.default.fileExists(atPath: Self.audioURL.path) else { return }
 
         let samples = try Self.readWAVSamples(from: Self.audioURL)
-        let service = STTService()
-        await service.loadModel(variant: Self.model)
-        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
+        let service = try await STTBenchmarkEngineSupport.loadService()
+        guard case .loaded = service.modelState else { Issue.record("엔진 로드 실패"); return }
 
         // haengan_20260526 기준. 모두 빈 출력이 정상(발화-빈출력 클립도 단일 패스에선 비어야 정상).
         let spans: [(String, Double, Double)] = [
@@ -228,11 +267,11 @@ struct MeetingCorpusTests {
         guard !targetWindows.isEmpty else { Issue.record("병합된 창이 없습니다"); return }
 
         let samples = try Self.readWAVSamples(from: Self.audioURL)
-        let service = STTService()
-        await service.loadModel(variant: Self.model)
-        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패: \(service.modelState)"); return }
+        let service = try await STTBenchmarkEngineSupport.loadService()
+        guard case .loaded = service.modelState else { Issue.record("엔진 로드 실패: \(service.modelState)"); return }
+        let engineLabel = STTBenchmarkEngineSupport.displayName(for: service)
 
-        print("\n=== 교정 기여도 측정 [\(Self.model) → Codex] (window=\(Self.windowSeconds)s, \(targetWindows.count)/\(windows.count)창) ===")
+        print("\n=== 교정 기여도 측정 [\(engineLabel) → Codex] (window=\(Self.windowSeconds)s, \(targetWindows.count)/\(windows.count)창) ===")
 
         var allRefText = ""
         var allRawText = ""
@@ -366,9 +405,8 @@ struct MeetingCorpusTests {
         let windows = Array(Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds).prefix(corrWindows))
         let samples = try Self.readWAVSamples(from: Self.audioURL)
 
-        let service = STTService()
-        await service.loadModel(variant: Self.model)
-        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
+        let service = try await STTBenchmarkEngineSupport.loadService()
+        guard case .loaded = service.modelState else { Issue.record("엔진 로드 실패"); return }
 
         print("\n=== 요약-as-context 교정 기여 측정 (\(windows.count)창, Codex) ===")
         var allRef = "", allNoSummary = "", allWithSummary = ""
@@ -444,9 +482,8 @@ struct MeetingCorpusTests {
         let probeWindows = Array(windows.prefix(8))
         let samples = try Self.readWAVSamples(from: Self.audioURL)
 
-        let service = STTService()
-        await service.loadModel(variant: Self.model)
-        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
+        let service = try await STTBenchmarkEngineSupport.loadService()
+        guard case .loaded = service.modelState else { Issue.record("엔진 로드 실패"); return }
 
         print("\n=== 회의 요약 end-to-end 스모크 (\(probeWindows.count)창) ===")
         var transcriptLines: [String] = []
@@ -507,9 +544,8 @@ struct MeetingCorpusTests {
         let windows = Array(Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds).prefix(6))
         let samples = try Self.readWAVSamples(from: Self.audioURL)
 
-        let service = STTService()
-        await service.loadModel(variant: Self.model)
-        guard case .loaded = service.modelState else { Issue.record("모델 로드 실패"); return }
+        let service = try await STTBenchmarkEngineSupport.loadService()
+        guard case .loaded = service.modelState else { Issue.record("엔진 로드 실패"); return }
         let llm = LLMCorrectionService.shared
 
         var transcriptCount = 0

@@ -26,10 +26,6 @@ struct StreamingChunkBenchmarkTests {
         rawDir.appendingPathComponent(ProcessInfo.processInfo.environment["MEETING_SMI"] ?? "haengan_20260526_smi.json")
     }
 
-    private static var model: String {
-        ProcessInfo.processInfo.environment["STT_MODEL"] ?? "openai_whisper-large-v3-v20240930_turbo"
-    }
-
     private static var maxSeconds: Double {
         positiveDoubleEnv("STREAM_MAX_SECONDS", default: 120.0)
     }
@@ -64,12 +60,12 @@ struct StreamingChunkBenchmarkTests {
         let captions = try Self.parseSMI(from: Self.smiURL)
         let reference = Self.referenceText(captions: captions, start: 0, end: totalSeconds)
 
-        let service = STTService()
-        await service.loadModel(variant: Self.model)
+        let service = try await STTBenchmarkEngineSupport.loadService()
         guard case .loaded = service.modelState else {
-            Issue.record("모델 로드 실패: \(service.modelState)")
+            Issue.record("엔진 로드 실패: \(service.modelState)")
             return
         }
+        let engineLabel = STTBenchmarkEngineSupport.displayName(for: service)
 
         var previewEvents = 0
         var previewNonEmpty = 0
@@ -88,24 +84,27 @@ struct StreamingChunkBenchmarkTests {
 
         var t = Self.previewStepSeconds
         while t <= totalSeconds {
-            let contextStart = max(0, t - Self.previewContextSeconds)
-            let clip = Self.slice(samples, start: contextStart, end: t)
-            let measured = try await Self.transcribeMeasured(service: service, samples: clip)
             previewEvents += 1
-            previewRTFs.append(measured.rtf)
 
-            let text = measured.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty {
-                previewNonEmpty += 1
-                if firstPreviewAt == nil {
-                    firstPreviewAt = t
+            if service.supportsPreviewTranscription {
+                let contextStart = max(0, t - Self.previewContextSeconds)
+                let clip = Self.slice(samples, start: contextStart, end: t)
+                let measured = try await Self.transcribeMeasured(service: service, samples: clip)
+                previewRTFs.append(measured.rtf)
+
+                let text = measured.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty {
+                    previewNonEmpty += 1
+                    if firstPreviewAt == nil {
+                        firstPreviewAt = t
+                    }
+                    if !lastPreviewText.isEmpty, text != lastPreviewText {
+                        previewRevisions += 1
+                        previewEditDistanceTotal += Self.editDistance(Array(lastPreviewText), Array(text))
+                    }
+                    lastPreviewText = text
+                    lastPreviewForFinal = text
                 }
-                if !lastPreviewText.isEmpty, text != lastPreviewText {
-                    previewRevisions += 1
-                    previewEditDistanceTotal += Self.editDistance(Array(lastPreviewText), Array(text))
-                }
-                lastPreviewText = text
-                lastPreviewForFinal = text
             }
 
             if t.truncatingRemainder(dividingBy: Self.finalWindowSeconds) < Self.previewStepSeconds {
@@ -136,9 +135,10 @@ struct StreamingChunkBenchmarkTests {
 
         print("""
 
-        === Streaming Chunk Benchmark [\(Self.model)] ===
+        === Streaming Chunk Benchmark [\(engineLabel)] ===
         audio                  : \(Self.audioURL.lastPathComponent)
         seconds                : \(String(format: "%.1f", totalSeconds))
+        preview support        : \(service.supportsPreviewTranscription ? "enabled" : "disabled")
         preview step/context   : \(String(format: "%.1f", Self.previewStepSeconds))s / \(String(format: "%.1f", Self.previewContextSeconds))s
         final window           : \(String(format: "%.1f", Self.finalWindowSeconds))s
         preview events         : \(previewEvents) (non-empty \(previewNonEmpty))
@@ -175,12 +175,12 @@ struct StreamingChunkBenchmarkTests {
         let captions = try Self.parseSMI(from: Self.smiURL)
         let reference = Self.referenceText(captions: captions, start: 0, end: totalSeconds)
 
-        let service = STTService()
-        await service.loadModel(variant: Self.model)
+        let service = try await STTBenchmarkEngineSupport.loadService()
         guard case .loaded = service.modelState else {
-            Issue.record("모델 로드 실패: \(service.modelState)")
+            Issue.record("엔진 로드 실패: \(service.modelState)")
             return
         }
+        let engineLabel = STTBenchmarkEngineSupport.displayName(for: service)
 
         let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
         var rawSegments: [Segment] = []
@@ -214,7 +214,7 @@ struct StreamingChunkBenchmarkTests {
 
         print("""
 
-        === Transcript Normalizer A/B [\(Self.model)] ===
+        === Transcript Normalizer A/B [\(engineLabel)] ===
         audio                  : \(Self.audioURL.lastPathComponent)
         seconds                : \(String(format: "%.1f", totalSeconds))
         raw window             : \(String(format: "%.1f", windowSeconds))s
