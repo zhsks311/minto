@@ -60,6 +60,83 @@ struct TranscriptionViewModelStopTests {
 
         viewModel.clearTranscript()
     }
+
+    @Test("empty final repair가 켜져 있으면 원본 buffer에서 padding을 붙여 한 번 재전사한다")
+    func emptyFinalRepairRetriesWithBufferedPadding() async throws {
+        let audioSource = StubAudioSource()
+        let vad = StubVoiceActivityDetector()
+        let stt = StubSTTService(resultTexts: ["", "복구된 발화"])
+        let policy = EmptyFinalRepairPolicy(
+            isEnabled: true,
+            padSeconds: 0.25,
+            minChunkSeconds: 0.5,
+            minAudioDB: -35,
+            maxBufferedSeconds: 5
+        )
+        let viewModel = TranscriptionViewModel(
+            sttService: stt,
+            audioSource: audioSource,
+            vadProcessor: vad,
+            emptyFinalRepairPolicy: policy
+        )
+
+        viewModel.startRecording()
+        audioSource.emit(samples: [Float](repeating: 0.5, count: 32_000))
+        vad.pendingChunk = AudioChunk(
+            samples: [Float](repeating: 0.5, count: 8_000),
+            durationSeconds: 0.5,
+            trailingSilence: 0,
+            startSeconds: 0.5,
+            endSeconds: 1.0
+        )
+
+        await viewModel.stopRecordingAndDrain()
+
+        #expect(stt.transcribedSampleCounts == [8_000, 16_000])
+        #expect(viewModel.committedSegments.map(\.text) == ["복구된 발화"])
+
+        viewModel.clearTranscript()
+    }
+
+    @Test("empty final repair guard에 걸리면 재전사하지 않고 preview를 유지한다")
+    func emptyFinalRepairGuardSkipsRetry() async throws {
+        let audioSource = StubAudioSource()
+        let vad = StubVoiceActivityDetector()
+        let stt = StubSTTService(resultTexts: ["", "재시도되면 안 됨"])
+        let policy = EmptyFinalRepairPolicy(
+            isEnabled: true,
+            padSeconds: 0.25,
+            minChunkSeconds: 2.0,
+            minAudioDB: -35,
+            maxBufferedSeconds: 5
+        )
+        let viewModel = TranscriptionViewModel(
+            sttService: stt,
+            audioSource: audioSource,
+            vadProcessor: vad,
+            emptyFinalRepairPolicy: policy
+        )
+        let preview = Segment(text: "미리보기 발화", timestamp: Date(), duration: 0.8)
+
+        viewModel.pendingSegment = preview
+        viewModel.startRecording()
+        audioSource.emit(samples: [Float](repeating: 0.5, count: 32_000))
+        vad.pendingChunk = AudioChunk(
+            samples: [Float](repeating: 0.5, count: 8_000),
+            durationSeconds: 0.5,
+            trailingSilence: 0,
+            startSeconds: 0.5,
+            endSeconds: 1.0
+        )
+
+        await viewModel.stopRecordingAndDrain()
+
+        #expect(stt.transcribedSampleCounts == [8_000])
+        #expect(viewModel.committedSegments.isEmpty)
+        #expect(viewModel.pendingSegment == preview)
+
+        viewModel.clearTranscript()
+    }
 }
 
 @MainActor
@@ -69,11 +146,15 @@ private final class StubSTTService: TranscriptionSTTServicing {
     var speechEngineID: SpeechEngineID = .whisperAccurate
     var supportsPreviewTranscription: Bool = true
     var onModelStateChange: ((ModelState) -> Void)?
-    private let resultText: String
+    private let resultTexts: [String]
     private(set) var transcribedSampleCounts: [Int] = []
 
     init(resultText: String) {
-        self.resultText = resultText
+        self.resultTexts = [resultText]
+    }
+
+    init(resultTexts: [String]) {
+        self.resultTexts = resultTexts.isEmpty ? [""] : resultTexts
     }
 
     func loadEngine(_ engineID: SpeechEngineID) async {
@@ -89,9 +170,10 @@ private final class StubSTTService: TranscriptionSTTServicing {
     }
 
     func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult {
+        let text = resultTexts[min(transcribedSampleCounts.count, resultTexts.count - 1)]
         transcribedSampleCounts.append(pcmSamples.count)
         return TranscriptionResult(
-            segment: Segment(text: resultText, timestamp: Date(), duration: Double(pcmSamples.count) / 16_000.0),
+            segment: Segment(text: text, timestamp: Date(), duration: Double(pcmSamples.count) / 16_000.0),
             isFinal: true
         )
     }
@@ -114,6 +196,10 @@ private final class StubAudioSource: AudioSourceProtocol {
     }
 
     func selectDevice(_ device: AudioDevice) throws {}
+
+    func emit(samples: [Float]) {
+        onBuffer?(samples)
+    }
 }
 
 private final class StubVoiceActivityDetector: VoiceActivityDetector, @unchecked Sendable {

@@ -42,6 +42,8 @@ public final class TranscriptionViewModel: ObservableObject {
     private var chunkContinuation: AsyncStream<AudioChunk>.Continuation?
     private let audioSource: AudioSourceProtocol
     private let vadProcessor: any VoiceActivityDetector
+    private let emptyFinalRepairPolicy: EmptyFinalRepairPolicy
+    private let audioSampleBuffer: TranscriptionAudioSampleBuffer
     private var state = TranscriptionState()
     private var recordingStartDate: Date?
 
@@ -77,11 +79,16 @@ public final class TranscriptionViewModel: ObservableObject {
     init(
         sttService: any TranscriptionSTTServicing,
         audioSource: AudioSourceProtocol,
-        vadProcessor: any VoiceActivityDetector
+        vadProcessor: any VoiceActivityDetector,
+        emptyFinalRepairPolicy: EmptyFinalRepairPolicy = .fromEnvironment()
     ) {
         self.sttService = sttService
         self.audioSource = audioSource
         self.vadProcessor = vadProcessor
+        self.emptyFinalRepairPolicy = emptyFinalRepairPolicy
+        self.audioSampleBuffer = TranscriptionAudioSampleBuffer(
+            maxBufferedSeconds: emptyFinalRepairPolicy.maxBufferedSeconds
+        )
 
         // STTService 상태 변화 → ViewModel @Published 전파
         self.sttService.onModelStateChange = { [weak self] state in
@@ -166,6 +173,7 @@ public final class TranscriptionViewModel: ObservableObject {
         guard !isRecording else { return }
         errorMessage = nil
         isFinalizingMeeting = false
+        audioSampleBuffer.reset()
         vadProcessor.reset()
         // 이전 회의의 관련 문서 조회 결과가 새 회의에 남지 않도록 초기화.
         RelatedInfoService.shared.clear()
@@ -197,6 +205,7 @@ public final class TranscriptionViewModel: ObservableObject {
 
         // AudioSource → VADProcessor + 레벨 미터
         audioSource.onBuffer = { [weak self] samples in
+            self?.audioSampleBuffer.append(samples)
             self?.vadProcessor.process(samples: samples)
         }
         audioSource.onLevel = { [weak self] level in
@@ -221,7 +230,7 @@ public final class TranscriptionViewModel: ObservableObject {
                 previewTask?.cancel()
                 previewTask = nil
                 do {
-                    let result = try await sttService.transcribe(pcmSamples: chunk.samples)
+                    let result = try await transcribeFinalChunk(chunk)
                     fputs("[VM] STT final result: '\(result.segment.text)'\n", stderr)
                     guard !result.segment.text.isEmpty else {
                         if pendingSegment != nil {
@@ -348,6 +357,32 @@ public final class TranscriptionViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func transcribeFinalChunk(_ chunk: AudioChunk) async throws -> TranscriptionResult {
+        let result = try await sttService.transcribe(pcmSamples: chunk.samples)
+        guard result.segment.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let repairSamples = emptyFinalRepairSamples(for: chunk) else {
+            return result
+        }
+
+        let repaired = try await sttService.transcribe(pcmSamples: repairSamples)
+        guard !repaired.segment.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return result
+        }
+
+        fputs("[VM] STT empty final repaired samples=\(repairSamples.count)\n", stderr)
+        return repaired
+    }
+
+    private func emptyFinalRepairSamples(for chunk: AudioChunk) -> [Float]? {
+        let audioDB = STTAudioUtilities.dbLevel(chunk.samples)
+        guard emptyFinalRepairPolicy.allowsRetry(for: chunk, audioDB: audioDB) else { return nil }
+        return audioSampleBuffer.paddedSamples(
+            startSeconds: chunk.startSeconds,
+            endSeconds: chunk.endSeconds,
+            padSeconds: emptyFinalRepairPolicy.padSeconds
+        )
     }
 
     /// 회의 종료 시 호출. 마지막 교정 완료를 기다린 뒤(SMELL-3) 남은 전사로 최종 요약을 생성해 반환한다.

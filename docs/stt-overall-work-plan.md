@@ -161,6 +161,8 @@ empty final 원인 분해를 위해 `WhisperEmptyClipDiagnosticsTests`에 full-d
 - 같은 all7 기준선 `repair 없음`: weighted CER 46.1%, macro CER 42.0%, empty 329, false-positive text 508 chars, RTF 0.121, peak memory 1120.4MB.
 - repair 시도/채택은 337회/204회였다. 샘플 7개 모두 weighted CER와 empty final은 개선됐지만, false-positive text는 508에서 628 chars로 늘었고 peak memory는 1673.3MB까지 상승했다.
 - 해석: all7 기준에서도 empty-only repair는 정확도와 empty final 문제를 실질적으로 줄인다. 하지만 비용과 부작용이 확인됐으므로 제품 기본값으로 승격하지 않는다. 다음은 `repair pad=1.0초` 그대로 제품 적용이 아니라, feature flag 전제의 더 좁은 guard 또는 더 작은 repair pad sweep을 먼저 검증한다.
+- 제품 경로에는 기본 off인 `MINTO_EMPTY_FINAL_REPAIR=1` feature flag로 empty-only repair 훅을 추가했다. live audio 원본 PCM을 짧게 보관하고, final STT가 empty일 때만 `startSeconds/endSeconds` 앞뒤 padding 구간을 한 번 재전사한다.
+- 제품 repair 기본 guard는 `pad=1.0초`, `min chunk=2.0초`, `min audio=-35dB`, `buffer=45초`다. 기본값은 off이므로 기존 녹음 UX와 기본 benchmark 경로는 바뀌지 않는다.
 - `repair pad=0.75초`도 120초 전체 7샘플에서 3회 반복했다. 결과 위치는 `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair075`, `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair075-repeat2`, `/private/tmp/minto2-vad-stt-120s-silero-pad012-repair075-repeat3`.
 - `repair pad=0.75초` 반복 결과: weighted CER 34.2%, 34.6%, 34.1%; Full Global CER 17.5%, 17.5%, 16.4%; empty 4, 4, 6; false-positive text 46, 46, 41 chars; RTF 0.124, 0.118, 0.126; peak memory 1238.2MB, 1239.7MB, 1036.8MB.
 - `repair pad=1.0초` 3회 평균은 weighted CER 34.0%, Full Global CER 16.6%, empty 5.3, false-positive text 41 chars, RTF 0.123, peak memory 1018.5MB다.
@@ -669,10 +671,10 @@ STT 기본값은 아래 조건을 모두 만족할 때만 바꾼다.
 ## 바로 다음 작업 순서
 
 1. repair guard sweep은 일단 멈춘다. 후보 A/B는 prune하고, 후보 C는 정확도 개선 후보가 아니라 memory guard 후보로만 남긴다.
-2. 제품 기본 후보는 no-guard empty-only repair가 아니라 feature-flagged empty-only repair다. no-guard는 CER/empty 개선이 가장 뚜렷하지만 all7 full-duration에서 false-positive text와 peak memory가 증가했다.
+2. 제품 기본 후보는 no-guard empty-only repair가 아니라 feature-flagged empty-only repair다. 기본 off 제품 훅은 추가됐고, no-guard는 CER/empty 개선이 가장 뚜렷하지만 all7 full-duration에서 false-positive text와 peak memory가 증가했다.
 3. 리소스 안전성을 우선하면 `min chunk=2.0초`, `min audio=-35dB` guard만 short3 full-duration으로 올린다. 이 후보는 3회 반복에서 peak memory를 낮췄지만 empty/RTF 이득이 명확하지 않으므로 default 승격 기준은 아니다.
 4. 정확도 우선이면 guard 추가 반복보다 WhisperKit turbo final-only 전체 baseline, Apple 엔진 smoke 복구, high-overlap empty segment 원인 분해를 먼저 한다.
-5. short3에서도 통과한 repair 후보만 제품 코드에 기본값이 아니라 feature flag와 안전 조건으로 붙인다.
+5. short3에서도 통과한 repair 후보만 제품 코드에 기본값이 아니라 feature flag와 안전 조건으로 붙인다. 현재 제품 훅은 붙었지만 default는 off다.
    - 첫 전사 결과가 empty일 때만 retry한다.
    - VAD speech chunk, 충분한 RMS, 충분한 chunk duration, retry 1회 제한 같은 조건을 둔다.
    - retry 결과가 비어 있거나 low confidence면 기존 preview/final 안정성 규칙을 유지한다.
