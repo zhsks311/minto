@@ -169,6 +169,11 @@ public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Recording control
 
+    public func startNewRecordingSession() {
+        clearTranscript()
+        startRecording()
+    }
+
     public func startRecording() {
         guard !isRecording else { return }
         errorMessage = nil

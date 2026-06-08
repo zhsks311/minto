@@ -6,6 +6,29 @@ import Testing
 @Suite("TranscriptionViewModel Stop/Drain")
 struct TranscriptionViewModelStopTests {
 
+    @Test("startNewRecordingSession은 이전 회의 전사와 미리보기를 새 세션에 남기지 않는다")
+    func startNewRecordingSessionClearsPreviousSessionState() async throws {
+        let audioSource = StubAudioSource()
+        let vad = StubVoiceActivityDetector()
+        let stt = StubSTTService(resultText: "새 발화")
+        let viewModel = TranscriptionViewModel(sttService: stt, audioSource: audioSource, vadProcessor: vad)
+
+        viewModel.committedSegments = [
+            Segment(text: "이전 테스트 회의 발화", timestamp: Date(), duration: 1.0)
+        ]
+        viewModel.pendingSegment = Segment(text: "이전 미리보기", timestamp: Date(), duration: 0.5)
+
+        viewModel.startNewRecordingSession()
+
+        #expect(viewModel.committedSegments.isEmpty)
+        #expect(viewModel.pendingSegment == nil)
+        #expect(audioSource.startCount == 1)
+        #expect(vad.resetCount == 1)
+
+        await viewModel.stopRecordingAndDrain()
+        viewModel.clearTranscript()
+    }
+
     @Test("stopRecordingAndDrain은 VAD 잔여 청크를 final 전사까지 drain한다")
     func stopRecordingDrainsPendingVADChunk() async throws {
         let audioSource = StubAudioSource()

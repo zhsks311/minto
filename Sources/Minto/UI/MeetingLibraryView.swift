@@ -76,7 +76,14 @@ public struct MeetingLibraryView: View {
             selectFirstAvailableIfNeeded()
         }
         .onChange(of: store.meetings) { _, _ in selectFirstAvailableIfNeeded() }
-        .onChange(of: searchText) { _, _ in selectFirstAvailableIfNeeded(preferFirstResult: true) }
+        .onChange(of: searchText) { _, _ in
+            if hasLiveMeeting {
+                showingLiveMeeting = true
+                selectedID = nil
+            } else {
+                selectFirstAvailableIfNeeded(preferFirstResult: true)
+            }
+        }
         .onChange(of: viewModel.isRecording) { _, isRecording in
             showingLiveMeeting = isRecording || viewModel.isFinalizingMeeting
             if !showingLiveMeeting {
@@ -1486,6 +1493,11 @@ public struct MeetingLibraryView: View {
             return
         }
         if preferFirstResult {
+            if hasLiveMeeting {
+                showingLiveMeeting = true
+                selectedID = nil
+                return
+            }
             selectedID = displayedMeetings.first?.id
             showingLiveMeeting = false
             return

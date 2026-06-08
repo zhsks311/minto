@@ -33,7 +33,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 guard let self else { return }
                 MeetingContext.shared.start(topic: topic, glossary: glossary, document: document)
                 self.reportService.startNewReport(startedAt: Date())
-                self.viewModel.startRecording()
+                self.viewModel.startNewRecordingSession()
                 self.mainWindowManager.show()
             },
             onCancel: {}
