@@ -55,6 +55,14 @@ protocol NemotronSidecarTransport: Sendable {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
+protocol NemotronSidecarTranscribing: Sendable {
+    func health() async throws -> NemotronSidecarHealth
+    func transcribe(
+        pcmSamples: [Float],
+        requestID: String?
+    ) async throws -> NemotronSidecarTranscription
+}
+
 struct URLSessionNemotronSidecarTransport: NemotronSidecarTransport {
     let session: URLSession
 
@@ -169,6 +177,8 @@ struct NemotronSidecarClient: Sendable {
         return data
     }
 }
+
+extension NemotronSidecarClient: NemotronSidecarTranscribing {}
 
 private struct HealthResponse: Decodable {
     let status: String

@@ -86,6 +86,12 @@
    - Send the same f32le base64 payload as the Swift client.
    - Record per-window CER, global CER, client latency, sidecar RTF, peak memory, and health before/after.
    - Verify with the mock worker only as a contract smoke; real CER evidence requires the MLX worker.
+14. Add a Swift sidecar transcriber adapter without registering it as a product engine.
+   - `NemotronSidecarTranscriber`
+   - Reuse `STTAudioUtilities` for padding, silence skip, and `TranscriptionResult` creation.
+   - Check `/health` before treating the sidecar as ready.
+   - Keep `SpeechEngineID`, settings UI, default fallback, and `STTService.makeEngine` unchanged.
+   - Verify with a stub client for ready/not-ready, padding, request id, final result, and silent-skip behavior.
 
 ## Non-goals
 

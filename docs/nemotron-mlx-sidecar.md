@@ -80,6 +80,14 @@ mock worker로도 runner smoke는 가능하지만, mock transcript는 CER 근거
   - worker 내부에서 Float32 PCM을 임시 16kHz mono WAV로 변환한 뒤 `model.generate()`에 전달한다.
 - `scripts/nemotron_sidecar_bench.py`는 WAV 전체를 메모리에 올리지 않고 window별로 읽어서 같은 계약으로 요청한다.
 
+## Swift 연결 상태
+
+- `NemotronSidecarClient`는 `/health`와 `/transcribe` HTTP 계약을 구현한다.
+- `NemotronSidecarTranscriber`는 sidecar 응답을 앱 내부 `TranscriptionResult`로 변환한다.
+- 이 adapter는 0.5초 미만 입력 padding과 무음 skip을 기존 엔진들과 같은 `STTAudioUtilities`로 처리한다.
+- 아직 `SpeechEngineID`, 설정 UI, 기본 fallback, `STTService.makeEngine`에는 연결하지 않았다.
+- 제품 선택지로 노출하기 전에는 mock worker가 아니라 실제 MLX worker로 전체 `sample/meeting` CER, latency, peak memory, 장시간 안정성을 확인해야 한다.
+
 ## 주의
 
 - 이 worker는 true streaming이 아니라 final chunk용 one-shot sidecar다.
