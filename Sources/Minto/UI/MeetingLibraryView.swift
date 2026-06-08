@@ -1269,7 +1269,15 @@ public struct MeetingLibraryView: View {
 
     private var displayedMeetings: [MeetingRecord] {
         guard isSearching else { return store.meetings }
-        return store.meetings.filter { recordMatches($0) }
+        let recordsByID = Dictionary(uniqueKeysWithValues: store.meetings.map { ($0.id, $0) })
+        var seen = Set<UUID>()
+        return meetingSearchResults.compactMap { result in
+            guard !seen.contains(result.meetingID), let record = recordsByID[result.meetingID] else {
+                return nil
+            }
+            seen.insert(result.meetingID)
+            return record
+        }
     }
 
     private var selectedRecord: MeetingRecord? {
@@ -1279,50 +1287,14 @@ public struct MeetingLibraryView: View {
         return displayedMeetings.first
     }
 
-    private func recordMatches(_ record: MeetingRecord) -> Bool {
-        let query = trimmedSearch
-        guard !query.isEmpty else { return true }
-        return displayTitle(for: record).localizedCaseInsensitiveContains(query)
-            || record.topic.localizedCaseInsensitiveContains(query)
-            || outcomeSearchText(record.summary).localizedCaseInsensitiveContains(query)
-            || record.summary.markdown().localizedCaseInsensitiveContains(query)
-            || record.transcript.contains { $0.text.localizedCaseInsensitiveContains(query) }
+    private var meetingSearchResults: [MeetingSearchResult] {
+        guard isSearching else { return [] }
+        return MeetingSearchIndex(records: store.meetings).search(trimmedSearch, limit: Int.max)
     }
 
     private func primaryMatch(for record: MeetingRecord) -> MeetingSearchMatch {
-        let query = trimmedSearch
-        if !query.isEmpty {
-            if displayTitle(for: record).localizedCaseInsensitiveContains(query) {
-                return MeetingSearchMatch(badge: "제목", text: displayTitle(for: record))
-            }
-            if record.topic.localizedCaseInsensitiveContains(query) {
-                return MeetingSearchMatch(badge: "주제", text: record.topic)
-            }
-            if let decision = visibleDecisions(record.summary.decisions).first(where: { $0.text.localizedCaseInsensitiveContains(query) }) {
-                return MeetingSearchMatch(badge: decision.time.isEmpty ? "결정" : decision.time, text: "결정: \(decision.text)")
-            }
-            if let item = visibleActionItems(record.summary.actionItems).first(where: { actionItemMatches($0, query: query) }) {
-                return MeetingSearchMatch(badge: item.time.isEmpty ? "할 일" : item.time, text: "할 일: \(item.task)")
-            }
-            if let question = visibleOpenQuestions(record.summary.openQuestions).first(where: { $0.text.localizedCaseInsensitiveContains(query) }) {
-                return MeetingSearchMatch(badge: question.time.isEmpty ? "질문" : question.time, text: "질문: \(question.text)")
-            }
-            if let section = record.summary.sections.first(where: { section in
-                section.title.localizedCaseInsensitiveContains(query)
-                    || section.points.contains { point in
-                        point.text.localizedCaseInsensitiveContains(query)
-                            || point.subPoints.contains { $0.localizedCaseInsensitiveContains(query) }
-                    }
-            }) {
-                let text = section.points.first?.text ?? section.title
-                return MeetingSearchMatch(badge: section.time.isEmpty ? "요약" : section.time, text: text)
-            }
-            if record.summary.markdown().localizedCaseInsensitiveContains(query) {
-                return MeetingSearchMatch(badge: "요약", text: record.summary.leadAnswer)
-            }
-            if let segment = record.transcript.first(where: { $0.text.localizedCaseInsensitiveContains(query) }) {
-                return MeetingSearchMatch(badge: relativeTimestamp(segment, in: record), text: segment.text)
-            }
+        if isSearching, let result = meetingSearchResults.first(where: { $0.meetingID == record.id }) {
+            return MeetingSearchMatch(badge: result.label, text: result.preview)
         }
 
         if !record.summary.leadAnswer.isEmpty {
@@ -1393,12 +1365,6 @@ public struct MeetingLibraryView: View {
 
     private func visibleOpenQuestions(_ questions: [MeetingSummary.OpenQuestion]) -> [MeetingSummary.OpenQuestion] {
         questions.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    }
-
-    private func actionItemMatches(_ item: MeetingSummary.ActionItem, query: String) -> Bool {
-        item.task.localizedCaseInsensitiveContains(query)
-            || item.owner.localizedCaseInsensitiveContains(query)
-            || item.due.localizedCaseInsensitiveContains(query)
     }
 
     private func actionMetadata(_ item: MeetingSummary.ActionItem) -> String {

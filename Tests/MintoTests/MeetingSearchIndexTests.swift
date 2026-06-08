@@ -1,0 +1,169 @@
+import Foundation
+import Testing
+@testable import MintoCore
+
+@Suite("MeetingSearchIndex")
+struct MeetingSearchIndexTests {
+    private func sampleRecord(transcriptID: UUID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!) -> MeetingRecord {
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        return MeetingRecord(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            title: "db 스키마 형상 관리 툴 적용과 기록 방식",
+            startedAt: startedAt,
+            durationSeconds: 245,
+            topic: "Liquibase와 Flyway 비교",
+            summary: MeetingSummary(
+                title: "db 스키마 형상 관리",
+                leadQuestion: "db 스키마 변경을 어떻게 기록할까?",
+                leadAnswer: "flyway와 liquibase로 SQL 변경 이력을 관리하는 방식을 논의했다.",
+                sections: [
+                    .init(
+                        title: "1. flyway를 통한 스키마 변경 적용",
+                        time: "01:02",
+                        points: [
+                            .init(text: "버전 기반 SQL 변경 적용", subPoints: [
+                                "price 컬럼을 추가하려면 SQL 파일을 V2로 추가한다.",
+                                "히스토리 테이블에 적용 기록이 남는다."
+                            ])
+                        ]
+                    ),
+                    .init(
+                        title: "2. liquibase 방식과 xml 관리",
+                        time: "01:30",
+                        points: [
+                            .init(text: "DDL을 XML 파일로 관리한다.", subPoints: [
+                                "change-log-master.xml include 문법을 쓴다."
+                            ])
+                        ]
+                    )
+                ],
+                keywords: ["flyway", "liquibase", "db", "마이그레이션"],
+                decisions: [.init(text: "DB 형상 관리 자체는 중요하다.", time: "03:22")],
+                actionItems: [.init(task: "팀 적용 범위를 다시 검토한다.", owner: "민토", due: "다음 회의", time: "03:45")],
+                openQuestions: [.init(text: "엔티티 변경을 SQL 파일로 다시 만드는 과정이 번거로운가?", time: "02:32")]
+            ),
+            transcript: [
+                Segment(
+                    id: transcriptID,
+                    text: "컬럼 추가와 인덱스 추가 이력을 추적해야 합니다.",
+                    timestamp: startedAt.addingTimeInterval(132),
+                    duration: 8
+                )
+            ]
+        )
+    }
+
+    @Test("회의 한 건을 검색 가능한 chunk로 분리한다")
+    func buildsChunks() {
+        let chunks = MeetingSearchIndex.chunks(for: sampleRecord())
+
+        #expect(chunks.contains { $0.kind == .title })
+        #expect(chunks.contains { $0.kind == .topic })
+        #expect(chunks.contains { $0.kind == .summary })
+        #expect(chunks.contains { $0.kind == .section && $0.time == "01:02" })
+        #expect(chunks.contains { $0.kind == .decision && $0.time == "03:22" })
+        #expect(chunks.contains { $0.kind == .actionItem && $0.text.contains("민토") })
+        #expect(chunks.contains { $0.kind == .openQuestion })
+        #expect(chunks.contains { $0.kind == .transcript && $0.time == "02:12" })
+        #expect(chunks.allSatisfy { $0.chunkingVersion == MeetingSearchIndex.chunkingVersion })
+        #expect(chunks.contains { $0.sourcePath == "summary.sections[0]" })
+        #expect(chunks.contains { $0.sourcePath.hasPrefix("transcript[") })
+    }
+
+    @Test("같은 회의를 다시 index해도 chunk id와 checksum이 안정적이다")
+    func chunksAreDeterministic() {
+        let first = MeetingSearchIndex.chunks(for: sampleRecord())
+        let second = MeetingSearchIndex.chunks(for: sampleRecord())
+
+        #expect(first.map(\.id) == second.map(\.id))
+        #expect(first.map(\.checksum) == second.map(\.checksum))
+    }
+
+    @Test("전사 segment UUID가 달라도 같은 내용과 시간은 같은 chunk id를 만든다")
+    func transcriptChunkDoesNotDependOnSegmentID() {
+        let first = MeetingSearchIndex.chunks(for: sampleRecord(transcriptID: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!))
+        let second = MeetingSearchIndex.chunks(for: sampleRecord(transcriptID: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!))
+
+        let firstTranscript = first.first { $0.kind == .transcript }
+        let secondTranscript = second.first { $0.kind == .transcript }
+        #expect(firstTranscript?.id == secondTranscript?.id)
+        #expect(firstTranscript?.sourcePath == "transcript[0]")
+    }
+
+    @Test("회의 검색은 제목보다 세부 chunk가 맞아도 회의를 찾는다")
+    func searchFindsMatchingChunks() {
+        let record = sampleRecord()
+        let index = MeetingSearchIndex(records: [record])
+
+        let results = index.search("change-log-master include", limit: 5)
+
+        #expect(results.first?.meetingID == record.id)
+        #expect(results.contains { $0.chunk.kind == .section })
+        #expect(results.first?.preview.contains("change-log-master.xml") == true)
+    }
+
+    @Test("빈 검색어는 결과를 반환하지 않는다")
+    func blankQueryReturnsEmpty() {
+        let index = MeetingSearchIndex(records: [sampleRecord()])
+
+        #expect(index.search("  ").isEmpty)
+    }
+
+    @Test("DB 스키마 형상 관리 질의는 관련 회의를 반환한다")
+    func dbSchemaQueryFindsMeeting() {
+        let record = sampleRecord()
+        let other = MeetingRecord(
+            id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+            title: "제품 리뷰",
+            startedAt: record.startedAt.addingTimeInterval(-100),
+            durationSeconds: 60,
+            summary: MeetingSummary(leadAnswer: "릴리즈 일정만 논의했다."),
+            transcript: [Segment(text: "제품 화면을 확인했다.", timestamp: record.startedAt, duration: 3)]
+        )
+        let index = MeetingSearchIndex(records: [other, record])
+
+        let results = index.search("db 스키마 형상 관리", limit: 5)
+
+        #expect(results.first?.meetingID == record.id)
+        #expect(results.first?.label == "제목")
+    }
+
+    @Test("제목과 전사가 모두 맞으면 제목 chunk가 대표 결과가 된다")
+    func titleWinsOverTranscriptForSameMatch() {
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let record = MeetingRecord(
+            id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
+            title: "예산 검토",
+            startedAt: startedAt,
+            durationSeconds: 30,
+            transcript: [
+                Segment(
+                    id: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
+                    text: "예산 검토",
+                    timestamp: startedAt.addingTimeInterval(10),
+                    duration: 3
+                )
+            ]
+        )
+
+        let results = MeetingSearchIndex(records: [record]).search("예산 검토", limit: 5)
+
+        #expect(results.first?.chunk.kind == .title)
+        #expect(results.first?.label == "제목")
+    }
+
+    @Test("악센트 차이는 같은 검색어로 취급한다")
+    func searchFoldsDiacritics() {
+        let record = MeetingRecord(
+            id: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!,
+            title: "Cafe 리뷰",
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            durationSeconds: 20,
+            summary: MeetingSummary(leadAnswer: "café 메뉴를 검토했다.")
+        )
+
+        let results = MeetingSearchIndex(records: [record]).search("cafe", limit: 5)
+
+        #expect(results.contains { $0.chunk.kind == .summary })
+    }
+}
