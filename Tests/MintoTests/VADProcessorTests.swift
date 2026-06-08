@@ -197,6 +197,12 @@ struct VADProcessorTests {
         #expect(chunk != nil, "0.8s speech should be drained at stop")
         #expect(chunk?.durationSeconds ?? 0 >= 0.79)
         #expect(chunk?.durationSeconds ?? 0 <= 0.81)
+        #expect(chunk?.startSeconds != nil)
+        #expect(chunk?.endSeconds != nil)
+        if let chunk, let start = chunk.startSeconds, let end = chunk.endSeconds {
+            #expect(end > start)
+            #expect(abs((end - start) - chunk.durationSeconds) < 0.01)
+        }
         #expect(emittedChunks.isEmpty, "flushPending should return the chunk without calling onChunk")
 
         let secondDrain = await vad.flushPending()

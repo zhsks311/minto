@@ -30,13 +30,24 @@ public struct AudioChunk: Sendable {
     public let samples: [Float]
     public let durationSeconds: Double
     public let trailingSilence: TimeInterval
+    public let startSeconds: Double?
+    public let endSeconds: Double?
     /// true이면 VAD가 아직 말 중인 동안 발행한 미리보기 청크 (pendingSegment 전용)
     public let isPreview: Bool
 
-    public init(samples: [Float], durationSeconds: Double, trailingSilence: TimeInterval, isPreview: Bool = false) {
+    public init(
+        samples: [Float],
+        durationSeconds: Double,
+        trailingSilence: TimeInterval,
+        isPreview: Bool = false,
+        startSeconds: Double? = nil,
+        endSeconds: Double? = nil
+    ) {
         self.samples = samples
         self.durationSeconds = durationSeconds
         self.trailingSilence = trailingSilence
+        self.startSeconds = startSeconds
+        self.endSeconds = endSeconds
         self.isPreview = isPreview
     }
 }

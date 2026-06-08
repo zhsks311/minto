@@ -42,6 +42,8 @@ public final class VADProcessor: @unchecked Sendable {
     private var lastPreviewTime: Date = .distantPast
     /// 이번 녹음에서 방출한 청크 수 — 0이면 ramp-up(짧은 첫 청크) 적용
     private var emittedChunkCount: Int = 0
+    private var processedSampleCount: Int = 0
+    private var bufferStartSample: Int?
 
     // MARK: - Init
 
@@ -77,6 +79,8 @@ public final class VADProcessor: @unchecked Sendable {
             self.buffer = []
             self.silenceSampleCount = 0
             self.emittedChunkCount = 0
+            self.processedSampleCount = 0
+            self.bufferStartSample = nil
             self.lastPreviewTime = .distantPast
         }
     }
@@ -84,6 +88,9 @@ public final class VADProcessor: @unchecked Sendable {
     // MARK: - Private
 
     private func processInternal(samples: [Float]) {
+        let frameStartSample = processedSampleCount
+        defer { processedSampleCount += samples.count }
+
         let energyDB = computeEnergyDB(samples: samples)
 
         if isCalibrating {
@@ -109,6 +116,9 @@ public final class VADProcessor: @unchecked Sendable {
             }
         } else {
             silenceSampleCount = 0
+            if buffer.isEmpty {
+                bufferStartSample = frameStartSample
+            }
             buffer.append(contentsOf: samples)
             let chunkCap = emittedChunkCount == 0
                 ? VADProcessor.firstChunkMaxSamples
@@ -122,9 +132,17 @@ public final class VADProcessor: @unchecked Sendable {
                     let previewSamples = buffer.count > VADProcessor.maxPreviewWindowSamples
                         ? Array(buffer.suffix(VADProcessor.maxPreviewWindowSamples))
                         : buffer
+                    let previewStartSample = (bufferStartSample ?? frameStartSample) + max(0, buffer.count - previewSamples.count)
+                    let previewEndSample = previewStartSample + previewSamples.count
                     let dur = Double(previewSamples.count) / VADProcessor.sampleRate
-                    let chunk = AudioChunk(samples: previewSamples, durationSeconds: dur,
-                                          trailingSilence: 0, isPreview: true)
+                    let chunk = AudioChunk(
+                        samples: previewSamples,
+                        durationSeconds: dur,
+                        trailingSilence: 0,
+                        isPreview: true,
+                        startSeconds: Double(previewStartSample) / VADProcessor.sampleRate,
+                        endSeconds: Double(previewEndSample) / VADProcessor.sampleRate
+                    )
                     DispatchQueue.main.async { [weak self] in
                         self?.onPreviewChunk?(chunk)
                     }
@@ -150,14 +168,19 @@ public final class VADProcessor: @unchecked Sendable {
         }
 
         let samples = buffer
+        let startSample = bufferStartSample ?? max(0, processedSampleCount - samples.count)
+        let endSample = startSample + samples.count
         let durationSeconds = Double(samples.count) / VADProcessor.sampleRate
         let chunk = AudioChunk(
             samples: samples,
             durationSeconds: durationSeconds,
-            trailingSilence: trailingSilence
+            trailingSilence: trailingSilence,
+            startSeconds: Double(startSample) / VADProcessor.sampleRate,
+            endSeconds: Double(endSample) / VADProcessor.sampleRate
         )
 
         buffer = []
+        bufferStartSample = nil
         silenceSampleCount = 0
         lastPreviewTime = .distantPast
         // ramp-up은 "연속 발화의 첫 강제 분할"을 짧게 하려는 것이므로,
