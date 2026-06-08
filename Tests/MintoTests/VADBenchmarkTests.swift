@@ -58,6 +58,10 @@ struct VADBenchmarkTests {
         Float(positiveDoubleEnv("SILERO_VAD_THRESHOLD", default: 0.5))
     }
 
+    private static var energyNoiseOffsetDB: Float {
+        Float(nonNegativeDoubleEnv("ENERGY_VAD_NOISE_OFFSET_DB") ?? 10.0)
+    }
+
     private static var sileroMinSpeechSeconds: Double {
         positiveDoubleEnv("SILERO_MIN_SPEECH_SEC", default: 0.25)
     }
@@ -99,6 +103,7 @@ struct VADBenchmarkTests {
 
     private static var benchmarkConfig: VADBenchmarkConfigMetric {
         VADBenchmarkConfigMetric(
+            energyNoiseOffsetDB: Double(Self.energyNoiseOffsetDB),
             sileroThreshold: Double(Self.sileroThreshold),
             sileroMinSpeechSeconds: Self.sileroMinSpeechSeconds,
             sileroMinSilenceSeconds: Self.sileroMinSilenceSeconds,
@@ -286,6 +291,7 @@ struct VADBenchmarkTests {
                 "raw_chunk_count": "\(rawChunks.count)",
                 "total_chunk_count": "\(allChunks.count)",
                 "measured_chunk_count": "\(chunkMetrics.count)",
+                "energy_noise_offset_db": "\(Self.benchmarkConfig.energyNoiseOffsetDB)",
                 "chunk_merge_gap_seconds": Self.formatOptionalSeconds(Self.benchmarkConfig.chunkMergeGapSeconds),
                 "chunk_merge_max_seconds": "\(Self.benchmarkConfig.chunkMergeMaxSeconds)",
                 "silero_threshold": "\(Self.benchmarkConfig.sileroThreshold)",
@@ -425,7 +431,7 @@ struct VADBenchmarkTests {
         from samples: [Float],
         totalSeconds: Double
     ) async -> (final: [VADChunkMetric], previews: [VADChunkMetric]) {
-        let detector: any VoiceActivityDetector = VADProcessor()
+        let detector: any VoiceActivityDetector = VADProcessor(noiseOffsetDB: Self.energyNoiseOffsetDB)
         nonisolated(unsafe) var finalChunks: [VADChunkMetric] = []
         nonisolated(unsafe) var previewChunks: [VADChunkMetric] = []
 
@@ -798,6 +804,7 @@ private struct VADBenchmarkMetric: Codable {
 }
 
 private struct VADBenchmarkConfigMetric: Codable {
+    let energyNoiseOffsetDB: Double
     let sileroThreshold: Double
     let sileroMinSpeechSeconds: Double
     let sileroMinSilenceSeconds: Double
@@ -807,6 +814,7 @@ private struct VADBenchmarkConfigMetric: Codable {
     let chunkMergeMaxSeconds: Double
 
     enum CodingKeys: String, CodingKey {
+        case energyNoiseOffsetDB = "energy_noise_offset_db"
         case sileroThreshold = "silero_threshold"
         case sileroMinSpeechSeconds = "silero_min_speech_seconds"
         case sileroMinSilenceSeconds = "silero_min_silence_seconds"

@@ -149,6 +149,15 @@ scripts/run_meeting_vad_benchmarks.py \
   --merge-gap-sec 1.1
 ```
 
+Run an Energy threshold sweep by changing the noise offset. The production default is `10`:
+
+```bash
+scripts/run_meeting_vad_benchmarks.py \
+  --engines energy \
+  --max-seconds 120 \
+  --energy-noise-offset-db 6
+```
+
 ## VAD chunk STT run
 
 To measure whether a VAD policy improves actual WhisperKit chunk CER, run VAD chunk STT mode:

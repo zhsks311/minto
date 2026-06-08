@@ -46,7 +46,7 @@ def summarize_by_vad(metrics):
 
     rows = []
     for key, items in sorted(groups.items()):
-        vad, merge_gap_seconds, merge_max_seconds = key
+        vad, energy_noise_offset_db, silero_threshold, merge_gap_seconds, merge_max_seconds = key
         total_seconds = sum(float(item.get("seconds") or 0) for item in items)
         total_reference = sum(float(item.get("reference_speech_seconds") or 0) for item in items)
         total_covered = sum(float(item.get("covered_speech_seconds") or 0) for item in items)
@@ -68,6 +68,8 @@ def summarize_by_vad(metrics):
         ]
         rows.append({
             "vad": vad,
+            "energy_noise_offset_db": energy_noise_offset_db,
+            "silero_threshold": silero_threshold,
             "merge_gap_seconds": merge_gap_seconds,
             "merge_max_seconds": merge_max_seconds,
             "sample_count": len(items),
@@ -101,6 +103,8 @@ def group_key(metric):
     config = metric.get("config") or {}
     return (
         metric["vad"],
+        config.get("energy_noise_offset_db"),
+        config.get("silero_threshold"),
         config.get("chunk_merge_gap_seconds"),
         config.get("chunk_merge_max_seconds"),
     )
@@ -108,13 +112,15 @@ def group_key(metric):
 
 def markdown_table(rows):
     lines = [
-        "| VAD | Merge gap | Merge max | Samples | Available | Chunks | Raw chunks | Chunks/min | Speech recall | Short recall | Missed sec | FP sec | FP ratio |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| VAD | Energy offset | Silero threshold | Merge gap | Merge max | Samples | Available | Chunks | Raw chunks | Chunks/min | Speech recall | Short recall | Missed sec | FP sec | FP ratio |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         lines.append(
-            "| {vad} | {merge_gap} | {merge_max} | {samples} | {available} | {chunks} | {raw_chunks} | {chunks_per_minute} | {speech_recall} | {short_recall} | {missed} | {fp_sec} | {fp_ratio} |".format(
+            "| {vad} | {energy_offset} | {silero_threshold} | {merge_gap} | {merge_max} | {samples} | {available} | {chunks} | {raw_chunks} | {chunks_per_minute} | {speech_recall} | {short_recall} | {missed} | {fp_sec} | {fp_ratio} |".format(
                 vad=row["vad"],
+                energy_offset=fmt_float(row["energy_noise_offset_db"]),
+                silero_threshold=fmt_float(row["silero_threshold"]),
                 merge_gap=fmt_float(row["merge_gap_seconds"]),
                 merge_max=fmt_float(row["merge_max_seconds"]),
                 samples=row["sample_count"],
@@ -135,6 +141,8 @@ def markdown_table(rows):
 def write_csv(path, rows):
     fieldnames = [
         "vad",
+        "energy_noise_offset_db",
+        "silero_threshold",
         "merge_gap_seconds",
         "merge_max_seconds",
         "sample_count",

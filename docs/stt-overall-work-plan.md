@@ -67,6 +67,12 @@ Energy VAD merge 정책도 같은 7개 120초 기준선에서 확인했다.
 - `merge gap=1.1초`, `merge max=30초`: chunk는 54개로 1개 줄었지만 speech recall 65.0%, short recall 62.7%로 동일했고, false-positive는 205.3초로 늘었다.
 - 해석: 현재 누락은 단순히 가까운 chunk를 이어 붙여 해결되는 문제가 아니다. 15초 chunk 상한을 유지한 merge gap 조정은 우선순위가 낮고, 다음 VAD 실험은 Energy threshold 계열 또는 Silero VAD처럼 speech/non-speech 판정 자체가 달라지는 후보를 봐야 한다.
 
+Energy threshold와 Silero VAD도 같은 7개 120초 기준선에서 확인했다.
+
+- Energy `noise offset=6dB`: chunk 55개, speech recall 72.8%, short recall 73.1%, missed speech 126.2초, false-positive 217.2초, false-positive ratio 39.1%.
+- Silero default `threshold=0.5`: chunk 93개, speech recall 91.3%, short recall 97.0%, missed speech 40.2초, false-positive 219.8초, false-positive ratio 34.2%.
+- 해석: Energy threshold 하향은 baseline보다 낫지만 Silero만큼은 아니다. Silero는 VAD coverage 기준으로 가장 강한 후보지만 chunk 수가 55개에서 93개로 늘었다. 기본값 후보가 되려면 VAD chunk STT에서 false-positive transcript와 global CER가 같이 좋아지는지 확인해야 한다.
+
 같은 runner로 Apple 엔진 smoke도 확인했다.
 
 - `sf_speech_on_device`: 현재 시스템에서 "Apple 음성 인식 권한이 거부" 상태라 1샘플 smoke가 load 단계에서 실패했다.

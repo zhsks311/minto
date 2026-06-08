@@ -16,7 +16,6 @@ public final class VADProcessor: @unchecked Sendable {
     private static let minSpeechSamples: Int = Int(minSpeechDuration * sampleRate)
     private static let silenceSampleThreshold: Int = Int(silenceDurationThreshold * sampleRate)
 
-    private static let noiseOffsetDB: Float = 10.0
     private static let calibrationFrameCount: Int = 10
 
     // MARK: - Public callbacks
@@ -44,10 +43,13 @@ public final class VADProcessor: @unchecked Sendable {
     private var emittedChunkCount: Int = 0
     private var processedSampleCount: Int = 0
     private var bufferStartSample: Int?
+    private let noiseOffsetDB: Float
 
     // MARK: - Init
 
-    public init() {}
+    public init(noiseOffsetDB: Float = 10.0) {
+        self.noiseOffsetDB = noiseOffsetDB
+    }
 
     // MARK: - Public API
 
@@ -99,7 +101,7 @@ public final class VADProcessor: @unchecked Sendable {
             }
             if calibrationEnergies.count >= VADProcessor.calibrationFrameCount {
                 let noiseFloor = calibrationEnergies.reduce(0, +) / Float(calibrationEnergies.count)
-                adaptiveThresholdDB = noiseFloor + VADProcessor.noiseOffsetDB
+                adaptiveThresholdDB = noiseFloor + noiseOffsetDB
                 isCalibrating = false
                 fputs("[VAD] calibrated: noiseFloor=\(noiseFloor)dB threshold=\(adaptiveThresholdDB)dB\n", stderr)
             }
