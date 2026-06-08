@@ -20,6 +20,23 @@
 - sherpa 계열은 true streaming 구조 참고용이다. 현재 한국어 CER 기준으로 기본 엔진 후보는 아니다.
 - true streaming은 모든 모델에 억지로 적용하지 않는다. 내부 cache/session을 유지하는 엔진에만 `accept`, `finish`, `reset` lifecycle을 붙인다.
 
+## 2026-06-08 진행 상태
+
+- `SpeechTranscriptionEngine` 경계로 STT 구현을 분리했고, WhisperKit turbo 기본 경로는 유지했다.
+- `sample/meeting` window benchmark와 rolling preview/final streaming benchmark를 JSON metric으로 저장할 수 있게 했다.
+- `VoiceActivityDetector` 경계를 만들고, 기존 energy VAD의 `flushPending()` 및 audio offset을 테스트로 고정했다.
+- FluidAudio Silero VAD를 test target PoC로 추가했다. production 기본 VAD로는 아직 올리지 않는다.
+- 120초 VAD-only smoke:
+  - energy: speech recall 58.6%, false positive ratio 53.3%, short recall 2/6
+  - Silero: speech recall 77.1%, false positive ratio 46.0%, short recall 6/6
+- 60초 VAD chunk -> WhisperKit turbo STT smoke:
+  - energy: 5/5 chunks, CER 33.0%, empty final 1, false-positive text 1 chunk / 13 chars
+  - Silero: 8/8 chunks, CER 56.9%, empty final 1, false-positive text 1 chunk / 1 char
+- 해석:
+  - Silero는 짧은 발화 recall을 확실히 올린다.
+  - 그러나 더 잘게/더 많이 자르면서 WhisperKit chunk CER가 악화될 수 있다.
+  - 따라서 Silero는 바로 기본값으로 바꾸지 말고, threshold/padding/min-silence 튜닝과 final chunk merge 정책을 같이 실험해야 한다.
+
 ## 원칙
 
 1. 정확도 개선과 가독성 개선을 분리한다.
