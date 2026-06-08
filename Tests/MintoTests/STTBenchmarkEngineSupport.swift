@@ -30,14 +30,6 @@ enum STTBenchmarkEngineSupport {
         return service.speechEngineID.rawValue
     }
 
-    static func metricsMetadata(for service: STTService) -> [String: Any] {
-        [
-            "engine": service.speechEngineID.rawValue,
-            "model": service.speechEngineID.whisperVariant == nil ? "" : service.modelVariant,
-            "supports_preview": service.supportsPreviewTranscription,
-        ]
-    }
-
     private static func engineID() throws -> SpeechEngineID {
         guard let rawEngine = nonEmptyEnvironmentValue("STT_ENGINE") else {
             return SpeechEngineID.fromWhisperVariant(whisperModel)
