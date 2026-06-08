@@ -49,6 +49,20 @@ struct SummaryPromptTests {
         #expect(!p.userContent.contains("아직 없음"))
     }
 
+    @Test("incremental: 참고 문서는 userContent에만 들어가고 instructions에는 없다")
+    func incrementalDocumentContext() {
+        let p = SummaryPrompt.buildIncremental(
+            topic: "",
+            glossary: "",
+            runningSummary: "",
+            newBatch: "검색 고도화 논의를 시작했습니다.",
+            document: "[Confluence 참고 문서]\n동의어와 도메인 용어를 검색 문맥에 반영한다."
+        )
+        #expect(p.userContent.contains("참고 문서(회의 자료)"))
+        #expect(p.userContent.contains("동의어와 도메인 용어"))
+        #expect(!p.instructions.contains("동의어와 도메인 용어"))
+    }
+
     @Test("final: 전사가 userContent에, 계층 JSON 스키마 + anti-날조 지시")
     func finalTranscriptAndSchema() {
         let p = SummaryPrompt.buildFinal(

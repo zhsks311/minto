@@ -204,6 +204,40 @@ struct ConfluenceParseTests {
     func malformedReturnsEmpty() throws {
         #expect(ConfluenceService.parse(Data("oops".utf8), fallbackBase: "https://fb/wiki", limit: 5).isEmpty)
     }
+
+    @Test("본문 응답 HTML을 회의 참고용 평문으로 정리한다")
+    func parsesContentBodyText() throws {
+        let json = """
+        {
+          "body": {
+            "storage": {
+              "value": "<h1>검색 고도화</h1><p>Confluence&nbsp;<strong>문서</strong>를 참고한다.</p><ul><li>SKU&amp;상품 용어</li></ul>"
+            }
+          }
+        }
+        """
+
+        let text = ConfluenceService.parseContentBodyText(Data(json.utf8))
+
+        #expect(text == "검색 고도화\nConfluence 문서를 참고한다.\n- SKU&상품 용어")
+    }
+
+    @Test("조회 문서를 프롬프트 참고자료 블록으로 만든다")
+    func buildsContextBlock() throws {
+        let docs = [
+            ConfluenceService.ContextDocument(
+                title: "검색 설계",
+                text: "동의어와 도메인 용어를 검색 문맥에 반영한다.",
+                url: "https://acme.atlassian.net/wiki/spaces/ENG/pages/1"
+            )
+        ]
+
+        let block = ConfluenceService.contextBlock(from: docs)
+
+        #expect(block.contains("[Confluence 참고 문서]"))
+        #expect(block.contains("검색 설계"))
+        #expect(block.contains("동의어와 도메인 용어"))
+    }
 }
 
 @Suite("Confluence 자격·URL 정규화")

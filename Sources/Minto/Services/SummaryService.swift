@@ -30,7 +30,8 @@ public final class SummaryService: ObservableObject {
             topic: meeting.topic,
             glossary: meeting.glossary,
             runningSummary: meeting.runningSummary,
-            newBatch: batch
+            newBatch: batch,
+            document: meeting.document
         )
         guard let summary = await dispatch(prompt) else { return nil }
         meeting.runningSummary = summary
