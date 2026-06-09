@@ -71,6 +71,46 @@ struct MeetingSearchAnswerServiceTests {
         #expect(request.userContent.contains("db 스키마 형상 관리"))
     }
 
+    @Test("검색 답변 use case는 Local LLM provider의 answer payload로 연결된다")
+    func localLLMProviderGeneratesAnswerPayloadFromSearchResults() async throws {
+        let transport = LocalAnswerTransport(data: Data(#"{"model":"minto-answer-e2e","response":"UI-E2E-LOCAL-LLM-ANSWER: 로컬 검색 답변 성공 [1]","done":true,"done_reason":"stop"}"#.utf8))
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(
+                baseURL: URL(string: "http://127.0.0.1:18080")!,
+                modelID: "minto-answer-e2e",
+                compatibility: .ollamaGenerate,
+                contextWindow: 4_096
+            ),
+            transport: transport
+        )
+        let service = MeetingSearchAnswerUseCase(maxChunks: 3, maxContextCharacters: 2_000)
+
+        let answer = try await service.answer(
+            query: "db 스키마 형상 관리",
+            index: MeetingSearchIndex(records: [sampleRecord()]),
+            provider: provider
+        )
+
+        #expect(answer.text == "UI-E2E-LOCAL-LLM-ANSWER: 로컬 검색 답변 성공 [1]")
+        #expect(answer.providerID == .local)
+        #expect(answer.modelID == "minto-answer-e2e")
+        #expect(answer.citations.isEmpty == false)
+
+        let request = try #require(transport.requests.first)
+        #expect(request.url?.absoluteString == "http://127.0.0.1:18080/api/generate")
+        #expect(request.httpMethod == "POST")
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        #expect(body["model"] as? String == "minto-answer-e2e")
+        #expect(body["stream"] as? Bool == false)
+        #expect((body["system"] as? String)?.contains("근거 번호") == true)
+        #expect((body["prompt"] as? String)?.contains("질문:") == true)
+        #expect((body["prompt"] as? String)?.contains("회의 근거:") == true)
+        #expect((body["prompt"] as? String)?.contains("db 스키마 형상 관리") == true)
+        let options = try #require(body["options"] as? [String: Any])
+        #expect(options["num_predict"] as? Int == 1_800)
+        #expect(options["num_ctx"] as? Int == 4_096)
+    }
+
     @Test("context 길이 제한을 넘으면 첫 근거만 잘라서 사용한다")
     func capsContextLength() async throws {
         let service = MeetingSearchAnswerUseCase(maxChunks: 5, maxContextCharacters: 500)
@@ -229,6 +269,10 @@ struct MeetingSearchAnswerServiceTests {
         #expect(!controller.isGenerating)
     }
 
+    private static func jsonObject(from data: Data) throws -> [String: Any] {
+        try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
     private func sampleRecord(extraTranscript: String = "") -> MeetingRecord {
         let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
         let transcriptText = [
@@ -280,6 +324,29 @@ struct MeetingSearchAnswerServiceTests {
             try? await Task.sleep(nanoseconds: step)
         }
         return condition()
+    }
+}
+
+private final class LocalAnswerTransport: LLMAPITransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private let data: Data
+    private(set) var requests: [URLRequest] = []
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        lock.withLock {
+            requests.append(request)
+        }
+        let response = HTTPURLResponse(
+            url: request.url ?? URL(string: "http://127.0.0.1")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        return (data, response)
     }
 }
 

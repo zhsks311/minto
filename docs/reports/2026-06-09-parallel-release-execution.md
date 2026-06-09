@@ -124,6 +124,7 @@
   - The runner now includes `correction_terms_with_context`, which mirrors Minto's meeting topic/glossary correction prompt more closely than the minimal correction case.
   - Context correction reruns are recorded under `docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-correction-context-numctx4096` and `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-numctx4096`; qwen remained at term recall `0.0`, while llama improved to `0.75` but missed `Liquibase`, so default-candidate status remains on hold.
   - Provider smoke coverage confirms local LLM Ollama payloads for correction, final summary, and search answer use cases.
+  - Search answer flow coverage now confirms `MeetingSearchAnswerUseCase` calls `LocalLLMProvider` with an Ollama `answer` payload, preserves citations, and uses `num_predict=1800` with the configured context window.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -172,6 +173,7 @@
   - `python3 scripts/run_local_llm_benchmarks.py --mock --model mock-model --cases correction_terms_with_context --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-case-mock`: passed, correction term recall `1.0`
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model qwen2.5:3b --cases correction_terms_with_context --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-correction-context-numctx4096 --fail-fast`: passed transport/format gates, mean latency `5.223s`, correction term recall `0.0`
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-numctx4096 --fail-fast`: passed transport/format gates, mean latency `22.979s`, correction term recall `0.75`
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-answer-e2e-test --filter MeetingSearchAnswerServiceTests`: passed, 13 tests
 
 ## Remaining Manual QA
 
@@ -182,7 +184,7 @@
   - `마이크+시스템` 선택 후 마이크와 시스템 출력이 모두 VAD/STT pipeline으로 들어오는지 확인
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
-  - Settings UI에서 local provider 선택 후 앱 화면의 correction, summary, answer 호출 확인. Provider payload smoke와 실제 endpoint benchmark는 통과했지만 UI-driven 호출은 별도 수동 QA가 필요하다.
+  - Settings UI에서 local provider 선택 후 앱 화면의 correction, summary, answer 버튼 호출 확인. Search answer use case to Local LLM payload is automatically covered, but the rendered app button click still needs manual QA because the direct SwiftPM app process exited during the UI attempt.
   - correction term recall이 높은 추가 실제 후보 모델 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
   - invalid Confluence token으로 Confluence 내보내기 실패 후 `다시 연결 필요` 표시 확인. 관련 문서 검색 401은 자동 검증됨.
