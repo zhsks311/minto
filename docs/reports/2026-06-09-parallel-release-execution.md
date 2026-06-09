@@ -143,6 +143,7 @@
   - Confluence search 401 and existing Notion reconnect state are covered through `RelatedInfoService` status-message tests.
   - Confluence export 401 is covered at both space lookup and page create steps, and leaves the service in `needsReconnect`.
   - Notion and Confluence status checks now cover the Settings prompt-count contract by proving status rendering paths do not load token payloads.
+  - Confluence export sheet now shows a Settings handoff when the service enters `needsReconnect`.
 - Settings UI QA:
   - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-ui-qa-rc1 ./scripts/dev.sh run` launched the RC integration app through build, signing, and app initialization.
   - Settings UI `GPT API` saved the test value `minto-ui-qa-not-a-secret` into `/tmp/minto2-dev-secrets-ui-qa-rc1/com.minto.app.llm-api__llm-api-key-gpt.json` with `-rw-------` permissions and showed `API 키 저장됨`.
@@ -197,6 +198,7 @@
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-viewmodel-pipeline-test --filter AudioInputMode`: passed, 14 tests. This includes `.mixed` selection and source-buffer-to-VAD handoff coverage.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-confluence-export-reconnect-test --filter 'ConfluenceExportReconnectTests|IntegrationReconnectStateTests'`: passed, 8 tests.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-settings-token-status-no-load-test --filter IntegrationReconnectStateTests`: passed, 8 tests.
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-confluence-export-sheet-handoff-test --filter ConfluenceExportSheetTests`: passed, 1 test.
 
 ## Remaining Manual QA
 
@@ -210,7 +212,7 @@
   - 실제 앱 화면에서 파일 가져오기 또는 녹음 종료 경로의 correction/summary 진행 상태 rendered QA. There are no standalone correction/summary buttons in the current UI; the automated file import pipeline test covers the stage order and corrected-transcript handoff.
   - correction term recall이 높은 추가 실제 후보 모델 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
-  - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 export sheet/Settings handoff 렌더 확인. 서비스의 `needsReconnect` 상태 전환은 export 401 자동 테스트로 검증됨.
+  - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 Atlassian 인증 실패 렌더 확인. 서비스의 `needsReconnect` 상태 전환과 export sheet의 Settings handoff 조건은 자동 테스트로 검증됨.
   - invalid Notion token으로 관련 문서 검색 실패 후 실제 OAuth 실패, 재연결, 지우기 버튼 동작 확인. `needsReconnect` 상태의 검색 안내는 자동 검증됨.
   - 실제 Settings 화면 반복 진입 시 macOS Keychain prompt 카운트 확인. Settings 상태 조회 경로가 token 원문을 읽지 않는 계약은 자동 검증됨.
   - 개발 실행 file secret store에서 Settings UI delete 확인. App launch, save, and relaunch-load are verified with `/tmp/minto2-dev-secrets-ui-qa-rc1`; delete remains manual because it requires a GUI deletion action.

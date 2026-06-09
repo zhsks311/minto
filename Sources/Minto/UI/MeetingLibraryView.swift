@@ -161,7 +161,11 @@ public struct MeetingLibraryView: View {
         }
         .sheet(isPresented: $showingConfluenceExport) {
             if let exportRecord {
-                ConfluenceExportSheet(record: exportRecord, confluence: confluence)
+                ConfluenceExportSheet(
+                    record: exportRecord,
+                    confluence: confluence,
+                    openSettings: openSettingsWindow
+                )
             }
         }
     }
@@ -1945,6 +1949,7 @@ public struct MeetingLibraryView: View {
 private struct ConfluenceExportSheet: View {
     let record: MeetingRecord
     @ObservedObject var confluence: ConfluenceService
+    let openSettings: () -> Void
     @Environment(\.dismiss) private var dismiss
     @AppStorage("confluenceExportSpaceKey") private var savedSpaceKey = ""
     @AppStorage("confluenceExportParentID") private var savedParentID = ""
@@ -1953,9 +1958,10 @@ private struct ConfluenceExportSheet: View {
     @State private var publishedPage: ConfluenceService.PublishedPage?
     @State private var errorMessage: String?
 
-    init(record: MeetingRecord, confluence: ConfluenceService) {
+    init(record: MeetingRecord, confluence: ConfluenceService, openSettings: @escaping () -> Void) {
         self.record = record
         self.confluence = confluence
+        self.openSettings = openSettings
         let title = record.title.trimmingCharacters(in: .whitespacesAndNewlines)
         _pageTitle = State(initialValue: title.isEmpty ? "회의록" : title)
     }
@@ -2007,6 +2013,33 @@ private struct ConfluenceExportSheet: View {
                     .font(.system(size: 13))
                     .foregroundColor(.red)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if ConfluenceExportSheetPresentation.showsSettingsHandoff(for: confluence.connectionState) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(
+                        ConfluenceExportSheetPresentation.settingsHandoffTitle,
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.orange)
+                    Text(ConfluenceExportSheetPresentation.settingsHandoffMessage)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        openSettings()
+                    } label: {
+                        Label(
+                            ConfluenceExportSheetPresentation.settingsHandoffButtonTitle,
+                            systemImage: "gearshape.fill"
+                        )
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
             HStack {
@@ -2074,5 +2107,15 @@ private struct ConfluenceExportSheet: View {
             }
             isPublishing = false
         }
+    }
+}
+
+enum ConfluenceExportSheetPresentation {
+    static let settingsHandoffTitle = "Confluence 다시 연결이 필요합니다."
+    static let settingsHandoffMessage = "설정에서 API token을 다시 저장한 뒤 내보내기를 다시 시도하세요."
+    static let settingsHandoffButtonTitle = "Confluence 설정 열기"
+
+    static func showsSettingsHandoff(for state: ConfluenceService.ConnectionState) -> Bool {
+        state == .needsReconnect
     }
 }
