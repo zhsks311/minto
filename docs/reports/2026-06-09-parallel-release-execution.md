@@ -87,6 +87,16 @@
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-integration-build`: passed
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-integration-smoke-test --filter 'AudioInputMode|LLMProviderTests|MeetingSearchAnswerService|RelatedInfoTests'`: passed, 86 tests
 
+## Release Candidate
+
+- RC branch: `release/llm-search-export-2026-06-09-rc1`
+- RC worktree: `/Users/d66hjkxwt9/Idea/private/minto2-release-rc1`
+- RC base commit: `07da899 merge related info reconnect status lane`
+- Original lane baseline remains fixed at `release/llm-search-export-2026-06-09` / `4bcff6d`.
+- RC validation:
+  - `git diff --check`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-release-rc1-smoke-test --filter 'AudioInputMode|LLMProviderTests|MeetingSearchAnswerService|RelatedInfoTests|IntegrationReconnectStateTests|SecretStore'`: passed, 102 tests
+
 ## Post-Integration Follow-up
 
 - Local LLM settings connection:
