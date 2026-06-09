@@ -134,6 +134,11 @@
 - Related info reconnect status:
   - Related document search now prioritizes reconnect guidance over a generic empty-results message when Notion or Confluence enters `needsReconnect`.
   - Confluence search 401 and existing Notion reconnect state are covered through `RelatedInfoService` status-message tests.
+- Settings UI QA:
+  - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-ui-qa-rc1 ./scripts/dev.sh run` launched the RC integration app through build, signing, and app initialization.
+  - Settings UI `GPT API` saved the test value `minto-ui-qa-not-a-secret` into `/tmp/minto2-dev-secrets-ui-qa-rc1/com.minto.app.llm-api__llm-api-key-gpt.json` with `-rw-------` permissions and showed `API 키 저장됨`.
+  - Relaunching with the same `MINTO_DEV_SECRET_STORE_ROOT` loaded the saved Settings state and still showed `API 키 저장됨`.
+  - Settings UI `로컬 LLM` showed `모델 ID 필요` when the model field was empty, then showed `로컬 런타임 설정됨` after entering `qwen2.5:3b`, with `API 키는 필요하지 않습니다` copy visible.
 - Validation:
   - `git diff --check`: passed
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter LLMProviderTests`: passed, 27 tests
@@ -177,14 +182,13 @@
   - `마이크+시스템` 선택 후 마이크와 시스템 출력이 모두 VAD/STT pipeline으로 들어오는지 확인
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
-  - Settings UI에서 local provider 선택과 상태 문구 확인
   - Settings UI에서 local provider 선택 후 앱 화면의 correction, summary, answer 호출 확인. Provider payload smoke와 실제 endpoint benchmark는 통과했지만 UI-driven 호출은 별도 수동 QA가 필요하다.
   - correction term recall이 높은 추가 실제 후보 모델 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
   - invalid Confluence token으로 Confluence 내보내기 실패 후 `다시 연결 필요` 표시 확인. 관련 문서 검색 401은 자동 검증됨.
   - invalid Notion token으로 관련 문서 검색 실패 후 실제 OAuth 실패, 재연결, 지우기 버튼 동작 확인. `needsReconnect` 상태의 검색 안내는 자동 검증됨.
   - Settings 진입만으로 반복 Keychain 원문 읽기 prompt가 늘지 않는지 확인
-  - 개발 실행에서 `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets`로 실제 Settings UI 저장, 앱 재시작 후 load, delete 확인. App launch with the env path has been verified, but the UI save/load/delete flow remains manual.
+  - 개발 실행 file secret store에서 Settings UI delete 확인. App launch, save, and relaunch-load are verified with `/tmp/minto2-dev-secrets-ui-qa-rc1`; delete remains manual because it requires a GUI deletion action.
 
 ## Stop Conditions
 
