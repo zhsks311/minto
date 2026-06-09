@@ -13,4 +13,5 @@
 - mock/dry-run은 runner 검증으로만 사용한다.
 - 기본값 후보는 실제 endpoint로 correction, summary, grounded answer case를 통과해야 한다.
 - latency, term recall, summary JSON validity, source-time preservation을 함께 본다.
+- Ollama 후보는 context window를 통제하고 `run_manifest.json`에 기록한 실제 run만 후보 판단에 사용한다.
 - timeout이 난 모델은 기본값 후보로 올리지 않는다.

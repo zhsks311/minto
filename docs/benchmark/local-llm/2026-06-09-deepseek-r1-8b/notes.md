@@ -45,6 +45,23 @@ curl -sS --max-time 60 http://127.0.0.1:11434/api/generate \
 
 - `curl: (28) Operation timed out after 60003 milliseconds with 0 bytes received`
 
+## Context window follow-up
+
+- 위 실패는 Ollama가 model context `131072`로 runner를 올린 상태에서 나온 결과다.
+- 다음 재측정은 앱/runner와 같은 context cap을 써서 실행한다.
+- 권장 재측정 명령:
+
+```bash
+python3 scripts/run_local_llm_benchmarks.py \
+  --compatibility ollama \
+  --base-url http://127.0.0.1:11434 \
+  --model deepseek-r1:8b \
+  --num-ctx 4096 \
+  --repeat 1 \
+  --output-root docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096 \
+  --fail-fast
+```
+
 ## 해석
 
 - 이 결과는 품질 실패라기보다 현재 모델/runtime 설정에서 latency gate를 통과하지 못한 것이다.

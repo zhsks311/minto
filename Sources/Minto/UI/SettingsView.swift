@@ -17,6 +17,7 @@ public struct SettingsView: View {
     @AppStorage(LocalLLMProviderConfiguration.modelIDKey) private var localLLMModelID = ""
     @AppStorage(LocalLLMProviderConfiguration.compatibilityKey) private var localLLMCompatibilityRaw = LocalLLMEndpointCompatibility.ollamaGenerate.rawValue
     @AppStorage(LocalLLMProviderConfiguration.timeoutSecondsKey) private var localLLMTimeoutSeconds = LocalLLMProviderConfiguration.defaultTimeoutSeconds
+    @AppStorage(LocalLLMProviderConfiguration.contextWindowKey) private var localLLMContextWindow = LocalLLMProviderConfiguration.defaultContextWindow
 
     // LLM 교정 서비스 관찰
     @ObservedObject private var llmService = LLMCorrectionService.shared
@@ -788,6 +789,14 @@ public struct SettingsView: View {
                 .textFieldStyle(.roundedBorder)
             Stepper(value: $localLLMTimeoutSeconds, in: 5...600, step: 5) {
                 Text("응답 대기 \(Int(localLLMTimeoutSeconds))초")
+                    .font(.caption)
+            }
+            Stepper(
+                value: $localLLMContextWindow,
+                in: LocalLLMProviderConfiguration.minimumContextWindow...LocalLLMProviderConfiguration.maximumContextWindow,
+                step: 512
+            ) {
+                Text("문맥 창 \(localLLMContextWindow) tokens")
                     .font(.caption)
             }
             Text(localLLMStatusMessage)

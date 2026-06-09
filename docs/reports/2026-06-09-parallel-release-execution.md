@@ -103,8 +103,10 @@
 - Local LLM benchmark runner:
   - `scripts/run_local_llm_benchmarks.py` measures correction, summary JSON, and grounded answer cases.
   - The runner supports Ollama and OpenAI-compatible endpoints, dry-run, mock validation, repeat runs, and optional server RSS sampling.
+  - Ollama runs now control `options.num_ctx` with `--num-ctx` or `MINTO_LOCAL_LLM_CONTEXT_WINDOW`, and record the applied value in manifest, metrics, and summary output.
   - Benchmark instructions are documented under `docs/benchmark/local-llm-benchmark-runner.md`.
   - Real Ollama run for `deepseek-r1:8b` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b`; first correction case timed out after 120s and a direct 16-token request timed out after 60s, so this model is not promoted as a default candidate.
+  - The `deepseek-r1:8b` failure happened with Ollama model context `131072`; rerun evidence should use a controlled context such as `--num-ctx 4096`.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -125,6 +127,11 @@
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-test --filter SecretStore`: passed, 6 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-related-test --filter 'SecretStore|LLMProviderTests|RelatedInfoTests'`: passed, 71 tests
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-build`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-context-test --filter LLMProviderTests`: passed, 28 tests
+  - `python3 -m py_compile scripts/run_local_llm_benchmarks.py`: passed
+  - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model deepseek-r1:8b --cases correction --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-dryrun`: passed, request body preview has `options.num_ctx=4096`
+  - `python3 scripts/run_local_llm_benchmarks.py --mock --model mock-model --repeat 1 --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-mock`: passed, 3 mock cases
+  - `swift build --disable-sandbox --scratch-path /tmp/minto2-local-llm-context-build`: passed
 
 ## Remaining Manual QA
 

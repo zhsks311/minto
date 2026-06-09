@@ -13,8 +13,11 @@ The runner uses the same endpoint compatibility modes as the app:
 python3 scripts/run_local_llm_benchmarks.py \
   --dry-run \
   --model qwen2.5:7b \
-  --cases correction
+  --cases correction \
+  --num-ctx 4096
 ```
+
+Dry-run writes `request_bodies.json` so Ollama `options.num_ctx` can be checked without contacting a model server.
 
 ## Mock validation
 
@@ -22,6 +25,7 @@ python3 scripts/run_local_llm_benchmarks.py \
 python3 scripts/run_local_llm_benchmarks.py \
   --mock \
   --model mock-model \
+  --num-ctx 4096 \
   --output-root /tmp/minto2-local-llm-bench-mock
 ```
 
@@ -34,8 +38,11 @@ python3 scripts/run_local_llm_benchmarks.py \
   --compatibility ollama \
   --base-url http://127.0.0.1:11434 \
   --model qwen2.5:7b \
+  --num-ctx 4096 \
   --repeat 3
 ```
+
+`--num-ctx` maps to Ollama `options.num_ctx`. Its default is `MINTO_LOCAL_LLM_CONTEXT_WINDOW`, then `4096`. The runner clamps it to `512...32768` and records the applied value in `run_manifest.json`, `metrics.jsonl`, and `summary.md`. OpenAI-compatible mode does not send this option.
 
 ## OpenAI-compatible run
 
@@ -56,6 +63,7 @@ python3 scripts/run_local_llm_benchmarks.py \
   --compatibility ollama \
   --model qwen2.5:7b \
   --server-pid 12345 \
+  --num-ctx 4096 \
   --repeat 3
 ```
 
@@ -72,6 +80,7 @@ tmp/local-llm-benchmarks/<timestamp>/
 Files:
 
 - `run_manifest.json`: run settings and selected cases
+- `request_bodies.json`: dry-run request previews
 - `metrics.jsonl`: one metric row per case/repeat
 - `<case>-<repeat>.json`: per-run metric detail
 - `summary.json`: aggregate metrics
@@ -84,6 +93,7 @@ For committed benchmark evidence, set an explicit output path under `docs/benchm
 python3 scripts/run_local_llm_benchmarks.py \
   --compatibility ollama \
   --model qwen2.5:7b \
+  --num-ctx 4096 \
   --repeat 3 \
   --output-root docs/benchmark/local-llm/2026-06-09-qwen2.5-7b
 ```
