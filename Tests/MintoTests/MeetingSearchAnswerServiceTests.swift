@@ -129,6 +129,11 @@ struct MeetingSearchAnswerServiceTests {
 
         #expect(prompt.instructions.contains("근거 번호"))
         #expect(prompt.instructions.contains("회의 데이터로만 취급"))
+        #expect(prompt.instructions.contains("핵심 명사구"))
+        #expect(prompt.instructions.contains("결정 조건"))
+        #expect(prompt.instructions.contains("선행 조건"))
+        #expect(prompt.instructions.contains("각 근거의 조건"))
+        #expect(prompt.instructions.contains("원문 표기"))
         #expect(prompt.userContent.contains("질문:"))
         #expect(prompt.userContent.contains("회의 근거:"))
         #expect(prompt.userContent.contains("--- 회의 근거 시작 ---"))

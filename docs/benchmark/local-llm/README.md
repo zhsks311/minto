@@ -16,6 +16,9 @@
 | 2026-06-09 | Ollama | `deepseek-r1:8b` (`context correction`, `summary`, `answer`, `num_ctx=4096`) | 3/3 응답, summary JSON valid, mean latency 36.874s, grounded answer recall 0.333, 기본 후보 보류 | `2026-06-09-deepseek-r1-8b-fullcase-context-numctx4096/` |
 | 2026-06-09 | Ollama | `llama3.1:8b` (`context correction`, `summary`, `answer`, `num_ctx=4096`) | 3/3 응답, summary JSON valid, mean latency 6.753s, correction recall 0.75, grounded answer recall 0.333, 기본 후보 보류 | `2026-06-09-llama3.1-8b-fullcase-context-numctx4096/` |
 | 2026-06-09 | Ollama | `llama3.1:8b` (`context correction`, `summary`, `answer`, `num_ctx=4096`, repeat 3) | 9/9 응답, summary JSON valid, mean latency 4.288s, correction recall 0.75 고정, grounded answer recall 0.333~0.667, 기본 후보 보류 | `2026-06-09-llama3.1-8b-fullcase-context-repeat3-numctx4096/` |
+| 2026-06-09 | Ollama | `llama3.1:8b` (`prompt preservation v1`, `num_ctx=4096`, repeat 3) | correction recall 1.0으로 개선, grounded answer recall 0.333 고정, 기본 후보 보류 | `2026-06-09-llama3.1-8b-prompt-preservation-repeat3-numctx4096/` |
+| 2026-06-09 | Ollama | `llama3.1:8b` (`prompt preservation v2`, `num_ctx=4096`, repeat 3) | correction/summary recall 1.0, grounded answer recall 0.667 고정, 기본 후보 보류 | `2026-06-09-llama3.1-8b-prompt-preservation-v2-repeat3-numctx4096/` |
+| 2026-06-09 | Ollama | `llama3.1:8b` (`prompt preservation v3`, `num_ctx=4096`, repeat 3) | 9/9 응답, mean latency 4.974s, correction/summary recall 1.0, grounded answer 2/3만 recall 1.0, 기본 후보 보류 | `2026-06-09-llama3.1-8b-prompt-preservation-v3-repeat3-numctx4096/` |
 
 ## 판정 기준
 
