@@ -113,6 +113,7 @@
   - Controlled `llama3.1:8b` run with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-numctx4096`; it completed 3/3 cases with mean latency `6.894s`, but correction term recall was `0.0`, so default-candidate status remains on hold.
   - The runner now includes `correction_terms_with_context`, which mirrors Minto's meeting topic/glossary correction prompt more closely than the minimal correction case.
   - Context correction reruns are recorded under `docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-correction-context-numctx4096` and `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-numctx4096`; qwen remained at term recall `0.0`, while llama improved to `0.75` but missed `Liquibase`, so default-candidate status remains on hold.
+  - Provider smoke coverage confirms local LLM Ollama payloads for correction, final summary, and search answer use cases.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -126,6 +127,7 @@
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter 'LLMProviderTests|MeetingSearchAnswerService|SummaryServiceTests'`: passed, 51 tests
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-build`: passed
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-routing-test --filter LLMProviderTests`: passed, 29 tests
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-service-smoke-test --filter LLMProviderTests`: passed, 30 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-test --filter AudioInputMode`: passed, 13 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-test --filter 'AudioInputMode|TranscriptionViewModelStopTests'`: passed, 21 tests
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-build`: passed
@@ -162,7 +164,7 @@
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
   - Settings UI에서 local provider 선택과 상태 문구 확인
-  - Ollama 또는 OpenAI-compatible local endpoint로 correction, summary, answer 호출 확인
+  - Settings UI에서 local provider 선택 후 앱 화면의 correction, summary, answer 호출 확인. Provider payload smoke와 실제 endpoint benchmark는 통과했지만 UI-driven 호출은 별도 수동 QA가 필요하다.
   - correction term recall이 높은 추가 실제 후보 모델 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
   - invalid Confluence token으로 검색/내보내기 실패 후 `다시 연결 필요` 표시 확인

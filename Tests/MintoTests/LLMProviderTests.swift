@@ -379,6 +379,49 @@ struct LLMProviderTests {
         #expect(options["num_ctx"] as? Int == 2_048)
     }
 
+    @Test("로컬 LLM provider는 교정, 요약, 검색 답변 payload를 use case별로 만든다")
+    func localLLMProviderBuildsCoreUseCasePayloads() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"model":"local-smoke","response":"ok","done":true}"#.utf8))
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(
+                baseURL: URL(string: "http://127.0.0.1:11434")!,
+                modelID: "local-smoke",
+                compatibility: .ollamaGenerate,
+                contextWindow: 4_096
+            ),
+            transport: transport
+        )
+
+        let useCases: [(LLMUseCase, String, String, Int)] = [
+            (.correction, "교정 규칙", "교정 원문", 900),
+            (.finalSummary, "요약 규칙", "요약 원문", 3_000),
+            (.answer, "답변 규칙", "답변 근거", 1_800)
+        ]
+
+        for useCase in useCases {
+            let response = try await provider.generateText(LLMTextRequest(
+                useCase: useCase.0,
+                instructions: useCase.1,
+                userContent: useCase.2
+            ))
+            #expect(response.text == "ok")
+            #expect(response.providerID == .local)
+        }
+
+        #expect(transport.requests.count == useCases.count)
+        for (index, request) in transport.requests.enumerated() {
+            let expected = useCases[index]
+            #expect(request.url?.absoluteString == "http://127.0.0.1:11434/api/generate")
+            let body = try Self.jsonObject(from: try #require(request.httpBody))
+            #expect(body["model"] as? String == "local-smoke")
+            #expect(body["system"] as? String == expected.1)
+            #expect(body["prompt"] as? String == expected.2)
+            let options = try #require(body["options"] as? [String: Any])
+            #expect(options["num_predict"] as? Int == expected.3)
+            #expect(options["num_ctx"] as? Int == 4_096)
+        }
+    }
+
     @Test("로컬 LLM provider는 OpenAI 호환 chat completions endpoint를 지원한다")
     func localLLMProviderBuildsOpenAICompatibleRequest() async throws {
         let transport = StubLLMAPITransport(data: Data(#"{"model":"qwen2.5:7b","choices":[{"message":{"content":"답변입니다. [1]"},"finish_reason":"length"}]}"#.utf8))
