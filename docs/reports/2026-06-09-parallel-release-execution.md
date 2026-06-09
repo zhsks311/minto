@@ -110,6 +110,7 @@
   - The mixer combines aligned buffered samples at 0.5 gain with clipping; echo cancellation and long-run drift correction remain measurement items.
   - Single-source backlog is capped with passthrough fallback to avoid unbounded live input latency and memory growth.
   - Mixed readiness uses the same screen/system audio permission and availability gate as system audio.
+  - Rendered setup UI QA confirms `시스템` and `마이크+시스템` selection both show ready states and enable `녹음 시작` when screen/system audio permission is already available.
 - Local LLM benchmark runner:
   - `scripts/run_local_llm_benchmarks.py` measures correction, summary JSON, and grounded answer cases.
   - The runner supports Ollama and OpenAI-compatible endpoints, dry-run, mock validation, repeat runs, and optional server RSS sampling.
@@ -183,12 +184,16 @@
   - Test cleanup: app and mock server processes were stopped; real `com.minto.app` defaults were restored to no `meetingSearchAnswer*` keys, no local endpoint override keys, and `localLLMModelID=qwen2.5:3b`.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-correction-summary-pipeline-test --filter MeetingFileImportUseCaseTests`: passed, 10 tests
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context --num-ctx 4096 --repeat 3 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-repeat3-numctx4096 --fail-fast`: passed, 3/3 runs, mean latency `5.617s`, correction term recall `0.75`, missing term `Liquibase`
+  - `CFFIXED_USER_HOME=/tmp/minto2-system-audio-ui-home-1780984552 HOME=/tmp/minto2-system-audio-ui-home-1780984552 .build/debug/minto2`: rendered setup UI opened from `새 회의`, selected `시스템` and observed `시스템 입력 가능` with `녹음 시작` enabled.
+  - Same setup UI run selected `마이크+시스템` and observed `마이크+시스템 입력 가능`, explanatory copy `Echo cancellation은 적용하지 않습니다.`, and `녹음 시작` enabled.
+  - `/tmp/minto2-system-audio-setup-mixed-ready.png`: window capture shows the rendered `마이크+시스템` ready state.
+  - Test cleanup: the direct SwiftPM app process was stopped. Permission-denied state was not exercised because this macOS environment already had screen/system audio permission available.
 
 ## Remaining Manual QA
 
 - System audio:
-  - 권한 없음 상태에서 readiness warning, start disabled, 시스템 설정 열기 동작 확인
-  - 권한 허용 후 앱 복귀 시 readiness 갱신과 level meter 동작 확인
+  - 권한 없음 상태에서 readiness warning, start disabled, 시스템 설정 열기 동작 확인. Current QA environment already had screen/system audio permission, so this state remains manual.
+  - 권한 거부 상태에서 권한 허용 후 앱 복귀 시 readiness 갱신과 level meter 동작 확인
   - 실제 화상회의 앱 출력으로 system audio capture 확인
   - `마이크+시스템` 선택 후 마이크와 시스템 출력이 모두 VAD/STT pipeline으로 들어오는지 확인
   - echo 상황과 장시간 녹음 drift 측정
