@@ -83,7 +83,7 @@ public final class LLMCorrectionService: ObservableObject {
                 instructions: instructions,
                 userContent: userContent
             ))
-            let corrected = response.text
+            let corrected = CorrectionOutputPostprocessor.clean(response.text)
             fputs("[LLM] correction completed via \(provider.descriptor.id.rawValue) (outputChars=\(corrected.count))\n", stderr)
             return corrected
         } catch {
