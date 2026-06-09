@@ -100,10 +100,10 @@ Files:
 - `run_manifest.json`: run settings and selected cases
 - `request_bodies.json`: dry-run request previews
 - `metrics.jsonl`: one metric row per case/repeat
-- `<case>-<repeat>.json`: per-run metric detail
+- `<case>-<repeat>.json`: per-run metric detail, including capped `output_preview`, `output_sha256`, and found/missing terms
 - `summary.json`: aggregate metrics
-- `summary.csv`: tabular metrics
-- `summary.md`: human-readable benchmark report
+- `summary.csv`: tabular metrics with found/missing terms
+- `summary.md`: human-readable benchmark report with missing-term triage
 
 For committed benchmark evidence, set an explicit output path under `docs/benchmark/local-llm/`.
 
@@ -121,6 +121,6 @@ python3 scripts/run_local_llm_benchmarks.py \
 - correction: expected domain-term preservation
 - summary: required JSON fields and term recall
 - answer: grounded answer term recall and source-time preservation
-- all cases: latency, status, output length, optional sampled server RSS
+- all cases: latency, status, output length, capped output preview/hash, found/missing terms, optional sampled server RSS
 
 Do not promote a local model as the default until a real non-mock run is recorded and reviewed.
