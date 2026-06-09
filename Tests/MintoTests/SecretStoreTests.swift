@@ -31,6 +31,61 @@ struct SecretStoreTests {
         #expect(!storedFiles[0].contains("root-override-secret"))
     }
 
+    @Test("기본 backend는 실제 프로세스 env의 dev file store를 따른다")
+    func defaultBackendsUseProcessEnvironmentDevStoreWhenEnabled() throws {
+        let environment = ProcessInfo.processInfo.environment
+        let mode = environment[SecretStoreFactory.devStoreModeEnvironmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard ["file", "local-file", "local"].contains(mode ?? "") else {
+            #expect(SecretStoreFactory.make() is KeychainSecretStore)
+            return
+        }
+
+        let root = try #require(environment[SecretStoreFactory.devStoreRootEnvironmentKey])
+        let rootURL = URL(fileURLWithPath: (root as NSString).expandingTildeInPath, isDirectory: true)
+        #expect(SecretStoreFactory.make() is LocalDevSecretStore)
+
+        let token = UUID().uuidString
+        let llmAccount = "llm-api-key-gpt-\(token)"
+        let llmService = "com.minto.test.llm-api.\(token)"
+        let oauthKey = "notion-\(token)"
+        let confluenceAccount = "confluence-\(token)"
+        let llmBackend = SecretStoreLLMAPIKeyStorageBackend()
+        let oauthBackend = SecretStoreOAuthTokenStorageBackend()
+        let confluenceBackend = SecretStoreConfluenceTokenStorageBackend()
+
+        #expect(llmBackend.save(account: llmAccount, data: Data("sk-env-smoke".utf8), service: llmService))
+        #expect(llmBackend.exists(account: llmAccount, service: llmService))
+        #expect(llmBackend.load(account: llmAccount, service: llmService) == Data("sk-env-smoke".utf8))
+
+        oauthBackend.save(key: oauthKey, data: Data(#"{"accessToken":"oauth-env-smoke"}"#.utf8))
+        #expect(oauthBackend.exists(key: oauthKey))
+        #expect(oauthBackend.load(key: oauthKey) != nil)
+
+        confluenceBackend.save(account: confluenceAccount, data: Data("confluence-env-smoke".utf8))
+        #expect(confluenceBackend.exists(account: confluenceAccount))
+        #expect(confluenceBackend.load(account: confluenceAccount) == Data("confluence-env-smoke".utf8))
+
+        let storedFiles = try FileManager.default.contentsOfDirectory(atPath: rootURL.path)
+        let matchingStoredFiles = storedFiles.filter { $0.contains(token) }
+        #expect(matchingStoredFiles.count == 3)
+        let rootAttributes = try FileManager.default.attributesOfItem(atPath: rootURL.path)
+        #expect(rootAttributes[.posixPermissions] as? Int == 0o700)
+        for fileName in matchingStoredFiles {
+            let filePath = rootURL.appendingPathComponent(fileName).path
+            let fileAttributes = try FileManager.default.attributesOfItem(atPath: filePath)
+            #expect(fileAttributes[.posixPermissions] as? Int == 0o600)
+        }
+
+        #expect(llmBackend.delete(account: llmAccount, service: llmService))
+        oauthBackend.delete(key: oauthKey)
+        confluenceBackend.delete(account: confluenceAccount)
+        let remainingFiles = try FileManager.default.contentsOfDirectory(atPath: rootURL.path)
+        let matchingRemainingFiles = remainingFiles.filter { $0.contains(token) }
+        #expect(matchingRemainingFiles.isEmpty)
+    }
+
     @Test("LocalDevSecretStore는 secret을 파일에 저장하고 삭제한다")
     func localDevSecretStoreRoundTripsData() throws {
         let root = try temporaryDirectory()
