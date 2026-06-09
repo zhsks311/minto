@@ -467,6 +467,49 @@ struct IntegrationReconnectStateTests {
         #expect(httpClient.requests[0].value(forHTTPHeaderField: "Authorization")?.hasPrefix("Basic ") == true)
     }
 
+    @Test("관련 문서 검색은 Confluence 인증 실패를 재연결 안내로 표시한다")
+    func relatedInfoSearchShowsConfluenceReconnectMessage() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 401, data: Data("unauthorized".utf8))
+        ])
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let confluence = makeConfiguredConfluenceService(httpClient: httpClient, tokenStorage: tokenStorage)
+        let notionStorage = KeychainTokenStorage(
+            keychainKey: "test-notion-related-info",
+            storage: StubOAuthTokenStorageBackend(loadData: nil, existsResult: false)
+        )
+        let relatedInfo = RelatedInfoService(
+            notionMCP: NotionMCPService(tokenStorage: notionStorage),
+            confluence: confluence
+        )
+
+        await relatedInfo.search(query: "회의 안건")
+
+        #expect(relatedInfo.results.isEmpty)
+        #expect(relatedInfo.statusMessage == "Confluence 다시 연결이 필요합니다. 설정에서 연결 정보를 갱신하세요.")
+        #expect(confluence.connectionState == .needsReconnect)
+        #expect(httpClient.requests.count == 1)
+    }
+
+    @Test("관련 문서 검색은 Notion 재연결 필요 상태를 연결 안내로 표시한다")
+    func relatedInfoSearchShowsNotionReconnectMessage() async {
+        let tokenStorage = KeychainTokenStorage(
+            keychainKey: "test-notion-related-info",
+            storage: StubOAuthTokenStorageBackend(loadData: nil, existsResult: true)
+        )
+        let notion = NotionMCPService(tokenStorage: tokenStorage)
+        notion.handleConnectionFailure(MCPError.internalError("Authorization flow failed: Token request failed with status 401"))
+        let confluence = makeConfiguredConfluenceService(tokenStorage: StubConfluenceTokenStorageBackend())
+        let relatedInfo = RelatedInfoService(notionMCP: notion, confluence: confluence)
+
+        #expect(relatedInfo.isAnyConfigured)
+
+        await relatedInfo.search(query: "회의 안건")
+
+        #expect(relatedInfo.results.isEmpty)
+        #expect(relatedInfo.statusMessage == "Notion 다시 연결이 필요합니다. 설정에서 연결 정보를 갱신하세요.")
+    }
+
     private func makeConfiguredConfluenceService(
         httpClient: StubConfluenceHTTPClient = StubConfluenceHTTPClient(),
         tokenStorage: StubConfluenceTokenStorageBackend

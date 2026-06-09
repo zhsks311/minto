@@ -20,7 +20,10 @@ public final class RelatedInfoService: ObservableObject {
 
     /// 둘 중 하나라도 연동 설정이 되어 있으면 조회 가능.
     public var isAnyConfigured: Bool {
-        notionMCP.isConfigured || confluence.isConfigured
+        notionMCP.isConfigured
+            || confluence.isConfigured
+            || notionMCP.connectionState == .needsReconnect
+            || confluence.connectionState == .needsReconnect
     }
 
     public func search(query: String) async {
@@ -33,6 +36,11 @@ public final class RelatedInfoService: ObservableObject {
             statusMessage = "조회할 키워드가 없습니다."
             return
         }
+        if let reconnectStatusMessage {
+            results = []
+            statusMessage = reconnectStatusMessage
+            return
+        }
 
         isSearching = true
         statusMessage = nil
@@ -43,12 +51,22 @@ public final class RelatedInfoService: ObservableObject {
         let combined = await notionResults + confluenceResults
 
         results = combined
-        statusMessage = combined.isEmpty ? "관련 문서를 찾지 못했습니다." : nil
+        statusMessage = reconnectStatusMessage
+            ?? (combined.isEmpty ? "관련 문서를 찾지 못했습니다." : nil)
     }
 
     public func clear() {
         results = []
         statusMessage = nil
         isSearching = false
+    }
+
+    private var reconnectStatusMessage: String? {
+        let sourceNames = [
+            notionMCP.connectionState == .needsReconnect ? "Notion" : nil,
+            confluence.connectionState == .needsReconnect ? "Confluence" : nil
+        ].compactMap { $0 }
+        guard !sourceNames.isEmpty else { return nil }
+        return "\(sourceNames.joined(separator: "과 ")) 다시 연결이 필요합니다. 설정에서 연결 정보를 갱신하세요."
     }
 }
