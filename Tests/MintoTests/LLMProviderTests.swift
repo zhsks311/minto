@@ -134,6 +134,64 @@ struct LLMProviderTests {
     }
 
     @MainActor
+    @Test("Settings 저장 local LLM 값은 교정, 요약, 검색 답변 provider로 연결된다")
+    func localLLMSettingsRouteThroughAppProviderSelections() async throws {
+        let defaults = UserDefaults.standard
+        let localKeys = [
+            LocalLLMProviderConfiguration.baseURLKey,
+            LocalLLMProviderConfiguration.modelIDKey,
+            LocalLLMProviderConfiguration.compatibilityKey,
+            LocalLLMProviderConfiguration.timeoutSecondsKey,
+            LocalLLMProviderConfiguration.contextWindowKey
+        ]
+        let savedDefaults = Dictionary(uniqueKeysWithValues: localKeys.map { ($0, defaults.object(forKey: $0)) })
+        let savedCorrectionProvider = LLMCorrectionService.shared.selectedProvider
+        let savedSummaryEnabled = LLMSummarySettingsService.shared.isEnabled
+        let savedSummaryProvider = LLMSummarySettingsService.shared.selectedProvider
+        let savedAnswerEnabled = MeetingSearchAnswerSettingsService.shared.isEnabled
+        let savedAnswerProvider = MeetingSearchAnswerSettingsService.shared.selectedProvider
+        defer {
+            for key in localKeys {
+                switch savedDefaults[key] {
+                case .some(.some(let value)):
+                    defaults.set(value, forKey: key)
+                default:
+                    defaults.removeObject(forKey: key)
+                }
+            }
+            LLMCorrectionService.shared.selectedProvider = savedCorrectionProvider
+            LLMSummarySettingsService.shared.isEnabled = savedSummaryEnabled
+            LLMSummarySettingsService.shared.selectedProvider = savedSummaryProvider
+            MeetingSearchAnswerSettingsService.shared.isEnabled = savedAnswerEnabled
+            MeetingSearchAnswerSettingsService.shared.selectedProvider = savedAnswerProvider
+        }
+
+        defaults.set("http://127.0.0.1:11434", forKey: LocalLLMProviderConfiguration.baseURLKey)
+        defaults.set("settings-local-model", forKey: LocalLLMProviderConfiguration.modelIDKey)
+        defaults.set(LocalLLMEndpointCompatibility.ollamaGenerate.rawValue, forKey: LocalLLMProviderConfiguration.compatibilityKey)
+        defaults.set(45.0, forKey: LocalLLMProviderConfiguration.timeoutSecondsKey)
+        defaults.set(4_096, forKey: LocalLLMProviderConfiguration.contextWindowKey)
+        LLMCorrectionService.shared.selectedProvider = .local
+        LLMSummarySettingsService.shared.isEnabled = true
+        LLMSummarySettingsService.shared.selectedProvider = .local
+        MeetingSearchAnswerSettingsService.shared.isEnabled = true
+        MeetingSearchAnswerSettingsService.shared.selectedProvider = .local
+
+        #expect(LLMCorrectionService.shared.isLoggedIn)
+        let correctionProvider = try #require(LLMCorrectionService.shared.selectedTextProvider())
+        let summaryProvider = try #require(LLMSummarySettingsService.shared.selectedTextProvider())
+        let answerProvider = try #require(MeetingSearchAnswerSettingsService.shared.selectedTextProvider())
+
+        for provider in [correctionProvider, summaryProvider, answerProvider] {
+            #expect(provider.descriptor.id == .local)
+            #expect(await provider.isConfigured())
+            let catalog = await provider.modelCatalog()
+            #expect(catalog.models.first?.id == "settings-local-model")
+            #expect(catalog.warning == nil)
+        }
+    }
+
+    @MainActor
     @Test("legacy 계정 공급자는 text generation adapter로 생성된다")
     func legacyAccountTextProviderCreation() async {
         let registry = LLMProviderRegistry.shared
