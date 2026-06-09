@@ -1,5 +1,52 @@
 import SwiftUI
 
+private enum LocalLLMContextWindowPreset: String, CaseIterable, Identifiable {
+    case small
+    case medium
+    case large
+
+    var id: String { rawValue }
+
+    var tokenCount: Int {
+        switch self {
+        case .small:
+            return 2_048
+        case .medium:
+            return 4_608
+        case .large:
+            return 8_192
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .small:
+            return "소"
+        case .medium:
+            return "중"
+        case .large:
+            return "대"
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .small:
+            return "짧은 회의와 작은 모델에 적합합니다."
+        case .medium:
+            return "권장값입니다. 대부분의 로컬 모델에서 안정적입니다."
+        case .large:
+            return "긴 회의에 유리하지만 느리거나 메모리를 더 쓸 수 있습니다."
+        }
+    }
+
+    static func nearest(to tokenCount: Int) -> Self {
+        allCases.min {
+            abs($0.tokenCount - tokenCount) < abs($1.tokenCount - tokenCount)
+        } ?? .medium
+    }
+}
+
 public struct SettingsView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
     @AppStorage(SpeechEnginePreferences.selectedEngineKey) private var selectedSpeechEngineRaw = SpeechEngineID.defaultEngine.rawValue
@@ -42,7 +89,10 @@ public struct SettingsView: View {
     @State private var glossaryAliasesInput = ""
     @State private var glossaryDescriptionInput = ""
     @State private var glossaryTagsInput = ""
+    @State private var glossaryCategoryInput = "개발"
     @State private var showGlossaryAddForm = false
+    @State private var showLocalLLMAdvancedSettings = false
+    @State private var isDetectingLocalLLMCompatibility = false
 
     // 외부 연동(Notion MCP OAuth·Confluence token).
     @ObservedObject private var notionMCP = NotionMCPService.shared
@@ -65,7 +115,7 @@ public struct SettingsView: View {
     public var body: some View {
         Form {
             aiProcessingSection
-            if generalAIEnabled {
+            if aiConnectionNeeded {
                 aiConnectionSection
             }
             glossarySection
@@ -104,6 +154,7 @@ public struct SettingsView: View {
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
+            syncSearchAnswerProviderWithActiveAIIfNeeded()
             apiKeyInputs = [:]
             loginError = nil
         }
@@ -111,6 +162,7 @@ public struct SettingsView: View {
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
+            syncSearchAnswerProviderWithActiveAIIfNeeded()
             apiKeyInputs = [:]
             loginError = nil
         }
@@ -127,10 +179,10 @@ public struct SettingsView: View {
         Section("용어집") {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("회의 시작 때 관련 용어만 추천합니다.")
+                    Text("묶음별 용어집에서 회의 주제에 맞는 용어만 추천합니다.")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text("활성 용어 \(glossaryStore.entries.filter(\.enabled).count)개")
+                    Text("활성 용어 \(glossaryStore.entries.filter(\.enabled).count)개 · AI 전달량 \(glossaryPromptPreviewCount) / \(GlossaryContextResolver.defaultMaxCharacters)자")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -145,14 +197,26 @@ public struct SettingsView: View {
             }
 
             if glossaryStore.entries.isEmpty {
-                Text("자주 쓰는 회사명, 제품명, 프로젝트명, 기술 용어를 추가해두면 회의 시작 때 선택할 수 있습니다.")
+                Text("개발, 인프라, 제품, 조직처럼 묶음별 용어를 추가하면 새 회의 시작 때 관련 용어만 선택할 수 있습니다.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
-                ForEach(glossaryStore.entries) { entry in
-                    glossaryEntryRow(entry)
+                ForEach(glossaryGroupedEntries, id: \.category) { group in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(group.category)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.secondary)
+                        ForEach(group.entries) { entry in
+                            glossaryEntryRow(entry)
+                        }
+                    }
                 }
             }
+
+            Text("AI에는 전체 용어집이 아니라 회의 주제와 선택한 묶음에 맞는 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달됩니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -165,6 +229,12 @@ public struct SettingsView: View {
                     if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(entry.description)
                             .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    let tags = entry.tags.joined(separator: ", ")
+                    if !tags.isEmpty {
+                        Text("태그: \(tags)")
+                            .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                     let aliases = entry.aliases.joined(separator: ", ")
@@ -198,6 +268,13 @@ public struct SettingsView: View {
 
     private var glossaryAddForm: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Picker("묶음", selection: $glossaryCategoryInput) {
+                ForEach(glossaryCategoryPresets, id: \.self) { category in
+                    Text(category).tag(category)
+                }
+            }
+            .pickerStyle(.segmented)
+
             glossaryInputField(
                 title: "정확한 표기",
                 placeholder: "Liquibase",
@@ -294,6 +371,7 @@ public struct SettingsView: View {
             canonical: glossaryCanonicalInput,
             aliasesText: glossaryAliasesInput,
             description: glossaryDescriptionInput,
+            category: glossaryCategoryInput,
             tagsText: glossaryTagsInput
         ) {
             clearGlossaryInputs()
@@ -306,6 +384,33 @@ public struct SettingsView: View {
         glossaryAliasesInput = ""
         glossaryDescriptionInput = ""
         glossaryTagsInput = ""
+    }
+
+    private var glossaryCategoryPresets: [String] {
+        ["개발", "인프라", "제품", "조직", "기타"]
+    }
+
+    private var glossaryGroupedEntries: [(category: String, entries: [GlossaryEntry])] {
+        let grouped = Dictionary(grouping: glossaryStore.entries) { entry in
+            let category = entry.category.trimmingCharacters(in: .whitespacesAndNewlines)
+            return category.isEmpty ? "기타" : category
+        }
+        return grouped.keys.sorted { lhs, rhs in
+            let lhsIndex = glossaryCategoryPresets.firstIndex(of: lhs) ?? Int.max
+            let rhsIndex = glossaryCategoryPresets.firstIndex(of: rhs) ?? Int.max
+            if lhsIndex != rhsIndex { return lhsIndex < rhsIndex }
+            return lhs.localizedStandardCompare(rhs) == .orderedAscending
+        }
+        .map { category in
+            let entries = grouped[category] ?? []
+            return (category: category, entries: entries)
+        }
+    }
+
+    private var glossaryPromptPreviewCount: Int {
+        GlossaryContextResolver()
+            .resolve(manualGlossary: "", selectedEntries: glossaryStore.entries.filter(\.isUsable))
+            .count
     }
 
     // MARK: - AI Section Rows
@@ -356,11 +461,6 @@ public struct SettingsView: View {
 
             if answerSettings.isEnabled {
                 searchAnswerDetailRows
-                if !generalAIEnabled, let err = loginError {
-                    Text(err)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
             }
 
             Text(aiProcessingStateMessage)
@@ -371,17 +471,15 @@ public struct SettingsView: View {
 
     private var aiConnectionSection: some View {
         Section("AI 연결") {
-            if generalAIEnabled {
-                aiProviderRow
-                currentProviderModelPicker
-                if activeAIProvider.requiresWarning {
-                    tosWarningRow
-                }
-                llmStatusRow
-                llmActionRow
-                if deviceCodeInProgress {
-                    deviceCodeRow
-                }
+            aiProviderRow
+            currentProviderModelPicker
+            if activeAIProvider.requiresWarning {
+                tosWarningRow
+            }
+            llmStatusRow
+            llmActionRow
+            if deviceCodeInProgress {
+                deviceCodeRow
             }
 
             if let err = loginError {
@@ -424,7 +522,7 @@ public struct SettingsView: View {
             set: { enabled in
                 answerSettings.isEnabled = enabled
                 if enabled {
-                    answerSettings.selectedProvider = answerCapableProvider(from: activeAIProvider)
+                    answerSettings.selectedProvider = activeAIProvider
                 }
             }
         )
@@ -432,6 +530,10 @@ public struct SettingsView: View {
 
     private var generalAIEnabled: Bool {
         llmService.selectedProvider != .none || summarySettings.isEnabled
+    }
+
+    private var aiConnectionNeeded: Bool {
+        generalAIEnabled || answerSettings.isEnabled
     }
 
     private var aiProcessingStateMessage: String {
@@ -471,10 +573,14 @@ public struct SettingsView: View {
 
     private func normalizeSearchAnswerProviderIfNeeded() {
         guard answerSettings.isEnabled else { return }
-        let provider = answerCapableProvider(from: answerSettings.selectedProvider)
-        if provider != answerSettings.selectedProvider {
+        syncSearchAnswerProviderWithActiveAIIfNeeded()
+    }
+
+    private func syncSearchAnswerProviderWithActiveAIIfNeeded() {
+        guard answerSettings.isEnabled else { return }
+        let provider = activeAIProvider
+        if provider != .none, provider != answerSettings.selectedProvider {
             answerSettings.selectedProvider = provider
-            lastLLMProviderRaw = provider.rawValue
         }
     }
 
@@ -759,8 +865,7 @@ public struct SettingsView: View {
     @ViewBuilder
     private var searchAnswerDetailRows: some View {
         VStack(alignment: .leading, spacing: 8) {
-            searchAnswerProviderRow
-            Text("검색 답변은 로컬 LLM 또는 공식 API provider만 지원합니다. Codex, Gemini, Copilot 계정 로그인은 전사 다듬기와 회의록 정리에만 사용합니다.")
+            Text("검색 답변도 AI 연결의 \(activeAIProvider.label)을 함께 사용합니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -769,12 +874,11 @@ public struct SettingsView: View {
                 .foregroundColor(.orange)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if generalAIEnabled, answerCapableProvider(from: answerSettings.selectedProvider) == activeAIProvider {
-                Text("검색 답변도 아래 AI 연결 설정을 함께 사용합니다.")
+            if activeAIProviderAuthKind == .accountLogin {
+                Text("공식 API 키 방식이 아니며 검색 근거가 해당 계정 서비스로 전송됩니다. 데이터 사용과 학습 여부는 각 앱의 프라이버시 설정에서 제어하세요.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
-                searchAnswerConnectionRows
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -824,6 +928,9 @@ public struct SettingsView: View {
         if summarySettings.selectedProvider != .none {
             return summarySettings.selectedProvider
         }
+        if answerSettings.isEnabled, answerSettings.selectedProvider != .none {
+            return answerSettings.selectedProvider
+        }
         return restoredLLMProvider
     }
 
@@ -838,6 +945,9 @@ public struct SettingsView: View {
                 }
                 if summarySettings.isEnabled {
                     summarySettings.selectedProvider = provider
+                }
+                if answerSettings.isEnabled {
+                    answerSettings.selectedProvider = provider
                 }
             }
         )
@@ -895,33 +1005,60 @@ public struct SettingsView: View {
 
     private func localLLMSettingsRows(title: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("로컬 런타임", selection: $localLLMCompatibilityRaw) {
-                ForEach(LocalLLMEndpointCompatibility.allCases) { compatibility in
-                    Text(compatibility.displayName).tag(compatibility.rawValue)
-                }
-            }
-            TextField("Endpoint URL", text: $localLLMBaseURL)
-                .textFieldStyle(.roundedBorder)
             TextField(title, text: $localLLMModelID)
                 .textFieldStyle(.roundedBorder)
             localLLMInstalledModelsRows
-            Stepper(value: $localLLMTimeoutSeconds, in: 5...600, step: 5) {
-                Text("응답 대기 \(Int(localLLMTimeoutSeconds))초")
+
+            Picker("문맥 창", selection: localLLMContextPresetBinding) {
+                ForEach(LocalLLMContextWindowPreset.allCases) { preset in
+                    Text(preset.label).tag(preset)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text("\(localLLMContextPreset.label) · \(formattedInteger(localLLMContextWindow)) tokens · \(localLLMContextPreset.helpText)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            DisclosureGroup(isExpanded: $showLocalLLMAdvancedSettings) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("로컬 런타임", selection: $localLLMCompatibilityRaw) {
+                        ForEach(LocalLLMEndpointCompatibility.allCases) { compatibility in
+                            Text(compatibility.displayName).tag(compatibility.rawValue)
+                        }
+                    }
+                    TextField("Endpoint URL", text: $localLLMBaseURL)
+                        .textFieldStyle(.roundedBorder)
+                    HStack(spacing: 8) {
+                        Button("Endpoint 확인") {
+                            Task { await detectLocalLLMCompatibility() }
+                        }
+                        .font(.caption)
+                        .disabled(localLLMBaseURLValue == nil || isDetectingLocalLLMCompatibility)
+                        if isDetectingLocalLLMCompatibility {
+                            ProgressView()
+                                .scaleEffect(0.65)
+                        }
+                    }
+                    Stepper(value: $localLLMTimeoutSeconds, in: 5...600, step: 5) {
+                        Text("응답 대기 \(Int(localLLMTimeoutSeconds))초")
+                            .font(.caption)
+                    }
+                    if localLLMCompatibilityValue != .ollamaGenerate {
+                        Text(localLLMStatusMessage)
+                            .font(.caption)
+                            .foregroundColor(localLLMConfigurationIsValid ? .secondary : .orange)
+                    }
+                    Text("OpenAI 호환 서버는 LM Studio, llama.cpp server, vLLM처럼 /v1/chat/completions 형식을 제공하는 로컬 또는 사설 서버입니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } label: {
+                Text("고급 설정")
                     .font(.caption)
             }
-            Stepper(
-                value: $localLLMContextWindow,
-                in: LocalLLMProviderConfiguration.minimumContextWindow...LocalLLMProviderConfiguration.maximumContextWindow,
-                step: 512
-            ) {
-                Text("문맥 창 \(localLLMContextWindow) tokens")
-                    .font(.caption)
-            }
-            if localLLMCompatibilityValue != .ollamaGenerate {
-                Text(localLLMStatusMessage)
-                    .font(.caption)
-                    .foregroundColor(localLLMConfigurationIsValid ? .secondary : .orange)
-            }
+
             Text("API 키는 필요하지 않습니다. 다만 endpoint가 외부 주소이면 회의 원문이 그 서버로 전송됩니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -1079,12 +1216,54 @@ public struct SettingsView: View {
         isLoadingLocalLLMModels = false
     }
 
+    @MainActor
+    private func detectLocalLLMCompatibility() async {
+        guard let baseURL = localLLMBaseURLValue else { return }
+        isDetectingLocalLLMCompatibility = true
+        defer { isDetectingLocalLLMCompatibility = false }
+
+        if await endpointResponds(baseURL.appendingPathComponent("api").appendingPathComponent("tags")) {
+            localLLMCompatibilityRaw = LocalLLMEndpointCompatibility.ollamaGenerate.rawValue
+            await refreshLocalLLMModelCatalog(force: true)
+            return
+        }
+
+        if await endpointResponds(baseURL.appendingPathComponent("v1").appendingPathComponent("models")) {
+            localLLMCompatibilityRaw = LocalLLMEndpointCompatibility.openAIChatCompletions.rawValue
+            localLLMModelCatalog = nil
+            localLLMModelCatalogKey = nil
+            return
+        }
+
+        localLLMModelCatalog = LLMModelCatalog(
+            models: [],
+            source: .manualOnly,
+            warning: "Endpoint에서 Ollama 또는 OpenAI 호환 서버를 확인하지 못했습니다."
+        )
+        localLLMModelCatalogKey = localLLMModelCatalogRefreshKey
+    }
+
+    private func endpointResponds(_ url: URL) async -> Bool {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 5
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            return (200..<300).contains(httpResponse.statusCode)
+        } catch {
+            return false
+        }
+    }
+
     private var tosWarningRow: some View {
         HStack(spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(.orange)
                 .font(.caption)
-            Text("비공식 방식으로 서비스 ToS 회색 지대입니다. 개인 사용 목적으로만 사용하세요.")
+            Text("공식 API 키 방식이 아닙니다. 데이터 사용과 학습 여부는 각 앱의 프라이버시 설정에서 제어하세요.")
                 .font(.caption)
                 .foregroundColor(.orange)
         }
@@ -1228,6 +1407,17 @@ public struct SettingsView: View {
 
     private var localLLMCompatibilityValue: LocalLLMEndpointCompatibility {
         LocalLLMProviderConfiguration.compatibility(from: localLLMCompatibilityRaw)
+    }
+
+    private var localLLMContextPreset: LocalLLMContextWindowPreset {
+        LocalLLMContextWindowPreset.nearest(to: localLLMContextWindow)
+    }
+
+    private var localLLMContextPresetBinding: Binding<LocalLLMContextWindowPreset> {
+        Binding(
+            get: { localLLMContextPreset },
+            set: { localLLMContextWindow = $0.tokenCount }
+        )
     }
 
     private var localLLMProviderConfiguration: LocalLLMProviderConfiguration {
@@ -1386,6 +1576,11 @@ public struct SettingsView: View {
         case .none, .local, .gemini, .copilot, .codex:
             return nil
         }
+    }
+
+    private var activeAIProviderAuthKind: LLMProviderAuthKind? {
+        guard let providerID = activeAIProvider.providerID else { return nil }
+        return LLMProviderRegistry.shared.descriptor(for: providerID)?.authKind
     }
 
     private var currentDeviceCode: String {
@@ -2011,5 +2206,11 @@ public struct SettingsView: View {
 
     private func formatDuration(_ t: TimeInterval) -> String {
         String(format: "%02d:%02d", Int(t) / 60, Int(t) % 60)
+    }
+
+    private func formattedInteger(_ value: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 }

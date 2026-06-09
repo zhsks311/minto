@@ -9,9 +9,9 @@ public enum LocalLLMEndpointCompatibility: String, CaseIterable, Identifiable, S
     public var displayName: String {
         switch self {
         case .ollamaGenerate:
-            return "Ollama generate"
+            return "Ollama"
         case .openAIChatCompletions:
-            return "OpenAI 호환 chat"
+            return "기타 OpenAI 호환 서버"
         }
     }
 }
@@ -24,7 +24,7 @@ public struct LocalLLMProviderConfiguration: Equatable, Sendable {
     public static let contextWindowKey = "localLLMContextWindow"
     public static let defaultBaseURL = URL(string: "http://127.0.0.1:11434")!
     public static let defaultTimeoutSeconds: TimeInterval = 120
-    public static let defaultContextWindow = 4_096
+    public static let defaultContextWindow = 4_608
     public static let minimumContextWindow = 512
     public static let maximumContextWindow = 32_768
 

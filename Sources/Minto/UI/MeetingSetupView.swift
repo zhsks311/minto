@@ -194,6 +194,11 @@ public struct MeetingSetupView: View {
 
             if showGlossary {
                 VStack(alignment: .leading, spacing: 10) {
+                    Text("AI에는 선택한 용어와 직접 입력한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달됩니다. 현재 \(combinedGlossary.count) / \(GlossaryContextResolver.defaultMaxCharacters)자")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     if !glossaryCandidates.isEmpty {
                         HStack(spacing: 8) {
                             Text("주제와 관련된 용어")
@@ -261,6 +266,11 @@ public struct MeetingSetupView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.normalizedCanonical)
                     .font(.caption.weight(.semibold))
+                if !entry.category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(entry.category)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
                 if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(entry.description)
                         .font(.caption2)
@@ -394,7 +404,7 @@ public struct MeetingSetupView: View {
     }
 
     private var glossaryCandidates: [GlossaryEntry] {
-        glossaryStore.candidates(for: topic, limit: 8)
+        glossaryStore.candidates(for: topic, limit: 24)
     }
 
     private var selectedGlossaryEntries: [GlossaryEntry] {

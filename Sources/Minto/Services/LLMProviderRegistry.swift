@@ -93,23 +93,23 @@ extension LLMProviderRegistry {
         ),
         LLMProviderDescriptor(
             id: .copilot,
-            description: "GitHub Copilot 계정으로 교정과 요약을 실행합니다.",
+            description: "GitHub Copilot 계정으로 교정, 요약, 검색 답변을 실행합니다.",
             authKind: .accountLogin,
-            supportedCapabilities: [.textGeneration, .correction, .summary]
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer]
         ),
         LLMProviderDescriptor(
             id: .chatGPTAccount,
-            description: "GPT 계정 로그인으로 교정과 요약을 실행합니다.",
+            description: "GPT 계정 로그인으로 교정, 요약, 검색 답변을 실행합니다.",
             authKind: .accountLogin,
             requiresWarning: true,
-            supportedCapabilities: [.textGeneration, .correction, .summary]
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer]
         ),
         LLMProviderDescriptor(
             id: .geminiAccount,
-            description: "Gemini 계정 로그인으로 교정과 요약을 실행합니다.",
+            description: "Gemini 계정 로그인으로 교정, 요약, 검색 답변을 실행합니다.",
             authKind: .accountLogin,
             requiresWarning: true,
-            supportedCapabilities: [.textGeneration, .correction, .summary]
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer]
         )
     ]
 }

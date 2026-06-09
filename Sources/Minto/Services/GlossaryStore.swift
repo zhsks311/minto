@@ -112,7 +112,7 @@ public final class GlossaryStore: ObservableObject {
     }
 
     nonisolated public static func promptLines(for entries: [GlossaryEntry]) -> [String] {
-        cleaned(entries).filter(\.isUsable).map { entry in
+        cleaned(entries, sortByUpdatedAt: false).filter(\.isUsable).map { entry in
             var line = entry.normalizedCanonical
             let aliases = entry.aliases.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             if !aliases.isEmpty {
@@ -139,7 +139,7 @@ public final class GlossaryStore: ObservableObject {
         }
     }
 
-    nonisolated private static func cleaned(_ raw: [GlossaryEntry]) -> [GlossaryEntry] {
+    nonisolated private static func cleaned(_ raw: [GlossaryEntry], sortByUpdatedAt: Bool = true) -> [GlossaryEntry] {
         var seen = Set<String>()
         var cleanedEntries: [GlossaryEntry] = []
         for var entry in raw {
@@ -154,6 +154,7 @@ public final class GlossaryStore: ObservableObject {
             seen.insert(key)
             cleanedEntries.append(entry)
         }
+        guard sortByUpdatedAt else { return cleanedEntries }
         return cleanedEntries.sorted { $0.updatedAt > $1.updatedAt }
     }
 
@@ -201,11 +202,11 @@ public struct GlossarySnapshot: Codable, Sendable, Equatable {
 }
 
 public struct GlossaryContextResolver: Sendable {
-    public let maxEntries: Int
+    public static let defaultMaxCharacters = 1_200
+
     public let maxCharacters: Int
 
-    public init(maxEntries: Int = 12, maxCharacters: Int = 1_200) {
-        self.maxEntries = maxEntries
+    public init(maxCharacters: Int = Self.defaultMaxCharacters) {
         self.maxCharacters = maxCharacters
     }
 
@@ -218,9 +219,7 @@ public struct GlossaryContextResolver: Sendable {
             .split(whereSeparator: { $0.isNewline })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        let merged = Array(uniqueLines(selectedLines + manualLines).prefix(maxEntries)).joined(separator: "\n")
-        guard merged.count > maxCharacters else { return merged }
-        return String(merged.prefix(maxCharacters)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return fitLines(uniqueLines(selectedLines + manualLines), maxCharacters: maxCharacters)
     }
 
     private func uniqueLines(_ lines: [String]) -> [String] {
@@ -235,6 +234,24 @@ public struct GlossaryContextResolver: Sendable {
             result.append(trimmed)
         }
         return result
+    }
+
+    private func fitLines(_ lines: [String], maxCharacters: Int) -> String {
+        guard maxCharacters > 0 else { return "" }
+        var result: [String] = []
+        var currentCount = 0
+
+        for line in lines {
+            let additionalCount = line.count + (result.isEmpty ? 0 : 1)
+            if currentCount + additionalCount <= maxCharacters {
+                result.append(line)
+                currentCount += additionalCount
+            } else if result.isEmpty {
+                return String(line.prefix(maxCharacters)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return result.joined(separator: "\n")
     }
 
     private func canonicalKey(for line: String) -> String {

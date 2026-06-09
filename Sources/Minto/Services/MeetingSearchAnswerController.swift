@@ -84,10 +84,10 @@ public final class MeetingSearchAnswerController: ObservableObject {
             return "검색 답변에 사용할 AI 서비스를 선택하세요."
         }
         guard descriptor.supportedCapabilities.contains(.answer) else {
-            return "현재 선택한 AI 서비스는 검색 답변을 지원하지 않습니다. 로컬 LLM 또는 GPT, Gemini, Claude, OpenRouter API를 선택하세요."
+            return "현재 선택한 AI 서비스는 검색 답변을 지원하지 않습니다. AI 연결에서 다른 서비스를 선택하세요."
         }
         guard isProviderReady else {
-            return "검색 답변 AI 설정을 완료하세요. 로컬 런타임이나 API 키가 필요합니다."
+            return "검색 답변 AI 설정을 완료하세요. 로컬 런타임, 로그인, API 키 중 선택한 연결 방식이 준비되어야 합니다."
         }
         return descriptor.id.isCloudProvider
             ? "상위 검색 근거가 선택한 AI 서비스로 전송됩니다."
@@ -123,7 +123,7 @@ public final class MeetingSearchAnswerController: ObservableObject {
             return
         }
         guard isProviderReady else {
-            errorMessage = "검색 답변 AI 설정을 완료하세요. 로컬 런타임이나 API 키가 필요합니다."
+            errorMessage = "검색 답변 AI 설정을 완료하세요. 로컬 런타임, 로그인, API 키 중 선택한 연결 방식이 준비되어야 합니다."
             return
         }
 

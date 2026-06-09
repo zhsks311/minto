@@ -211,6 +211,13 @@ struct LLMProviderTests {
         #expect(tooLarge.contextWindow == LocalLLMProviderConfiguration.maximumContextWindow)
     }
 
+    @Test("로컬 LLM 기본 context window는 중 프리셋 값이다")
+    func localLLMDefaultContextWindowUsesMediumPreset() {
+        let configuration = LocalLLMProviderConfiguration(modelID: "local")
+
+        #expect(configuration.contextWindow == 4_608)
+    }
+
     @MainActor
     @Test("Settings 저장 local LLM 값은 교정, 요약, 검색 답변 provider로 연결된다")
     func localLLMSettingsRouteThroughAppProviderSelections() async throws {
@@ -283,10 +290,14 @@ struct LLMProviderTests {
         #expect(geminiProvider?.descriptor.id == .geminiAccount)
         #expect(copilotProvider?.descriptor.id == .copilot)
         #expect(gptAPIProvider?.descriptor.id == .gpt)
+        #expect(chatGPTProvider?.descriptor.supportedCapabilities.contains(.answer) == true)
+        #expect(geminiProvider?.descriptor.supportedCapabilities.contains(.answer) == true)
+        #expect(copilotProvider?.descriptor.supportedCapabilities.contains(.answer) == true)
 
         let catalog = await chatGPTProvider?.modelCatalog()
         #expect(catalog?.source == .bundledFallback)
         #expect(catalog?.models.isEmpty == false)
+        #expect(catalog?.models.first?.capabilities.contains(.answer) == true)
     }
 
     @MainActor

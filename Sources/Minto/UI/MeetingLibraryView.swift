@@ -173,37 +173,67 @@ public struct MeetingLibraryView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Minto")
-                    .font(.system(size: 20, weight: .bold))
-                Text(isSearching ? "필요한 회의와 근거를 찾고 있어요" : "회의를 찾거나 새로 시작하세요")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                headerTitle
+                    .layoutPriority(1)
+                Spacer(minLength: 12)
+                searchField
+                    .frame(minWidth: 220, idealWidth: 360, maxWidth: 360)
+                    .layoutPriority(0)
+                fileImportButton
+                    .layoutPriority(2)
+                newMeetingButton
+                    .layoutPriority(4)
             }
 
-            Spacer(minLength: 20)
-
-            searchField
-                .frame(width: 360)
-
-            Button { selectFileForImport() } label: {
-                Label("파일 가져오기", systemImage: "tray.and.arrow.down")
-                    .font(.system(size: 13, weight: .semibold))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    headerTitle
+                    Spacer(minLength: 12)
+                    newMeetingButton
+                }
+                HStack(spacing: 10) {
+                    searchField
+                        .frame(minWidth: 180, maxWidth: .infinity)
+                    fileImportButton
+                }
             }
-            .controlSize(.large)
-            .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
-            .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있습니다." : "음성 또는 영상 파일로 회의록을 만듭니다.")
-
-            Button { onNewMeeting() } label: {
-                Label("새 회의", systemImage: "mic.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .controlSize(.large)
-            .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 16)
+    }
+
+    private var headerTitle: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Minto")
+                .font(.system(size: 20, weight: .bold))
+            Text(isSearching ? "필요한 회의와 근거를 찾고 있어요" : "회의를 찾거나 새로 시작하세요")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var fileImportButton: some View {
+        Button { selectFileForImport() } label: {
+            Label("파일 가져오기", systemImage: "tray.and.arrow.down")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .controlSize(.large)
+        .fixedSize()
+        .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
+        .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있습니다." : "음성 또는 영상 파일로 회의록을 만듭니다.")
+    }
+
+    private var newMeetingButton: some View {
+        Button { onNewMeeting() } label: {
+            Label("새 회의", systemImage: "mic.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .controlSize(.large)
+        .buttonStyle(.borderedProminent)
+        .fixedSize()
     }
 
     private var searchField: some View {

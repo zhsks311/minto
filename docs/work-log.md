@@ -17,6 +17,7 @@
 | 6 | 2026-06-09 | [LLM/Search/Export 확장 구현 시작](work-log/2026-06-09-06-llm-search-export-expansion-start.md) | provider/search/export/glossary/file/system audio/mixed audio/local LLM/benchmark/keychain reconnect/SecretStore 병렬 통합 |
 | 7 | 2026-06-09 | [Local LLM Ollama 설치 모델 조회](work-log/2026-06-09-07-local-llm-ollama-model-discovery.md) | Ollama `/api/tags` 설치 모델 picker, 모델 확인 상태, 실패 fallback 테스트 |
 | 8 | 2026-06-10 | [Settings AI/Glossary UX 정리](work-log/2026-06-10-08-settings-ai-glossary-ux.md) | 검색 답변 연결 위치 정리, 로컬/API 안내, 용어집 입력 폼 개선 |
+| 9 | 2026-06-10 | [Settings AI 통합과 용어집 예산 표시](work-log/2026-06-10-09-settings-ai-unified-glossary-budget.md) | 검색 답변 AI를 기본 AI 연결과 통합, 로컬 LLM 프리셋, 용어집 묶음/1,200자 예산, 새 회의 버튼 유지 |
 
 ## 남은 과제
 

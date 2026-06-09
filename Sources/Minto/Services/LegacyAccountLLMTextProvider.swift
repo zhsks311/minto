@@ -80,7 +80,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
     }
 
     private func bundledModels() async -> [LLMModelInfo] {
-        let capabilities: Set<LLMModelInfo.Capability> = [.textGeneration, .correction, .summary]
+        let capabilities: Set<LLMModelInfo.Capability> = [.textGeneration, .correction, .summary, .answer]
         switch descriptor.id {
         case .chatGPTAccount:
             return await CodexOAuthService.availableModels.map {

@@ -141,23 +141,25 @@ struct GlossaryStoreTests {
         #expect(merged == "Liquibase = 리퀴베이스 — DB 스키마 변경 관리\nFlyway")
     }
 
-    @Test("resolver는 최종 병합 결과 기준으로 용어 수를 제한한다")
-    func resolverCapsFinalLineCount() {
+    @Test("resolver는 항목 수 대신 문자 예산 안에서 가능한 용어를 포함한다")
+    func resolverUsesCharacterBudgetInsteadOfEntryCount() {
         let selected = [
             GlossaryEntry(canonical: "Liquibase"),
-            GlossaryEntry(canonical: "Flyway")
+            GlossaryEntry(canonical: "Flyway"),
+            GlossaryEntry(canonical: "ArgoCD"),
+            GlossaryEntry(canonical: "Terraform"),
+            GlossaryEntry(canonical: "Kubernetes")
         ]
 
-        let merged = GlossaryContextResolver(maxEntries: 3, maxCharacters: 1_000).resolve(
+        let merged = GlossaryContextResolver(maxCharacters: 1_000).resolve(
             manualGlossary: "Confluence\nNotion\nJira",
             selectedEntries: selected
         )
 
-        #expect(merged.split(whereSeparator: { $0.isNewline }).count == 3)
+        #expect(merged.split(whereSeparator: { $0.isNewline }).count == 8)
         #expect(merged.contains("Liquibase"))
-        #expect(merged.contains("Flyway"))
-        #expect(merged.contains("Confluence"))
-        #expect(!merged.contains("Notion"))
+        #expect(merged.contains("Kubernetes"))
+        #expect(merged.contains("Jira"))
     }
 
     @Test("resolver는 프롬프트 용어 수와 길이를 제한한다")
@@ -166,13 +168,12 @@ struct GlossaryStoreTests {
             GlossaryEntry(canonical: "Term\($0)", description: String(repeating: "가", count: 120))
         }
 
-        let merged = GlossaryContextResolver(maxEntries: 2, maxCharacters: 40).resolve(
+        let merged = GlossaryContextResolver(maxCharacters: 40).resolve(
             manualGlossary: "ManualTerm",
             selectedEntries: entries
         )
 
         #expect(merged.count <= 40)
-        #expect(merged.contains("Term1") || merged.contains("Term5"))
-        #expect(!merged.contains("Term3"))
+        #expect(merged.contains("Term1"))
     }
 }
