@@ -13,6 +13,10 @@ public struct SettingsView: View {
     @AppStorage("geminiAPIModel") private var geminiAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gemini)
     @AppStorage("claudeAPIModel") private var claudeAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .claude)
     @AppStorage("openRouterAPIModel") private var openRouterAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .openRouter)
+    @AppStorage(LocalLLMProviderConfiguration.baseURLKey) private var localLLMBaseURL = LocalLLMProviderConfiguration.defaultBaseURL.absoluteString
+    @AppStorage(LocalLLMProviderConfiguration.modelIDKey) private var localLLMModelID = ""
+    @AppStorage(LocalLLMProviderConfiguration.compatibilityKey) private var localLLMCompatibilityRaw = LocalLLMEndpointCompatibility.ollamaGenerate.rawValue
+    @AppStorage(LocalLLMProviderConfiguration.timeoutSecondsKey) private var localLLMTimeoutSeconds = LocalLLMProviderConfiguration.defaultTimeoutSeconds
 
     // LLM 교정 서비스 관찰
     @ObservedObject private var llmService = LLMCorrectionService.shared
@@ -665,6 +669,8 @@ public struct SettingsView: View {
     @ViewBuilder
     private func providerModelPicker(_ provider: LLMProviderSelection, title: String) -> some View {
         switch provider {
+        case .local:
+            localLLMSettingsRows(title: title)
         case .gptAPI:
             apiModelPicker(title: title, providerID: .gpt, selection: $gptAPIModel)
         case .geminiAPI:
@@ -762,8 +768,34 @@ public struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
             providerModelPicker(provider, title: "검색 답변 모델")
-            apiKeyStatusRow(providerID)
-            apiKeySettingsRow(providerID)
+            if providerID != .local {
+                apiKeyStatusRow(providerID)
+                apiKeySettingsRow(providerID)
+            }
+        }
+    }
+
+    private func localLLMSettingsRows(title: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("로컬 런타임", selection: $localLLMCompatibilityRaw) {
+                ForEach(LocalLLMEndpointCompatibility.allCases) { compatibility in
+                    Text(compatibility.displayName).tag(compatibility.rawValue)
+                }
+            }
+            TextField("Endpoint URL", text: $localLLMBaseURL)
+                .textFieldStyle(.roundedBorder)
+            TextField(title, text: $localLLMModelID)
+                .textFieldStyle(.roundedBorder)
+            Stepper(value: $localLLMTimeoutSeconds, in: 5...600, step: 5) {
+                Text("응답 대기 \(Int(localLLMTimeoutSeconds))초")
+                    .font(.caption)
+            }
+            Text(localLLMStatusMessage)
+                .font(.caption)
+                .foregroundColor(localLLMConfigurationIsValid ? .secondary : .orange)
+            Text("API 키는 필요하지 않습니다. 다만 endpoint가 외부 주소이면 회의 원문이 그 서버로 전송됩니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -882,7 +914,9 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var llmActionRow: some View {
-        if let providerID = currentAPIKeyProviderID {
+        if activeAIProvider == .local {
+            EmptyView()
+        } else if let providerID = currentAPIKeyProviderID {
             apiKeySettingsRow(providerID)
         } else if currentProviderLoggedIn {
             Button("로그아웃") {
@@ -982,10 +1016,48 @@ public struct SettingsView: View {
 
     // MARK: - Computed helpers
 
+    private var localLLMBaseURLValue: URL? {
+        guard let url = URL(string: localLLMBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil
+        else {
+            return nil
+        }
+        return url
+    }
+
+    private var localLLMModelIDValue: String {
+        localLLMModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var localLLMConfigurationIsValid: Bool {
+        localLLMBaseURLValue != nil && !localLLMModelIDValue.isEmpty
+    }
+
+    private var localLLMMissingStatusText: String {
+        if localLLMBaseURLValue == nil {
+            return "Endpoint URL 확인 필요"
+        }
+        return "모델 ID 필요"
+    }
+
+    private var localLLMStatusMessage: String {
+        if localLLMBaseURLValue == nil {
+            return "Endpoint URL 형식을 확인하세요."
+        }
+        if localLLMModelIDValue.isEmpty {
+            return "Ollama 또는 llama.cpp 서버에서 사용할 모델 ID를 입력하세요."
+        }
+        return "로컬 런타임으로 교정, 요약, 검색 답변을 실행합니다."
+    }
+
     private var currentProviderLoggedIn: Bool {
         switch activeAIProvider {
         case .none:
             return false
+        case .local:
+            return localLLMConfigurationIsValid
         case .gptAPI:
             return LLMAPIKeyStore.shared.hasAPIKey(for: .gpt)
         case .geminiAPI:
@@ -1004,6 +1076,9 @@ public struct SettingsView: View {
     }
 
     private var currentProviderStatusText: String {
+        if activeAIProvider == .local {
+            return localLLMConfigurationIsValid ? "로컬 런타임 설정됨" : localLLMMissingStatusText
+        }
         if currentAPIKeyProviderID != nil {
             return currentProviderLoggedIn ? "API 키 저장됨" : "API 키 필요"
         }
@@ -1012,7 +1087,7 @@ public struct SettingsView: View {
 
     private var currentEmail: String {
         switch activeAIProvider {
-        case .none, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
+        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
             return ""
         case .gemini:
             return geminiEmail
@@ -1039,7 +1114,7 @@ public struct SettingsView: View {
             return .claude
         case .openRouterAPI:
             return .openRouter
-        case .none, .gemini, .copilot, .codex:
+        case .none, .local, .gemini, .copilot, .codex:
             return nil
         }
     }
@@ -1057,7 +1132,7 @@ public struct SettingsView: View {
     private func startLogin() {
         isLoginLoading = true
         switch activeAIProvider {
-        case .none, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI:
+        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI:
             isLoginLoading = false
         case .gemini:
             Task {
@@ -1088,7 +1163,7 @@ public struct SettingsView: View {
 
     private func disconnectCurrentAIProvider() {
         switch activeAIProvider {
-        case .none:
+        case .none, .local:
             break
         case .gptAPI:
             LLMAPIKeyStore.shared.deleteAPIKey(for: .gpt)

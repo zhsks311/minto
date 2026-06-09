@@ -98,6 +98,8 @@ public final class LLMCorrectionService: ObservableObject {
         switch selectedProvider {
         case .none:
             return false
+        case .local:
+            return LocalLLMProviderConfiguration.stored().isConfigured
         case .gptAPI:
             return LLMAPIKeyStore.shared.hasAPIKey(for: .gpt)
         case .geminiAPI:
@@ -117,7 +119,7 @@ public final class LLMCorrectionService: ObservableObject {
 
     public var loginEmail: String {
         switch selectedProvider {
-        case .none, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
+        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
             return ""
         case .gemini:
             return GeminiOAuthService.shared.email
@@ -128,7 +130,7 @@ public final class LLMCorrectionService: ObservableObject {
 
     public func logout() {
         switch selectedProvider {
-        case .none:
+        case .none, .local:
             break
         case .gptAPI:
             LLMAPIKeyStore.shared.deleteAPIKey(for: .gpt)

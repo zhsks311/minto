@@ -44,6 +44,8 @@ struct LLMProviderTests {
     func legacyCorrectionProviderMapping() {
         let registry = LLMProviderRegistry.shared
 
+        #expect(LLMProviderSelection.local.providerID == .local)
+        #expect(LLMProviderSelection(providerID: .local) == .local)
         #expect(registry.providerID(forLegacyCorrectionProviderRawValue: "codex") == .chatGPTAccount)
         #expect(registry.providerID(forLegacyCorrectionProviderRawValue: "gemini") == .geminiAccount)
         #expect(registry.providerID(forLegacyCorrectionProviderRawValue: "copilot") == .copilot)
@@ -84,6 +86,38 @@ struct LLMProviderTests {
         #expect(catalog.source == .manualOnly)
         #expect(catalog.models.first?.id == "llama3.1:8b")
         #expect(catalog.models.first?.capabilities == [.textGeneration, .correction, .summary, .answer])
+    }
+
+    @Test("로컬 LLM 설정은 저장값을 우선하고 환경변수를 fallback으로 쓴다")
+    func localLLMConfigurationReadsStoredSettingsBeforeEnvironment() throws {
+        let suiteName = "LocalLLMProviderTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let environment = [
+            "MINTO_LOCAL_LLM_BASE_URL": "http://127.0.0.1:11434",
+            "MINTO_LOCAL_LLM_MODEL": "env-model",
+            "MINTO_LOCAL_LLM_COMPATIBILITY": "ollamaGenerate",
+            "MINTO_LOCAL_LLM_TIMEOUT_SECONDS": "90"
+        ]
+
+        var configuration = LocalLLMProviderConfiguration.stored(defaults: defaults, environment: environment)
+        #expect(configuration.baseURL.absoluteString == "http://127.0.0.1:11434")
+        #expect(configuration.modelID == "env-model")
+        #expect(configuration.compatibility == .ollamaGenerate)
+        #expect(configuration.timeoutSeconds == 90)
+
+        defaults.set("http://127.0.0.1:8080", forKey: LocalLLMProviderConfiguration.baseURLKey)
+        defaults.set("qwen2.5:7b", forKey: LocalLLMProviderConfiguration.modelIDKey)
+        defaults.set(LocalLLMEndpointCompatibility.openAIChatCompletions.rawValue, forKey: LocalLLMProviderConfiguration.compatibilityKey)
+        defaults.set(30.0, forKey: LocalLLMProviderConfiguration.timeoutSecondsKey)
+
+        configuration = LocalLLMProviderConfiguration.stored(defaults: defaults, environment: environment)
+        #expect(configuration.baseURL.absoluteString == "http://127.0.0.1:8080")
+        #expect(configuration.modelID == "qwen2.5:7b")
+        #expect(configuration.compatibility == .openAIChatCompletions)
+        #expect(configuration.timeoutSeconds == 30)
+        #expect(configuration.isConfigured)
     }
 
     @MainActor

@@ -87,6 +87,19 @@
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-integration-build`: passed
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-integration-smoke-test --filter 'AudioInputMode|LLMProviderTests|MeetingSearchAnswerService|RelatedInfoTests'`: passed, 86 tests
 
+## Post-Integration Follow-up
+
+- Local LLM settings connection:
+  - `.local` provider selection is now available in correction, summary, and search answer provider pickers.
+  - Local runtime settings are stored in UserDefaults and still fall back to `MINTO_LOCAL_LLM_*` environment variables.
+  - Settings UI exposes endpoint URL, model ID, Ollama/OpenAI-compatible mode, and timeout without API key/login controls.
+  - Endpoint URL validation requires `http` or `https` with a host.
+- Validation:
+  - `git diff --check`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter LLMProviderTests`: passed, 27 tests
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter 'LLMProviderTests|MeetingSearchAnswerService|SummaryServiceTests'`: passed, 51 tests
+  - `swift build --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-build`: passed
+
 ## Remaining Manual QA
 
 - System audio:
@@ -94,6 +107,7 @@
   - 권한 허용 후 앱 복귀 시 readiness 갱신과 level meter 동작 확인
   - 실제 화상회의 앱 출력으로 system audio capture 확인
 - Local LLM:
+  - Settings에서 local provider 선택, endpoint/model 저장, 상태 문구 확인
   - Ollama 또는 OpenAI-compatible local endpoint로 correction, summary, answer 호출 확인
   - 한국어 회의 교정 품질, 요약 구조화 성공률, 검색 답변 근거 충실도, latency, RAM benchmark 기록
 - Keychain reconnect UX:

@@ -1,36 +1,56 @@
 import Foundation
 
-public enum LocalLLMEndpointCompatibility: String, Sendable {
+public enum LocalLLMEndpointCompatibility: String, CaseIterable, Identifiable, Sendable {
     case ollamaGenerate
     case openAIChatCompletions
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .ollamaGenerate:
+            return "Ollama generate"
+        case .openAIChatCompletions:
+            return "OpenAI 호환 chat"
+        }
+    }
 }
 
 public struct LocalLLMProviderConfiguration: Equatable, Sendable {
+    public static let baseURLKey = "localLLMBaseURL"
+    public static let modelIDKey = "localLLMModelID"
+    public static let compatibilityKey = "localLLMCompatibility"
+    public static let timeoutSecondsKey = "localLLMTimeoutSeconds"
+    public static let defaultBaseURL = URL(string: "http://127.0.0.1:11434")!
+    public static let defaultTimeoutSeconds: TimeInterval = 120
+
     public let baseURL: URL
     public let modelID: String
     public let compatibility: LocalLLMEndpointCompatibility
     public let timeoutSeconds: TimeInterval
 
     public init(
-        baseURL: URL = URL(string: "http://127.0.0.1:11434")!,
+        baseURL: URL = Self.defaultBaseURL,
         modelID: String = "",
         compatibility: LocalLLMEndpointCompatibility = .ollamaGenerate,
-        timeoutSeconds: TimeInterval = 120
+        timeoutSeconds: TimeInterval = Self.defaultTimeoutSeconds
     ) {
         self.baseURL = baseURL
         self.modelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         self.compatibility = compatibility
-        self.timeoutSeconds = timeoutSeconds
+        self.timeoutSeconds = max(5, timeoutSeconds)
+    }
+
+    public var isConfigured: Bool {
+        !modelID.isEmpty
     }
 
     public static func environment(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Self {
-        let baseURL = environment["MINTO_LOCAL_LLM_BASE_URL"]
-            .flatMap(URL.init(string:))
-            ?? URL(string: "http://127.0.0.1:11434")!
+        let baseURL = endpointURL(from: environment["MINTO_LOCAL_LLM_BASE_URL"]) ?? defaultBaseURL
         let modelID = environment["MINTO_LOCAL_LLM_MODEL"] ?? ""
         let timeoutSeconds = environment["MINTO_LOCAL_LLM_TIMEOUT_SECONDS"]
             .flatMap(TimeInterval.init)
-            ?? 120
+            ?? defaultTimeoutSeconds
         let compatibility = Self.compatibility(from: environment["MINTO_LOCAL_LLM_COMPATIBILITY"])
         return Self(
             baseURL: baseURL,
@@ -40,13 +60,55 @@ public struct LocalLLMProviderConfiguration: Equatable, Sendable {
         )
     }
 
-    private static func compatibility(from rawValue: String?) -> LocalLLMEndpointCompatibility {
+    public static func stored(
+        defaults: UserDefaults = .standard,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Self {
+        let environmentConfiguration = Self.environment(environment)
+        let savedBaseURL = endpointURL(from: defaults.string(forKey: baseURLKey))
+        let savedModelID = nonEmpty(defaults.string(forKey: modelIDKey))
+        let savedCompatibility = defaults.string(forKey: compatibilityKey)
+        let savedCompatibilityValue = savedCompatibility.map(compatibility(from:))
+        let savedTimeout = defaults.object(forKey: timeoutSecondsKey) as? TimeInterval
+
+        return Self(
+            baseURL: savedBaseURL ?? environmentConfiguration.baseURL,
+            modelID: savedModelID ?? environmentConfiguration.modelID,
+            compatibility: savedCompatibilityValue ?? environmentConfiguration.compatibility,
+            timeoutSeconds: savedTimeout ?? environmentConfiguration.timeoutSeconds
+        )
+    }
+
+    public static func compatibility(from rawValue: String?) -> LocalLLMEndpointCompatibility {
         switch rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "openai", "openai_chat", "openai-chat", "chat_completions", "chat-completions", "llama.cpp":
+        case LocalLLMEndpointCompatibility.openAIChatCompletions.rawValue.lowercased(),
+             "openai",
+             "openai_chat",
+             "openai-chat",
+             "chat_completions",
+             "chat-completions",
+             "llama.cpp":
             return .openAIChatCompletions
         default:
             return .ollamaGenerate
         }
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func endpointURL(from value: String?) -> URL? {
+        guard let rawValue = nonEmpty(value),
+              let url = URL(string: rawValue),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil
+        else {
+            return nil
+        }
+        return url
     }
 }
 
@@ -58,7 +120,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
 
     public init(
         registry: LLMProviderRegistry = .shared,
-        configuration: LocalLLMProviderConfiguration = .environment(),
+        configuration: LocalLLMProviderConfiguration = .stored(),
         transport: any LLMAPITransport = URLSessionLLMAPITransport()
     ) {
         self.descriptor = registry.descriptor(for: .local) ?? LLMProviderDescriptor(
@@ -72,7 +134,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
     }
 
     public func isConfigured() async -> Bool {
-        !configuration.modelID.isEmpty
+        configuration.isConfigured
     }
 
     public func modelCatalog() async -> LLMModelCatalog {

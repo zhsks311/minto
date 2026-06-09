@@ -2,6 +2,7 @@ import Foundation
 
 public enum LLMProviderSelection: String, CaseIterable {
     case none = "none"
+    case local = "local"
     case gptAPI = "gpt_api"
     case geminiAPI = "gemini_api"
     case claudeAPI = "claude_api"
@@ -14,6 +15,8 @@ public enum LLMProviderSelection: String, CaseIterable {
         switch self {
         case .none:
             return nil
+        case .local:
+            return .local
         case .gptAPI:
             return .gpt
         case .geminiAPI:
@@ -36,6 +39,8 @@ public enum LLMProviderSelection: String, CaseIterable {
 
     public init?(providerID: LLMProviderID) {
         switch providerID {
+        case .local:
+            self = .local
         case .gpt:
             self = .gptAPI
         case .gemini:
@@ -51,8 +56,6 @@ public enum LLMProviderSelection: String, CaseIterable {
                 return nil
             }
             self = provider
-        case .local:
-            return nil
         }
     }
 
