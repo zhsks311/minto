@@ -298,6 +298,46 @@ struct LLMProviderTests {
         #expect(catalog?.source == .bundledFallback)
         #expect(catalog?.models.isEmpty == false)
         #expect(catalog?.models.first?.capabilities.contains(.answer) == true)
+        #expect(catalog?.models.map(\.id) == [
+            "auto",
+            "gpt-5.5",
+            "gpt-5.3-codex",
+            "gpt-5.4",
+            "gpt-5.4-mini"
+        ])
+
+        let geminiCatalog = await geminiProvider?.modelCatalog()
+        #expect(geminiCatalog?.models.first(where: \.isRecommended)?.id == GeminiOAuthService.defaultModelID)
+        #expect(geminiCatalog?.models.map(\.id) == [
+            "gemini-3.5-flash",
+            "gemini-3.1-pro-preview",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro"
+        ])
+
+        let copilotCatalog = await copilotProvider?.modelCatalog()
+        #expect(copilotCatalog?.models.first(where: \.isRecommended)?.id == CopilotOAuthService.defaultModelID)
+        #expect(copilotCatalog?.models.map(\.id) == [
+            "gpt-5-mini",
+            "gpt-5.3-codex",
+            "gpt-5.4-mini",
+            "gpt-5.4-nano",
+            "gpt-5.4",
+            "gpt-5.5",
+            "claude-sonnet-4.5",
+            "claude-sonnet-4.6",
+            "claude-haiku-4.5",
+            "claude-opus-4.5",
+            "claude-opus-4.6",
+            "claude-opus-4.7",
+            "claude-opus-4.8",
+            "gemini-3-flash",
+            "gemini-3.1-pro-preview",
+            "gemini-3.5-flash",
+            "gemini-2.5-pro",
+            "mai-code-1-flash",
+            "raptor-mini"
+        ])
     }
 
     @MainActor

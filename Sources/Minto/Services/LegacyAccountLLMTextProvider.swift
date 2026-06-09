@@ -97,7 +97,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
                     id: $0.id,
                     displayName: $0.label,
                     capabilities: capabilities,
-                    isRecommended: $0.id == "gemini-2.5-flash"
+                    isRecommended: $0.id == GeminiOAuthService.defaultModelID
                 )
             }
         case .copilot:
@@ -106,7 +106,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
                     id: $0.id,
                     displayName: $0.label,
                     capabilities: capabilities,
-                    isRecommended: $0.id == "gpt-4o"
+                    isRecommended: $0.id == CopilotOAuthService.defaultModelID
                 )
             }
         case .local, .gpt, .gemini, .claude, .openRouter:

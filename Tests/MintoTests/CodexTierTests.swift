@@ -43,7 +43,29 @@ struct CodexTierTests {
     func paidTiersUseUpgradedModel() {
         let svc = CodexOAuthService.shared
         for plan in ["pro", "plus", "team", "enterprise"] {
-            #expect(svc.correctionModel(for: plan) == "gpt-5.4", "\(plan)은 상위 모델이어야 함")
+            #expect(svc.correctionModel(for: plan) == "gpt-5.5", "\(plan)은 상위 모델이어야 함")
         }
+    }
+
+    @Test("상위 모델 실패 시 검증된 하위 모델로만 폴백한다")
+    func fallbackChainUsesStableLowerModels() {
+        let svc = CodexOAuthService.shared
+
+        #expect(svc.correctionModelFallbackChain(for: "gpt-5.5") == [
+            "gpt-5.5",
+            "gpt-5.4",
+            "gpt-5.4-mini"
+        ])
+        #expect(svc.correctionModelFallbackChain(for: "gpt-5.4") == [
+            "gpt-5.4",
+            "gpt-5.4-mini"
+        ])
+        #expect(svc.correctionModelFallbackChain(for: "gpt-5.4-mini") == [
+            "gpt-5.4-mini"
+        ])
+        #expect(svc.correctionModelFallbackChain(for: "custom-model") == [
+            "custom-model",
+            "gpt-5.4-mini"
+        ])
     }
 }

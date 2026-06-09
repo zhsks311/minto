@@ -53,9 +53,9 @@ public struct SettingsView: View {
     @AppStorage("selectedModel") private var selectedModel = "openai_whisper-large-v3-v20240930_turbo"
 
     // 교정 provider별 모델 선택(서비스가 같은 UserDefaults 키를 읽는다).
-    @AppStorage("codexModel") private var codexModel = "auto"
-    @AppStorage("geminiModel") private var geminiModel = "gemini-2.5-flash"
-    @AppStorage("copilotModel") private var copilotModel = "gpt-4o"
+    @AppStorage("codexModel") private var codexModel = CodexOAuthService.defaultModelID
+    @AppStorage("geminiModel") private var geminiModel = GeminiOAuthService.defaultModelID
+    @AppStorage("copilotModel") private var copilotModel = CopilotOAuthService.defaultModelID
     @AppStorage("gptAPIModel") private var gptAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gpt)
     @AppStorage("geminiAPIModel") private var geminiAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gemini)
     @AppStorage("claudeAPIModel") private var claudeAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .claude)
@@ -146,6 +146,7 @@ public struct SettingsView: View {
         .onAppear {
             summarySettings.migrateIfNeeded(from: llmService.selectedProvider)
             normalizeSpeechEngineSelection()
+            normalizeAccountModelSelectionIfNeeded()
             normalizeSearchAnswerProviderIfNeeded()
             rememberCurrentProviderIfNeeded()
             Task { await refreshSpeechEngineAvailability() }
@@ -576,6 +577,18 @@ public struct SettingsView: View {
         syncSearchAnswerProviderWithActiveAIIfNeeded()
     }
 
+    private func normalizeAccountModelSelectionIfNeeded() {
+        if !CodexOAuthService.availableModels.contains(where: { $0.id == codexModel }) {
+            codexModel = CodexOAuthService.defaultModelID
+        }
+        if !GeminiOAuthService.availableModels.contains(where: { $0.id == geminiModel }) {
+            geminiModel = GeminiOAuthService.defaultModelID
+        }
+        if !CopilotOAuthService.availableModels.contains(where: { $0.id == copilotModel }) {
+            copilotModel = CopilotOAuthService.defaultModelID
+        }
+    }
+
     private func syncSearchAnswerProviderWithActiveAIIfNeeded() {
         guard answerSettings.isEnabled else { return }
         let provider = activeAIProvider
@@ -905,21 +918,21 @@ public struct SettingsView: View {
             Picker(title, selection: $codexModel) {
                 ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
-            Text("보통은 자동을 그대로 두면 됩니다. 계정 플랜과 앱 상태에 맞는 모델을 사용합니다.")
+            Text("보통은 자동을 그대로 두면 됩니다. 계정 플랜에서 최신 모델을 쓸 수 없으면 안정 모델로 다시 시도합니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .gemini:
             Picker(title, selection: $geminiModel) {
                 ForEach(GeminiOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
-            Text("보통은 기본 모델을 그대로 두면 됩니다. 더 높은 품질이 필요할 때만 Pro 계열을 선택하세요.")
+            Text("Gemini 계정과 Code Assist 권한에 따라 일부 모델은 막힐 수 있습니다. 실패하면 이전 호환 모델로 다시 시도합니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .copilot:
             Picker(title, selection: $copilotModel) {
                 ForEach(CopilotOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
-            Text("Copilot 계정에서 사용할 대화 모델입니다. 특별한 이유가 없으면 기본값을 유지하세요.")
+            Text("Copilot 계정과 조직 정책에서 허용된 모델만 실제 호출됩니다. 막히면 다른 모델을 선택하세요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .none:
