@@ -14,6 +14,23 @@ struct SecretStoreTests {
         #expect(SecretStoreFactory.make(environment: [:]) is KeychainSecretStore)
     }
 
+    @Test("factory는 dev file store root override를 사용한다")
+    func factoryUsesLocalDevRootOverride() throws {
+        let root = try temporaryDirectory().appendingPathComponent("override", isDirectory: true)
+        let store = SecretStoreFactory.make(environment: [
+            SecretStoreFactory.devStoreModeEnvironmentKey: "file",
+            SecretStoreFactory.devStoreRootEnvironmentKey: root.path
+        ])
+        let secret = Data("root-override-secret".utf8)
+
+        #expect(store.save(account: "gpt", data: secret, service: "com.minto.test.root"))
+        #expect(store.load(account: "gpt", service: "com.minto.test.root") == secret)
+
+        let storedFiles = try FileManager.default.contentsOfDirectory(atPath: root.path)
+        #expect(storedFiles.count == 1)
+        #expect(!storedFiles[0].contains("root-override-secret"))
+    }
+
     @Test("LocalDevSecretStore는 secret을 파일에 저장하고 삭제한다")
     func localDevSecretStoreRoundTripsData() throws {
         let root = try temporaryDirectory()
