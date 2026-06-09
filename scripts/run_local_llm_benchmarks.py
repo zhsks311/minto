@@ -479,7 +479,7 @@ def write_summary_csv(path, metrics):
         "error",
     ]
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for metric in metrics:
             writer.writerow({field: metric.get(field) for field in fieldnames})
