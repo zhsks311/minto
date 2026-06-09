@@ -251,7 +251,7 @@
   - 실제 마이크와 화상회의 앱 출력을 동시에 넣은 `마이크+시스템` VAD/STT 결과 확인. ViewModel-level mixed source buffer to VAD handoff is covered by `AudioInputModeTests`.
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
-  - 설치된 후보 중 `llama3.1:8b`는 gate breakdown repeat-3에서 9/9 transport는 통과했지만 correction clean rate `0.0`, answer min recall `0.667`로 `default_candidate_ready=false`다. 다음 기본값 판단은 추가 모델 설치 또는 correction 출력 후처리/프롬프트 재설계로 진행한다.
+  - 설치된 후보 중 `llama3.1:8b`는 gate breakdown repeat-3에서 9/9 transport는 통과했지만 correction clean rate `0.0`, answer min recall `0.667`로 `default_candidate_ready=false`다. 앱 correction wrapper 후처리는 추가됐으므로, 다음 기본값 판단은 후처리 반영 benchmark 재측정, 추가 모델 설치, 또는 correction 전용 prompt 재설계로 진행한다.
 - Keychain reconnect UX:
   - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 Atlassian 인증 실패 렌더 확인. 서비스의 `needsReconnect` 상태 전환과 export sheet의 Settings handoff 조건은 자동 테스트로 검증됨.
   - invalid Notion token으로 관련 문서 검색 실패 후 실제 OAuth 실패, 재연결, 지우기 버튼 동작 확인. `needsReconnect` 상태의 검색 안내는 자동 검증됨.
