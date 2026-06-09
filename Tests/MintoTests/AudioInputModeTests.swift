@@ -211,6 +211,35 @@ struct AudioInputModeTests {
         #expect(viewModel.audioInputMode == .systemAudio)
         await viewModel.stopRecordingAndDrain()
     }
+
+    @Test("ViewModel은 혼합 입력 source buffer를 VAD pipeline으로 전달한다")
+    func viewModelPassesMixedSourceBuffersToVAD() async {
+        let initialSource = InputModeStubAudioSource()
+        let selectedSource = InputModeStubAudioSource()
+        let stt = InputModeStubSTT()
+        let vad = InputModeStubVAD()
+        var requestedModes: [AudioInputMode] = []
+        let viewModel = TranscriptionViewModel(
+            sttService: stt,
+            audioSource: initialSource,
+            vadProcessor: vad,
+            audioSourceFactory: { mode in
+                requestedModes.append(mode)
+                return selectedSource
+            }
+        )
+
+        viewModel.startNewRecordingSession(inputMode: .mixed)
+        selectedSource.emitBuffer([0.2, -0.2, 0.4])
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(requestedModes == [.mixed])
+        #expect(initialSource.stopCount == 1)
+        #expect(selectedSource.startCount == 1)
+        #expect(viewModel.audioInputMode == .mixed)
+        #expect(samples(vad.processedBuffers.first, approximatelyEqualTo: [0.2, -0.2, 0.4]))
+        await viewModel.stopRecordingAndDrain()
+    }
 }
 
 private final class InputModeStubAudioSource: AudioSourceProtocol {
@@ -356,8 +385,25 @@ private final class InputModeStubSTT: TranscriptionSTTServicing {
 private final class InputModeStubVAD: VoiceActivityDetector, @unchecked Sendable {
     var onChunk: (@Sendable (AudioChunk) -> Void)?
     var onPreviewChunk: (@Sendable (AudioChunk) -> Void)?
+    private let lock = NSLock()
+    private var receivedBuffers: [[Float]] = []
 
-    func process(samples: [Float]) {}
+    var processedBuffers: [[Float]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return receivedBuffers
+    }
+
+    func process(samples: [Float]) {
+        lock.lock()
+        receivedBuffers.append(samples)
+        lock.unlock()
+    }
+
     func flushPending() async -> AudioChunk? { nil }
-    func reset() {}
+    func reset() {
+        lock.lock()
+        receivedBuffers.removeAll()
+        lock.unlock()
+    }
 }
