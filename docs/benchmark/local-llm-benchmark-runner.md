@@ -31,6 +31,24 @@ python3 scripts/run_local_llm_benchmarks.py \
 
 Mock mode validates the runner, output files, summary generation, and heuristic scoring without contacting a model server.
 
+## Correction context
+
+The runner includes two correction cases:
+
+- `correction_terms`: minimal system prompt plus one transcript line.
+- `correction_terms_with_context`: Minto-style correction prompt with meeting topic, glossary, previous context, and current transcript line.
+
+Use the context case when checking whether a local model can follow the same glossary-assisted correction path as the app.
+
+```bash
+python3 scripts/run_local_llm_benchmarks.py \
+  --compatibility ollama \
+  --base-url http://127.0.0.1:11434 \
+  --model qwen2.5:3b \
+  --cases correction_terms_with_context \
+  --num-ctx 4096
+```
+
 ## Ollama run
 
 ```bash

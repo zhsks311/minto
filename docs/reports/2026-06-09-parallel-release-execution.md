@@ -110,6 +110,8 @@
   - Controlled `deepseek-r1:8b` rerun with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096`; timeout was resolved, but correction term recall was `0.0`, so default-candidate status remains on hold.
   - Controlled `qwen2.5:3b` run with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-numctx4096`; it completed 3/3 cases with mean latency `6.957s`, but correction term recall was `0.0`, so default-candidate status remains on hold.
   - Controlled `llama3.1:8b` run with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-numctx4096`; it completed 3/3 cases with mean latency `6.894s`, but correction term recall was `0.0`, so default-candidate status remains on hold.
+  - The runner now includes `correction_terms_with_context`, which mirrors Minto's meeting topic/glossary correction prompt more closely than the minimal correction case.
+  - Context correction reruns are recorded under `docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-correction-context-numctx4096` and `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-numctx4096`; qwen remained at term recall `0.0`, while llama improved to `0.75` but missed `Liquibase`, so default-candidate status remains on hold.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -138,6 +140,10 @@
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model deepseek-r1:8b --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096 --fail-fast`: passed transport/format gates, 3 cases completed, correction term recall `0.0`
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model qwen2.5:3b --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-numctx4096 --fail-fast`: passed transport/format gates, 3 cases completed, mean latency `6.957s`, correction term recall `0.0`
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-numctx4096 --fail-fast`: passed transport/format gates, 3 cases completed, mean latency `6.894s`, correction term recall `0.0`
+  - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model qwen2.5:3b --cases correction_terms_with_context --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-case-dryrun`: passed, request body has Minto correction policy, meeting context, glossary, current transcript, and `options.num_ctx=4096`
+  - `python3 scripts/run_local_llm_benchmarks.py --mock --model mock-model --cases correction_terms_with_context --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-case-mock`: passed, correction term recall `1.0`
+  - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model qwen2.5:3b --cases correction_terms_with_context --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-correction-context-numctx4096 --fail-fast`: passed transport/format gates, mean latency `5.223s`, correction term recall `0.0`
+  - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-numctx4096 --fail-fast`: passed transport/format gates, mean latency `22.979s`, correction term recall `0.75`
 
 ## Remaining Manual QA
 
