@@ -78,6 +78,41 @@ struct MeetingFileImportUseCaseTests {
         #expect(summary.receivedTranscript == "[00:00] corrected text")
     }
 
+    @Test("파일 import UI 상태는 교정과 요약 단계를 순서대로 노출한다")
+    func exposesCorrectionAndSummaryStagesDuringImport() async throws {
+        let startedAt = Date(timeIntervalSince1970: 3_000)
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 32_000), durationSeconds: 2)
+        let stt = StubFileImportSTT(texts: ["raw first", "raw second"])
+        let correction = StubFileImportCorrection(responses: ["corrected first", "corrected second"])
+        let summary = StubFileImportSummary(summary: MeetingSummary(title: "정리된 회의", leadAnswer: "요약됨"))
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: summary,
+            store: store,
+            chunkSeconds: 1,
+            now: { startedAt }
+        )
+        correction.stageProbe = { useCase.state.stage }
+        summary.stageProbe = { useCase.state.stage }
+
+        let record = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/local-llm-pipeline.wav"),
+            topic: "Local LLM QA",
+            glossary: "Liquibase",
+            document: "회의 문맥",
+            shouldCorrect: true
+        )
+
+        #expect(correction.observedStages == [.correcting, .correcting])
+        #expect(summary.observedStages == [.summarizing])
+        #expect(record.transcript.map(\.text) == ["corrected first", "corrected second"])
+        #expect(summary.receivedTranscript == "[00:00] corrected first\n[00:01] corrected second")
+        #expect(useCase.state.stage == .completed)
+    }
+
     @Test("전사 결과가 비어 있으면 저장하지 않고 실패 상태를 남긴다")
     func failsWhenTranscriptIsEmpty() async {
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
@@ -269,6 +304,8 @@ private final class StubFileImportCorrection: MeetingFileImportCorrecting {
     }
 
     var calls: [Call] = []
+    var observedStages: [MeetingFileImportStage] = []
+    var stageProbe: (@MainActor () -> MeetingFileImportStage)?
     private var responses: [String?]
 
     init(responses: [String?] = []) {
@@ -276,6 +313,9 @@ private final class StubFileImportCorrection: MeetingFileImportCorrecting {
     }
 
     func correct(text: String, context: LLMCorrectionContext) async -> String? {
+        if let stageProbe {
+            observedStages.append(stageProbe())
+        }
         calls.append(Call(text: text, context: context))
         return responses.isEmpty ? nil : responses.removeFirst()
     }
@@ -285,6 +325,8 @@ private final class StubFileImportCorrection: MeetingFileImportCorrecting {
 private final class StubFileImportSummary: MeetingFileImportSummaryGenerating {
     var receivedTranscript: String?
     var receivedContext: SummaryGenerationContext?
+    var observedStages: [MeetingFileImportStage] = []
+    var stageProbe: (@MainActor () -> MeetingFileImportStage)?
     private let summary: MeetingSummary?
 
     init(summary: MeetingSummary? = nil) {
@@ -292,6 +334,9 @@ private final class StubFileImportSummary: MeetingFileImportSummaryGenerating {
     }
 
     func generateFinal(transcript: String, context: SummaryGenerationContext) async -> MeetingSummary? {
+        if let stageProbe {
+            observedStages.append(stageProbe())
+        }
         receivedTranscript = transcript
         receivedContext = context
         return summary

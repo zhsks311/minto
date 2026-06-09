@@ -126,6 +126,7 @@
   - Provider smoke coverage confirms local LLM Ollama payloads for correction, final summary, and search answer use cases.
   - Search answer flow coverage now confirms `MeetingSearchAnswerUseCase` calls `LocalLLMProvider` with an Ollama `answer` payload, preserves citations, and uses `num_predict=1800` with the configured context window.
   - Rendered app UI QA now confirms the meeting search "AI 답변" button calls the Local LLM Ollama `/api/generate` flow and renders the returned answer with citations.
+  - File import pipeline QA now confirms correction and final summary run as pipeline stages rather than standalone buttons: `전사 다듬는 중`/`.correcting` is observed before the corrected transcript is passed to `회의록 정리 중`/`.summarizing`.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -179,6 +180,7 @@
   - `/tmp/minto2-local-llm-ui-e2e-requests-1780982633.jsonl`: last mock Ollama request used `/api/generate`, model `minto-ui-e2e`, `stream=false`, `options.num_predict=1800`, `options.num_ctx=4096`, citation instructions, `질문: liquibase`, and meeting evidence containing `db 스키마 형상 관리` plus `change-log-master.xml`.
   - `/tmp/minto2-local-llm-ui-answer-window.png`: window-id capture shows the rendered search answer card, citation list `[1]...[4]`, and the isolated one-meeting search result.
   - Test cleanup: app and mock server processes were stopped; real `com.minto.app` defaults were restored to no `meetingSearchAnswer*` keys, no local endpoint override keys, and `localLLMModelID=qwen2.5:3b`.
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-correction-summary-pipeline-test --filter MeetingFileImportUseCaseTests`: passed, 10 tests
 
 ## Remaining Manual QA
 
@@ -189,7 +191,7 @@
   - `마이크+시스템` 선택 후 마이크와 시스템 출력이 모두 VAD/STT pipeline으로 들어오는지 확인
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
-  - 앱 화면의 correction, summary 버튼 호출 확인. Search answer rendered button click is verified with isolated meeting data and mock Local LLM.
+  - 실제 앱 화면에서 파일 가져오기 또는 녹음 종료 경로의 correction/summary 진행 상태 rendered QA. There are no standalone correction/summary buttons in the current UI; the automated file import pipeline test covers the stage order and corrected-transcript handoff.
   - correction term recall이 높은 추가 실제 후보 모델 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
   - invalid Confluence token으로 Confluence 내보내기 실패 후 `다시 연결 필요` 표시 확인. 관련 문서 검색 401은 자동 검증됨.
