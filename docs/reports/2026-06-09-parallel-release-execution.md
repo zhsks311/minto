@@ -112,6 +112,7 @@
   - Mixed readiness uses the same screen/system audio permission and availability gate as system audio.
   - Rendered setup UI QA confirms `시스템` and `마이크+시스템` selection both show ready states and enable `녹음 시작` when screen/system audio permission is already available.
   - `SystemAudioLiveTests` provides an opt-in live QA gate that plays a generated WAV through `/usr/bin/afplay` and verifies `SystemAudioSource` receives buffer and level callbacks from a separate process.
+  - ViewModel coverage now confirms `.mixed` input selection replaces the source before recording and sends source buffers into the VAD pipeline.
 - Local LLM benchmark runner:
   - `scripts/run_local_llm_benchmarks.py` measures correction, summary JSON, and grounded answer cases.
   - The runner supports Ollama and OpenAI-compatible endpoints, dry-run, mock validation, repeat runs, and optional server RSS sampling.
@@ -191,6 +192,7 @@
   - Test cleanup: the direct SwiftPM app process was stopped. Permission-denied state was not exercised because this macOS environment already had screen/system audio permission available.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-system-audio-live-default-test --filter 'SystemAudioLiveTests|AudioInputMode'`: passed, 14 tests. The live capture test is skipped by default unless `RUN_SYSTEM_AUDIO_LIVE_TEST=1` is set.
   - `RUN_SYSTEM_AUDIO_LIVE_TEST=1 swift test --disable-sandbox --scratch-path /tmp/minto2-system-audio-live-default-test --filter SystemAudioLiveTests`: passed, 1 test. The opt-in run verified system audio buffer and level callbacks from external `afplay` output.
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-viewmodel-pipeline-test --filter AudioInputMode`: passed, 14 tests. This includes `.mixed` selection and source-buffer-to-VAD handoff coverage.
 
 ## Remaining Manual QA
 
@@ -198,7 +200,7 @@
   - 권한 없음 상태에서 readiness warning, start disabled, 시스템 설정 열기 동작 확인. Current QA environment already had screen/system audio permission, so this state remains manual.
   - 권한 거부 상태에서 권한 허용 후 앱 복귀 시 readiness 갱신과 level meter 동작 확인
   - 실제 화상회의 앱 출력으로 source-specific system audio capture 확인. Generic external-process system output is covered by `SystemAudioLiveTests`.
-  - `마이크+시스템` 선택 후 마이크와 시스템 출력이 모두 VAD/STT pipeline으로 들어오는지 확인
+  - 실제 마이크와 화상회의 앱 출력을 동시에 넣은 `마이크+시스템` VAD/STT 결과 확인. ViewModel-level mixed source buffer to VAD handoff is covered by `AudioInputModeTests`.
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
   - 실제 앱 화면에서 파일 가져오기 또는 녹음 종료 경로의 correction/summary 진행 상태 rendered QA. There are no standalone correction/summary buttons in the current UI; the automated file import pipeline test covers the stage order and corrected-transcript handoff.
