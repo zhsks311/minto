@@ -33,6 +33,12 @@ enum STTAudioUtilities {
         return 20 * log10(max(rms, 1e-7))
     }
 
+    static func normalizedLevel(_ samples: [Float]) -> Float {
+        guard !samples.isEmpty else { return 0 }
+        let db = dbLevel(samples)
+        return Float(max(0, min(1, (db + 60) / 50)))
+    }
+
     static func writeTemporaryAudioFile(samples: [Float]) throws -> URL {
         guard let format = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,

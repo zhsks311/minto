@@ -14,6 +14,13 @@
 | 3 | 2026-05-31 | [LLM 후처리 교정 + OAuth 3종 연동](work-log/2026-05-31-03-llm-correction-oauth.md) | Gemini/Copilot/Codex OAuth + 비동기 교정 (추가만, 미검증) |
 | 4 | 2026-05-31 | [OAuth 실제 동작화 + 교정 품질 측정](work-log/2026-05-31-04-oauth-functional-quality.md) | 설정 진입점, Codex 9개 수정, Gemini loopback, sample CER |
 | 5 | 2026-06-01 | [회의 맥락 기반 후교정](work-log/2026-06-01-05-meeting-context-correction.md) | MeetingContext·CorrectionPrompt 중앙화+보수적 규칙, 회의 시작 시트 |
+| 6 | 2026-06-09 | [LLM/Search/Export 확장 구현 시작](work-log/2026-06-09-06-llm-search-export-expansion-start.md) | provider/search/export/glossary/file/system audio/mixed audio/local LLM/benchmark/keychain reconnect/SecretStore 병렬 통합 |
+| 7 | 2026-06-09 | [Local LLM Ollama 설치 모델 조회](work-log/2026-06-09-07-local-llm-ollama-model-discovery.md) | Ollama `/api/tags` 설치 모델 picker, 모델 확인 상태, 실패 fallback 테스트 |
+| 8 | 2026-06-10 | [Settings AI/Glossary UX 정리](work-log/2026-06-10-08-settings-ai-glossary-ux.md) | 검색 답변 연결 위치 정리, 로컬/API 안내, 용어집 입력 폼 개선 |
+| 9 | 2026-06-10 | [Settings AI 통합과 용어집 예산 표시](work-log/2026-06-10-09-settings-ai-unified-glossary-budget.md) | 검색 답변 AI를 기본 AI 연결과 통합, 로컬 LLM 프리셋, 용어집 묶음/1,200자 예산, 새 회의 버튼 유지 |
+| 10 | 2026-06-10 | [Settings 모델 선택 안내 정리](work-log/2026-06-10-10-settings-model-selection-clarity.md) | 로컬 LLM 모델 입력 중복 제거, 고급 설정 클릭 영역 확대, API 모델 선택 안내 개선 |
+| 11 | 2026-06-10 | [Provider 모델 카탈로그 갱신](work-log/2026-06-10-11-provider-model-catalog-refresh.md) | API key provider 기본 모델과 직접 입력 예시를 현재 공식 모델 ID로 갱신 |
+| 12 | 2026-06-10 | [계정 provider 모델 카탈로그 갱신](work-log/2026-06-10-12-account-provider-model-refresh.md) | GPT/Gemini/Copilot 계정 로그인 모델 목록 갱신, 최신 모델 실패 시 안정 모델 폴백 |
 
 ## 남은 과제
 

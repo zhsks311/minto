@@ -1,0 +1,10 @@
+{
+  "json_valid_rate": null,
+  "max_latency_seconds": 5.223,
+  "max_server_rss_peak_mb": 96.69,
+  "mean_latency_seconds": 5.223,
+  "mean_term_recall": 0.0,
+  "passed_runs": 1,
+  "success_rate": 1.0,
+  "total_runs": 1
+}

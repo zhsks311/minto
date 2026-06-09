@@ -15,6 +15,7 @@ public final class MeetingStore: ObservableObject {
     private let dir: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let searchIndexStore: MeetingSearchIndexStore
 
     /// - Parameter directory: 저장 디렉터리. nil이면 ~/Library/Application Support/Minto/meetings (테스트는 temp 주입).
     public init(directory: URL? = nil) {
@@ -26,6 +27,7 @@ public final class MeetingStore: ObservableObject {
                 .first ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
             dir = base.appendingPathComponent("Minto/meetings", isDirectory: true)
         }
+        searchIndexStore = MeetingSearchIndexStore(directory: dir)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let enc = JSONEncoder()
@@ -52,6 +54,7 @@ public final class MeetingStore: ObservableObject {
             loaded.append(record)
         }
         meetings = loaded.sorted { $0.startedAt > $1.startedAt }
+        rebuildSearchIndex()
     }
 
     /// 회의를 저장한다. 빈 회의(전사·요약 없음)는 저장하지 않는다. 성공 시 true.
@@ -75,6 +78,7 @@ public final class MeetingStore: ObservableObject {
         meetings.removeAll { $0.id == record.id }
         meetings.append(record)
         meetings.sort { $0.startedAt > $1.startedAt }
+        rebuildSearchIndex()
         return true
     }
 
@@ -83,8 +87,15 @@ public final class MeetingStore: ObservableObject {
         let url = dir.appendingPathComponent("\(id.uuidString).json")
         try? FileManager.default.removeItem(at: url)
         meetings.removeAll { $0.id == id }
+        rebuildSearchIndex()
     }
 
     /// 저장 디렉터리(테스트·export 기본 경로 참고용).
     public var storageDirectory: URL { dir }
+
+    public var searchIndexURL: URL { searchIndexStore.indexURL }
+
+    private func rebuildSearchIndex() {
+        searchIndexStore.rebuild(from: meetings)
+    }
 }

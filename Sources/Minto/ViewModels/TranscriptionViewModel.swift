@@ -18,6 +18,14 @@ protocol TranscriptionSTTServicing: AnyObject {
 extension STTService: TranscriptionSTTServicing {}
 
 @MainActor
+protocol TranscriptionSummaryGenerating: AnyObject {
+    func generateIncremental(correctedBatch: String) async -> String?
+    func generateFinal(transcript: String) async -> MeetingSummary?
+}
+
+extension SummaryService: TranscriptionSummaryGenerating {}
+
+@MainActor
 public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Published
@@ -31,16 +39,19 @@ public final class TranscriptionViewModel: ObservableObject {
     @Published public var recordingDuration: TimeInterval = 0
     @Published public var audioLevel: Float = 0
     @Published public var isFinalizingMeeting: Bool = false
+    @Published public private(set) var audioInputMode: AudioInputMode = .microphone
 
     // MARK: - Private
 
     private let sttService: any TranscriptionSTTServicing
     private let llmService = LLMCorrectionService.shared
+    private let summaryService: any TranscriptionSummaryGenerating
     private var transcriptionTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
     private var chunkContinuation: AsyncStream<AudioChunk>.Continuation?
-    private let audioSource: AudioSourceProtocol
+    private var audioSource: any AudioSourceProtocol
+    private let audioSourceFactory: @MainActor (AudioInputMode) -> any AudioSourceProtocol
     private let vadProcessor: any VoiceActivityDetector
     private let emptyFinalRepairPolicy: EmptyFinalRepairPolicy
     private let audioSampleBuffer: TranscriptionAudioSampleBuffer
@@ -73,18 +84,24 @@ public final class TranscriptionViewModel: ObservableObject {
         self.init(
             sttService: STTService(),
             audioSource: MicrophoneSource(),
-            vadProcessor: VoiceActivityDetectorFactory.makeDefault()
+            vadProcessor: VoiceActivityDetectorFactory.makeDefault(),
+            audioSourceFactory: AudioSourceFactory.makeSource(for:)
         )
     }
 
     init(
         sttService: any TranscriptionSTTServicing,
-        audioSource: AudioSourceProtocol,
+        audioSource: any AudioSourceProtocol,
         vadProcessor: any VoiceActivityDetector,
-        emptyFinalRepairPolicy: EmptyFinalRepairPolicy = .fromEnvironment()
+        summaryService: any TranscriptionSummaryGenerating = SummaryService.shared,
+        emptyFinalRepairPolicy: EmptyFinalRepairPolicy = .fromEnvironment(),
+        audioSourceFactory: (@MainActor (AudioInputMode) -> any AudioSourceProtocol)? = nil
     ) {
+        let initialAudioSource = audioSource
         self.sttService = sttService
+        self.summaryService = summaryService
         self.audioSource = audioSource
+        self.audioSourceFactory = audioSourceFactory ?? { _ in initialAudioSource }
         self.vadProcessor = vadProcessor
         self.emptyFinalRepairPolicy = emptyFinalRepairPolicy
         self.audioSampleBuffer = TranscriptionAudioSampleBuffer(
@@ -170,10 +187,18 @@ public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Recording control
 
-    public func startNewRecordingSession() {
+    public func startNewRecordingSession(inputMode: AudioInputMode = .microphone) {
         guard !isRecording else { return }
+        setAudioInputMode(inputMode)
         clearTranscript()
         startRecording()
+    }
+
+    public func setAudioInputMode(_ mode: AudioInputMode) {
+        guard !isRecording else { return }
+        audioSource.stop()
+        audioSource = audioSourceFactory(mode)
+        audioInputMode = mode
     }
 
     public func startRecording() {
@@ -213,8 +238,10 @@ public final class TranscriptionViewModel: ObservableObject {
 
         // AudioSource → VADProcessor + 레벨 미터
         audioSource.onBuffer = { [weak self] samples in
-            self?.audioSampleBuffer.append(samples)
-            self?.vadProcessor.process(samples: samples)
+            Task { @MainActor [weak self] in
+                self?.audioSampleBuffer.append(samples)
+                self?.vadProcessor.process(samples: samples)
+            }
         }
         audioSource.onLevel = { [weak self] level in
             Task { @MainActor [weak self] in
@@ -332,8 +359,8 @@ public final class TranscriptionViewModel: ObservableObject {
         isFinalizingMeeting = false
     }
 
-    /// 누적된 미교정 구간을 한 번에 교정해 하나의 문단으로 병합한다.
-    /// 원본은 이미 표시돼 있으므로 fail-soft: 실패하면 병합하지 않고 원본을 유지한다.
+    /// 누적된 배치를 교정/요약한다.
+    /// 교정 실패나 교정 off 상태에서는 원본을 유지하되, 요약이 켜져 있으면 원본으로 증분 요약을 갱신한다.
     private func flushCorrectionBatch() {
         guard !pendingCorrectionIds.isEmpty else { return }
         let ids = pendingCorrectionIds
@@ -352,19 +379,31 @@ public final class TranscriptionViewModel: ObservableObject {
         correctionTask = Task { @MainActor [weak self] in
             await previous?.value
             guard let self else { return }
-            guard let corrected = await self.llmService.correct(text: original, context: context),
-                  !corrected.isEmpty else { return }
-            self.state.replaceRange(ids: ids, correctedText: corrected)
-            self.committedSegments = self.state.committedSegments
 
-            // 교정본으로 증분 요약 갱신. drop-if-running: 진행 중이면 이번 배치는 건너뛴다
-            // (요약 호출 누적·종료 지연 방지). 누락분은 runningSummary 누적본 + 종료 시 최종 요약이 보완.
-            if self.summaryTask == nil {
-                self.summaryTask = Task { @MainActor [weak self] in
-                    defer { self?.summaryTask = nil }
-                    await SummaryService.shared.generateIncremental(correctedBatch: corrected)
-                }
+            let summaryBatch: String
+            if let corrected = await self.llmService.correct(text: original, context: context),
+               !corrected.isEmpty {
+                self.state.replaceRange(ids: ids, correctedText: corrected)
+                self.committedSegments = self.state.committedSegments
+                summaryBatch = corrected
+            } else {
+                summaryBatch = original
             }
+
+            self.enqueueIncrementalSummary(summaryBatch)
+        }
+    }
+
+    private func enqueueIncrementalSummary(_ batch: String) {
+        let trimmed = batch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, summaryTask == nil else { return }
+
+        // drop-if-running: 진행 중이면 이번 배치는 건너뛴다.
+        // 누락분은 runningSummary 누적본 + 종료 시 최종 요약이 보완.
+        summaryTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.summaryTask = nil }
+            _ = await self.summaryService.generateIncremental(correctedBatch: trimmed)
         }
     }
 
@@ -436,7 +475,7 @@ public final class TranscriptionViewModel: ObservableObject {
             let s = max(0, Int(seg.timestamp.timeIntervalSince(start).rounded()))
             return String(format: "[%02d:%02d] %@", s / 60, s % 60, seg.text)
         }.joined(separator: "\n")
-        return await SummaryService.shared.generateFinal(transcript: transcript)
+        return await summaryService.generateFinal(transcript: transcript)
     }
 
     public func enqueueChunk(_ chunk: AudioChunk) {
@@ -478,6 +517,13 @@ public final class TranscriptionViewModel: ObservableObject {
         switch error {
         case .permissionDenied:
             isPermissionDenied = true
+            isRecording = false
+        case .screenCapturePermissionDenied:
+            isPermissionDenied = true
+            isRecording = false
+            errorMessage = "시스템 사운드 입력을 사용하려면 화면 기록 권한이 필요합니다."
+        case .systemAudioUnavailable(let reason):
+            errorMessage = "시스템 사운드 입력을 사용할 수 없습니다: \(reason)"
             isRecording = false
         case .configChangeFailed(let underlying):
             errorMessage = "오디오 설정 변경 실패: \(underlying.localizedDescription)"

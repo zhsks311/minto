@@ -1,0 +1,431 @@
+import Foundation
+import Testing
+@testable import MintoCore
+
+@MainActor
+@Suite("MeetingFileImportUseCase")
+struct MeetingFileImportUseCaseTests {
+    @Test("파일 샘플을 streaming chunk 전사 후 요약하고 일반 회의로 저장한다")
+    func importsFileAsMeetingRecord() async throws {
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 48_000), durationSeconds: 3)
+        let stt = StubFileImportSTT(texts: ["첫 문장", "둘 문장", "셋 문장"])
+        let correction = StubFileImportCorrection()
+        let summary = StubFileImportSummary(summary: MeetingSummary(title: "요약 제목", leadAnswer: "정리됨"))
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: summary,
+            store: store,
+            chunkSeconds: 1,
+            now: { startedAt }
+        )
+
+        let record = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/source-meeting.m4a"),
+            shouldCorrect: false
+        )
+
+        #expect(record.title == "요약 제목")
+        #expect(record.topic == "source-meeting")
+        #expect(record.startedAt == startedAt)
+        #expect(record.durationSeconds == 3)
+        #expect(record.transcript.map(\.text) == ["첫 문장", "둘 문장", "셋 문장"])
+        #expect(record.transcript.map(\.duration) == [1, 1, 1])
+        #expect(record.transcript[1].timestamp == startedAt.addingTimeInterval(1))
+        #expect(stt.loadedEngines == [.defaultEngine])
+        #expect(stt.transcribedSampleCounts == [16_000, 16_000, 16_000])
+        #expect(summary.receivedContext?.topic == "source-meeting")
+        #expect(summary.receivedTranscript?.contains("[00:02] 셋 문장") == true)
+        #expect(store.savedRecords == [record])
+        #expect(useCase.state.stage == .completed)
+        #expect(useCase.state.record == record)
+    }
+
+    @Test("전사 교정이 켜져 있으면 파일 import context로 교정본을 만들고 저장한다")
+    func appliesCorrectionBeforeSummaryAndSave() async throws {
+        let startedAt = Date(timeIntervalSince1970: 2_000)
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
+        let stt = StubFileImportSTT(texts: ["raw text"])
+        let correction = StubFileImportCorrection(responses: ["corrected text"])
+        let summary = StubFileImportSummary(summary: MeetingSummary(leadAnswer: "정리"))
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: summary,
+            store: store,
+            chunkSeconds: 30,
+            now: { startedAt }
+        )
+
+        let record = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/local-review.wav"),
+            topic: "파일 회의",
+            glossary: "Minto",
+            document: "사후 처리 자료",
+            shouldCorrect: true
+        )
+
+        #expect(correction.calls.map(\.text) == ["raw text"])
+        #expect(correction.calls.first?.context.topic == "파일 회의")
+        #expect(correction.calls.first?.context.glossary == "Minto")
+        #expect(correction.calls.first?.context.document == "사후 처리 자료")
+        #expect(record.transcript.map(\.text) == ["corrected text"])
+        #expect(summary.receivedTranscript == "[00:00] corrected text")
+    }
+
+    @Test("파일 import UI 상태는 교정과 요약 단계를 순서대로 노출한다")
+    func exposesCorrectionAndSummaryStagesDuringImport() async throws {
+        let startedAt = Date(timeIntervalSince1970: 3_000)
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 32_000), durationSeconds: 2)
+        let stt = StubFileImportSTT(texts: ["raw first", "raw second"])
+        let correction = StubFileImportCorrection(responses: ["corrected first", "corrected second"])
+        let summary = StubFileImportSummary(summary: MeetingSummary(title: "정리된 회의", leadAnswer: "요약됨"))
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: summary,
+            store: store,
+            chunkSeconds: 1,
+            now: { startedAt }
+        )
+        correction.stageProbe = { useCase.state.stage }
+        summary.stageProbe = { useCase.state.stage }
+
+        let record = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/local-llm-pipeline.wav"),
+            topic: "Local LLM QA",
+            glossary: "Liquibase",
+            document: "회의 문맥",
+            shouldCorrect: true
+        )
+
+        #expect(correction.observedStages == [.correcting, .correcting])
+        #expect(summary.observedStages == [.summarizing])
+        #expect(record.transcript.map(\.text) == ["corrected first", "corrected second"])
+        #expect(summary.receivedTranscript == "[00:00] corrected first\n[00:01] corrected second")
+        #expect(useCase.state.stage == .completed)
+    }
+
+    @Test("전사 결과가 비어 있으면 저장하지 않고 실패 상태를 남긴다")
+    func failsWhenTranscriptIsEmpty() async {
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
+        let stt = StubFileImportSTT(texts: [""])
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: StubFileImportCorrection(),
+            summaryService: StubFileImportSummary(),
+            store: store
+        )
+
+        await #expect(throws: MeetingFileImportError.emptyTranscript) {
+            try await useCase.importFile(URL(fileURLWithPath: "/tmp/silent.wav"), shouldCorrect: false)
+        }
+        #expect(store.savedRecords.isEmpty)
+        #expect(useCase.state.stage == .failed)
+        #expect(useCase.state.errorMessage == MeetingFileImportError.emptyTranscript.localizedDescription)
+    }
+
+    @Test("취소되면 저장하지 않고 cancelled 상태를 남긴다")
+    func cancellationDoesNotSavePartialRecord() async {
+        let extractor = StubFileExtractor(cancelImmediately: true)
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: StubFileImportSTT(texts: []),
+            correctionService: StubFileImportCorrection(),
+            summaryService: StubFileImportSummary(),
+            store: store
+        )
+
+        await #expect(throws: CancellationError.self) {
+            try await useCase.importFile(URL(fileURLWithPath: "/tmp/cancelled.mp4"), shouldCorrect: false)
+        }
+        #expect(store.savedRecords.isEmpty)
+        #expect(useCase.state.stage == .cancelled)
+    }
+
+    @Test("chunk 처리 중 취소되어도 부분 회의를 저장하지 않는다")
+    func cancellationDuringChunkProcessingDoesNotSavePartialRecord() async {
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
+        let stt = StubFileImportSTT(texts: [""], cancelOnCall: 1)
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: StubFileImportCorrection(),
+            summaryService: StubFileImportSummary(),
+            store: store
+        )
+
+        await #expect(throws: CancellationError.self) {
+            try await useCase.importFile(URL(fileURLWithPath: "/tmp/chunk-cancelled.wav"), shouldCorrect: false)
+        }
+        #expect(store.savedRecords.isEmpty)
+        #expect(useCase.state.stage == .cancelled)
+    }
+
+    @Test("파일 chunking은 마지막 짧은 구간의 offset과 duration을 보존한다")
+    func chunkingPreservesRemainderTiming() {
+        let chunks = MeetingFileImportUseCase.makeChunks(
+            samples: [Float](repeating: 0.1, count: 40_000),
+            chunkSeconds: 1,
+            sampleRate: 16_000
+        )
+
+        #expect(chunks.map(\.samples.count) == [16_000, 16_000, 8_000])
+        #expect(chunks.map(\.startSeconds) == [0, 1, 2])
+        #expect(chunks.map(\.durationSeconds) == [1, 1, 0.5])
+    }
+
+    @Test("지원하지 않는 파일 형식은 읽기 전에 거부한다")
+    func rejectsUnsupportedFileType() async {
+        await #expect(throws: FileAudioExtractionError.unsupportedFile) {
+            _ = try await FileAudioExtractor().extractChunks(
+                from: URL(fileURLWithPath: "/tmp/not-a-meeting.txt"),
+                chunkSeconds: 1,
+                onChunk: { _ in }
+            )
+        }
+    }
+
+    @Test("작은 wav 파일은 실제 AVFoundation extractor를 통해 chunk를 방출한다")
+    func extractsSmallWAVFixture() async throws {
+        let url = try makeTempWAV(samples: [Int16](repeating: 600, count: 8_000))
+        var chunks: [FileAudioChunk] = []
+
+        let extraction = try await FileAudioExtractor().extractChunks(
+            from: url,
+            chunkSeconds: 1,
+            onChunk: { chunk in
+                chunks.append(chunk)
+            }
+        )
+
+        #expect(extraction.durationSeconds > 0)
+        #expect(chunks.count == 1)
+        #expect(chunks.first?.samples.isEmpty == false)
+        #expect(chunks.first?.startSeconds == 0)
+    }
+
+    @Test("실제 extractor는 부모 task 취소를 detached reader에 전파한다")
+    func realExtractorCancellationPropagatesToDetachedReader() async throws {
+        let url = try makeTempWAV(samples: [Int16](repeating: 600, count: 32_000))
+        let extractionTask = Task {
+            try await FileAudioExtractor().extractChunks(
+                from: url,
+                chunkSeconds: 1,
+                onChunk: { _ in
+                    try await Task.sleep(nanoseconds: 5_000_000_000)
+                }
+            )
+        }
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+        extractionTask.cancel()
+
+        let outcome = await extractionOutcome(for: extractionTask, timeoutNanoseconds: 1_000_000_000)
+        #expect(outcome == .cancelled)
+    }
+}
+
+private struct StubFileExtractor: MeetingFileAudioExtracting {
+    let samples: [Float]
+    let durationSeconds: TimeInterval
+    let cancelImmediately: Bool
+
+    init(samples: [Float] = [], durationSeconds: TimeInterval = 0, cancelImmediately: Bool = false) {
+        self.samples = samples
+        self.durationSeconds = durationSeconds
+        self.cancelImmediately = cancelImmediately
+    }
+
+    func extractChunks(
+        from url: URL,
+        chunkSeconds: TimeInterval,
+        onChunk: @MainActor @Sendable @escaping (FileAudioChunk) async throws -> Void
+    ) async throws -> FileAudioExtraction {
+        if cancelImmediately { throw CancellationError() }
+        for chunk in FileAudioExtractor.makeChunks(
+            samples: samples,
+            chunkSeconds: chunkSeconds,
+            sampleRate: STTAudioUtilities.sampleRate
+        ) {
+            try await onChunk(chunk)
+        }
+        return FileAudioExtraction(durationSeconds: durationSeconds)
+    }
+}
+
+@MainActor
+private final class StubFileImportSTT: MeetingFileImportSTTServicing {
+    var modelState: ModelState = .unloaded
+    var loadedEngines: [SpeechEngineID] = []
+    var transcribedSampleCounts: [Int] = []
+    private var texts: [String]
+    private let cancelOnCall: Int?
+
+    init(texts: [String], cancelOnCall: Int? = nil) {
+        self.texts = texts
+        self.cancelOnCall = cancelOnCall
+    }
+
+    func loadEngine(_ engineID: SpeechEngineID) async {
+        loadedEngines.append(engineID)
+        modelState = .loaded
+    }
+
+    func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult {
+        transcribedSampleCounts.append(pcmSamples.count)
+        if transcribedSampleCounts.count == cancelOnCall {
+            throw CancellationError()
+        }
+        let text = texts.isEmpty ? "" : texts.removeFirst()
+        return TranscriptionResult(
+            segment: Segment(text: text, timestamp: Date(), duration: Double(pcmSamples.count) / 16_000),
+            isFinal: true
+        )
+    }
+}
+
+@MainActor
+private final class StubFileImportCorrection: MeetingFileImportCorrecting {
+    struct Call: Equatable {
+        let text: String
+        let context: LLMCorrectionContext
+    }
+
+    var calls: [Call] = []
+    var observedStages: [MeetingFileImportStage] = []
+    var stageProbe: (@MainActor () -> MeetingFileImportStage)?
+    private var responses: [String?]
+
+    init(responses: [String?] = []) {
+        self.responses = responses
+    }
+
+    func correct(text: String, context: LLMCorrectionContext) async -> String? {
+        if let stageProbe {
+            observedStages.append(stageProbe())
+        }
+        calls.append(Call(text: text, context: context))
+        return responses.isEmpty ? nil : responses.removeFirst()
+    }
+}
+
+@MainActor
+private final class StubFileImportSummary: MeetingFileImportSummaryGenerating {
+    var receivedTranscript: String?
+    var receivedContext: SummaryGenerationContext?
+    var observedStages: [MeetingFileImportStage] = []
+    var stageProbe: (@MainActor () -> MeetingFileImportStage)?
+    private let summary: MeetingSummary?
+
+    init(summary: MeetingSummary? = nil) {
+        self.summary = summary
+    }
+
+    func generateFinal(transcript: String, context: SummaryGenerationContext) async -> MeetingSummary? {
+        if let stageProbe {
+            observedStages.append(stageProbe())
+        }
+        receivedTranscript = transcript
+        receivedContext = context
+        return summary
+    }
+}
+
+@MainActor
+private final class StubFileImportStore: MeetingFileImportStoring {
+    var savedRecords: [MeetingRecord] = []
+    var shouldSave = true
+
+    func save(_ record: MeetingRecord) -> Bool {
+        guard shouldSave else { return false }
+        savedRecords.append(record)
+        return true
+    }
+}
+
+private enum ExtractionTaskOutcome: Equatable {
+    case cancelled
+    case completed
+    case failed
+    case timedOut
+}
+
+private func extractionOutcome(
+    for task: Task<FileAudioExtraction, Error>,
+    timeoutNanoseconds: UInt64
+) async -> ExtractionTaskOutcome {
+    await withTaskGroup(of: ExtractionTaskOutcome.self) { group in
+        group.addTask {
+            do {
+                _ = try await task.value
+                return .completed
+            } catch is CancellationError {
+                return .cancelled
+            } catch {
+                return .failed
+            }
+        }
+        group.addTask {
+            try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+            return .timedOut
+        }
+        let outcome = await group.next() ?? .timedOut
+        group.cancelAll()
+        return outcome
+    }
+}
+
+private func makeTempWAV(samples: [Int16], sampleRate: Int = 16_000) throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("minto-file-import-tests-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let url = directory.appendingPathComponent("fixture.wav")
+    try makeWAVData(samples: samples, sampleRate: sampleRate).write(to: url)
+    return url
+}
+
+private func makeWAVData(samples: [Int16], sampleRate: Int) -> Data {
+    var data = Data()
+    let bytesPerSample = 2
+    let dataByteCount = UInt32(samples.count * bytesPerSample)
+    appendASCII("RIFF", to: &data)
+    appendLittleEndian(UInt32(36) + dataByteCount, to: &data)
+    appendASCII("WAVE", to: &data)
+    appendASCII("fmt ", to: &data)
+    appendLittleEndian(UInt32(16), to: &data)
+    appendLittleEndian(UInt16(1), to: &data)
+    appendLittleEndian(UInt16(1), to: &data)
+    appendLittleEndian(UInt32(sampleRate), to: &data)
+    appendLittleEndian(UInt32(sampleRate * bytesPerSample), to: &data)
+    appendLittleEndian(UInt16(bytesPerSample), to: &data)
+    appendLittleEndian(UInt16(16), to: &data)
+    appendASCII("data", to: &data)
+    appendLittleEndian(dataByteCount, to: &data)
+    for sample in samples {
+        appendLittleEndian(UInt16(bitPattern: sample), to: &data)
+    }
+    return data
+}
+
+private func appendASCII(_ string: String, to data: inout Data) {
+    data.append(contentsOf: string.utf8)
+}
+
+private func appendLittleEndian<T: FixedWidthInteger>(_ value: T, to data: inout Data) {
+    var littleEndian = value.littleEndian
+    withUnsafeBytes(of: &littleEndian) { bytes in
+        data.append(contentsOf: bytes)
+    }
+}

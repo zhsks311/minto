@@ -72,8 +72,92 @@ public struct AudioDevice: Identifiable, Equatable, Sendable {
     }
 }
 
+public enum AudioInputMode: String, CaseIterable, Identifiable, Codable, Sendable {
+    case microphone
+    case systemAudio
+    case mixed
+
+    public var id: String { rawValue }
+
+    public static let selectableCases: [AudioInputMode] = [.microphone, .systemAudio, .mixed]
+
+    public var title: String {
+        switch self {
+        case .microphone:
+            return "마이크"
+        case .systemAudio:
+            return "시스템"
+        case .mixed:
+            return "마이크+시스템"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .microphone:
+            return "내 목소리 중심"
+        case .systemAudio:
+            return "화상회의 상대방 소리"
+        case .mixed:
+            return "내 목소리와 상대방 소리"
+        }
+    }
+
+    public var requiresScreenCapturePermission: Bool {
+        self != .microphone
+    }
+}
+
+public enum AudioInputReadinessState: String, Sendable, Equatable {
+    case checking
+    case ready
+    case permissionRequired
+    case unavailable
+}
+
+public struct AudioInputReadiness: Sendable, Equatable {
+    public let state: AudioInputReadinessState
+    public let title: String
+    public let detail: String
+    public let actionTitle: String?
+
+    public init(
+        state: AudioInputReadinessState,
+        title: String,
+        detail: String,
+        actionTitle: String? = nil
+    ) {
+        self.state = state
+        self.title = title
+        self.detail = detail
+        self.actionTitle = actionTitle
+    }
+
+    public var canStartRecording: Bool {
+        state == .ready
+    }
+
+    public static func checking(for mode: AudioInputMode) -> AudioInputReadiness {
+        AudioInputReadiness(
+            state: .checking,
+            title: "\(mode.title) 입력 확인 중",
+            detail: "녹음 시작 전에 입력 권한과 가용성을 확인하고 있습니다."
+        )
+    }
+
+    public static func ready(for mode: AudioInputMode) -> AudioInputReadiness {
+        AudioInputReadiness(
+            state: .ready,
+            title: "\(mode.title) 입력 가능",
+            detail: mode.detail
+        )
+    }
+}
+
 public enum AudioSourceError: Error, Sendable {
     case permissionDenied
+    case screenCapturePermissionDenied
+    case systemAudioUnavailable(String)
     case configChangeFailed(Error)
     case deviceNotFound(AudioDevice)
     case engineStartFailed(Error)

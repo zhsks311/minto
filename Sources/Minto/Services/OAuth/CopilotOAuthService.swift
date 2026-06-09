@@ -5,10 +5,11 @@ import AppKit
 // gho_ 토큰 → copilot_internal/v2/token 교환 → 단기 Copilot API 토큰.
 private let kClientID = "Ov23li8tweQw6odWQebz"
 private let kKeychainKey = "copilot"
+private let kSecretStore = SecretStoreFactory.make()
 
-// 교정/요약 모델·출력 한도. 모델 상향 시 여기만 바꾼다. 단 Copilot은 구독이 없으면 404(noSubscription)라
-// 이 계정에서 검증 불가 → 상위 모델로의 변경은 구독 계정 검증 후. max_tokens는 긴 요약 잘림 시 상향.
-private let kCopilotModel = "gpt-4o"
+// 교정/요약 모델·출력 한도. Copilot은 계정/조직 정책에 따라 모델 노출이 달라질 수 있다.
+// 기본값은 일반 Copilot Chat에서 널리 쓰이는 경량 GPT 모델로 둔다.
+private let kCopilotModel = "gpt-5-mini"
 private let kCopilotMaxTokens = 1024
 
 // MARK: - Token Model
@@ -33,11 +34,28 @@ public final class CopilotOAuthService: ObservableObject {
     private init() {}
 
     /// 설정에서 고른 모델 키 + 목록. 미설정이면 기본 상수.
-    public static let modelDefaultsKey = "copilotModel"
+    nonisolated public static let modelDefaultsKey = "copilotModel"
+    nonisolated public static let defaultModelID = kCopilotModel
     public static let availableModels: [(id: String, label: String)] = [
-        ("gpt-4o", "gpt-4o"),
-        ("gpt-4.1", "gpt-4.1"),
-        ("claude-sonnet-4-5", "claude-sonnet-4.5"),
+        ("gpt-5-mini", "GPT-5 mini · 기본"),
+        ("gpt-5.3-codex", "GPT-5.3-Codex · 코딩"),
+        ("gpt-5.4-mini", "GPT-5.4 mini · 빠름"),
+        ("gpt-5.4-nano", "GPT-5.4 nano · 저지연"),
+        ("gpt-5.4", "GPT-5.4 · 균형"),
+        ("gpt-5.5", "GPT-5.5 · 고품질"),
+        ("claude-sonnet-4.5", "Claude Sonnet 4.5"),
+        ("claude-sonnet-4.6", "Claude Sonnet 4.6"),
+        ("claude-haiku-4.5", "Claude Haiku 4.5"),
+        ("claude-opus-4.5", "Claude Opus 4.5"),
+        ("claude-opus-4.6", "Claude Opus 4.6"),
+        ("claude-opus-4.7", "Claude Opus 4.7"),
+        ("claude-opus-4.8", "Claude Opus 4.8"),
+        ("gemini-3-flash", "Gemini 3 Flash"),
+        ("gemini-3.1-pro-preview", "Gemini 3.1 Pro Preview"),
+        ("gemini-3.5-flash", "Gemini 3.5 Flash"),
+        ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+        ("mai-code-1-flash", "MAI-Code-1-Flash"),
+        ("raptor-mini", "Raptor mini"),
     ]
     static var selectedModel: String {
         let v = UserDefaults.standard.string(forKey: modelDefaultsKey) ?? ""
@@ -57,7 +75,7 @@ public final class CopilotOAuthService: ObservableObject {
     private(set) var credentials: CopilotCredentials? {
         get {
             if let cached = cachedCredentials { return cached }
-            let loaded = KeychainService.load(provider: kKeychainKey)
+            let loaded = kSecretStore.load(account: kKeychainKey, service: KeychainService.oauthService)
                 .flatMap { try? JSONDecoder().decode(CopilotCredentials.self, from: $0) }
             cachedCredentials = .some(loaded)
             return loaded
@@ -66,15 +84,26 @@ public final class CopilotOAuthService: ObservableObject {
             objectWillChange.send()  // isLoggedIn은 computed이므로 자격증명 변경 시 직접 뷰에 알린다
             cachedCredentials = .some(newValue)
             if let v = newValue, let data = try? JSONEncoder().encode(v) {
-                KeychainService.save(provider: kKeychainKey, data: data)
+                _ = kSecretStore.save(account: kKeychainKey, data: data, service: KeychainService.oauthService)
             } else {
-                KeychainService.delete(provider: kKeychainKey)
+                _ = kSecretStore.delete(account: kKeychainKey, service: KeychainService.oauthService)
             }
         }
     }
 
-    public var isLoggedIn: Bool { credentials != nil }
-    public var email: String { credentials?.email ?? "" }
+    public var isLoggedIn: Bool {
+        if let cached = cachedCredentials {
+            return cached != nil
+        }
+        return kSecretStore.exists(account: kKeychainKey, service: KeychainService.oauthService)
+    }
+
+    public var email: String {
+        if case .some(.some(let credentials)) = cachedCredentials {
+            return credentials.email
+        }
+        return ""
+    }
 
     // MARK: - Login
 

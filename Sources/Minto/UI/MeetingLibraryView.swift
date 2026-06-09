@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 private enum LibraryPalette {
     static let background = Color(nsColor: .windowBackgroundColor)
@@ -20,14 +21,22 @@ public struct MeetingLibraryView: View {
     @ObservedObject private var store: MeetingStore
     @ObservedObject private var viewModel: TranscriptionViewModel
     @ObservedObject private var summaryService = SummaryService.shared
+    @ObservedObject private var answerSettings = MeetingSearchAnswerSettingsService.shared
     @ObservedObject private var relatedInfo = RelatedInfoService.shared
     @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
+    @StateObject private var searchAnswerController = MeetingSearchAnswerController()
+    @StateObject private var fileImportUseCase = MeetingFileImportUseCase()
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var showingLiveMeeting = false
+    @State private var showingExportOptions = false
+    @State private var showingConfluenceExport = false
+    @State private var exportRecord: MeetingRecord?
+    @State private var isSearchAnswerExpanded = false
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
+    @State private var fileImportTask: Task<Void, Never>?
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
@@ -74,9 +83,16 @@ public struct MeetingLibraryView: View {
                 showingLiveMeeting = true
             }
             selectFirstAvailableIfNeeded()
+            searchAnswerController.refreshReadiness()
         }
-        .onChange(of: store.meetings) { _, _ in selectFirstAvailableIfNeeded() }
+        .onChange(of: store.meetings) { _, _ in
+            searchAnswerController.reset()
+            isSearchAnswerExpanded = false
+            selectFirstAvailableIfNeeded()
+        }
         .onChange(of: searchText) { _, _ in
+            searchAnswerController.reset()
+            isSearchAnswerExpanded = false
             if hasLiveMeeting {
                 showingLiveMeeting = true
                 selectedID = nil
@@ -98,34 +114,126 @@ public struct MeetingLibraryView: View {
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
+        .onChange(of: answerSettings.isEnabled) { _, _ in
+            searchAnswerController.reset(clearReadiness: true)
+            isSearchAnswerExpanded = false
+            searchAnswerController.refreshReadiness()
+        }
+        .onChange(of: answerSettings.selectedProvider) { _, _ in
+            searchAnswerController.reset(clearReadiness: true)
+            isSearchAnswerExpanded = false
+            searchAnswerController.refreshReadiness()
+        }
+        .onChange(of: fileImportUseCase.state) { _, state in
+            if let record = state.record {
+                selectedID = record.id
+                showingLiveMeeting = false
+                detailTab = .summary
+            }
+        }
+        .confirmationDialog(
+            "회의록 내보내기",
+            isPresented: $showingExportOptions,
+            titleVisibility: .visible
+        ) {
+            if let exportRecord {
+                Button("Markdown 파일로 저장") {
+                    MeetingExporter.save(MeetingResult.from(exportRecord))
+                }
+                Button("전체 내용 복사") {
+                    copyFullMeeting(exportRecord)
+                }
+                if confluence.isConfigured {
+                    Button("Confluence로 내보내기") {
+                        showingConfluenceExport = true
+                    }
+                } else {
+                    Button("Confluence 설정 열기") {
+                        openSettingsWindow()
+                    }
+                }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text(confluence.isConfigured
+                 ? "파일로 저장하거나 연결된 Confluence 공간에 새 페이지로 만들 수 있습니다."
+                 : "Confluence 내보내기는 설정의 검색 소스에서 Confluence를 연결한 뒤 사용할 수 있습니다.")
+        }
+        .sheet(isPresented: $showingConfluenceExport) {
+            if let exportRecord {
+                ConfluenceExportSheet(
+                    record: exportRecord,
+                    confluence: confluence,
+                    openSettings: openSettingsWindow
+                )
+            }
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Minto")
-                    .font(.system(size: 20, weight: .bold))
-                Text(isSearching ? "필요한 회의와 근거를 찾고 있어요" : "회의를 찾거나 새로 시작하세요")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                headerTitle
+                    .layoutPriority(1)
+                Spacer(minLength: 12)
+                searchField
+                    .frame(minWidth: 220, idealWidth: 360, maxWidth: 360)
+                    .layoutPriority(0)
+                fileImportButton
+                    .layoutPriority(2)
+                newMeetingButton
+                    .layoutPriority(4)
             }
 
-            Spacer(minLength: 20)
-
-            searchField
-                .frame(width: 360)
-
-            Button { onNewMeeting() } label: {
-                Label("새 회의", systemImage: "mic.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    headerTitle
+                    Spacer(minLength: 12)
+                    newMeetingButton
+                }
+                HStack(spacing: 10) {
+                    searchField
+                        .frame(minWidth: 180, maxWidth: .infinity)
+                    fileImportButton
+                }
             }
-            .controlSize(.large)
-            .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 16)
+    }
+
+    private var headerTitle: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Minto")
+                .font(.system(size: 20, weight: .bold))
+            Text(isSearching ? "필요한 회의와 근거를 찾고 있어요" : "회의를 찾거나 새로 시작하세요")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var fileImportButton: some View {
+        Button { selectFileForImport() } label: {
+            Label("파일 가져오기", systemImage: "tray.and.arrow.down")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .controlSize(.large)
+        .fixedSize()
+        .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
+        .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있습니다." : "음성 또는 영상 파일로 회의록을 만듭니다.")
+    }
+
+    private var newMeetingButton: some View {
+        Button { onNewMeeting() } label: {
+            Label("새 회의", systemImage: "mic.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .controlSize(.large)
+        .buttonStyle(.borderedProminent)
+        .fixedSize()
     }
 
     private var searchField: some View {
@@ -166,9 +274,11 @@ public struct MeetingLibraryView: View {
     private var resultsColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             searchReadiness
+            fileImportStatusCard
 
             if isSearching {
                 searchSummary
+                searchAnswerCard
                 suggestionChips
             }
 
@@ -265,6 +375,131 @@ public struct MeetingLibraryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var searchAnswerCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Label("AI 답변", systemImage: "sparkles")
+                    .font(.system(size: 12, weight: .bold))
+                Spacer()
+                if searchAnswerController.isCheckingProvider {
+                    Text("확인 중")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                } else if !answerSettings.isEnabled || !searchAnswerController.isProviderReady {
+                    Button("AI 설정") { openSettingsWindow() }
+                        .font(.system(size: 11, weight: .semibold))
+                } else {
+                    Button(searchAnswerController.answer == nil ? "답변 만들기" : "다시 만들기") {
+                        isSearchAnswerExpanded = false
+                        searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                }
+            }
+
+            if searchAnswerController.isCheckingProvider {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("AI 설정 확인 중")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            } else if searchAnswerController.isGenerating {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("검색 결과를 종합하는 중")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            } else if let searchAnswer = searchAnswerController.answer, searchAnswer.query == trimmedSearch {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(searchAnswer.text)
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(isSearchAnswerExpanded ? nil : 5)
+                        .textSelection(.enabled)
+                    if !isSearchAnswerExpanded {
+                        Button("답변 펼치기") {
+                            isSearchAnswerExpanded = true
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .buttonStyle(.borderless)
+                    }
+                    searchAnswerCitationList(searchAnswer.citations)
+                    Button {
+                        copySearchAnswer(searchAnswer)
+                    } label: {
+                        Label("답변과 근거 복사", systemImage: "doc.on.doc")
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .buttonStyle(.borderless)
+                }
+            } else if let errorMessage = searchAnswerController.errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LibraryPalette.elevated)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func searchAnswerCitationList(_ citations: [MeetingSearchAnswerCitation]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(citations) { citation in
+                Button {
+                    selectSearchAnswerCitation(citation)
+                } label: {
+                    HStack(alignment: .top, spacing: 5) {
+                        Text("[\(citation.number)]")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.accentColor)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(citation.meetingTitle)
+                                .font(.system(size: 10, weight: .semibold))
+                                .lineLimit(1)
+                            Text(searchAnswerCitationMeta(citation))
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                            if !citation.preview.isEmpty {
+                                Text(citation.preview)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(2)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .help("근거 회의 열기")
+            }
+        }
+    }
+
+    private func searchAnswerCitationMeta(_ citation: MeetingSearchAnswerCitation) -> String {
+        var parts = [citation.kind.label]
+        if !citation.time.isEmpty {
+            parts.append(citation.time)
+        }
+        parts.append(citation.label)
+        return parts.joined(separator: " · ")
+    }
+
     private var suggestionChips: some View {
         HStack(spacing: 6) {
             Label("필터", systemImage: "slider.horizontal.3")
@@ -321,6 +556,61 @@ public struct MeetingLibraryView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var fileImportStatusCard: some View {
+        let importState = fileImportUseCase.state
+        if importState.stage != .idle {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .top, spacing: 8) {
+                    fileImportIcon(importState.stage)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(importState.stage.title)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.primary)
+                        if !importState.fileName.isEmpty {
+                            Text(importState.fileName)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    if importState.isRunning {
+                        Button("취소") {
+                            fileImportTask?.cancel()
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                    } else {
+                        Button {
+                            fileImportUseCase.reset()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .frame(width: 20, height: 20)
+                        }
+                        .buttonStyle(.plain)
+                        .help("상태 닫기")
+                    }
+                }
+
+                if importState.isRunning {
+                    ProgressView(value: importState.progress)
+                        .progressViewStyle(.linear)
+                }
+
+                Text(importState.errorMessage ?? importState.detailText)
+                    .font(.system(size: 11))
+                    .foregroundColor(importState.stage == .failed ? .red : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(fileImportBackground(importState.stage))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(fileImportBorder(importState.stage), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     private var liveMeetingRow: some View {
@@ -621,7 +911,10 @@ public struct MeetingLibraryView: View {
                 Spacer()
                 readingModeButton
 
-                Button { MeetingExporter.save(MeetingResult.from(record)) } label: {
+                Button {
+                    exportRecord = record
+                    showingExportOptions = true
+                } label: {
                     Label("내보내기", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.bordered)
@@ -1269,7 +1562,15 @@ public struct MeetingLibraryView: View {
 
     private var displayedMeetings: [MeetingRecord] {
         guard isSearching else { return store.meetings }
-        return store.meetings.filter { recordMatches($0) }
+        let recordsByID = Dictionary(uniqueKeysWithValues: store.meetings.map { ($0.id, $0) })
+        var seen = Set<UUID>()
+        return meetingSearchResults.compactMap { result in
+            guard !seen.contains(result.meetingID), let record = recordsByID[result.meetingID] else {
+                return nil
+            }
+            seen.insert(result.meetingID)
+            return record
+        }
     }
 
     private var selectedRecord: MeetingRecord? {
@@ -1279,50 +1580,20 @@ public struct MeetingLibraryView: View {
         return displayedMeetings.first
     }
 
-    private func recordMatches(_ record: MeetingRecord) -> Bool {
-        let query = trimmedSearch
-        guard !query.isEmpty else { return true }
-        return displayTitle(for: record).localizedCaseInsensitiveContains(query)
-            || record.topic.localizedCaseInsensitiveContains(query)
-            || outcomeSearchText(record.summary).localizedCaseInsensitiveContains(query)
-            || record.summary.markdown().localizedCaseInsensitiveContains(query)
-            || record.transcript.contains { $0.text.localizedCaseInsensitiveContains(query) }
+    private var meetingSearchResults: [MeetingSearchResult] {
+        guard isSearching else { return [] }
+        return MeetingSearchIndex(records: store.meetings).search(trimmedSearch, limit: Int.max)
+    }
+
+    private func selectSearchAnswerCitation(_ citation: MeetingSearchAnswerCitation) {
+        selectedID = citation.meetingID
+        showingLiveMeeting = false
+        detailTab = citation.kind == .transcript ? .transcript : .summary
     }
 
     private func primaryMatch(for record: MeetingRecord) -> MeetingSearchMatch {
-        let query = trimmedSearch
-        if !query.isEmpty {
-            if displayTitle(for: record).localizedCaseInsensitiveContains(query) {
-                return MeetingSearchMatch(badge: "제목", text: displayTitle(for: record))
-            }
-            if record.topic.localizedCaseInsensitiveContains(query) {
-                return MeetingSearchMatch(badge: "주제", text: record.topic)
-            }
-            if let decision = visibleDecisions(record.summary.decisions).first(where: { $0.text.localizedCaseInsensitiveContains(query) }) {
-                return MeetingSearchMatch(badge: decision.time.isEmpty ? "결정" : decision.time, text: "결정: \(decision.text)")
-            }
-            if let item = visibleActionItems(record.summary.actionItems).first(where: { actionItemMatches($0, query: query) }) {
-                return MeetingSearchMatch(badge: item.time.isEmpty ? "할 일" : item.time, text: "할 일: \(item.task)")
-            }
-            if let question = visibleOpenQuestions(record.summary.openQuestions).first(where: { $0.text.localizedCaseInsensitiveContains(query) }) {
-                return MeetingSearchMatch(badge: question.time.isEmpty ? "질문" : question.time, text: "질문: \(question.text)")
-            }
-            if let section = record.summary.sections.first(where: { section in
-                section.title.localizedCaseInsensitiveContains(query)
-                    || section.points.contains { point in
-                        point.text.localizedCaseInsensitiveContains(query)
-                            || point.subPoints.contains { $0.localizedCaseInsensitiveContains(query) }
-                    }
-            }) {
-                let text = section.points.first?.text ?? section.title
-                return MeetingSearchMatch(badge: section.time.isEmpty ? "요약" : section.time, text: text)
-            }
-            if record.summary.markdown().localizedCaseInsensitiveContains(query) {
-                return MeetingSearchMatch(badge: "요약", text: record.summary.leadAnswer)
-            }
-            if let segment = record.transcript.first(where: { $0.text.localizedCaseInsensitiveContains(query) }) {
-                return MeetingSearchMatch(badge: relativeTimestamp(segment, in: record), text: segment.text)
-            }
+        if isSearching, let result = meetingSearchResults.first(where: { $0.meetingID == record.id }) {
+            return MeetingSearchMatch(badge: result.label, text: result.preview)
         }
 
         if !record.summary.leadAnswer.isEmpty {
@@ -1393,12 +1664,6 @@ public struct MeetingLibraryView: View {
 
     private func visibleOpenQuestions(_ questions: [MeetingSummary.OpenQuestion]) -> [MeetingSummary.OpenQuestion] {
         questions.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    }
-
-    private func actionItemMatches(_ item: MeetingSummary.ActionItem, query: String) -> Bool {
-        item.task.localizedCaseInsensitiveContains(query)
-            || item.owner.localizedCaseInsensitiveContains(query)
-            || item.due.localizedCaseInsensitiveContains(query)
     }
 
     private func actionMetadata(_ item: MeetingSummary.ActionItem) -> String {
@@ -1609,6 +1874,17 @@ public struct MeetingLibraryView: View {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
+    private func copySearchAnswer(_ answer: MeetingSearchAnswer) {
+        let citationText = answer.citations.map { citation in
+            let meta = searchAnswerCitationMeta(citation)
+            return "[\(citation.number)] \(citation.meetingTitle) · \(meta)\n\(citation.preview)"
+        }
+        let text = ([answer.text, "근거", citationText.joined(separator: "\n\n")]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            .joined(separator: "\n\n")
+        copyMarkdown(text)
+    }
+
     private func copyLiveSummary() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(liveRunningSummary, forType: .string)
@@ -1617,5 +1893,259 @@ public struct MeetingLibraryView: View {
     private func copyLiveTranscript() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(liveSegments.map(\.text).joined(separator: "\n"), forType: .string)
+    }
+
+    private func openSettingsWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
+    private func selectFileForImport() {
+        guard !hasLiveMeeting, !fileImportUseCase.state.isRunning else { return }
+
+        let panel = NSOpenPanel()
+        panel.title = "파일로 회의록 만들기"
+        panel.prompt = "가져오기"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = MeetingFileImportUseCase.supportedContentTypes
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            fileImportTask?.cancel()
+            fileImportTask = Task { @MainActor in
+                do {
+                    _ = try await fileImportUseCase.importFile(url)
+                } catch is CancellationError {
+                    // 취소 상태는 use-case가 이미 반영한다.
+                } catch {
+                    // 실패 상태는 use-case가 이미 반영한다.
+                }
+            }
+        }
+    }
+
+    private func fileImportIcon(_ stage: MeetingFileImportStage) -> some View {
+        let symbol: String
+        let color: Color
+        switch stage {
+        case .idle:
+            symbol = "tray"
+            color = .secondary
+        case .analyzing, .transcribing, .correcting, .summarizing, .saving:
+            symbol = "arrow.triangle.2.circlepath"
+            color = .accentColor
+        case .completed:
+            symbol = "checkmark.circle.fill"
+            color = .green
+        case .failed:
+            symbol = "exclamationmark.triangle.fill"
+            color = .red
+        case .cancelled:
+            symbol = "xmark.circle.fill"
+            color = .secondary
+        }
+        return Image(systemName: symbol)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(color)
+            .frame(width: 20, height: 20)
+    }
+
+    private func fileImportBackground(_ stage: MeetingFileImportStage) -> Color {
+        switch stage {
+        case .completed:
+            return Color.green.opacity(0.08)
+        case .failed:
+            return Color.red.opacity(0.08)
+        case .cancelled:
+            return Color.secondary.opacity(0.08)
+        case .idle, .analyzing, .transcribing, .correcting, .summarizing, .saving:
+            return LibraryPalette.elevated
+        }
+    }
+
+    private func fileImportBorder(_ stage: MeetingFileImportStage) -> Color {
+        switch stage {
+        case .completed:
+            return Color.green.opacity(0.25)
+        case .failed:
+            return Color.red.opacity(0.25)
+        case .idle, .analyzing, .transcribing, .correcting, .summarizing, .saving, .cancelled:
+            return LibraryPalette.border
+        }
+    }
+}
+
+private struct ConfluenceExportSheet: View {
+    let record: MeetingRecord
+    @ObservedObject var confluence: ConfluenceService
+    let openSettings: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("confluenceExportSpaceKey") private var savedSpaceKey = ""
+    @AppStorage("confluenceExportParentID") private var savedParentID = ""
+    @State private var pageTitle: String
+    @State private var isPublishing = false
+    @State private var publishedPage: ConfluenceService.PublishedPage?
+    @State private var errorMessage: String?
+
+    init(record: MeetingRecord, confluence: ConfluenceService, openSettings: @escaping () -> Void) {
+        self.record = record
+        self.confluence = confluence
+        self.openSettings = openSettings
+        let title = record.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        _pageTitle = State(initialValue: title.isEmpty ? "회의록" : title)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Confluence로 내보내기")
+                    .font(.system(size: 20, weight: .bold))
+                Text("선택한 공간에 회의록 페이지를 새로 만듭니다.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                labeledField("페이지 제목") {
+                    TextField("페이지 제목", text: $pageTitle)
+                }
+                labeledField("공간 키") {
+                    TextField("예: ENG", text: $savedSpaceKey)
+                }
+                labeledField("부모 페이지 ID") {
+                    TextField("비우면 공간 최상위에 생성", text: $savedParentID)
+                }
+
+                Text("공간 키는 Confluence URL의 `/spaces/ENG`에서 `ENG`에 해당합니다. 부모 페이지 ID는 내보낼 위치를 지정할 때만 입력하세요.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let publishedPage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("내보내기가 완료되었습니다.", systemImage: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.system(size: 13, weight: .semibold))
+                    Button {
+                        if let url = URL(string: publishedPage.url) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    } label: {
+                        Label("Confluence에서 열기", systemImage: "arrow.up.right.square")
+                    }
+                }
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 13))
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if ConfluenceExportSheetPresentation.showsSettingsHandoff(for: confluence.connectionState) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(
+                        ConfluenceExportSheetPresentation.settingsHandoffTitle,
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.orange)
+                    Text(ConfluenceExportSheetPresentation.settingsHandoffMessage)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        openSettings()
+                    } label: {
+                        Label(
+                            ConfluenceExportSheetPresentation.settingsHandoffButtonTitle,
+                            systemImage: "gearshape.fill"
+                        )
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            HStack {
+                Button("닫기") { dismiss() }
+                Spacer()
+                Button {
+                    publish()
+                } label: {
+                    if isPublishing {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("내보내는 중")
+                        }
+                    } else {
+                        Label("내보내기", systemImage: "square.and.arrow.up")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canPublish)
+            }
+        }
+        .padding(22)
+        .frame(width: 460)
+    }
+
+    private var canPublish: Bool {
+        confluence.isConfigured
+            && !isPublishing
+            && !pageTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !savedSpaceKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func labeledField<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+            content()
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func publish() {
+        errorMessage = nil
+        publishedPage = nil
+        isPublishing = true
+        let markdown = MeetingExporter.markdown(for: MeetingResult.from(record))
+        let title = pageTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let spaceKey = savedSpaceKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parentID = savedParentID.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task { @MainActor in
+            do {
+                publishedPage = try await confluence.publishPage(
+                    title: title,
+                    markdown: markdown,
+                    spaceKey: spaceKey,
+                    parentID: parentID.isEmpty ? nil : parentID
+                )
+            } catch {
+                errorMessage = (error as? LocalizedError)?.errorDescription
+                    ?? "Confluence 내보내기에 실패했습니다."
+            }
+            isPublishing = false
+        }
+    }
+}
+
+enum ConfluenceExportSheetPresentation {
+    static let settingsHandoffTitle = "Confluence 다시 연결이 필요합니다."
+    static let settingsHandoffMessage = "설정에서 API token을 다시 저장한 뒤 내보내기를 다시 시도하세요."
+    static let settingsHandoffButtonTitle = "Confluence 설정 열기"
+
+    static func showsSettingsHandoff(for state: ConfluenceService.ConnectionState) -> Bool {
+        state == .needsReconnect
     }
 }

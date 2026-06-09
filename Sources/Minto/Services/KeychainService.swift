@@ -2,9 +2,11 @@ import Foundation
 import Security
 
 public enum KeychainService {
-    private static let service = "com.minto.app.oauth"
+    public static let oauthService = "com.minto.app.oauth"
+    public static let llmAPIService = "com.minto.app.llm-api"
 
-    public static func save(provider: String, data: Data) {
+    @discardableResult
+    public static func save(provider: String, data: Data, service: String = oauthService) -> OSStatus {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -14,14 +16,18 @@ public enum KeychainService {
             kSecValueData as String: data
         ]
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecSuccess {
+            return status
+        }
         if status == errSecItemNotFound {
             var addQuery = query
             addQuery[kSecValueData as String] = data
-            SecItemAdd(addQuery as CFDictionary, nil)
+            return SecItemAdd(addQuery as CFDictionary, nil)
         }
+        return status
     }
 
-    public static func load(provider: String) -> Data? {
+    public static func load(provider: String, service: String = oauthService) -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -34,12 +40,23 @@ public enum KeychainService {
         return result as? Data
     }
 
-    public static func delete(provider: String) {
+    public static func exists(provider: String, service: String = oauthService) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: provider,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    @discardableResult
+    public static func delete(provider: String, service: String = oauthService) -> OSStatus {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: provider
         ]
-        SecItemDelete(query as CFDictionary)
+        return SecItemDelete(query as CFDictionary)
     }
 }

@@ -6,12 +6,14 @@ import AppKit
 // 사용자에게 경고 후 동의를 받고 사용해야 함.
 private let kClientID = "app_EMoamEEZ73f0CkXaXp7hrann"
 private let kKeychainKey = "codex"
+private let kSecretStore = SecretStoreFactory.make()
 
 // 교정 모델: 유료(plus/pro/team/…)는 상위 모델, 무료/미상 tier는 경량 기본.
 // 무료 계정은 상위 모델 ID가 막혀(4xx) 교정을 통째로 잃을 수 있으므로 보수적으로 기본 모델을 쓰고,
-// 유료라도 상위 모델 호출이 실패하면 correct()가 기본 모델로 1회 폴백한다(아래).
+// 유료라도 상위 모델 호출이 실패하면 correct()가 검증된 하위 모델로 순차 폴백한다(아래).
 private let kCorrectionModelDefault = "gpt-5.4-mini"
-private let kCorrectionModelPaid = "gpt-5.4"
+private let kCorrectionModelPaid = "gpt-5.5"
+private let kCorrectionFallbackModels = ["gpt-5.4", kCorrectionModelDefault]
 
 // MARK: - Token Model
 
@@ -43,7 +45,7 @@ public final class CodexOAuthService: ObservableObject {
     private(set) var credentials: CodexCredentials? {
         get {
             if let cached = cachedCredentials { return cached }
-            let loaded = KeychainService.load(provider: kKeychainKey)
+            let loaded = kSecretStore.load(account: kKeychainKey, service: KeychainService.oauthService)
                 .flatMap { try? JSONDecoder().decode(CodexCredentials.self, from: $0) }
             cachedCredentials = .some(loaded)
             return loaded
@@ -52,14 +54,19 @@ public final class CodexOAuthService: ObservableObject {
             objectWillChange.send()  // isLoggedIn은 computed이므로 자격증명 변경 시 직접 뷰에 알린다
             cachedCredentials = .some(newValue)
             if let v = newValue, let data = try? JSONEncoder().encode(v) {
-                KeychainService.save(provider: kKeychainKey, data: data)
+                _ = kSecretStore.save(account: kKeychainKey, data: data, service: KeychainService.oauthService)
             } else {
-                KeychainService.delete(provider: kKeychainKey)
+                _ = kSecretStore.delete(account: kKeychainKey, service: KeychainService.oauthService)
             }
         }
     }
 
-    public var isLoggedIn: Bool { credentials != nil }
+    public var isLoggedIn: Bool {
+        if let cached = cachedCredentials {
+            return cached != nil
+        }
+        return kSecretStore.exists(account: kKeychainKey, service: KeychainService.oauthService)
+    }
 
     // MARK: - Login
 
@@ -114,29 +121,37 @@ public final class CodexOAuthService: ObservableObject {
         // 동일하게 막힐 가능성이 커 폴백하지 않고 그대로 던진다(무한 시도 방지).
         let plan = chatGPTPlanType(from: creds.accessToken)
         let primaryModel = correctionModel(for: plan)
-        do {
-            return try await performCorrection(model: primaryModel, instructions: instructions, userContent: userContent, creds: creds)
-        } catch let error as CodexError where primaryModel != kCorrectionModelDefault && error.isModelFallbackable {
-            fputs("[Codex] model '\(primaryModel)' 실패(plan=\(plan ?? "?"), \(error)) → '\(kCorrectionModelDefault)'로 폴백\n", stderr)
-            return try await performCorrection(model: kCorrectionModelDefault, instructions: instructions, userContent: userContent, creds: creds)
+        let modelChain = correctionModelFallbackChain(for: primaryModel)
+        for (index, model) in modelChain.enumerated() {
+            do {
+                return try await performCorrection(model: model, instructions: instructions, userContent: userContent, creds: creds)
+            } catch let error as CodexError where index < modelChain.count - 1 && error.isModelFallbackable {
+                let fallback = modelChain[index + 1]
+                fputs("[Codex] model '\(model)' 실패(plan=\(plan ?? "?"), \(error)) → '\(fallback)'로 폴백\n", stderr)
+                continue
+            }
         }
+        throw CodexError.badResponse
     }
 
     /// 설정에서 고른 모델 키(설정 UI·서비스 공용).
-    public static let modelDefaultsKey = "codexModel"
+    nonisolated public static let modelDefaultsKey = "codexModel"
+    nonisolated public static let defaultModelID = "auto"
 
     /// 설정 Picker용 모델 목록. "auto"는 플랜(tier)에 맞춰 자동 선택.
     public static let availableModels: [(id: String, label: String)] = [
         ("auto", "자동 (플랜에 맞춤)"),
+        ("gpt-5.5", "gpt-5.5 · 최신 고품질"),
+        ("gpt-5.3-codex", "gpt-5.3-codex · 코딩 특화"),
+        ("gpt-5.4", "gpt-5.4 · 균형"),
         ("gpt-5.4-mini", "gpt-5.4-mini · 빠름"),
-        ("gpt-5.4", "gpt-5.4 · 고품질"),
     ]
 
     /// 사용할 교정 모델. 설정에서 명시 선택했으면 그 값, "auto"/미설정이면 plan(tier)에 맞춘다.
     /// 무료(free)·미상 → 경량 기본, 유료(plus/pro/team/…) → 상위.
     func correctionModel(for plan: String?) -> String {
-        let chosen = UserDefaults.standard.string(forKey: Self.modelDefaultsKey) ?? "auto"
-        if chosen != "auto", !chosen.isEmpty {
+        let chosen = UserDefaults.standard.string(forKey: Self.modelDefaultsKey) ?? Self.defaultModelID
+        if chosen != Self.defaultModelID, !chosen.isEmpty {
             return chosen
         }
         switch plan?.lowercased() {
@@ -144,6 +159,25 @@ public final class CodexOAuthService: ObservableObject {
             return kCorrectionModelDefault
         default:
             return kCorrectionModelPaid
+        }
+    }
+
+    func correctionModelFallbackChain(for model: String) -> [String] {
+        let candidates: [String]
+        switch model {
+        case kCorrectionModelDefault:
+            candidates = [model]
+        case "gpt-5.4":
+            candidates = [model, kCorrectionModelDefault]
+        case kCorrectionModelPaid:
+            candidates = [model] + kCorrectionFallbackModels
+        default:
+            candidates = [model, kCorrectionModelDefault]
+        }
+        return candidates.reduce(into: [String]()) { result, candidate in
+            if !candidate.isEmpty, !result.contains(candidate) {
+                result.append(candidate)
+            }
         }
     }
 

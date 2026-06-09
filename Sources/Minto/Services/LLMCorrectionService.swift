@@ -1,27 +1,32 @@
 import Foundation
 import SwiftUI
 
+public struct LLMCorrectionContext: Sendable, Equatable {
+    public let topic: String
+    public let glossary: String
+    public let previousText: String
+    public let runningSummary: String
+    public let document: String
+
+    public init(
+        topic: String = "",
+        glossary: String = "",
+        previousText: String = "",
+        runningSummary: String = "",
+        document: String = ""
+    ) {
+        self.topic = topic
+        self.glossary = glossary
+        self.previousText = previousText
+        self.runningSummary = runningSummary
+        self.document = document
+    }
+}
+
 @MainActor
 public final class LLMCorrectionService: ObservableObject {
 
-    public enum Provider: String, CaseIterable {
-        case none    = "none"
-        case gemini  = "gemini"
-        case copilot = "copilot"
-        case codex   = "codex"
-
-        public var label: String {
-            switch self {
-            case .none:    return "사용 안 함"
-            case .gemini:  return "Gemini (Google) ⚠️"
-            case .copilot: return "GitHub Copilot"
-            case .codex:   return "OpenAI Codex ⚠️"
-            }
-        }
-
-        // ToS 회색 지대 경고 필요 여부
-        public var requiresWarning: Bool { self == .gemini || self == .codex }
-    }
+    public typealias Provider = LLMProviderSelection
 
     public static let shared = LLMCorrectionService()
     private init() {}
@@ -31,43 +36,58 @@ public final class LLMCorrectionService: ObservableObject {
     // 교정 진행 중 카운터 (ViewModel에서 UI 인디케이터에 사용)
     @Published public var activeCorrections: Int = 0
 
+    func selectedTextProvider() -> (any LLMTextGenerationProvider)? {
+        guard let providerID = selectedProvider.providerID else { return nil }
+        return LLMProviderRegistry.shared.textGenerationProvider(for: providerID)
+    }
+
     // MARK: - Correct
 
     /// 비동기 교정 수행. 실패 시 nil 반환 (원본 유지).
     public func correct(text: String, context: String) async -> String? {
+        let meeting = MeetingContext.shared
+        return await correct(
+            text: text,
+            context: LLMCorrectionContext(
+                topic: meeting.topic,
+                glossary: meeting.glossary,
+                previousText: context,
+                runningSummary: meeting.runningSummary,
+                document: meeting.document
+            )
+        )
+    }
+
+    /// 명시적 context로 교정한다. 파일 import처럼 live `MeetingContext`를 섞으면 안 되는 경로에서 사용한다.
+    public func correct(text: String, context: LLMCorrectionContext) async -> String? {
         guard selectedProvider != .none, !text.isEmpty else { return nil }
 
         activeCorrections += 1
         defer { activeCorrections -= 1 }
 
-        // 회의 맥락 + 직전 발화 + 현재 인식을 한 곳에서 프롬프트로 조립 (provider 공통)
-        let meeting = MeetingContext.shared
         let (instructions, userContent) = CorrectionPrompt.build(
-            topic: meeting.topic,
-            glossary: meeting.glossary,
-            context: context,
+            topic: context.topic,
+            glossary: context.glossary,
+            context: context.previousText,
             text: text,
-            summary: meeting.runningSummary,
-            document: meeting.document
+            summary: context.runningSummary,
+            document: context.document
         )
 
-        fputs("[LLM] correcting via \(selectedProvider.rawValue): \"\(text)\"\n", stderr)
+        guard let provider = selectedTextProvider() else { return nil }
+
+        fputs("[LLM] correcting via \(provider.descriptor.id.rawValue) (inputChars=\(text.count), contextChars=\(context.previousText.count))\n", stderr)
         do {
-            let corrected: String
-            switch selectedProvider {
-            case .none:
-                return nil
-            case .gemini:
-                corrected = try await GeminiOAuthService.shared.correct(instructions: instructions, userContent: userContent)
-            case .copilot:
-                corrected = try await CopilotOAuthService.shared.correct(instructions: instructions, userContent: userContent)
-            case .codex:
-                corrected = try await CodexOAuthService.shared.correct(instructions: instructions, userContent: userContent)
-            }
-            fputs("[LLM] corrected → \"\(corrected)\"\n", stderr)
+            let response = try await provider.generateText(LLMTextRequest(
+                useCase: .correction,
+                instructions: instructions,
+                userContent: userContent
+            ))
+            let corrected = CorrectionOutputPostprocessor.clean(response.text)
+            fputs("[LLM] correction completed via \(provider.descriptor.id.rawValue) (outputChars=\(corrected.count))\n", stderr)
             return corrected
         } catch {
-            fputs("[LLM] correction failed: \(error)\n", stderr)
+            fputs("[LLM] correction failed via \(provider.descriptor.id.rawValue): \(error.localizedDescription)\n", stderr)
             return nil
         }
     }
@@ -76,31 +96,56 @@ public final class LLMCorrectionService: ObservableObject {
 
     public var isLoggedIn: Bool {
         switch selectedProvider {
-        case .none:    return false
-        case .gemini:  return GeminiOAuthService.shared.isLoggedIn
-        case .copilot: return CopilotOAuthService.shared.isLoggedIn
-        case .codex:   return CodexOAuthService.shared.isLoggedIn
+        case .none:
+            return false
+        case .local:
+            return LocalLLMProviderConfiguration.stored().isConfigured
+        case .gptAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .gpt)
+        case .geminiAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .gemini)
+        case .claudeAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .claude)
+        case .openRouterAPI:
+            return LLMAPIKeyStore.shared.hasAPIKey(for: .openRouter)
+        case .gemini:
+            return GeminiOAuthService.shared.isLoggedIn
+        case .copilot:
+            return CopilotOAuthService.shared.isLoggedIn
+        case .codex:
+            return CodexOAuthService.shared.isLoggedIn
         }
     }
 
     public var loginEmail: String {
         switch selectedProvider {
-        case .none:    return ""
-        case .gemini:  return GeminiOAuthService.shared.email
-        case .copilot: return CopilotOAuthService.shared.email
-        case .codex:   return ""
+        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
+            return ""
+        case .gemini:
+            return GeminiOAuthService.shared.email
+        case .copilot:
+            return CopilotOAuthService.shared.email
         }
     }
 
     public func logout() {
         switch selectedProvider {
-        case .none:    break
-        case .gemini:  GeminiOAuthService.shared.logout()
-        case .copilot: CopilotOAuthService.shared.logout()
-        case .codex:   CodexOAuthService.shared.logout()
+        case .none, .local:
+            break
+        case .gptAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .gpt)
+        case .geminiAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .gemini)
+        case .claudeAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .claude)
+        case .openRouterAPI:
+            LLMAPIKeyStore.shared.deleteAPIKey(for: .openRouter)
+        case .gemini:
+            GeminiOAuthService.shared.logout()
+        case .copilot:
+            CopilotOAuthService.shared.logout()
+        case .codex:
+            CodexOAuthService.shared.logout()
         }
     }
 }
-
-// AppStorage에서 enum을 쓰기 위한 RawRepresentable 준수 (String으로 저장)
-extension LLMCorrectionService.Provider: RawRepresentable {}

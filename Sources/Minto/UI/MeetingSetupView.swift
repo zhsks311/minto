@@ -1,27 +1,35 @@
+import AppKit
 import SwiftUI
 
 /// "녹음 시작" 시 뜨는 회의 시작 시트.
 /// 주제·용어집을 입력받아 그 회의 세션의 교정 맥락으로 쓴다. 비우고 시작해도 된다.
 public struct MeetingSetupView: View {
     @ObservedObject private var confluence = ConfluenceService.shared
+    @ObservedObject private var glossaryStore = GlossaryStore.shared
     @State private var topic: String = ""
     @State private var glossary: String = ""
     @State private var document: String = ""
     @State private var showGlossary = false
     @State private var showDocument = false
+    @State private var audioInputMode: AudioInputMode = .microphone
+    @State private var audioReadiness: AudioInputReadiness = .ready(for: .microphone)
+    @State private var selectedGlossaryEntryIDs: Set<UUID> = []
     @State private var confluenceDocuments: [ConfluenceService.ContextDocument] = []
     @State private var confluenceStatus: String?
     @State private var isSearchingConfluence = false
 
-    private let onStart: (String, String, String) -> Void
+    private let onStart: (String, String, String, AudioInputMode) -> Void
     private let onCancel: () -> Void
+    private let audioReadinessChecker: AudioInputReadinessChecker
 
     public init(
-        onStart: @escaping (String, String, String) -> Void,
-        onCancel: @escaping () -> Void
+        onStart: @escaping (String, String, String, AudioInputMode) -> Void,
+        onCancel: @escaping () -> Void,
+        audioReadinessChecker: AudioInputReadinessChecker = .live
     ) {
         self.onStart = onStart
         self.onCancel = onCancel
+        self.audioReadinessChecker = audioReadinessChecker
     }
 
     public var body: some View {
@@ -44,13 +52,9 @@ public struct MeetingSetupView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            optionalEditor(
-                title: "용어집",
-                subtitle: "고유명사·전문용어를 한 줄에 하나씩 입력하세요",
-                text: $glossary,
-                isExpanded: $showGlossary,
-                height: 130
-            )
+            audioInputPicker
+
+            glossaryContextEditor
 
             documentContextEditor
 
@@ -58,34 +62,124 @@ public struct MeetingSetupView: View {
                 Spacer()
                 Button("닫기") { onCancel() }
                     .keyboardShortcut(.cancelAction)
-                Button("녹음 시작") { onStart(topic, glossary, combinedDocument) }
+                Button("녹음 시작") { onStart(topic, combinedGlossary, combinedDocument, audioInputMode) }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
+                    .disabled(!audioReadiness.canStartRecording)
             }
         }
         .padding(20)
         .frame(width: 440)
+        .task(id: audioInputMode) {
+            await refreshAudioReadiness(for: audioInputMode)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await refreshAudioReadiness(for: audioInputMode) }
+        }
     }
 
-    private func optionalEditor(
-        title: String,
-        subtitle: String,
-        text: Binding<String>,
-        isExpanded: Binding<Bool>,
-        height: CGFloat
-    ) -> some View {
+    private var audioInputPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("입력")
+                .font(.subheadline.weight(.medium))
+            Picker("입력", selection: $audioInputMode) {
+                ForEach(AudioInputMode.selectableCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            HStack(spacing: 6) {
+                Image(systemName: audioInputMode.requiresScreenCapturePermission ? "rectangle.on.rectangle" : "mic")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(audioInputMode.detail)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            audioReadinessRow
+        }
+    }
+
+    private var audioReadinessRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            readinessIcon
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(audioReadiness.title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(audioReadinessColor)
+                Text(audioReadiness.detail)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle = audioReadiness.actionTitle {
+                    Button(actionTitle) {
+                        Task { await requestAudioPermissionAndRefresh() }
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.link)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(audioReadinessColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    @ViewBuilder
+    private var readinessIcon: some View {
+        if audioReadiness.state == .checking {
+            ProgressView()
+                .controlSize(.mini)
+        } else {
+            Image(systemName: readinessIconName)
+                .font(.caption)
+                .foregroundColor(audioReadinessColor)
+        }
+    }
+
+    private var readinessIconName: String {
+        switch audioReadiness.state {
+        case .checking:
+            return "hourglass"
+        case .ready:
+            return "checkmark.circle.fill"
+        case .permissionRequired:
+            return "exclamationmark.triangle.fill"
+        case .unavailable:
+            return "xmark.circle.fill"
+        }
+    }
+
+    private var audioReadinessColor: Color {
+        switch audioReadiness.state {
+        case .checking:
+            return .secondary
+        case .ready:
+            return .green
+        case .permissionRequired:
+            return .orange
+        case .unavailable:
+            return .red
+        }
+    }
+
+    private var glossaryContextEditor: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                isExpanded.wrappedValue.toggle()
+                showGlossary.toggle()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
+                    Image(systemName: showGlossary ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 12)
-                    Text(title)
+                    Text("용어집")
                         .font(.subheadline.weight(.medium))
-                    Text("선택")
+                    Text(glossaryBadgeText)
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
@@ -98,14 +192,56 @@ public struct MeetingSetupView: View {
             }
             .buttonStyle(.plain)
 
-            if isExpanded.wrappedValue {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(subtitle)
+            if showGlossary {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("AI에는 선택한 용어와 직접 입력한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달됩니다. 현재 \(combinedGlossary.count) / \(GlossaryContextResolver.defaultMaxCharacters)자")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    TextEditor(text: text)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if !glossaryCandidates.isEmpty {
+                        HStack(spacing: 8) {
+                            Text("주제와 관련된 용어")
+                                .font(.caption.weight(.semibold))
+                            Spacer()
+                            Button("추천 선택") {
+                                selectedGlossaryEntryIDs.formUnion(glossaryCandidates.map(\.id))
+                            }
+                            .font(.caption)
+                            .buttonStyle(.borderless)
+                        }
+
+                        VStack(spacing: 6) {
+                            ForEach(glossaryCandidates) { entry in
+                                glossaryCandidateRow(entry)
+                            }
+                        }
+                    } else {
+                        Text(glossaryStore.entries.isEmpty
+                             ? "설정에서 기본 용어를 추가하면 회의마다 다시 입력하지 않아도 됩니다."
+                             : "회의 주제를 입력하면 관련 기본 용어를 추천합니다.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if !selectedGlossaryEntriesOutsideCandidates.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("선택된 용어")
+                                .font(.caption.weight(.semibold))
+                            Text("현재 추천 목록에는 없지만 이번 회의 문맥에 포함됩니다.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            ForEach(selectedGlossaryEntriesOutsideCandidates) { entry in
+                                glossaryCandidateRow(entry)
+                            }
+                        }
+                    }
+
+                    Text("이번 회의 용어")
+                        .font(.caption.weight(.semibold))
+                    TextEditor(text: $glossary)
                         .font(.body)
-                        .frame(height: height)
+                        .frame(height: 92)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
                                 .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
@@ -114,6 +250,36 @@ public struct MeetingSetupView: View {
                 .padding(.leading, 18)
             }
         }
+    }
+
+    private func glossaryCandidateRow(_ entry: GlossaryEntry) -> some View {
+        Toggle(isOn: Binding(
+            get: { selectedGlossaryEntryIDs.contains(entry.id) },
+            set: { selected in
+                if selected {
+                    selectedGlossaryEntryIDs.insert(entry.id)
+                } else {
+                    selectedGlossaryEntryIDs.remove(entry.id)
+                }
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.normalizedCanonical)
+                    .font(.caption.weight(.semibold))
+                if !entry.category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(entry.category)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(entry.description)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .toggleStyle(.checkbox)
     }
 
     private var documentContextEditor: some View {
@@ -231,6 +397,30 @@ public struct MeetingSetupView: View {
         return confluence.isConfigured ? "연결됨" : "설정 필요"
     }
 
+    private var glossaryBadgeText: String {
+        let count = selectedGlossaryEntries.count
+            + glossary.split(whereSeparator: { $0.isNewline }).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+        return count > 0 ? "\(count)개 선택" : "선택"
+    }
+
+    private var glossaryCandidates: [GlossaryEntry] {
+        glossaryStore.candidates(for: topic, limit: 24)
+    }
+
+    private var selectedGlossaryEntries: [GlossaryEntry] {
+        let ids = selectedGlossaryEntryIDs
+        return glossaryStore.entries.filter { ids.contains($0.id) && $0.isUsable }
+    }
+
+    private var selectedGlossaryEntriesOutsideCandidates: [GlossaryEntry] {
+        let candidateIDs = Set(glossaryCandidates.map(\.id))
+        return selectedGlossaryEntries.filter { !candidateIDs.contains($0.id) }
+    }
+
+    private var combinedGlossary: String {
+        GlossaryContextResolver().resolve(manualGlossary: glossary, selectedEntries: selectedGlossaryEntries)
+    }
+
     private var confluenceQuery: String {
         let joined = [topic, document]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -268,5 +458,37 @@ public struct MeetingSetupView: View {
         confluenceStatus = documents.isEmpty
             ? "관련 Confluence 문서를 찾지 못했습니다."
             : "Confluence 문서 \(documents.count)개를 참고자료로 사용합니다."
+    }
+
+    @MainActor
+    private func refreshAudioReadiness(for mode: AudioInputMode) async {
+        audioReadiness = .checking(for: mode)
+        let readiness = await audioReadinessChecker.readiness(for: mode)
+        guard audioInputMode == mode else { return }
+        audioReadiness = readiness
+    }
+
+    @MainActor
+    private func requestAudioPermissionAndRefresh() async {
+        let mode = audioInputMode
+        audioReadiness = .checking(for: mode)
+        let readiness = await audioReadinessChecker.requestPermission(for: mode)
+        guard audioInputMode == mode else { return }
+        audioReadiness = readiness
+        if readiness.state == .permissionRequired {
+            openScreenCaptureSettings()
+        }
+    }
+
+    private func openScreenCaptureSettings() {
+        let settingsURLs = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture",
+        ]
+
+        for urlString in settingsURLs {
+            guard let url = URL(string: urlString), NSWorkspace.shared.open(url) else { continue }
+            return
+        }
     }
 }

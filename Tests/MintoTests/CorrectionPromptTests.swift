@@ -20,6 +20,16 @@ struct CorrectionPromptTests {
         #expect(p.instructions.contains("교정 원칙"))
     }
 
+    @Test("instructions는 용어집 exact spelling 보존 규칙을 포함한다")
+    func instructionsPreserveGlossaryExactSpelling() {
+        let p = CorrectionPrompt.build(topic: "", glossary: "", context: "", text: "리퀴 베이스")
+
+        #expect(p.instructions.contains("exact spelling"))
+        #expect(p.instructions.contains("리퀴 베이스"))
+        #expect(p.instructions.contains("Liquibase"))
+        #expect(p.instructions.contains("dry-run"))
+    }
+
     @Test("빈 회의 맥락이면 userContent에 회의 블록이 없다")
     func emptyMeetingContext() {
         let p = CorrectionPrompt.build(topic: "", glossary: "", context: "이전 발화", text: "현재 발화")
@@ -61,5 +71,33 @@ struct CorrectionPromptTests {
     func textAlwaysInUserContent() {
         let p = CorrectionPrompt.build(topic: "주제", glossary: "용어", context: "맥락", text: "교정할문장")
         #expect(p.userContent.contains("교정할문장"))
+    }
+
+    @Test("postprocessor는 출력 마커 뒤의 교정문만 남긴다")
+    func postprocessorExtractsOutputMarkerText() {
+        let raw = """
+        오늘 PDCR-2901 마이그레이션에서 리퀴 베이스 → Liquibase로 교정합니다.
+
+        출력: 오늘 PDCR-2901 마이그레이션에서 Liquibase 순서를 확인했습니다.
+        """
+
+        #expect(CorrectionOutputPostprocessor.clean(raw) == "오늘 PDCR-2901 마이그레이션에서 Liquibase 순서를 확인했습니다.")
+    }
+
+    @Test("postprocessor는 명확한 마커가 없으면 응답을 보존한다")
+    func postprocessorPreservesUnmarkedOutput() {
+        let raw = """
+        첫 번째 교정 문장입니다.
+        두 번째 교정 문장입니다.
+        """
+
+        #expect(CorrectionOutputPostprocessor.clean(raw) == "첫 번째 교정 문장입니다.\n두 번째 교정 문장입니다.")
+        #expect(CorrectionOutputPostprocessor.clean("실험 결과: 배포를 보류했습니다.") == "실험 결과: 배포를 보류했습니다.")
+    }
+
+    @Test("postprocessor는 교정문을 감싼 따옴표만 제거한다")
+    func postprocessorStripsWrappingQuotes() {
+        #expect(CorrectionOutputPostprocessor.clean("  \"교정된 문장\"  ") == "교정된 문장")
+        #expect(CorrectionOutputPostprocessor.clean("교정 결과: “교정된 문장”") == "교정된 문장")
     }
 }

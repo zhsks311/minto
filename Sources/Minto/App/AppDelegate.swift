@@ -29,11 +29,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     @MainActor
     public func requestStartSession() {
         meetingSetupManager.show(
-            onStart: { [weak self] topic, glossary, document in
+            onStart: { [weak self] topic, glossary, document, inputMode in
                 guard let self else { return }
                 MeetingContext.shared.start(topic: topic, glossary: glossary, document: document)
                 self.reportService.startNewReport(startedAt: Date())
-                self.viewModel.startNewRecordingSession()
+                self.viewModel.startNewRecordingSession(inputMode: inputMode)
                 self.mainWindowManager.show()
             },
             onCancel: {}
@@ -85,33 +85,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     /// 전사 세그먼트 + 구조화 요약 → 저장용 MeetingRecord. 제목·길이를 해소한다.
     @MainActor
     static func makeRecord(summary: MeetingSummary, segments: [Segment], topic: String, duration: TimeInterval) -> MeetingRecord {
-        let transcript = TranscriptNormalizer.normalize(segments)
-        let title: String = {
-            let t = summary.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !t.isEmpty { return t }
-            let topicTrimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
-            return topicTrimmed.isEmpty ? "회의 결과" : topicTrimmed
-        }()
-        let start = transcript.first?.timestamp ?? Date()
-        // 회의 길이는 segment 타임스탬프로 계산(recordingDuration은 종료 시점에 0으로 들어올 수 있음).
-        let meetingSeconds: TimeInterval
-        if let first = transcript.first, let last = transcript.last {
-            meetingSeconds = max(duration, last.timestamp.timeIntervalSince(first.timestamp) + last.duration)
-        } else {
-            meetingSeconds = duration
-        }
-        return MeetingRecord(
-            title: title,
-            startedAt: start,
-            durationSeconds: meetingSeconds,
-            topic: topic,
+        MeetingRecordFactory.makeRecord(
             summary: summary,
-            transcript: transcript
+            segments: segments,
+            topic: topic,
+            duration: duration
         )
     }
 
+    @MainActor
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        LLMSummarySettingsService.shared.migrateIfNeeded(from: LLMCorrectionService.shared.selectedProvider)
         SpeechEnginePreferences.normalizeLegacyValues()
         Task {
             let savedEngine = SpeechEnginePreferences.selectedEngine()

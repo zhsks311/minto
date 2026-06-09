@@ -1,11 +1,30 @@
 import Foundation
 import SwiftUI
 
+public struct SummaryGenerationContext: Sendable, Equatable {
+    public let topic: String
+    public let glossary: String
+    public let runningSummary: String
+    public let document: String
+
+    public init(
+        topic: String = "",
+        glossary: String = "",
+        runningSummary: String = "",
+        document: String = ""
+    ) {
+        self.topic = topic
+        self.glossary = glossary
+        self.runningSummary = runningSummary
+        self.document = document
+    }
+}
+
 /// 회의 요약 생성 서비스.
 ///
-/// `LLMCorrectionService`와 동일한 provider 분기(Codex/Gemini/Copilot)를 재사용한다.
-/// 사용자가 교정용으로 고른 provider(`selectedProvider`)를 그대로 쓰며, Codex는 tier-aware
-/// 모델 상향도 그대로 적용된다.
+/// 요약 provider는 교정 provider와 별도 설정으로 관리한다.
+/// 기존 사용자는 최초 실행 시 교정 provider를 한 번 복사해 요약 동작 회귀를 줄이고,
+/// 이후에는 교정 off + 요약 on 조합을 독립적으로 사용할 수 있다.
 ///
 /// 모든 경로 fail-soft: provider 미선택·미로그인·네트워크 오류·빈 응답이면 nil을 반환하고
 /// 기존 요약을 유지한다(요약 실패가 전사·교정을 망가뜨리지 않는다).
@@ -33,7 +52,7 @@ public final class SummaryService: ObservableObject {
             newBatch: batch,
             document: meeting.document
         )
-        guard let summary = await dispatch(prompt) else { return nil }
+        guard let summary = await dispatch(prompt, useCase: .incrementalSummary) else { return nil }
         meeting.runningSummary = summary
         return summary
     }
@@ -42,28 +61,42 @@ public final class SummaryService: ObservableObject {
     /// LLM 실패/파싱 실패 시: 평문 폴백(마지막 runningSummary 또는 raw 텍스트). 모두 비면 nil.
     public func generateFinal(transcript: String) async -> MeetingSummary? {
         let meeting = MeetingContext.shared
+        let context = SummaryGenerationContext(
+            topic: meeting.topic,
+            glossary: meeting.glossary,
+            runningSummary: meeting.runningSummary,
+            document: meeting.document
+        )
+        let summary = await generateFinal(transcript: transcript, context: context)
+        if let summary {
+            meeting.finalSummary = summary
+        }
+        return summary
+    }
+
+    /// 명시적 context로 최종 요약을 생성한다.
+    ///
+    /// 파일 import처럼 live `MeetingContext`를 건드리면 안 되는 사후 처리 경로에서 사용한다.
+    public func generateFinal(transcript: String, context: SummaryGenerationContext) async -> MeetingSummary? {
         // 빈 회의(전사 없음)는 요약할 내용이 없으므로 LLM을 호출하지 않는다.
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
 
         let prompt = SummaryPrompt.buildFinal(
-            topic: meeting.topic,
-            glossary: meeting.glossary,
+            topic: context.topic,
+            glossary: context.glossary,
             transcript: transcript,
-            document: meeting.document
+            document: context.document
         )
 
-        if let raw = await dispatch(prompt) {
+        if let raw = await dispatch(prompt, useCase: .finalSummary) {
             // JSON 파싱 시도 → 실패하면 raw를 평문 요약으로 감싼다(빈 화면 방지).
             let summary = Self.parseStructured(raw) ?? .plain(raw)
-            meeting.finalSummary = summary
             return summary
         }
         // 최종 LLM 호출 실패 → 마지막 증분 요약을 평문 폴백(빈 요약이면 nil).
-        let fallback = meeting.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = context.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !fallback.isEmpty else { return nil }
-        let summary = MeetingSummary.plain(fallback)
-        meeting.finalSummary = summary
-        return summary
+        return MeetingSummary.plain(fallback)
     }
 
     /// LLM 응답에서 JSON 객체를 추출해 MeetingSummary로 디코딩한다.
@@ -81,30 +114,23 @@ public final class SummaryService: ObservableObject {
         return summary
     }
 
-    /// provider 분기 — `LLMCorrectionService.selectedProvider`를 재사용. 실패·none·빈 응답이면 nil.
-    private func dispatch(_ prompt: (instructions: String, userContent: String)) async -> String? {
-        let provider = LLMCorrectionService.shared.selectedProvider
-        guard provider != .none else { return nil }
+    /// provider adapter dispatch. 실패·none·빈 응답이면 nil.
+    private func dispatch(_ prompt: (instructions: String, userContent: String), useCase: LLMUseCase) async -> String? {
+        guard let provider = LLMSummarySettingsService.shared.selectedTextProvider() else { return nil }
 
         activeGenerations += 1
         defer { activeGenerations -= 1 }
 
         do {
-            let result: String
-            switch provider {
-            case .none:
-                return nil
-            case .gemini:
-                result = try await GeminiOAuthService.shared.correct(instructions: prompt.instructions, userContent: prompt.userContent)
-            case .copilot:
-                result = try await CopilotOAuthService.shared.correct(instructions: prompt.instructions, userContent: prompt.userContent)
-            case .codex:
-                result = try await CodexOAuthService.shared.correct(instructions: prompt.instructions, userContent: prompt.userContent)
-            }
-            let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            let response = try await provider.generateText(LLMTextRequest(
+                useCase: useCase,
+                instructions: prompt.instructions,
+                userContent: prompt.userContent
+            ))
+            let trimmed = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
         } catch {
-            fputs("[Summary] generation failed via \(provider.rawValue): \(error)\n", stderr)
+            fputs("[Summary] generation failed via \(provider.descriptor.id.rawValue): \(error.localizedDescription)\n", stderr)
             return nil
         }
     }

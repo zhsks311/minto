@@ -1,0 +1,2 @@
+case_id,case_type,repeat_index,status,latency_seconds,term_recall,json_valid,required_field_recall,server_rss_peak_mb,error
+correction_terms,correction,0,failed,120.406,,,,59.36,timeout
