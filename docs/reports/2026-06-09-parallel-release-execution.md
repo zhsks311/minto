@@ -117,6 +117,7 @@
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
   - `MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets` can isolate dev secret files during app QA.
   - Dev secret files are written under the app support dev-secrets directory with restricted directory/file permissions.
+  - Process-env smoke coverage confirms the default LLM API key, OAuth token, and Confluence token backends follow `MINTO_DEV_SECRET_STORE=file` without injected test stores.
   - Settings copy now says secret store instead of hardcoding Keychain-only storage.
 - Validation:
   - `git diff --check`: passed
@@ -132,6 +133,8 @@
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-test --filter SecretStore`: passed, 6 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-related-test --filter 'SecretStore|LLMProviderTests|RelatedInfoTests'`: passed, 71 tests
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-build`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-process-env-test-2 --filter SecretStore`: passed, 7 tests
+  - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-process-env-qa swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-process-env-env-test --filter SecretStore`: passed, 7 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-context-test --filter LLMProviderTests`: passed, 28 tests
   - `python3 -m py_compile scripts/run_local_llm_benchmarks.py`: passed
   - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model deepseek-r1:8b --cases correction --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-dryrun`: passed, request body preview has `options.num_ctx=4096`
@@ -161,7 +164,7 @@
   - invalid Confluence token으로 검색/내보내기 실패 후 `다시 연결 필요` 표시 확인
   - invalid Notion token으로 관련 문서 검색 실패 후 재연결/지우기 동작 확인
   - Settings 진입만으로 반복 Keychain 원문 읽기 prompt가 늘지 않는지 확인
-  - 개발 실행에서 `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets`로 LLM API key, OAuth token, Confluence token save/load/delete 확인
+  - 개발 실행에서 `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets`로 실제 Settings UI 저장, 앱 재시작 후 load, delete 확인
 
 ## Stop Conditions
 
