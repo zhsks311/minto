@@ -100,10 +100,10 @@ Files:
 - `run_manifest.json`: run settings and selected cases
 - `request_bodies.json`: dry-run request previews
 - `metrics.jsonl`: one metric row per case/repeat
-- `<case>-<repeat>.json`: per-run metric detail, including capped `output_preview`, `output_sha256`, and found/missing terms
-- `summary.json`: aggregate metrics, `by_case_type`, and `default_candidate_gate`
-- `summary.csv`: tabular metrics with found/missing terms
-- `summary.md`: human-readable benchmark report with gate breakdown and missing-term triage
+- `<case>-<repeat>.json`: per-run metric detail, including capped `output_preview`, `output_sha256`, found/missing terms, and app-postprocessed correction metrics
+- `summary.json`: aggregate metrics, `by_case_type`, raw `default_candidate_gate`, and app-postprocessed `app_default_candidate_gate`
+- `summary.csv`: tabular metrics with found/missing terms and raw/app correction gate columns
+- `summary.md`: human-readable benchmark report with raw/app gate breakdown and missing-term triage
 
 For committed benchmark evidence, set an explicit output path under `docs/benchmark/local-llm/`.
 
@@ -118,10 +118,13 @@ python3 scripts/run_local_llm_benchmarks.py \
 
 ## Metrics
 
-- correction: expected domain-term preservation
+- correction: expected domain-term preservation, raw output cleanliness, raw output length preservation, and app-postprocessed output checks
 - summary: required JSON fields and term recall
 - answer: grounded answer term recall and source-time preservation
 - all cases: latency, status, output length, capped output preview/hash, found/missing terms, optional sampled server RSS
-- default candidate gate: real non-mock run, correction/summary/answer coverage, transport pass, correction-only output cleanliness, per-type minimum recall, and summary JSON validity
+- raw default candidate gate: real non-mock run, correction/summary/answer coverage, transport pass, correction-only output cleanliness, correction length preservation, per-type minimum recall, and summary JSON validity
+- app default candidate gate: same coverage and transport checks, but correction recall/cleanliness/length are evaluated after the same conservative wrapper stripping used by the app correction postprocessor
+
+The app gate can pass while the raw gate fails when a model returns a correct correction wrapped in explicit labels such as `출력:`. Treat this as a quality signal, not an automatic default promotion; latency and repeated stability still need review.
 
 Do not promote a local model as the default until a real non-mock run is recorded and reviewed.

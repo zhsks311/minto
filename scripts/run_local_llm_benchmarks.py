@@ -16,6 +16,8 @@ from pathlib import Path
 
 
 OUTPUT_PREVIEW_CHARS = 800
+CORRECTION_MAX_LENGTH_RATIO = 1.6
+CORRECTION_MAX_LENGTH_EXTRA_CHARS = 40
 CORRECTION_EXPLANATION_MARKERS = [
     "출력:",
     "교정:",
@@ -23,6 +25,14 @@ CORRECTION_EXPLANATION_MARKERS = [
     "교정합니다",
     "수정합니다",
     "→",
+]
+APP_CORRECTION_OUTPUT_MARKERS = [
+    "출력:",
+    "최종 출력:",
+    "교정 결과:",
+    "교정본:",
+    "수정 결과:",
+    "수정본:",
 ]
 
 BENCHMARK_CASES = [
@@ -358,12 +368,8 @@ def parse_json_object(text):
 
 def evaluate(case, text):
     stripped_text = text.strip()
-    normalized = text.lower()
     expected_terms = case["expected_terms"]
-    found_terms = [
-        term for term in expected_terms
-        if term.lower() in normalized
-    ]
+    found_terms = matching_terms(stripped_text, expected_terms)
 
     parsed_json = parse_json_object(text) if case["required_fields"] else None
     required_fields_present = []
@@ -373,6 +379,7 @@ def evaluate(case, text):
             if field in parsed_json
         ]
     correction_clean, correction_clean_failures = evaluate_correction_output(case, stripped_text)
+    correction_length = evaluate_correction_length(case, stripped_text)
 
     return {
         "output_chars": len(text),
@@ -399,7 +406,17 @@ def evaluate(case, text):
         ),
         "correction_clean": correction_clean,
         "correction_clean_failures": correction_clean_failures,
+        **correction_length,
+        **evaluate_app_correction_output(case, stripped_text),
     }
+
+
+def matching_terms(text, expected_terms):
+    normalized = text.lower()
+    return [
+        term for term in expected_terms
+        if term.lower() in normalized
+    ]
 
 
 def evaluate_correction_output(case, stripped_text):
@@ -414,6 +431,130 @@ def evaluate_correction_output(case, stripped_text):
         if marker in stripped_text
     )
     return len(failures) == 0, failures
+
+
+def evaluate_correction_length(case, output):
+    if case["type"] != "correction":
+        return {
+            "correction_input_chars": None,
+            "correction_length_limit": None,
+            "correction_length_ratio": None,
+            "correction_length_ok": None,
+        }
+
+    input_chars = len(case["prompt"].strip())
+    output_chars = len(output)
+    limit = max(
+        round(input_chars * CORRECTION_MAX_LENGTH_RATIO),
+        input_chars + CORRECTION_MAX_LENGTH_EXTRA_CHARS,
+    )
+    return {
+        "correction_input_chars": input_chars,
+        "correction_length_limit": limit,
+        "correction_length_ratio": round(output_chars / input_chars, 3) if input_chars else None,
+        "correction_length_ok": output_chars <= limit,
+    }
+
+
+def evaluate_app_correction_output(case, stripped_text):
+    if case["type"] != "correction":
+        return {
+            "app_output_chars": None,
+            "app_output_preview_chars": None,
+            "app_output_preview": None,
+            "app_output_preview_truncated": None,
+            "app_output_sha256": None,
+            "app_found_terms": [],
+            "app_missing_terms": [],
+            "app_term_recall": None,
+            "app_correction_clean": None,
+            "app_correction_clean_failures": [],
+            "app_correction_length_ratio": None,
+            "app_correction_length_ok": None,
+        }
+
+    app_output = app_postprocess_correction_output(stripped_text)
+    expected_terms = case["expected_terms"]
+    app_found_terms = matching_terms(app_output, expected_terms)
+    app_correction_clean, app_correction_clean_failures = evaluate_correction_output(case, app_output)
+    app_correction_length = evaluate_correction_length(case, app_output)
+
+    return {
+        "app_output_chars": len(app_output),
+        "app_output_preview_chars": OUTPUT_PREVIEW_CHARS,
+        "app_output_preview": app_output[:OUTPUT_PREVIEW_CHARS],
+        "app_output_preview_truncated": len(app_output) > OUTPUT_PREVIEW_CHARS,
+        "app_output_sha256": (
+            hashlib.sha256(app_output.encode("utf-8")).hexdigest()
+            if app_output else None
+        ),
+        "app_found_terms": app_found_terms,
+        "app_missing_terms": [
+            term for term in expected_terms
+            if term not in app_found_terms
+        ],
+        "app_term_recall": (
+            len(app_found_terms) / len(expected_terms)
+            if expected_terms else None
+        ),
+        "app_correction_clean": app_correction_clean,
+        "app_correction_clean_failures": app_correction_clean_failures,
+        "app_correction_length_ratio": app_correction_length["correction_length_ratio"],
+        "app_correction_length_ok": app_correction_length["correction_length_ok"],
+    }
+
+
+def app_postprocess_correction_output(output):
+    trimmed = strip_wrapping_quotes(output.strip())
+    if not trimmed:
+        return trimmed
+
+    lines = [
+        line.strip() for line in trimmed.splitlines()
+        if line.strip()
+    ]
+    marker_match = first_app_output_marker(lines)
+    if marker_match is None:
+        return trimmed
+
+    line_index, text = marker_match
+    candidate_lines = [text]
+    if line_index + 1 < len(lines):
+        candidate_lines.extend(lines[line_index + 1:])
+
+    candidate = strip_wrapping_quotes("\n".join(candidate_lines).strip())
+    return candidate or trimmed
+
+
+def first_app_output_marker(lines):
+    for line_index, line in enumerate(lines):
+        for marker in APP_CORRECTION_OUTPUT_MARKERS:
+            if line.startswith(marker):
+                text = line[len(marker):].strip()
+                if text:
+                    return line_index, text
+    return None
+
+
+def strip_wrapping_quotes(value):
+    result = value
+    quote_pairs = [
+        ('"', '"'),
+        ("'", "'"),
+        ("“", "”"),
+        ("‘", "’"),
+    ]
+    did_strip = True
+    while did_strip and len(result) >= 2:
+        did_strip = False
+        first = result[0]
+        last = result[-1]
+        for opening, closing in quote_pairs:
+            if first == opening and last == closing:
+                result = result[1:-1].strip()
+                did_strip = True
+                break
+    return result
 
 
 def run_case(args, case, repeat_index):
@@ -520,6 +661,19 @@ def write_summary_csv(path, metrics):
         "missing_terms",
         "correction_clean",
         "correction_clean_failures",
+        "correction_input_chars",
+        "correction_length_limit",
+        "correction_length_ratio",
+        "correction_length_ok",
+        "app_output_chars",
+        "app_output_sha256",
+        "app_term_recall",
+        "app_found_terms",
+        "app_missing_terms",
+        "app_correction_clean",
+        "app_correction_clean_failures",
+        "app_correction_length_ratio",
+        "app_correction_length_ok",
         "json_valid",
         "required_field_recall",
         "server_rss_peak_mb",
@@ -558,6 +712,22 @@ def aggregate(metrics):
         metric["correction_clean"] for metric in passed
         if metric.get("correction_clean") is not None
     ]
+    correction_length_ok_values = [
+        metric["correction_length_ok"] for metric in passed
+        if metric.get("correction_length_ok") is not None
+    ]
+    app_term_recalls = [
+        metric["app_term_recall"] for metric in passed
+        if isinstance(metric.get("app_term_recall"), (int, float))
+    ]
+    app_correction_clean_values = [
+        metric["app_correction_clean"] for metric in passed
+        if metric.get("app_correction_clean") is not None
+    ]
+    app_correction_length_ok_values = [
+        metric["app_correction_length_ok"] for metric in passed
+        if metric.get("app_correction_length_ok") is not None
+    ]
     return {
         "total_runs": len(metrics),
         "passed_runs": len(passed),
@@ -573,6 +743,26 @@ def aggregate(metrics):
         "correction_clean_rate": (
             sum(1 for value in correction_clean_values if value) / len(correction_clean_values)
             if correction_clean_values else None
+        ),
+        "correction_length_ok_rate": (
+            sum(1 for value in correction_length_ok_values if value) / len(correction_length_ok_values)
+            if correction_length_ok_values else None
+        ),
+        "app_mean_term_recall": (
+            round(sum(app_term_recalls) / len(app_term_recalls), 3)
+            if app_term_recalls else None
+        ),
+        "app_min_term_recall": (
+            round(min(app_term_recalls), 3)
+            if app_term_recalls else None
+        ),
+        "app_correction_clean_rate": (
+            sum(1 for value in app_correction_clean_values if value) / len(app_correction_clean_values)
+            if app_correction_clean_values else None
+        ),
+        "app_correction_length_ok_rate": (
+            sum(1 for value in app_correction_length_ok_values if value) / len(app_correction_length_ok_values)
+            if app_correction_length_ok_values else None
         ),
         "max_server_rss_peak_mb": max(rss_values) if rss_values else None,
     }
@@ -593,6 +783,7 @@ def summary_payload(metrics, manifest):
     summary = aggregate(metrics)
     summary["by_case_type"] = aggregate_by(metrics, "case_type")
     summary["default_candidate_gate"] = default_candidate_gate(metrics, manifest)
+    summary["app_default_candidate_gate"] = app_default_candidate_gate(metrics, manifest)
     return summary
 
 
@@ -604,6 +795,7 @@ def default_candidate_gate(metrics, manifest):
     transport_passed = bool(metrics) and all(metric["status"] == "passed" for metric in metrics)
     correction_min_recall = min_term_recall(metrics, "correction")
     correction_clean_rate = clean_rate(metrics, "correction")
+    correction_length_ok_rate = clean_rate(metrics, "correction", "correction_length_ok")
     summary_min_recall = min_term_recall(metrics, "summary")
     summary_json_valid_rate = json_valid_rate(metrics, "summary")
     answer_min_recall = min_term_recall(metrics, "answer")
@@ -613,6 +805,7 @@ def default_candidate_gate(metrics, manifest):
         and transport_passed
         and correction_min_recall == 1.0
         and correction_clean_rate == 1.0
+        and correction_length_ok_rate == 1.0
         and summary_min_recall == 1.0
         and summary_json_valid_rate == 1.0
         and answer_min_recall == 1.0
@@ -626,6 +819,7 @@ def default_candidate_gate(metrics, manifest):
         "transport_passed": transport_passed,
         "correction_min_term_recall": correction_min_recall,
         "correction_clean_rate": correction_clean_rate,
+        "correction_length_ok_rate": correction_length_ok_rate,
         "summary_min_term_recall": summary_min_recall,
         "summary_json_valid_rate": summary_json_valid_rate,
         "answer_min_term_recall": answer_min_recall,
@@ -633,12 +827,56 @@ def default_candidate_gate(metrics, manifest):
     }
 
 
+def app_default_candidate_gate(metrics, manifest):
+    selected_case_types = sorted({metric["case_type"] for metric in metrics})
+    required_case_types = ["answer", "correction", "summary"]
+    real_run = not manifest["mock"] and not manifest["dry_run"]
+    coverage_ok = all(case_type in selected_case_types for case_type in required_case_types)
+    transport_passed = bool(metrics) and all(metric["status"] == "passed" for metric in metrics)
+    app_correction_min_recall = min_metric(metrics, "correction", "app_term_recall")
+    app_correction_clean_rate = clean_rate(metrics, "correction", "app_correction_clean")
+    app_correction_length_ok_rate = clean_rate(metrics, "correction", "app_correction_length_ok")
+    summary_min_recall = min_term_recall(metrics, "summary")
+    summary_json_valid_rate = json_valid_rate(metrics, "summary")
+    answer_min_recall = min_term_recall(metrics, "answer")
+    ready = (
+        real_run
+        and coverage_ok
+        and transport_passed
+        and app_correction_min_recall == 1.0
+        and app_correction_clean_rate == 1.0
+        and app_correction_length_ok_rate == 1.0
+        and summary_min_recall == 1.0
+        and summary_json_valid_rate == 1.0
+        and answer_min_recall == 1.0
+    )
+
+    return {
+        "required_case_types": required_case_types,
+        "selected_case_types": selected_case_types,
+        "real_run": real_run,
+        "coverage_ok": coverage_ok,
+        "transport_passed": transport_passed,
+        "app_correction_min_term_recall": app_correction_min_recall,
+        "app_correction_clean_rate": app_correction_clean_rate,
+        "app_correction_length_ok_rate": app_correction_length_ok_rate,
+        "summary_min_term_recall": summary_min_recall,
+        "summary_json_valid_rate": summary_json_valid_rate,
+        "answer_min_term_recall": answer_min_recall,
+        "app_default_candidate_ready": ready,
+    }
+
+
 def min_term_recall(metrics, case_type):
+    return min_metric(metrics, case_type, "term_recall")
+
+
+def min_metric(metrics, case_type, metric_key):
     values = [
-        metric["term_recall"] for metric in metrics
+        metric[metric_key] for metric in metrics
         if metric.get("case_type") == case_type
         and metric.get("status") == "passed"
-        and isinstance(metric.get("term_recall"), (int, float))
+        and isinstance(metric.get(metric_key), (int, float))
     ]
     return round(min(values), 3) if values else None
 
@@ -656,12 +894,12 @@ def json_valid_rate(metrics, case_type):
     )
 
 
-def clean_rate(metrics, case_type):
+def clean_rate(metrics, case_type, metric_key="correction_clean"):
     values = [
-        metric["correction_clean"] for metric in metrics
+        metric[metric_key] for metric in metrics
         if metric.get("case_type") == case_type
         and metric.get("status") == "passed"
-        and metric.get("correction_clean") is not None
+        and metric.get(metric_key) is not None
     ]
     return (
         sum(1 for value in values if value) / len(values)
@@ -672,6 +910,7 @@ def clean_rate(metrics, case_type):
 def write_summary_md(path, manifest, metrics):
     summary = summary_payload(metrics, manifest)
     gate = summary["default_candidate_gate"]
+    app_gate = summary["app_default_candidate_gate"]
     context_window = manifest["num_ctx"] if manifest["num_ctx"] is not None else "n/a"
     lines = [
         "# Local LLM benchmark summary",
@@ -694,19 +933,33 @@ def write_summary_md(path, manifest, metrics):
         f"- Transport passed: `{gate['transport_passed']}`",
         f"- Correction min recall: `{gate['correction_min_term_recall']}`",
         f"- Correction clean rate: `{gate['correction_clean_rate']}`",
+        f"- Correction length OK rate: `{gate['correction_length_ok_rate']}`",
         f"- Summary min recall: `{gate['summary_min_term_recall']}`",
         f"- Summary JSON valid rate: `{gate['summary_json_valid_rate']}`",
         f"- Answer min recall: `{gate['answer_min_term_recall']}`",
         f"- Default candidate ready: `{gate['default_candidate_ready']}`",
         "",
+        "## App Candidate Gate",
+        "",
+        f"- Real run: `{app_gate['real_run']}`",
+        f"- Coverage OK: `{app_gate['coverage_ok']}`",
+        f"- Transport passed: `{app_gate['transport_passed']}`",
+        f"- App correction min recall: `{app_gate['app_correction_min_term_recall']}`",
+        f"- App correction clean rate: `{app_gate['app_correction_clean_rate']}`",
+        f"- App correction length OK rate: `{app_gate['app_correction_length_ok_rate']}`",
+        f"- Summary min recall: `{app_gate['summary_min_term_recall']}`",
+        f"- Summary JSON valid rate: `{app_gate['summary_json_valid_rate']}`",
+        f"- Answer min recall: `{app_gate['answer_min_term_recall']}`",
+        f"- App default candidate ready: `{app_gate['app_default_candidate_ready']}`",
+        "",
         "## Case Type Summary",
         "",
-        "| Case Type | Runs | Success | Mean Latency | Mean Term Recall | Min Term Recall | JSON Valid | Correction Clean |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Case Type | Runs | Success | Mean Latency | Mean Term Recall | Min Term Recall | JSON Valid | Correction Clean | Length OK | App Mean Recall | App Min Recall | App Correction Clean | App Length OK |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for case_type, case_summary in summary["by_case_type"].items():
         lines.append(
-            "| {case_type} | {runs} | {success} | {latency} | {mean_recall} | {min_recall} | {json_valid} | {clean} |".format(
+            "| {case_type} | {runs} | {success} | {latency} | {mean_recall} | {min_recall} | {json_valid} | {clean} | {length_ok} | {app_mean} | {app_min} | {app_clean} | {app_length_ok} |".format(
                 case_type=case_type,
                 runs=case_summary["total_runs"],
                 success=case_summary["success_rate"],
@@ -715,18 +968,23 @@ def write_summary_md(path, manifest, metrics):
                 min_recall=case_summary["min_term_recall"],
                 json_valid=case_summary["json_valid_rate"],
                 clean=case_summary["correction_clean_rate"],
+                length_ok=case_summary["correction_length_ok_rate"],
+                app_mean=case_summary["app_mean_term_recall"],
+                app_min=case_summary["app_min_term_recall"],
+                app_clean=case_summary["app_correction_clean_rate"],
+                app_length_ok=case_summary["app_correction_length_ok_rate"],
             )
         )
     lines.extend([
         "",
         "## Case Runs",
         "",
-        "| Case | Repeat | Status | Latency | Term Recall | Missing Terms | Correction Clean | JSON | RSS MB | Error |",
-        "|---|---:|---|---:|---:|---|---|---|---:|---|",
+        "| Case | Repeat | Status | Latency | Term Recall | Missing Terms | Correction Clean | Length Ratio | Length OK | App Term Recall | App Missing Terms | App Correction Clean | App Length Ratio | App Length OK | JSON | RSS MB | Error |",
+        "|---|---:|---|---:|---:|---|---|---:|---|---:|---|---|---:|---|---|---:|---|",
     ])
     for metric in metrics:
         lines.append(
-            "| {case} | {repeat} | {status} | {latency} | {term} | {missing} | {clean} | {json_valid} | {rss} | {error} |".format(
+            "| {case} | {repeat} | {status} | {latency} | {term} | {missing} | {clean} | {length_ratio} | {length_ok} | {app_term} | {app_missing} | {app_clean} | {app_length_ratio} | {app_length_ok} | {json_valid} | {rss} | {error} |".format(
                 case=metric["case_id"],
                 repeat=metric["repeat_index"],
                 status=metric["status"],
@@ -734,6 +992,13 @@ def write_summary_md(path, manifest, metrics):
                 term=metric.get("term_recall"),
                 missing=markdown_terms(metric.get("missing_terms")),
                 clean=correction_clean_cell(metric),
+                length_ratio=metric.get("correction_length_ratio"),
+                length_ok=metric.get("correction_length_ok"),
+                app_term=metric.get("app_term_recall"),
+                app_missing=markdown_terms(metric.get("app_missing_terms")),
+                app_clean=app_correction_clean_cell(metric),
+                app_length_ratio=metric.get("app_correction_length_ratio"),
+                app_length_ok=metric.get("app_correction_length_ok"),
                 json_valid=metric.get("json_valid"),
                 rss=metric.get("server_rss_peak_mb"),
                 error=markdown_cell(metric.get("error") or ""),
@@ -757,6 +1022,16 @@ def correction_clean_cell(metric):
     if value is None:
         return ""
     failures = metric.get("correction_clean_failures") or []
+    if not failures:
+        return str(value)
+    return markdown_cell(f"{value} ({', '.join(failures)})")
+
+
+def app_correction_clean_cell(metric):
+    value = metric.get("app_correction_clean")
+    if value is None:
+        return ""
+    failures = metric.get("app_correction_clean_failures") or []
     if not failures:
         return str(value)
     return markdown_cell(f"{value} ({', '.join(failures)})")
