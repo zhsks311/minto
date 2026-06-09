@@ -104,6 +104,7 @@
   - `scripts/run_local_llm_benchmarks.py` measures correction, summary JSON, and grounded answer cases.
   - The runner supports Ollama and OpenAI-compatible endpoints, dry-run, mock validation, repeat runs, and optional server RSS sampling.
   - Ollama runs now control `options.num_ctx` with `--num-ctx` or `MINTO_LOCAL_LLM_CONTEXT_WINDOW`, and record the applied value in manifest, metrics, and summary output.
+  - Settings-backed local model values are covered through correction, summary, and search answer provider selection readiness.
   - Benchmark instructions are documented under `docs/benchmark/local-llm-benchmark-runner.md`.
   - Real Ollama run for `deepseek-r1:8b` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b`; first correction case timed out after 120s and a direct 16-token request timed out after 60s, so this model is not promoted as a default candidate.
   - The `deepseek-r1:8b` failure happened with Ollama model context `131072`; rerun evidence should use a controlled context such as `--num-ctx 4096`.
@@ -124,6 +125,7 @@
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter LLMProviderTests`: passed, 27 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter 'LLMProviderTests|MeetingSearchAnswerService|SummaryServiceTests'`: passed, 51 tests
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-build`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-routing-test --filter LLMProviderTests`: passed, 29 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-test --filter AudioInputMode`: passed, 13 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-test --filter 'AudioInputMode|TranscriptionViewModelStopTests'`: passed, 21 tests
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-build`: passed
@@ -157,7 +159,7 @@
   - `마이크+시스템` 선택 후 마이크와 시스템 출력이 모두 VAD/STT pipeline으로 들어오는지 확인
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
-  - Settings에서 local provider 선택, endpoint/model 저장, 상태 문구 확인
+  - Settings UI에서 local provider 선택과 상태 문구 확인
   - Ollama 또는 OpenAI-compatible local endpoint로 correction, summary, answer 호출 확인
   - correction term recall이 높은 추가 실제 후보 모델 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
