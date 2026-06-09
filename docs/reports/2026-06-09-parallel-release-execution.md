@@ -107,6 +107,7 @@
   - Benchmark instructions are documented under `docs/benchmark/local-llm-benchmark-runner.md`.
   - Real Ollama run for `deepseek-r1:8b` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b`; first correction case timed out after 120s and a direct 16-token request timed out after 60s, so this model is not promoted as a default candidate.
   - The `deepseek-r1:8b` failure happened with Ollama model context `131072`; rerun evidence should use a controlled context such as `--num-ctx 4096`.
+  - Controlled `deepseek-r1:8b` rerun with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096`; timeout was resolved, but correction term recall was `0.0`, so default-candidate status remains on hold.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -132,6 +133,7 @@
   - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model deepseek-r1:8b --cases correction --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-dryrun`: passed, request body preview has `options.num_ctx=4096`
   - `python3 scripts/run_local_llm_benchmarks.py --mock --model mock-model --repeat 1 --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-mock`: passed, 3 mock cases
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-local-llm-context-build`: passed
+  - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model deepseek-r1:8b --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096 --fail-fast`: passed transport/format gates, 3 cases completed, correction term recall `0.0`
 
 ## Remaining Manual QA
 

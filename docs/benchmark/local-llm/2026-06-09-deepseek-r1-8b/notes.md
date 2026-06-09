@@ -49,6 +49,8 @@ curl -sS --max-time 60 http://127.0.0.1:11434/api/generate \
 
 - 위 실패는 Ollama가 model context `131072`로 runner를 올린 상태에서 나온 결과다.
 - 다음 재측정은 앱/runner와 같은 context cap을 써서 실행한다.
+- `num_ctx=4096` 재측정은 `2026-06-09-deepseek-r1-8b-numctx4096/`에 기록했다.
+- timeout은 사라졌지만 correction term recall이 `0.0`이라 기본 후보 보류 판단은 유지한다.
 - 권장 재측정 명령:
 
 ```bash

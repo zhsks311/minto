@@ -7,6 +7,7 @@
 | 날짜 | Runtime | Model | 결과 | 위치 |
 |---|---|---|---|---|
 | 2026-06-09 | Ollama | `deepseek-r1:8b` | 첫 correction case 120초 timeout, 기본 후보 보류 | `2026-06-09-deepseek-r1-8b/` |
+| 2026-06-09 | Ollama | `deepseek-r1:8b` (`num_ctx=4096`) | 3/3 응답, correction term recall 0.0, 기본 후보 보류 | `2026-06-09-deepseek-r1-8b-numctx4096/` |
 
 ## 판정 기준
 
