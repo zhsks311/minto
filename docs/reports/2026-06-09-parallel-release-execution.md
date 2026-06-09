@@ -13,6 +13,7 @@
 
 - Branch: `feature/system-audio-readiness`
 - Worktree: `/Users/d66hjkxwt9/Idea/private/minto2-system-audio-readiness`
+- Result commit: `c295d17 feat: show system audio readiness before recording`
 - Scope:
   - 녹음 전 system audio availability/readiness 표시
   - 권한 필요 상태와 설정 안내
@@ -27,6 +28,7 @@
 
 - Branch: `feature/local-llm-adapter`
 - Worktree: `/Users/d66hjkxwt9/Idea/private/minto2-local-llm-adapter`
+- Result commit: `7972535 feat: add local HTTP LLM provider`
 - Scope:
   - 외부 로컬 런타임용 text generation adapter
   - provider registry capability 전환
@@ -41,6 +43,7 @@
 
 - Branch: `feature/keychain-reconnect-ux`
 - Worktree: `/Users/d66hjkxwt9/Idea/private/minto2-keychain-reconnect-ux`
+- Result commit: `6a96d21 fix: mark integrations needing reconnect`
 - Scope:
   - stored credential existence와 actual credential validity 분리
   - invalid/corrupt token 사용 실패 후 다시 연결 필요 상태 표시
@@ -68,6 +71,35 @@
 - `git diff --check`: passed
 - `swift build --disable-sandbox --scratch-path /tmp/minto2-release-baseline-build`: passed
 - `swift test --disable-sandbox --scratch-path /tmp/minto2-release-baseline-test --filter 'LLMProviderTests|MeetingSearchAnswerService|AudioInputMode|RelatedInfoTests|MeetingFileImportUseCaseTests'`: passed, 81 tests
+
+## Integration Result
+
+- Integration branch: `integration/llm-search-export-2026-06-09`
+- Merge commits:
+  - `5e01941 merge system audio readiness lane`
+  - `6e101c6 merge local llm adapter lane`
+  - `ad87b7f merge keychain reconnect ux lane`
+- Pre-keychain smoke:
+  - `git diff --check`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-integration-smoke-test --filter 'AudioInputMode|LLMProviderTests|MeetingSearchAnswerService'`: passed, 48 tests
+- Final integration validation:
+  - `git diff --check`: passed
+  - `swift build --disable-sandbox --scratch-path /tmp/minto2-integration-build`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-integration-smoke-test --filter 'AudioInputMode|LLMProviderTests|MeetingSearchAnswerService|RelatedInfoTests'`: passed, 86 tests
+
+## Remaining Manual QA
+
+- System audio:
+  - 권한 없음 상태에서 readiness warning, start disabled, 시스템 설정 열기 동작 확인
+  - 권한 허용 후 앱 복귀 시 readiness 갱신과 level meter 동작 확인
+  - 실제 화상회의 앱 출력으로 system audio capture 확인
+- Local LLM:
+  - Ollama 또는 OpenAI-compatible local endpoint로 correction, summary, answer 호출 확인
+  - 한국어 회의 교정 품질, 요약 구조화 성공률, 검색 답변 근거 충실도, latency, RAM benchmark 기록
+- Keychain reconnect UX:
+  - invalid Confluence token으로 검색/내보내기 실패 후 `다시 연결 필요` 표시 확인
+  - invalid Notion token으로 관련 문서 검색 실패 후 재연결/지우기 동작 확인
+  - Settings 진입만으로 반복 Keychain 원문 읽기 prompt가 늘지 않는지 확인
 
 ## Stop Conditions
 
