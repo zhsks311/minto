@@ -155,6 +155,46 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
     }
 
     public func modelCatalog() async -> LLMModelCatalog {
+        if configuration.compatibility == .ollamaGenerate {
+            return await ollamaModelCatalog()
+        }
+        return manualModelCatalog(warning: openAICompatibleModelWarning())
+    }
+
+    private func ollamaModelCatalog() async -> LLMModelCatalog {
+        var request = URLRequest(
+            url: configuration.baseURL
+                .appendingPathComponent("api")
+                .appendingPathComponent("tags")
+        )
+        request.httpMethod = "GET"
+        request.timeoutInterval = min(configuration.timeoutSeconds, 10)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await transport.data(for: request)
+            guard (200..<300).contains(response.statusCode) else {
+                return manualModelCatalog(warning: "Ollama 설치 모델 조회 실패: HTTP \(response.statusCode)")
+            }
+            guard let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return manualModelCatalog(warning: "Ollama 모델 목록 응답을 이해하지 못했습니다.")
+            }
+
+            let installedModels = ollamaModels(from: payload)
+            let warning = ollamaCatalogWarning(for: installedModels)
+            return LLMModelCatalog(
+                models: installedModels,
+                source: .live,
+                warning: warning
+            )
+        } catch is CancellationError {
+            return manualModelCatalog(warning: "Ollama 설치 모델 조회가 취소되었습니다.")
+        } catch {
+            return manualModelCatalog(warning: "Ollama 설치 모델을 확인하지 못했습니다. endpoint와 Ollama 실행 상태를 확인하세요.")
+        }
+    }
+
+    private func manualModelCatalog(warning: String? = nil) -> LLMModelCatalog {
         let textCapabilities: Set<LLMModelInfo.Capability> = [.textGeneration, .correction, .summary, .answer]
         let models: [LLMModelInfo]
         if configuration.modelID.isEmpty {
@@ -173,8 +213,67 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
         return LLMModelCatalog(
             models: models,
             source: .manualOnly,
-            warning: configuration.modelID.isEmpty ? "로컬 LLM endpoint와 모델 ID를 설정해야 합니다." : nil
+            warning: warning ?? (configuration.modelID.isEmpty ? "로컬 LLM endpoint와 모델 ID를 설정해야 합니다." : nil)
         )
+    }
+
+    private func ollamaModels(from payload: [String: Any]) -> [LLMModelInfo] {
+        let rawModels = payload["models"] as? [[String: Any]] ?? []
+        return rawModels.compactMap { rawModel in
+            let id = (
+                rawModel["name"] as? String
+                ?? rawModel["model"] as? String
+                ?? ""
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty else { return nil }
+
+            let details = rawModel["details"] as? [String: Any] ?? [:]
+            let parameterSize = details["parameter_size"] as? String
+            let quantization = details["quantization_level"] as? String
+            let sizeDescription = (rawModel["size"] as? NSNumber)
+                .map { Self.formattedByteCount($0.int64Value) }
+            let description = [
+                parameterSize.map { "parameters \($0)" },
+                quantization.map { "quantization \($0)" },
+                sizeDescription.map { "size \($0)" }
+            ]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+
+            return LLMModelInfo(
+                id: id,
+                displayName: id,
+                description: description,
+                capabilities: [.textGeneration, .correction, .summary, .answer],
+                isRecommended: id == configuration.modelID
+            )
+        }
+        .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+    }
+
+    private func ollamaCatalogWarning(for installedModels: [LLMModelInfo]) -> String? {
+        if installedModels.isEmpty {
+            return "Ollama에 설치된 모델이 없습니다. 터미널에서 ollama pull <model>을 실행하세요."
+        }
+        guard !configuration.modelID.isEmpty else {
+            return "설치된 모델을 선택하거나 모델 ID를 입력하세요."
+        }
+        let installedModelIDs = Set(installedModels.map(\.id))
+        if !installedModelIDs.contains(configuration.modelID) {
+            return "입력한 모델 ID가 Ollama 설치 목록에 없습니다: \(configuration.modelID)"
+        }
+        return nil
+    }
+
+    private func openAICompatibleModelWarning() -> String? {
+        if configuration.modelID.isEmpty {
+            return "OpenAI 호환 런타임에서 사용할 모델 ID를 입력하세요."
+        }
+        return "OpenAI 호환 런타임은 표준 설치 모델 목록 API가 없어 모델 ID를 직접 입력합니다."
+    }
+
+    private static func formattedByteCount(_ value: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
     }
 
     public func generateText(_ request: LLMTextRequest) async throws -> LLMTextResponse {

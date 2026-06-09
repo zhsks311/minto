@@ -79,13 +79,91 @@ struct LLMProviderTests {
         let unconfigured = LocalLLMProvider(configuration: LocalLLMProviderConfiguration(modelID: ""))
         #expect(await unconfigured.isConfigured() == false)
 
-        let configured = LocalLLMProvider(configuration: LocalLLMProviderConfiguration(modelID: "llama3.1:8b"))
+        let configured = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(modelID: "llama3.1:8b"),
+            transport: StubLLMAPITransport(error: StubTransportError())
+        )
         #expect(await configured.isConfigured())
 
         let catalog = await configured.modelCatalog()
         #expect(catalog.source == .manualOnly)
         #expect(catalog.models.first?.id == "llama3.1:8b")
         #expect(catalog.models.first?.capabilities == [.textGeneration, .correction, .summary, .answer])
+    }
+
+    @Test("로컬 LLM provider는 Ollama 설치 모델 목록을 조회한다")
+    func localLLMProviderListsInstalledOllamaModels() async throws {
+        let tagsResponse = """
+        {
+          "models": [
+            {
+              "name": "llama3.1:8b",
+              "size": 4661224676,
+              "details": {
+                "parameter_size": "8B",
+                "quantization_level": "Q4_0"
+              }
+            },
+            {
+              "model": "qwen2.5:3b",
+              "details": {
+                "parameter_size": "3B"
+              }
+            }
+          ]
+        }
+        """
+        let transport = StubLLMAPITransport(data: Data(tagsResponse.utf8))
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(modelID: "llama3.1:8b"),
+            transport: transport
+        )
+
+        let catalog = await provider.modelCatalog()
+
+        #expect(catalog.source == .live)
+        #expect(catalog.models.map(\.id) == ["llama3.1:8b", "qwen2.5:3b"])
+        #expect(catalog.models.first?.capabilities == [.textGeneration, .correction, .summary, .answer])
+        #expect(catalog.models.first?.description.contains("parameters 8B") == true)
+        #expect(catalog.warning == nil)
+        let request = try #require(transport.requests.first)
+        #expect(request.httpMethod == "GET")
+        #expect(request.url?.absoluteString == "http://127.0.0.1:11434/api/tags")
+    }
+
+    @Test("로컬 LLM provider는 설정한 모델이 Ollama 설치 목록에 없으면 경고한다")
+    func localLLMProviderWarnsWhenConfiguredModelIsNotInstalled() async {
+        let tagsResponse = """
+        {
+          "models": [
+            { "name": "qwen2.5:3b" }
+          ]
+        }
+        """
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(modelID: "missing-model"),
+            transport: StubLLMAPITransport(data: Data(tagsResponse.utf8))
+        )
+
+        let catalog = await provider.modelCatalog()
+
+        #expect(catalog.source == .live)
+        #expect(catalog.models.map(\.id) == ["qwen2.5:3b"])
+        #expect(catalog.warning?.contains("설치 목록") == true)
+    }
+
+    @Test("로컬 LLM provider는 Ollama 모델 목록 조회 실패 시 수동 설정 모델로 fallback한다")
+    func localLLMProviderFallsBackWhenOllamaModelListFails() async {
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(modelID: "llama3.1:8b"),
+            transport: StubLLMAPITransport(statusCode: 500)
+        )
+
+        let catalog = await provider.modelCatalog()
+
+        #expect(catalog.source == .manualOnly)
+        #expect(catalog.models.first?.id == "llama3.1:8b")
+        #expect(catalog.warning?.contains("HTTP 500") == true)
     }
 
     @Test("로컬 LLM 설정은 저장값을 우선하고 환경변수를 fallback으로 쓴다")
@@ -168,7 +246,7 @@ struct LLMProviderTests {
 
         defaults.set("http://127.0.0.1:11434", forKey: LocalLLMProviderConfiguration.baseURLKey)
         defaults.set("settings-local-model", forKey: LocalLLMProviderConfiguration.modelIDKey)
-        defaults.set(LocalLLMEndpointCompatibility.ollamaGenerate.rawValue, forKey: LocalLLMProviderConfiguration.compatibilityKey)
+        defaults.set(LocalLLMEndpointCompatibility.openAIChatCompletions.rawValue, forKey: LocalLLMProviderConfiguration.compatibilityKey)
         defaults.set(45.0, forKey: LocalLLMProviderConfiguration.timeoutSecondsKey)
         defaults.set(4_096, forKey: LocalLLMProviderConfiguration.contextWindowKey)
         LLMCorrectionService.shared.selectedProvider = .local
@@ -186,8 +264,9 @@ struct LLMProviderTests {
             #expect(provider.descriptor.id == .local)
             #expect(await provider.isConfigured())
             let catalog = await provider.modelCatalog()
+            #expect(catalog.source == .manualOnly)
             #expect(catalog.models.first?.id == "settings-local-model")
-            #expect(catalog.warning == nil)
+            #expect(catalog.warning?.contains("OpenAI 호환") == true)
         }
     }
 

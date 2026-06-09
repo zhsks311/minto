@@ -15,6 +15,7 @@
 | 4 | 2026-05-31 | [OAuth 실제 동작화 + 교정 품질 측정](work-log/2026-05-31-04-oauth-functional-quality.md) | 설정 진입점, Codex 9개 수정, Gemini loopback, sample CER |
 | 5 | 2026-06-01 | [회의 맥락 기반 후교정](work-log/2026-06-01-05-meeting-context-correction.md) | MeetingContext·CorrectionPrompt 중앙화+보수적 규칙, 회의 시작 시트 |
 | 6 | 2026-06-09 | [LLM/Search/Export 확장 구현 시작](work-log/2026-06-09-06-llm-search-export-expansion-start.md) | provider/search/export/glossary/file/system audio/mixed audio/local LLM/benchmark/keychain reconnect/SecretStore 병렬 통합 |
+| 7 | 2026-06-09 | [Local LLM Ollama 설치 모델 조회](work-log/2026-06-09-07-local-llm-ollama-model-discovery.md) | Ollama `/api/tags` 설치 모델 picker, 모델 확인 상태, 실패 fallback 테스트 |
 
 ## 남은 과제
 

@@ -35,6 +35,9 @@ public struct SettingsView: View {
     @State private var apiKeyInputs: [LLMProviderID: String] = [:]
     @State private var apiModelCatalogs: [LLMProviderID: LLMModelCatalog] = [:]
     @State private var loadingAPIModelProviderIDs: Set<LLMProviderID> = []
+    @State private var localLLMModelCatalog: LLMModelCatalog? = nil
+    @State private var localLLMModelCatalogKey: String? = nil
+    @State private var isLoadingLocalLLMModels = false
     @State private var glossaryCanonicalInput = ""
     @State private var glossaryAliasesInput = ""
     @State private var glossaryDescriptionInput = ""
@@ -788,6 +791,7 @@ public struct SettingsView: View {
                 .textFieldStyle(.roundedBorder)
             TextField(title, text: $localLLMModelID)
                 .textFieldStyle(.roundedBorder)
+            localLLMInstalledModelsRows
             Stepper(value: $localLLMTimeoutSeconds, in: 5...600, step: 5) {
                 Text("응답 대기 \(Int(localLLMTimeoutSeconds))초")
                     .font(.caption)
@@ -800,12 +804,55 @@ public struct SettingsView: View {
                 Text("문맥 창 \(localLLMContextWindow) tokens")
                     .font(.caption)
             }
-            Text(localLLMStatusMessage)
-                .font(.caption)
-                .foregroundColor(localLLMConfigurationIsValid ? .secondary : .orange)
+            if localLLMCompatibilityValue != .ollamaGenerate {
+                Text(localLLMStatusMessage)
+                    .font(.caption)
+                    .foregroundColor(localLLMConfigurationIsValid ? .secondary : .orange)
+            }
             Text("API 키는 필요하지 않습니다. 다만 endpoint가 외부 주소이면 회의 원문이 그 서버로 전송됩니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
+        }
+        .task(id: localLLMModelCatalogRefreshKey) {
+            await refreshLocalLLMModelCatalog(force: false)
+        }
+    }
+
+    @ViewBuilder
+    private var localLLMInstalledModelsRows: some View {
+        if localLLMCompatibilityValue == .ollamaGenerate {
+            VStack(alignment: .leading, spacing: 6) {
+                if let catalog = localLLMModelCatalog,
+                   catalog.source == .live,
+                   !catalog.models.isEmpty {
+                    Picker("설치된 모델", selection: $localLLMModelID) {
+                        ForEach(catalog.models, id: \.id) { model in
+                            Text(model.displayName).tag(model.id)
+                        }
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Text(localLLMModelCatalogStatusText)
+                        .font(.caption)
+                        .foregroundColor(localLLMRuntimeIsConfirmed ? .secondary : .orange)
+                    if isLoadingLocalLLMModels {
+                        ProgressView()
+                            .scaleEffect(0.65)
+                    }
+                    Button(localLLMModelCatalog?.source == .live ? "새로고침" : "설치 모델 조회") {
+                        Task { await refreshLocalLLMModelCatalog(force: true) }
+                    }
+                    .font(.caption)
+                    .disabled(localLLMBaseURLValue == nil || isLoadingLocalLLMModels)
+                }
+
+                if let warning = localLLMModelCatalogWarningText {
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
         }
     }
 
@@ -892,6 +939,31 @@ public struct SettingsView: View {
         let catalog = await provider.modelCatalog()
         apiModelCatalogs[providerID] = catalog
         loadingAPIModelProviderIDs.remove(providerID)
+    }
+
+    @MainActor
+    private func refreshLocalLLMModelCatalog(force: Bool) async {
+        guard localLLMCompatibilityValue == .ollamaGenerate else {
+            localLLMModelCatalog = nil
+            localLLMModelCatalogKey = nil
+            return
+        }
+        guard localLLMBaseURLValue != nil else {
+            localLLMModelCatalog = nil
+            localLLMModelCatalogKey = nil
+            return
+        }
+        let refreshKey = localLLMModelCatalogRefreshKey
+        guard force || localLLMModelCatalog == nil || localLLMModelCatalogKey != refreshKey else {
+            return
+        }
+
+        isLoadingLocalLLMModels = true
+        let provider = LocalLLMProvider(configuration: localLLMProviderConfiguration)
+        let catalog = await provider.modelCatalog()
+        localLLMModelCatalog = catalog
+        localLLMModelCatalogKey = refreshKey
+        isLoadingLocalLLMModels = false
     }
 
     private var tosWarningRow: some View {
@@ -1041,8 +1113,40 @@ public struct SettingsView: View {
         localLLMModelID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var localLLMCompatibilityValue: LocalLLMEndpointCompatibility {
+        LocalLLMProviderConfiguration.compatibility(from: localLLMCompatibilityRaw)
+    }
+
+    private var localLLMProviderConfiguration: LocalLLMProviderConfiguration {
+        LocalLLMProviderConfiguration(
+            baseURL: localLLMBaseURLValue ?? LocalLLMProviderConfiguration.defaultBaseURL,
+            modelID: localLLMModelIDValue,
+            compatibility: localLLMCompatibilityValue,
+            timeoutSeconds: localLLMTimeoutSeconds,
+            contextWindow: localLLMContextWindow
+        )
+    }
+
+    private var localLLMModelCatalogRefreshKey: String {
+        [
+            localLLMBaseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            localLLMCompatibilityValue.rawValue
+        ].joined(separator: "|")
+    }
+
     private var localLLMConfigurationIsValid: Bool {
         localLLMBaseURLValue != nil && !localLLMModelIDValue.isEmpty
+    }
+
+    private var localLLMRuntimeIsConfirmed: Bool {
+        guard localLLMConfigurationIsValid else { return false }
+        guard localLLMCompatibilityValue == .ollamaGenerate else { return true }
+        guard let catalog = localLLMModelCatalog,
+              catalog.source == .live
+        else {
+            return false
+        }
+        return catalog.models.contains { $0.id == localLLMModelIDValue }
     }
 
     private var localLLMMissingStatusText: String {
@@ -1059,7 +1163,43 @@ public struct SettingsView: View {
         if localLLMModelIDValue.isEmpty {
             return "Ollama 또는 llama.cpp 서버에서 사용할 모델 ID를 입력하세요."
         }
-        return "로컬 런타임으로 교정, 요약, 검색 답변을 실행합니다."
+        if localLLMCompatibilityValue == .ollamaGenerate {
+            return localLLMModelCatalogStatusText
+        }
+        return "OpenAI 호환 런타임은 표준 모델 목록 조회가 없어 입력한 모델 ID를 그대로 사용합니다."
+    }
+
+    private var localLLMModelCatalogStatusText: String {
+        if localLLMBaseURLValue == nil {
+            return "Endpoint URL을 입력하면 설치 모델을 조회할 수 있습니다."
+        }
+        if isLoadingLocalLLMModels {
+            return "Ollama 설치 모델을 확인하는 중입니다."
+        }
+        guard let catalog = localLLMModelCatalog else {
+            return "설치 모델 조회로 실제 모델 존재 여부를 확인하세요."
+        }
+        if catalog.source != .live {
+            return "Ollama 모델 목록을 확인하지 못했습니다."
+        }
+        if catalog.models.isEmpty {
+            return "Ollama에 설치된 모델이 없습니다."
+        }
+        if localLLMModelIDValue.isEmpty {
+            return "설치된 모델 \(catalog.models.count)개 중 하나를 선택하세요."
+        }
+        if catalog.models.contains(where: { $0.id == localLLMModelIDValue }) {
+            return "설치된 모델 확인됨: \(localLLMModelIDValue)"
+        }
+        return "입력한 모델이 설치 목록에 없습니다."
+    }
+
+    private var localLLMModelCatalogWarningText: String? {
+        guard let catalog = localLLMModelCatalog else { return nil }
+        if catalog.source != .live || catalog.models.isEmpty {
+            return catalog.warning
+        }
+        return nil
     }
 
     private var currentProviderLoggedIn: Bool {
@@ -1067,7 +1207,7 @@ public struct SettingsView: View {
         case .none:
             return false
         case .local:
-            return localLLMConfigurationIsValid
+            return localLLMRuntimeIsConfirmed
         case .gptAPI:
             return LLMAPIKeyStore.shared.hasAPIKey(for: .gpt)
         case .geminiAPI:
@@ -1087,7 +1227,13 @@ public struct SettingsView: View {
 
     private var currentProviderStatusText: String {
         if activeAIProvider == .local {
-            return localLLMConfigurationIsValid ? "로컬 런타임 설정됨" : localLLMMissingStatusText
+            if !localLLMConfigurationIsValid {
+                return localLLMMissingStatusText
+            }
+            if localLLMRuntimeIsConfirmed {
+                return localLLMCompatibilityValue == .ollamaGenerate ? "설치 모델 확인됨" : "로컬 런타임 설정됨"
+            }
+            return localLLMCompatibilityValue == .ollamaGenerate ? "모델 확인 필요" : "로컬 런타임 설정됨"
         }
         if currentAPIKeyProviderID != nil {
             return currentProviderLoggedIn ? "API 키 저장됨" : "API 키 필요"
