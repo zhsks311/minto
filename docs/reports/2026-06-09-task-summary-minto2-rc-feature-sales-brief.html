@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minto2 RC 기능 세일즈 브리프 - task-summary</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --surface-strong: #eef2f6;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --accent: #0969da;
+      --code-bg: #f6f8fa;
+      --c-critical: #cf222e;
+      --c-critical-bg: #fff0ee;
+      --c-critical-border: #ff818266;
+      --c-high: #9a6700;
+      --c-high-bg: #fff8c5;
+      --c-high-border: #f1e05a99;
+      --c-medium: #0550ae;
+      --c-medium-bg: #ddf4ff;
+      --c-medium-border: #79c0ff99;
+      --c-low: #116329;
+      --c-low-bg: #dafbe1;
+      --c-low-border: #56d36499;
+      --pass-bg: #f0fdf4;
+      --pass-border: #bbf7d0;
+      --fail-bg: #fff0ee;
+      --fail-border: #fecaca;
+      --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-strong: #1f2630;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-muted: #8b949e;
+        --accent: #58a6ff;
+        --code-bg: #161b22;
+        --c-critical: #ff7b72;
+        --c-critical-bg: #2d0f0f;
+        --c-critical-border: #ff7b7266;
+        --c-high: #e3b341;
+        --c-high-bg: #2d1f04;
+        --c-high-border: #e3b34166;
+        --c-medium: #79c0ff;
+        --c-medium-bg: #051d4d;
+        --c-medium-border: #79c0ff66;
+        --c-low: #56d364;
+        --c-low-bg: #0a2d19;
+        --c-low-border: #56d36466;
+        --pass-bg: #0a2d19;
+        --pass-border: #56d36444;
+        --fail-bg: #2d0f0f;
+        --fail-border: #ff7b7244;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.65;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+    h1 { font-size: 1.72rem; font-weight: 700; letter-spacing: 0; margin-bottom: 0.4rem; }
+    h2 {
+      font-size: 1.08rem;
+      font-weight: 650;
+      margin: 2.4rem 0 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 { font-size: 0.96rem; font-weight: 650; margin: 1.25rem 0 0.45rem; }
+    p { margin-bottom: 0.75rem; }
+    ul { padding-left: 1.4rem; margin-bottom: 0.85rem; }
+    li { margin-bottom: 0.28rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    pre {
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.15rem;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+      line-height: 1.5;
+    }
+    pre code { background: none; border: none; padding: 0; font-size: inherit; }
+    .eyebrow {
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      margin-bottom: 0.7rem;
+    }
+    .summary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 1.1rem 1.35rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .summary-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    .summary p:last-child { margin-bottom: 0; }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.15rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-height: 102px;
+    }
+    .stat-card--danger { background: var(--c-critical-bg); border-color: var(--c-critical-border); }
+    .stat-card--warning { background: var(--c-high-bg); border-color: var(--c-high-border); }
+    .stat-card--success { background: var(--pass-bg); border-color: var(--pass-border); }
+    .stat-card--info { background: var(--c-medium-bg); border-color: var(--c-medium-border); }
+    .stat-number {
+      font-size: 2rem;
+      font-weight: 750;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-card--danger .stat-number { color: var(--c-critical); }
+    .stat-card--warning .stat-number { color: var(--c-high); }
+    .stat-card--success .stat-number { color: var(--c-low); }
+    .stat-card--info .stat-number { color: var(--c-medium); }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 550; }
+    .stat-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      vertical-align: middle;
+    }
+    .tag-pass { background: var(--pass-bg); color: var(--c-low); }
+    .tag-fail { background: var(--fail-bg); color: var(--c-critical); }
+    .tag-info { background: var(--surface-strong); color: var(--text-muted); }
+    .tag-high { background: var(--c-high-bg); color: var(--c-high); }
+    .tag-medium { background: var(--c-medium-bg); color: var(--c-medium); }
+    .tag-low { background: var(--c-low-bg); color: var(--c-low); }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    th {
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      padding: 0.48rem 0.72rem;
+    }
+    td {
+      padding: 0.62rem 0.72rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    .verify-table {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .verify-table th {
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+    }
+    .vrow-pass { background: var(--pass-bg); }
+    .vrow-fail { background: var(--fail-bg); }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 0.75rem;
+      margin: 0.75rem 0 1.25rem;
+    }
+    .finding {
+      border: 1px solid var(--border);
+      border-left-width: 3px;
+      border-radius: 6px;
+      padding: 0.95rem 1.05rem;
+      background: var(--surface);
+    }
+    .finding--low { border-left-color: var(--c-low); background: var(--c-low-bg); }
+    .finding--medium { border-left-color: var(--c-medium); background: var(--c-medium-bg); }
+    .finding--high { border-left-color: var(--c-high); background: var(--c-high-bg); }
+    .finding-title {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+      font-weight: 650;
+      margin-bottom: 0.4rem;
+    }
+    .finding p { font-size: 0.91rem; margin-bottom: 0.45rem; }
+    .finding-location {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 0.45rem;
+    }
+    details { border: 1px solid var(--border); border-radius: 6px; margin: 0.65rem 0; }
+    details > summary {
+      padding: 0.65rem 1rem;
+      cursor: pointer;
+      font-weight: 550;
+      font-size: 0.92rem;
+      background: var(--surface);
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before {
+      content: ">";
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    details[open] > summary { border-bottom: 1px solid var(--border); }
+    details[open] > summary::before { content: "v"; }
+    .details-body { padding: 1rem 1.15rem; }
+    .flow-diagram { width: 100%; max-width: 760px; display: block; margin: 1rem 0; overflow: visible; }
+    .flow-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+    .flow-box-accent { fill: var(--c-medium-bg); stroke: var(--c-medium-border); stroke-width: 1.5; }
+    .flow-box-success { fill: var(--pass-bg); stroke: var(--pass-border); stroke-width: 1.5; }
+    .flow-text {
+      font-family: var(--font-body);
+      font-size: 12px;
+      fill: var(--text);
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+    .flow-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      fill: var(--text-muted);
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+    .flow-arrow { stroke: var(--text-muted); stroke-width: 1.5; }
+    .flow-arrowhead { fill: var(--text-muted); }
+    .small-print {
+      border: 1px solid var(--c-high-border);
+      border-left: 3px solid var(--c-high);
+      background: var(--c-high-bg);
+      border-radius: 6px;
+      padding: 1rem 1.15rem;
+      margin: 0.85rem 0 1.25rem;
+    }
+    .small-print strong { color: var(--c-high); }
+    footer {
+      margin-top: 3.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 1.4rem;
+      flex-wrap: wrap;
+    }
+    @media print {
+      body { max-width: none; padding: 0; background: #fff; color: #000; }
+      .stat-card, .finding, .small-print { border: 1px solid #ccc; background: #fff; }
+      .vrow-pass, .vrow-fail { background: #fff; }
+      details { border: 1px solid #ccc; }
+      details[open] { page-break-inside: avoid; }
+      a[href]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #666; }
+      footer { color: #666; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="eyebrow">task-summary · release/llm-search-export-2026-06-09-rc1 · 3cc07c4</div>
+<h1>Minto2 RC 기능 세일즈 브리프</h1>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">129</div>
+    <div class="stat-label">smoke tests passed</div>
+    <div class="stat-sub">핵심 기능군 현재 RC 기준</div>
+  </div>
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">9/9</div>
+    <div class="stat-label">Local LLM app gate transport</div>
+    <div class="stat-sub">llama3.1:8b, repeat 3</div>
+  </div>
+  <div class="stat-card stat-card--info">
+    <div class="stat-number">5</div>
+    <div class="stat-label">고객 체감 기능 묶음</div>
+    <div class="stat-sub">오디오, AI, 검색, 내보내기, 재연결</div>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <div class="stat-number">28.813s</div>
+    <div class="stat-label">Local LLM 평균 latency</div>
+    <div class="stat-sub">품질 gate 통과, 기본값 승격 전 정책 필요</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">Summary</div>
+  <p>Minto2 RC는 단순 녹음 앱이 아니라, 회의 입력부터 정리, 검색 답변, 외부 공유까지 한 흐름으로 묶는 업무 결과물 생산 도구로 확장됐다. 데모에서는 "회의를 넣으면 바로 써먹을 수 있는 기록이 나온다"가 핵심 메시지다.</p>
+</div>
+
+<h2>한 문장 영업 멘트</h2>
+<p>이 릴리즈의 판매 포인트는 명확하다. Minto2는 회의가 끝난 뒤 사람이 다시 뒤지는 시간을 줄이고, 로컬과 클라우드 AI를 상황에 맞게 골라 쓰면서, 필요한 근거와 내보내기까지 한 화면에서 이어준다.</p>
+
+<svg class="flow-diagram" viewBox="0 0 760 118" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Minto2 workflow">
+  <rect x="10" y="28" width="128" height="48" rx="6" class="flow-box"/>
+  <text x="74" y="48" class="flow-text">입력</text>
+  <text x="74" y="65" class="flow-label">mic · system · file</text>
+  <line x1="138" y1="52" x2="178" y2="52" class="flow-arrow"/>
+  <polygon points="178,47 188,52 178,57" class="flow-arrowhead"/>
+
+  <rect x="188" y="28" width="128" height="48" rx="6" class="flow-box-accent"/>
+  <text x="252" y="48" class="flow-text">AI 처리</text>
+  <text x="252" y="65" class="flow-label">correction · summary</text>
+  <line x1="316" y1="52" x2="356" y2="52" class="flow-arrow"/>
+  <polygon points="356,47 366,52 356,57" class="flow-arrowhead"/>
+
+  <rect x="366" y="28" width="128" height="48" rx="6" class="flow-box"/>
+  <text x="430" y="48" class="flow-text">검색 답변</text>
+  <text x="430" y="65" class="flow-label">evidence citations</text>
+  <line x1="494" y1="52" x2="534" y2="52" class="flow-arrow"/>
+  <polygon points="534,47 544,52 534,57" class="flow-arrowhead"/>
+
+  <rect x="544" y="28" width="128" height="48" rx="6" class="flow-box-success"/>
+  <text x="608" y="48" class="flow-text">공유</text>
+  <text x="608" y="65" class="flow-label">copy · markdown · Confluence</text>
+</svg>
+
+<h2>고객에게 팔 수 있는 기능</h2>
+<div class="card-grid">
+  <div class="finding finding--low">
+    <div class="finding-title"><span class="tag tag-pass">READY</span> 입력 선택지가 넓어졌다</div>
+    <p>마이크만 받는 회의에서 벗어나 <code>시스템</code>과 <code>마이크+시스템</code> 입력을 선택할 수 있다. 화상회의 상대방 소리를 기록 흐름에 태울 준비가 됐다.</p>
+    <div class="finding-location">Evidence: <code>SystemAudioLiveTests</code>, <code>AudioInputModeTests</code></div>
+  </div>
+  <div class="finding finding--low">
+    <div class="finding-title"><span class="tag tag-pass">READY</span> 파일을 넣으면 회의록이 된다</div>
+    <p><code>파일 가져오기</code>는 분석, 전사, 교정, 요약, 저장을 pipeline으로 돈다. 사용자는 버튼 하나로 녹음 파일을 회의 기록으로 전환한다.</p>
+    <div class="finding-location">Evidence: <code>MeetingFileImportUseCaseTests</code>, rendered file import QA</div>
+  </div>
+  <div class="finding finding--low">
+    <div class="finding-title"><span class="tag tag-pass">READY</span> 검색은 답변까지 간다</div>
+    <p>저장된 회의를 검색하고, 상위 근거 chunk만 AI에 넘겨 답변과 citation을 함께 만든다. 그냥 검색 결과 목록이 아니라 "질문에 대한 답"을 제공한다.</p>
+    <div class="finding-location">Evidence: <code>MeetingSearchAnswerServiceTests</code>, local LLM UI QA</div>
+  </div>
+  <div class="finding finding--low">
+    <div class="finding-title"><span class="tag tag-pass">READY</span> 로컬 LLM도 제품 흐름에 연결됐다</div>
+    <p>Ollama와 OpenAI-compatible endpoint를 설정 화면에서 다룰 수 있고, 교정·요약·검색 답변 use case별 payload가 검증됐다. API key가 필요 없는 로컬 모드가 제품 옵션이 됐다.</p>
+    <div class="finding-location">Evidence: <code>LLMProviderTests</code>, benchmark runner</div>
+  </div>
+  <div class="finding finding--low">
+    <div class="finding-title"><span class="tag tag-pass">READY</span> 연결 실패가 덜 당황스럽다</div>
+    <p>Notion과 Confluence가 인증 실패 상태에 들어가면 일반 빈 결과 대신 재연결 안내를 먼저 보여준다. Confluence 내보내기 실패도 Settings handoff로 이어진다.</p>
+    <div class="finding-location">Evidence: <code>RelatedInfoTests</code>, <code>IntegrationReconnectStateTests</code></div>
+  </div>
+  <div class="finding finding--low">
+    <div class="finding-title"><span class="tag tag-pass">READY</span> 개발 QA용 secret store가 생겼다</div>
+    <p><code>MINTO_DEV_SECRET_STORE=file</code>로 Keychain 대신 격리된 파일 저장소를 쓸 수 있다. 저장·로드·삭제 QA를 반복해도 실제 계정 상태를 덜 건드린다.</p>
+    <div class="finding-location">Evidence: <code>SecretStoreTests</code>, Settings UI save/load/delete QA</div>
+  </div>
+</div>
+
+<h2>데모 스크립트</h2>
+<table>
+  <thead>
+    <tr>
+      <th>장면</th>
+      <th>보여줄 문장</th>
+      <th>실제 근거</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>회의 시작</td>
+      <td>"내 목소리만이 아니라 상대방 소리까지 회의 입력으로 잡을 수 있습니다."</td>
+      <td><code>시스템</code>, <code>마이크+시스템</code> readiness UI QA 완료</td>
+    </tr>
+    <tr>
+      <td>파일 import</td>
+      <td>"이미 녹음된 파일도 전사 다듬기와 회의록 정리 단계로 그대로 들어갑니다."</td>
+      <td><code>전사 다듬는 중</code> → <code>회의록 정리 중</code> → <code>회의록 생성 완료</code> 캡처</td>
+    </tr>
+    <tr>
+      <td>검색 답변</td>
+      <td>"회의 자료를 찾는 데서 끝나지 않고, 근거가 붙은 답변까지 바로 생성합니다."</td>
+      <td>Local LLM <code>/api/generate</code> answer payload와 citation 렌더 확인</td>
+    </tr>
+    <tr>
+      <td>외부 공유</td>
+      <td>"Confluence로 내보낼 때 인증 문제가 생기면 그냥 실패하지 않고 재연결 액션으로 이어집니다."</td>
+      <td>space lookup/page create 401 모두 <code>needsReconnect</code> 전환 테스트</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>검증 결과</h2>
+<table class="verify-table">
+  <thead>
+    <tr>
+      <th>결과</th>
+      <th>명령 또는 증거</th>
+      <th>비고</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>git diff --check</code></td>
+      <td>RC worktree whitespace 검증 통과</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>swift build --disable-sandbox --scratch-path /tmp/minto2-rc-current-build-1781005000</code></td>
+      <td>현재 RC 기준 build complete</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>swift test --disable-sandbox --scratch-path /tmp/minto2-rc-current-smoke-test-1781005000 --filter 'AudioInputMode|LLMProviderTests|MeetingSearchAnswerService|RelatedInfoTests|IntegrationReconnectStateTests|SecretStore|CorrectionPromptTests|MeetingFileImportUseCaseTests'</code></td>
+      <td>129 tests, 0 failures</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>python3 -m py_compile scripts/run_local_llm_benchmarks.py</code></td>
+      <td>benchmark runner syntax 검증 통과</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>docs/benchmark/local-llm/2026-06-09-llama3.1-8b-app-postprocess-repeat3-numctx4096/summary.json</code></td>
+      <td>app gate true, raw gate false, mean latency 28.813s</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>작은 글씨: 몰래 말하는 실제 한계</h2>
+<div class="small-print">
+  <p><strong>데모는 된다. 다만 기본값으로 밀기 전에는 아래를 숨기면 안 된다.</strong> 로컬 LLM은 앱 후처리 기준 품질 gate를 통과했지만 평균 28.813초다. 특히 summary와 answer case는 평균 35초대라 "빠르다"가 아니라 "로컬에서도 된다"로 말해야 한다.</p>
+</div>
+
+<div class="card-grid">
+  <div class="finding finding--high">
+    <div class="finding-title"><span class="tag tag-high">LIMIT</span> Local LLM 기본값 승격은 아직 이르다</div>
+    <p><code>llama3.1:8b</code>는 app-postprocessed quality gate를 통과했지만 latency 정책이 없다. 기본값으로 올리려면 허용 latency, 반복 안정성, 모델 설치 UX를 먼저 정해야 한다.</p>
+  </div>
+  <div class="finding finding--high">
+    <div class="finding-title"><span class="tag tag-high">LIMIT</span> System audio는 권한 거부 상태 QA가 남았다</div>
+    <p>현재 환경은 이미 화면/시스템 오디오 권한이 허용돼 있었다. 권한 없음 warning, start disabled, 시스템 설정 열기, 권한 허용 후 readiness 갱신은 실제 macOS 권한 상태를 바꿔 확인해야 한다.</p>
+  </div>
+  <div class="finding finding--medium">
+    <div class="finding-title"><span class="tag tag-medium">LIMIT</span> 실제 화상회의 audio 품질은 별도 측정 대상이다</div>
+    <p>별도 프로세스 system output callback은 opt-in live test로 확인했다. 하지만 Google Meet/Zoom 같은 실제 앱 출력, 마이크 재유입 echo, 장시간 drift는 아직 제품 품질 판단 데이터가 아니다.</p>
+  </div>
+  <div class="finding finding--medium">
+    <div class="finding-title"><span class="tag tag-medium">LIMIT</span> Confluence rendered reconnect/delete는 signed app 기준 확인이 필요하다</div>
+    <p>서비스 레벨 회귀 테스트와 file-store token 삭제는 확인됐다. 다만 direct SwiftPM executable에서는 seeded 상태 렌더가 제한돼 signed app bundle 환경의 실제 UI QA가 남아 있다.</p>
+  </div>
+  <div class="finding finding--medium">
+    <div class="finding-title"><span class="tag tag-medium">LIMIT</span> Keychain prompt count는 실제 macOS 대화상자 기준 검증이 남았다</div>
+    <p>상태 조회 경로가 token 원문을 읽지 않는 계약은 자동 테스트로 고정했다. 하지만 반복 Settings 진입 때 실제 prompt가 몇 번 뜨는지는 사용자 권한 환경에서 직접 세야 한다.</p>
+  </div>
+</div>
+
+<h2>Changes</h2>
+<table>
+  <thead>
+    <tr>
+      <th>영역</th>
+      <th>구현된 변화</th>
+      <th>영업 포인트</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Audio input</td>
+      <td>system audio readiness, <code>SystemAudioSource</code>, <code>MixedAudioSource</code>, setup UI 선택</td>
+      <td>회의 상대방 소리까지 녹음 흐름으로 가져오는 기반</td>
+    </tr>
+    <tr>
+      <td>LLM provider</td>
+      <td>local HTTP provider, API provider, provider별 설정, context window 통제</td>
+      <td>로컬·클라우드 AI를 상황에 맞게 고르는 연결성</td>
+    </tr>
+    <tr>
+      <td>Meeting intelligence</td>
+      <td>correction, final summary, search answer, citation, glossary/context prompt</td>
+      <td>회의록을 읽는 자료에서 바로 답하는 자료로 전환</td>
+    </tr>
+    <tr>
+      <td>Export and related info</td>
+      <td>Confluence publish, related document reconnect status, Settings handoff</td>
+      <td>외부 협업 도구로 넘길 때 실패 복구 동선 제공</td>
+    </tr>
+    <tr>
+      <td>QA infrastructure</td>
+      <td>benchmark runner, file SecretStore, rendered UI QA, smoke test expansion</td>
+      <td>데모 가능한 기능을 수치와 회귀 테스트로 방어</td>
+    </tr>
+  </tbody>
+</table>
+
+<details open>
+  <summary>참고 경로</summary>
+  <div class="details-body">
+    <ul>
+      <li><code>docs/reports/2026-06-09-parallel-release-execution.md</code></li>
+      <li><code>docs/benchmark/local-llm/2026-06-09-llama3.1-8b-app-postprocess-repeat3-numctx4096/summary.json</code></li>
+      <li><code>scripts/run_local_llm_benchmarks.py</code></li>
+      <li><code>Sources/Minto/Services/CorrectionOutputPostprocessor.swift</code></li>
+      <li><code>Tests/MintoTests/MeetingSearchAnswerServiceTests.swift</code></li>
+      <li><code>Tests/MintoTests/AudioInputModeTests.swift</code></li>
+    </ul>
+  </div>
+</details>
+
+<footer>
+  <span>생성: 2026-06-09 21:15:05 KST</span>
+  <span>모델: GPT-5 Codex</span>
+  <span>유형: task-summary</span>
+</footer>
+
+<script>
+  (function () {
+    var opened = [];
+    window.addEventListener("beforeprint", function () {
+      opened = Array.prototype.slice.call(document.querySelectorAll("details:not([open])"));
+      opened.forEach(function (detail) { detail.setAttribute("open", ""); });
+    });
+    window.addEventListener("afterprint", function () {
+      opened.forEach(function (detail) { detail.removeAttribute("open"); });
+      opened = [];
+    });
+  }());
+</script>
+
+</body>
+</html>
