@@ -10,6 +10,12 @@ import MCP
 public final class NotionMCPService: ObservableObject {
     public static let shared = NotionMCPService()
 
+    public enum ConnectionState: Equatable, Sendable {
+        case disconnected
+        case connected
+        case needsReconnect
+    }
+
     // MARK: - 상수
 
     private static let endpoint = URL(string: "https://mcp.notion.com/mcp")!
@@ -20,18 +26,24 @@ public final class NotionMCPService: ObservableObject {
 
     // MARK: - 상태
 
-    private let tokenStorage = KeychainTokenStorage(keychainKey: NotionMCPService.keychainKey)
+    private let tokenStorage: KeychainTokenStorage
 
     /// 저장된 토큰 유무로 연결 상태를 초기화한다.
-    @Published public private(set) var isConnected: Bool
+    @Published public private(set) var connectionState: ConnectionState
 
+    public var isConnected: Bool { connectionState == .connected }
     public var isConfigured: Bool { isConnected }
 
     // MARK: - 초기화
 
-    private init() {
-        self.isConnected = false
-        self.isConnected = tokenStorage.hasToken()
+    private convenience init() {
+        self.init(tokenStorage: KeychainTokenStorage(keychainKey: NotionMCPService.keychainKey))
+    }
+
+    init(tokenStorage: KeychainTokenStorage) {
+        self.tokenStorage = tokenStorage
+        self.connectionState = .disconnected
+        refreshConnectionStateFromStorage()
     }
 
     // MARK: - Client 생성
@@ -74,13 +86,13 @@ public final class NotionMCPService: ObservableObject {
         guard toolList.tools.contains(where: { $0.name == Self.fetchToolName }) else {
             throw NotionMCPError.fetchToolUnavailable
         }
-        isConnected = tokenStorage.hasToken()
+        refreshConnectionStateFromStorage()
     }
 
     /// Keychain 토큰을 삭제하고 연결 상태를 해제한다.
     public func disconnect() {
         tokenStorage.clear()
-        isConnected = false
+        connectionState = .disconnected
     }
 
     /// 전사 키워드로 Notion 페이지를 검색한다.
@@ -112,10 +124,50 @@ public final class NotionMCPService: ObservableObject {
             return await Self.attachFetchedSnippets(to: docs, client: client)
         } catch {
             // 쿼리·토큰 유출 방지: 타입 이름만 기록
+            handleConnectionFailure(error)
             let typeName = String(describing: type(of: error))
             FileHandle.standardError.write(Data("[NotionMCP] 검색 오류(type=\(typeName))\n".utf8))
             return []
         }
+    }
+
+    func refreshConnectionStateFromStorage() {
+        if tokenStorage.requiresReconnect {
+            connectionState = .needsReconnect
+        } else {
+            connectionState = tokenStorage.hasToken() ? .connected : .disconnected
+        }
+    }
+
+    func handleConnectionFailure(_ error: any Error) {
+        guard tokenStorage.requiresReconnect || Self.isAuthorizationFailure(error) else {
+            return
+        }
+        tokenStorage.markRequiresReconnect()
+        connectionState = .needsReconnect
+    }
+
+    nonisolated static func isAuthorizationFailure(_ error: any Error) -> Bool {
+        if let authError = error as? OAuthAuthorizationError {
+            switch authError {
+            case .tokenRequestFailed, .tokenResponseInvalid:
+                return true
+            default:
+                return false
+            }
+        }
+        if let mcpError = error as? MCPError {
+            switch mcpError {
+            case .internalError(let message):
+                return message?.contains("Authorization flow failed") == true
+                    || message == "Authentication required"
+            case .transportError(let wrapped):
+                return isAuthorizationFailure(wrapped)
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     private static func attachFetchedSnippets(to docs: [RelatedDoc], client: Client) async -> [RelatedDoc] {
