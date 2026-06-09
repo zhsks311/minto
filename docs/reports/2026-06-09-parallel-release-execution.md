@@ -94,11 +94,20 @@
   - Local runtime settings are stored in UserDefaults and still fall back to `MINTO_LOCAL_LLM_*` environment variables.
   - Settings UI exposes endpoint URL, model ID, Ollama/OpenAI-compatible mode, and timeout without API key/login controls.
   - Endpoint URL validation requires `http` or `https` with a host.
+- Mixed audio input connection:
+  - `마이크+시스템` is selectable in the meeting setup sheet.
+  - `MixedAudioSource` starts microphone and system audio sources together and emits mixed PCM buffers.
+  - The mixer combines aligned buffered samples at 0.5 gain with clipping; echo cancellation and long-run drift correction remain measurement items.
+  - Single-source backlog is capped with passthrough fallback to avoid unbounded live input latency and memory growth.
+  - Mixed readiness uses the same screen/system audio permission and availability gate as system audio.
 - Validation:
   - `git diff --check`: passed
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter LLMProviderTests`: passed, 27 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter 'LLMProviderTests|MeetingSearchAnswerService|SummaryServiceTests'`: passed, 51 tests
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-build`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-test --filter AudioInputMode`: passed, 13 tests
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-test --filter 'AudioInputMode|TranscriptionViewModelStopTests'`: passed, 21 tests
+  - `swift build --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-build`: passed
 
 ## Remaining Manual QA
 
@@ -106,6 +115,8 @@
   - 권한 없음 상태에서 readiness warning, start disabled, 시스템 설정 열기 동작 확인
   - 권한 허용 후 앱 복귀 시 readiness 갱신과 level meter 동작 확인
   - 실제 화상회의 앱 출력으로 system audio capture 확인
+  - `마이크+시스템` 선택 후 마이크와 시스템 출력이 모두 VAD/STT pipeline으로 들어오는지 확인
+  - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
   - Settings에서 local provider 선택, endpoint/model 저장, 상태 문구 확인
   - Ollama 또는 OpenAI-compatible local endpoint로 correction, summary, answer 호출 확인

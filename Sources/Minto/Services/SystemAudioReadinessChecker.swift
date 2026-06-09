@@ -40,13 +40,9 @@ public struct AudioInputReadinessChecker: Sendable {
         case .microphone:
             return .ready(for: .microphone)
         case .mixed:
-            return AudioInputReadiness(
-                state: .unavailable,
-                title: "마이크+시스템 입력 미지원",
-                detail: "마이크와 시스템 사운드를 동시에 섞는 mixer는 아직 구현되지 않았습니다."
-            )
+            return await systemAudioReadiness(for: .mixed)
         case .systemAudio:
-            return await systemAudioReadiness()
+            return await systemAudioReadiness(for: .systemAudio)
         }
     }
 
@@ -59,18 +55,14 @@ public struct AudioInputReadinessChecker: Sendable {
         return await readiness(for: mode)
     }
 
-    private func systemAudioReadiness() async -> AudioInputReadiness {
+    private func systemAudioReadiness(for mode: AudioInputMode) async -> AudioInputReadiness {
         guard hasScreenCapturePermission() else {
             return Self.systemAudioPermissionRequiredReadiness()
         }
 
         switch await systemAudioAvailability() {
         case .available:
-            return AudioInputReadiness(
-                state: .ready,
-                title: "시스템 입력 가능",
-                detail: "화상회의 상대방 소리를 입력으로 받을 준비가 됐습니다."
-            )
+            return Self.systemAudioReadyReadiness(for: mode)
         case .permissionRequired:
             return Self.systemAudioPermissionRequiredReadiness()
         case .unavailable(let reason):
@@ -79,6 +71,25 @@ public struct AudioInputReadinessChecker: Sendable {
                 title: "시스템 입력 사용 불가",
                 detail: reason
             )
+        }
+    }
+
+    private static func systemAudioReadyReadiness(for mode: AudioInputMode) -> AudioInputReadiness {
+        switch mode {
+        case .mixed:
+            return AudioInputReadiness(
+                state: .ready,
+                title: "마이크+시스템 입력 가능",
+                detail: "마이크와 시스템 사운드를 함께 입력합니다. Echo cancellation은 적용하지 않습니다."
+            )
+        case .systemAudio:
+            return AudioInputReadiness(
+                state: .ready,
+                title: "시스템 입력 가능",
+                detail: "화상회의 상대방 소리를 입력으로 받을 준비가 됐습니다."
+            )
+        case .microphone:
+            return .ready(for: .microphone)
         }
     }
 

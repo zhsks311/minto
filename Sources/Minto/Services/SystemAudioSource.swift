@@ -248,12 +248,3 @@ public final class SystemAudioSource: NSObject, AudioSourceProtocol, SCStreamOut
         return mono
     }
 }
-
-private extension STTAudioUtilities {
-    static func normalizedLevel(_ samples: [Float]) -> Float {
-        guard !samples.isEmpty else { return 0 }
-        let rms = sqrt(samples.reduce(0.0) { $0 + $1 * $1 } / Float(samples.count))
-        let db = 20 * log10(max(rms, 1e-7))
-        return Float(max(0, min(1, (db + 60) / 50)))
-    }
-}

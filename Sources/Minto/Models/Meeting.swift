@@ -79,7 +79,7 @@ public enum AudioInputMode: String, CaseIterable, Identifiable, Codable, Sendabl
 
     public var id: String { rawValue }
 
-    public static let selectableCases: [AudioInputMode] = [.microphone, .systemAudio]
+    public static let selectableCases: [AudioInputMode] = [.microphone, .systemAudio, .mixed]
 
     public var title: String {
         switch self {
@@ -99,7 +99,7 @@ public enum AudioInputMode: String, CaseIterable, Identifiable, Codable, Sendabl
         case .systemAudio:
             return "화상회의 상대방 소리"
         case .mixed:
-            return "후속 mixer 보강 후 지원"
+            return "내 목소리와 상대방 소리"
         }
     }
 

@@ -8,7 +8,7 @@ struct AudioInputModeTests {
     @Test("입력 모드는 마이크/시스템/혼합을 표현한다")
     func inputModeMetadata() {
         #expect(AudioInputMode.allCases == [.microphone, .systemAudio, .mixed])
-        #expect(AudioInputMode.selectableCases == [.microphone, .systemAudio])
+        #expect(AudioInputMode.selectableCases == [.microphone, .systemAudio, .mixed])
         #expect(AudioInputMode.microphone.requiresScreenCapturePermission == false)
         #expect(AudioInputMode.systemAudio.requiresScreenCapturePermission == true)
         #expect(AudioInputMode.mixed.requiresScreenCapturePermission == true)
@@ -77,6 +77,22 @@ struct AudioInputModeTests {
         #expect(readiness.detail.contains("디스플레이"))
     }
 
+    @Test("혼합 입력은 시스템 오디오 권한과 가용성을 기준으로 시작 가능 여부를 표시한다")
+    func mixedAudioReadinessUsesSystemAudioGate() async {
+        let checker = AudioInputReadinessChecker(
+            hasScreenCapturePermission: { true },
+            requestScreenCapturePermission: { true },
+            systemAudioAvailability: { .available }
+        )
+
+        let readiness = await checker.readiness(for: .mixed)
+
+        #expect(readiness.state == .ready)
+        #expect(readiness.canStartRecording)
+        #expect(readiness.title == "마이크+시스템 입력 가능")
+        #expect(readiness.detail.contains("Echo cancellation"))
+    }
+
     @Test("시스템 입력 권한 요청 후 readiness를 다시 계산한다")
     func systemAudioReadinessRechecksAfterPermissionRequest() async {
         let permission = InputModePermissionStub(initial: false, requestedValue: true)
@@ -97,7 +113,7 @@ struct AudioInputModeTests {
     func sourceFactoryCreatesMatchingSource() {
         #expect(AudioSourceFactory.makeSource(for: .microphone) is MicrophoneSource)
         #expect(AudioSourceFactory.makeSource(for: .systemAudio) is SystemAudioSource)
-        #expect(AudioSourceFactory.makeSource(for: .mixed) is UnavailableAudioSource)
+        #expect(AudioSourceFactory.makeSource(for: .mixed) is MixedAudioSource)
     }
 
     @Test("SystemAudioSource stop은 시작 전과 반복 호출에서도 안전하다")
@@ -110,21 +126,64 @@ struct AudioInputModeTests {
         #expect(source.availableDevices == [AudioDevice(id: "system-audio", name: "시스템")])
     }
 
-    @Test("mixed source는 mixer 구현 전 unavailable error로 막는다")
-    func mixedSourceIsUnavailableUntilMixerExists() throws {
-        let source = AudioSourceFactory.makeSource(for: .mixed)
-        let errorSink = InputModeErrorSink()
-        source.onError = { error in
-            errorSink.record(error)
+    @Test("mixer는 마이크와 시스템 버퍼를 같은 길이만큼 섞고 남은 샘플을 보존한다")
+    func dualAudioBufferMixerMixesAlignedSamples() {
+        let mixer = DualAudioBufferMixer(gain: 0.5)
+
+        #expect(mixer.append([0.5, 1.0], source: .microphone).isEmpty)
+
+        let firstOutput = mixer.append([0.5, -1.0, 0.5], source: .systemAudio)
+        #expect(samples(firstOutput.first, approximatelyEqualTo: [0.5, 0.0]))
+
+        let secondOutput = mixer.append([0.5], source: .microphone)
+        #expect(samples(secondOutput.first, approximatelyEqualTo: [0.5]))
+        #expect(samples(
+            DualAudioBufferMixer.mix(microphone: [2.0], systemAudio: [2.0], gain: 1.0),
+            approximatelyEqualTo: [1.0]
+        ))
+    }
+
+    @Test("mixer는 한쪽 입력만 오래 쌓이면 오래된 샘플을 passthrough해 지연과 메모리 증가를 제한한다")
+    func dualAudioBufferMixerLimitsSingleSourceBacklog() {
+        let mixer = DualAudioBufferMixer(gain: 0.5, maxBufferedSamples: 2)
+
+        let overflow = mixer.append([0.2, 0.4, 2.0], source: .microphone)
+        #expect(samples(overflow.first, approximatelyEqualTo: [0.2]))
+
+        let mixed = mixer.append([0.0, 0.0], source: .systemAudio)
+        #expect(samples(mixed.first, approximatelyEqualTo: [0.2, 1.0]))
+    }
+
+    @Test("MixedAudioSource는 두 child source를 시작하고 섞인 buffer만 전달한다")
+    func mixedAudioSourceStartsChildrenAndEmitsMixedBuffers() throws {
+        let microphone = InputModeStubAudioSource()
+        let systemAudio = InputModeStubAudioSource()
+        let bufferSink = InputModeBufferSink()
+        let source = MixedAudioSource(
+            microphone: microphone,
+            systemAudio: systemAudio,
+            mixer: DualAudioBufferMixer(gain: 0.5)
+        )
+        source.onBuffer = { samples in
+            bufferSink.record(samples)
         }
 
         try source.start()
+        microphone.emitBuffer([0.4, 0.4])
+        #expect(bufferSink.buffers.isEmpty)
 
-        guard case .systemAudioUnavailable(let reason) = errorSink.error else {
-            Issue.record("mixed source should report unavailable")
-            return
-        }
-        #expect(reason.contains("mixer"))
+        systemAudio.emitBuffer([0.2, -0.2])
+        #expect(samples(bufferSink.buffers.first, approximatelyEqualTo: [0.3, 0.1]))
+
+        source.stop()
+        microphone.emitBuffer([1.0])
+        systemAudio.emitBuffer([1.0])
+
+        #expect(microphone.startCount == 1)
+        #expect(systemAudio.startCount == 1)
+        #expect(microphone.stopCount == 1)
+        #expect(systemAudio.stopCount == 1)
+        #expect(bufferSink.buffers.count == 1)
     }
 
     @Test("ViewModel은 녹음 시작 전에 선택한 입력 source로 교체한다")
@@ -171,6 +230,32 @@ private final class InputModeStubAudioSource: AudioSourceProtocol {
     }
 
     func selectDevice(_ device: AudioDevice) throws {}
+
+    func emitBuffer(_ samples: [Float]) {
+        onBuffer?(samples)
+    }
+}
+
+private final class InputModeBufferSink: @unchecked Sendable {
+    private let lock = NSLock()
+    private var receivedBuffers: [[Float]] = []
+
+    var buffers: [[Float]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return receivedBuffers
+    }
+
+    func record(_ samples: [Float]) {
+        lock.lock()
+        receivedBuffers.append(samples)
+        lock.unlock()
+    }
+}
+
+private func samples(_ lhs: [Float]?, approximatelyEqualTo rhs: [Float], tolerance: Float = 0.0001) -> Bool {
+    guard let lhs, lhs.count == rhs.count else { return false }
+    return zip(lhs, rhs).allSatisfy { abs($0 - $1) <= tolerance }
 }
 
 private final class InputModeErrorSink: @unchecked Sendable {
