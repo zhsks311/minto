@@ -13,6 +13,7 @@ private let kClientSecret = "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"
 private let kRedirectPath = "/oauth2callback"
 private let kScopes = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
 private let kKeychainKey = "gemini"
+private let kSecretStore = SecretStoreFactory.make()
 
 // 교정/요약 모델·출력 한도. 모델 상향 시 여기만 바꾼다. 단 Gemini는 무료 등급에서 반복 호출 시 429
 // 한도가 잦고, 상위 모델(gemini-2.5-pro)은 thinkingBudget 동작이 달라 검증이 필요 → 상향은 보류.
@@ -82,7 +83,7 @@ public final class GeminiOAuthService: NSObject {
     private(set) var credentials: GeminiCredentials? {
         get {
             if let cached = cachedCredentials { return cached }
-            let loaded = KeychainService.load(provider: kKeychainKey)
+            let loaded = kSecretStore.load(account: kKeychainKey, service: KeychainService.oauthService)
                 .flatMap { try? JSONDecoder().decode(GeminiCredentials.self, from: $0) }
             cachedCredentials = .some(loaded)
             return loaded
@@ -90,9 +91,9 @@ public final class GeminiOAuthService: NSObject {
         set {
             cachedCredentials = .some(newValue)
             if let v = newValue, let data = try? JSONEncoder().encode(v) {
-                KeychainService.save(provider: kKeychainKey, data: data)
+                _ = kSecretStore.save(account: kKeychainKey, data: data, service: KeychainService.oauthService)
             } else {
-                KeychainService.delete(provider: kKeychainKey)
+                _ = kSecretStore.delete(account: kKeychainKey, service: KeychainService.oauthService)
             }
         }
     }
@@ -101,7 +102,7 @@ public final class GeminiOAuthService: NSObject {
         if let cached = cachedCredentials {
             return cached != nil
         }
-        return KeychainService.exists(provider: kKeychainKey)
+        return kSecretStore.exists(account: kKeychainKey, service: KeychainService.oauthService)
     }
 
     public var email: String {

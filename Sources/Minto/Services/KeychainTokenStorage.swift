@@ -8,21 +8,27 @@ protocol OAuthTokenStorageBackend: Sendable {
     func delete(key: String)
 }
 
-struct KeychainOAuthTokenStorageBackend: OAuthTokenStorageBackend {
+struct SecretStoreOAuthTokenStorageBackend: OAuthTokenStorageBackend {
+    private let secretStore: any SecretStore
+
+    init(secretStore: any SecretStore = SecretStoreFactory.make()) {
+        self.secretStore = secretStore
+    }
+
     func exists(key: String) -> Bool {
-        KeychainService.exists(provider: key)
+        secretStore.exists(account: key, service: KeychainService.oauthService)
     }
 
     func load(key: String) -> Data? {
-        KeychainService.load(provider: key)
+        secretStore.load(account: key, service: KeychainService.oauthService)
     }
 
     func save(key: String, data: Data) {
-        KeychainService.save(provider: key, data: data)
+        _ = secretStore.save(account: key, data: data, service: KeychainService.oauthService)
     }
 
     func delete(key: String) {
-        KeychainService.delete(provider: key)
+        _ = secretStore.delete(account: key, service: KeychainService.oauthService)
     }
 }
 
@@ -37,7 +43,7 @@ final class KeychainTokenStorage: TokenStorage, @unchecked Sendable {
     private var cachedToken: OAuthAccessToken??
     private var storedTokenNeedsReconnect = false
 
-    init(keychainKey: String, storage: any OAuthTokenStorageBackend = KeychainOAuthTokenStorageBackend()) {
+    init(keychainKey: String, storage: any OAuthTokenStorageBackend = SecretStoreOAuthTokenStorageBackend()) {
         self.keychainKey = keychainKey
         self.storage = storage
     }

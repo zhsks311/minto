@@ -23,21 +23,27 @@ protocol ConfluenceTokenStorageBackend: Sendable {
     func delete(account: String)
 }
 
-struct KeychainConfluenceTokenStorageBackend: ConfluenceTokenStorageBackend {
+struct SecretStoreConfluenceTokenStorageBackend: ConfluenceTokenStorageBackend {
+    private let secretStore: any SecretStore
+
+    init(secretStore: any SecretStore = SecretStoreFactory.make()) {
+        self.secretStore = secretStore
+    }
+
     func exists(account: String) -> Bool {
-        KeychainService.exists(provider: account)
+        secretStore.exists(account: account, service: KeychainService.oauthService)
     }
 
     func load(account: String) -> Data? {
-        KeychainService.load(provider: account)
+        secretStore.load(account: account, service: KeychainService.oauthService)
     }
 
     func save(account: String, data: Data) {
-        KeychainService.save(provider: account, data: data)
+        _ = secretStore.save(account: account, data: data, service: KeychainService.oauthService)
     }
 
     func delete(account: String) {
-        KeychainService.delete(provider: account)
+        _ = secretStore.delete(account: account, service: KeychainService.oauthService)
     }
 }
 
@@ -130,7 +136,7 @@ public final class ConfluenceService: ObservableObject {
         self.init(
             httpClient: URLSessionConfluenceHTTPClient(session: session),
             defaults: defaults,
-            tokenStorage: KeychainConfluenceTokenStorageBackend()
+            tokenStorage: SecretStoreConfluenceTokenStorageBackend()
         )
     }
 

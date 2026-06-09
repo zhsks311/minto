@@ -6,6 +6,7 @@ import AppKit
 // 사용자에게 경고 후 동의를 받고 사용해야 함.
 private let kClientID = "app_EMoamEEZ73f0CkXaXp7hrann"
 private let kKeychainKey = "codex"
+private let kSecretStore = SecretStoreFactory.make()
 
 // 교정 모델: 유료(plus/pro/team/…)는 상위 모델, 무료/미상 tier는 경량 기본.
 // 무료 계정은 상위 모델 ID가 막혀(4xx) 교정을 통째로 잃을 수 있으므로 보수적으로 기본 모델을 쓰고,
@@ -43,7 +44,7 @@ public final class CodexOAuthService: ObservableObject {
     private(set) var credentials: CodexCredentials? {
         get {
             if let cached = cachedCredentials { return cached }
-            let loaded = KeychainService.load(provider: kKeychainKey)
+            let loaded = kSecretStore.load(account: kKeychainKey, service: KeychainService.oauthService)
                 .flatMap { try? JSONDecoder().decode(CodexCredentials.self, from: $0) }
             cachedCredentials = .some(loaded)
             return loaded
@@ -52,9 +53,9 @@ public final class CodexOAuthService: ObservableObject {
             objectWillChange.send()  // isLoggedIn은 computed이므로 자격증명 변경 시 직접 뷰에 알린다
             cachedCredentials = .some(newValue)
             if let v = newValue, let data = try? JSONEncoder().encode(v) {
-                KeychainService.save(provider: kKeychainKey, data: data)
+                _ = kSecretStore.save(account: kKeychainKey, data: data, service: KeychainService.oauthService)
             } else {
-                KeychainService.delete(provider: kKeychainKey)
+                _ = kSecretStore.delete(account: kKeychainKey, service: KeychainService.oauthService)
             }
         }
     }
@@ -63,7 +64,7 @@ public final class CodexOAuthService: ObservableObject {
         if let cached = cachedCredentials {
             return cached != nil
         }
-        return KeychainService.exists(provider: kKeychainKey)
+        return kSecretStore.exists(account: kKeychainKey, service: KeychainService.oauthService)
     }
 
     // MARK: - Login

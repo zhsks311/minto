@@ -5,6 +5,7 @@ import AppKit
 // gho_ 토큰 → copilot_internal/v2/token 교환 → 단기 Copilot API 토큰.
 private let kClientID = "Ov23li8tweQw6odWQebz"
 private let kKeychainKey = "copilot"
+private let kSecretStore = SecretStoreFactory.make()
 
 // 교정/요약 모델·출력 한도. 모델 상향 시 여기만 바꾼다. 단 Copilot은 구독이 없으면 404(noSubscription)라
 // 이 계정에서 검증 불가 → 상위 모델로의 변경은 구독 계정 검증 후. max_tokens는 긴 요약 잘림 시 상향.
@@ -57,7 +58,7 @@ public final class CopilotOAuthService: ObservableObject {
     private(set) var credentials: CopilotCredentials? {
         get {
             if let cached = cachedCredentials { return cached }
-            let loaded = KeychainService.load(provider: kKeychainKey)
+            let loaded = kSecretStore.load(account: kKeychainKey, service: KeychainService.oauthService)
                 .flatMap { try? JSONDecoder().decode(CopilotCredentials.self, from: $0) }
             cachedCredentials = .some(loaded)
             return loaded
@@ -66,9 +67,9 @@ public final class CopilotOAuthService: ObservableObject {
             objectWillChange.send()  // isLoggedIn은 computed이므로 자격증명 변경 시 직접 뷰에 알린다
             cachedCredentials = .some(newValue)
             if let v = newValue, let data = try? JSONEncoder().encode(v) {
-                KeychainService.save(provider: kKeychainKey, data: data)
+                _ = kSecretStore.save(account: kKeychainKey, data: data, service: KeychainService.oauthService)
             } else {
-                KeychainService.delete(provider: kKeychainKey)
+                _ = kSecretStore.delete(account: kKeychainKey, service: KeychainService.oauthService)
             }
         }
     }
@@ -77,7 +78,7 @@ public final class CopilotOAuthService: ObservableObject {
         if let cached = cachedCredentials {
             return cached != nil
         }
-        return KeychainService.exists(provider: kKeychainKey)
+        return kSecretStore.exists(account: kKeychainKey, service: KeychainService.oauthService)
     }
 
     public var email: String {

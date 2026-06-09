@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 extension Notification.Name {
     public static let llmAPIKeyStoreDidChange = Notification.Name("minto.llmAPIKeyStoreDidChange")
@@ -12,22 +11,27 @@ protocol LLMAPIKeyStorageBackend: Sendable {
     func delete(account: String, service: String) -> Bool
 }
 
-struct KeychainLLMAPIKeyStorageBackend: LLMAPIKeyStorageBackend {
+struct SecretStoreLLMAPIKeyStorageBackend: LLMAPIKeyStorageBackend {
+    private let secretStore: any SecretStore
+
+    init(secretStore: any SecretStore = SecretStoreFactory.make()) {
+        self.secretStore = secretStore
+    }
+
     func exists(account: String, service: String) -> Bool {
-        KeychainService.exists(provider: account, service: service)
+        secretStore.exists(account: account, service: service)
     }
 
     func load(account: String, service: String) -> Data? {
-        KeychainService.load(provider: account, service: service)
+        secretStore.load(account: account, service: service)
     }
 
     func save(account: String, data: Data, service: String) -> Bool {
-        KeychainService.save(provider: account, data: data, service: service) == errSecSuccess
+        secretStore.save(account: account, data: data, service: service)
     }
 
     func delete(account: String, service: String) -> Bool {
-        let status = KeychainService.delete(provider: account, service: service)
-        return status == errSecSuccess || status == errSecItemNotFound
+        secretStore.delete(account: account, service: service)
     }
 }
 
@@ -49,7 +53,7 @@ public final class LLMAPIKeyStore: LLMAPIKeyProviding, @unchecked Sendable {
 
     public init(serviceName: String = KeychainService.llmAPIService) {
         self.serviceName = serviceName
-        self.storage = KeychainLLMAPIKeyStorageBackend()
+        self.storage = SecretStoreLLMAPIKeyStorageBackend()
         self.notificationCenter = .default
     }
 

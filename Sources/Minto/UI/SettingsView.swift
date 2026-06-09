@@ -572,7 +572,7 @@ public struct SettingsView: View {
                     .foregroundColor(.red)
                 }
             }
-            Text("토큰은 이 Mac의 Keychain에만 저장됩니다. 사이트 URL과 이메일은 연결 상태 표시와 API 호출에만 사용됩니다.")
+            Text("토큰은 이 Mac의 비밀 저장소에만 저장됩니다. 기본 저장소는 Keychain입니다. 사이트 URL과 이메일은 연결 상태 표시와 API 호출에만 사용됩니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -950,7 +950,7 @@ public struct SettingsView: View {
                         loginError = nil
                         Task { await refreshAPIModelCatalog(for: providerID, force: true) }
                     } else {
-                        loginError = "API 키를 Keychain에 저장하지 못했습니다. macOS 권한 상태를 확인하세요."
+                        loginError = "API 키를 비밀 저장소에 저장하지 못했습니다. macOS 권한 상태를 확인하세요."
                     }
                 }
                 .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -963,13 +963,13 @@ public struct SettingsView: View {
                             apiModelCatalogs[providerID] = nil
                             loginError = nil
                         } else {
-                            loginError = "API 키를 Keychain에서 삭제하지 못했습니다. macOS 권한 상태를 확인하세요."
+                            loginError = "API 키를 비밀 저장소에서 삭제하지 못했습니다. macOS 권한 상태를 확인하세요."
                         }
                     }
                     .foregroundColor(.red)
                 }
             }
-            Text("API 키는 이 Mac의 Keychain에만 저장됩니다. 회의 원문은 선택한 공급자의 API로 전송됩니다.")
+            Text("API 키는 이 Mac의 비밀 저장소에만 저장됩니다. 기본 저장소는 Keychain입니다. 회의 원문은 선택한 공급자의 API로 전송됩니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

@@ -66,6 +66,7 @@ Minto2는 Mac에서 회의를 기록하고, 전사와 요약을 사용자가 다
 - 회의 목록 검색
 - 관련 문서 탭에서 Notion/Confluence 조회
 - Markdown 내보내기
+- 비밀값 저장은 기본 Keychain을 사용하고, 개발 opt-in으로 file 기반 SecretStore를 사용할 수 있음
 
 ## 4. 확장 예정 기능
 
@@ -80,7 +81,6 @@ Minto2는 Mac에서 회의를 기록하고, 전사와 요약을 사용자가 다
 - Confluence 내보내기
 - 음성/영상 파일 입력
 - 시스템 사운드 입력
-- 개발용 SecretStore로 Keychain prompt 감소
 
 ## 5. 데이터 원칙
 

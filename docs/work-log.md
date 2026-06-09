@@ -14,7 +14,7 @@
 | 3 | 2026-05-31 | [LLM 후처리 교정 + OAuth 3종 연동](work-log/2026-05-31-03-llm-correction-oauth.md) | Gemini/Copilot/Codex OAuth + 비동기 교정 (추가만, 미검증) |
 | 4 | 2026-05-31 | [OAuth 실제 동작화 + 교정 품질 측정](work-log/2026-05-31-04-oauth-functional-quality.md) | 설정 진입점, Codex 9개 수정, Gemini loopback, sample CER |
 | 5 | 2026-06-01 | [회의 맥락 기반 후교정](work-log/2026-06-01-05-meeting-context-correction.md) | MeetingContext·CorrectionPrompt 중앙화+보수적 규칙, 회의 시작 시트 |
-| 6 | 2026-06-09 | [LLM/Search/Export 확장 구현 시작](work-log/2026-06-09-06-llm-search-export-expansion-start.md) | provider/search/export/glossary/file/system audio/mixed audio/local LLM/benchmark/keychain reconnect 병렬 통합 |
+| 6 | 2026-06-09 | [LLM/Search/Export 확장 구현 시작](work-log/2026-06-09-06-llm-search-export-expansion-start.md) | provider/search/export/glossary/file/system audio/mixed audio/local LLM/benchmark/keychain reconnect/SecretStore 병렬 통합 |
 
 ## 남은 과제
 
