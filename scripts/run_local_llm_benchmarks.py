@@ -534,6 +534,7 @@ def aggregate(metrics):
         "mean_latency_seconds": round(sum(latencies) / len(latencies), 3) if latencies else None,
         "max_latency_seconds": max(latencies) if latencies else None,
         "mean_term_recall": round(sum(term_recalls) / len(term_recalls), 3) if term_recalls else None,
+        "min_term_recall": round(min(term_recalls), 3) if term_recalls else None,
         "json_valid_rate": (
             sum(1 for metric in json_metrics if metric.get("json_valid")) / len(json_metrics)
             if json_metrics else None
@@ -542,8 +543,84 @@ def aggregate(metrics):
     }
 
 
-def write_summary_md(path, manifest, metrics):
+def aggregate_by(metrics, key):
+    groups = {}
+    for metric in metrics:
+        group = metric.get(key) or "unknown"
+        groups.setdefault(group, []).append(metric)
+    return {
+        group: aggregate(group_metrics)
+        for group, group_metrics in sorted(groups.items())
+    }
+
+
+def summary_payload(metrics, manifest):
     summary = aggregate(metrics)
+    summary["by_case_type"] = aggregate_by(metrics, "case_type")
+    summary["default_candidate_gate"] = default_candidate_gate(metrics, manifest)
+    return summary
+
+
+def default_candidate_gate(metrics, manifest):
+    selected_case_types = sorted({metric["case_type"] for metric in metrics})
+    required_case_types = ["answer", "correction", "summary"]
+    real_run = not manifest["mock"] and not manifest["dry_run"]
+    coverage_ok = all(case_type in selected_case_types for case_type in required_case_types)
+    transport_passed = bool(metrics) and all(metric["status"] == "passed" for metric in metrics)
+    correction_min_recall = min_term_recall(metrics, "correction")
+    summary_min_recall = min_term_recall(metrics, "summary")
+    summary_json_valid_rate = json_valid_rate(metrics, "summary")
+    answer_min_recall = min_term_recall(metrics, "answer")
+    ready = (
+        real_run
+        and coverage_ok
+        and transport_passed
+        and correction_min_recall == 1.0
+        and summary_min_recall == 1.0
+        and summary_json_valid_rate == 1.0
+        and answer_min_recall == 1.0
+    )
+
+    return {
+        "required_case_types": required_case_types,
+        "selected_case_types": selected_case_types,
+        "real_run": real_run,
+        "coverage_ok": coverage_ok,
+        "transport_passed": transport_passed,
+        "correction_min_term_recall": correction_min_recall,
+        "summary_min_term_recall": summary_min_recall,
+        "summary_json_valid_rate": summary_json_valid_rate,
+        "answer_min_term_recall": answer_min_recall,
+        "default_candidate_ready": ready,
+    }
+
+
+def min_term_recall(metrics, case_type):
+    values = [
+        metric["term_recall"] for metric in metrics
+        if metric.get("case_type") == case_type
+        and metric.get("status") == "passed"
+        and isinstance(metric.get("term_recall"), (int, float))
+    ]
+    return round(min(values), 3) if values else None
+
+
+def json_valid_rate(metrics, case_type):
+    values = [
+        metric["json_valid"] for metric in metrics
+        if metric.get("case_type") == case_type
+        and metric.get("status") == "passed"
+        and metric.get("json_valid") is not None
+    ]
+    return (
+        sum(1 for value in values if value) / len(values)
+        if values else None
+    )
+
+
+def write_summary_md(path, manifest, metrics):
+    summary = summary_payload(metrics, manifest)
+    gate = summary["default_candidate_gate"]
     context_window = manifest["num_ctx"] if manifest["num_ctx"] is not None else "n/a"
     lines = [
         "# Local LLM benchmark summary",
@@ -559,9 +636,41 @@ def write_summary_md(path, manifest, metrics):
         f"- JSON valid rate: `{summary['json_valid_rate']}`",
         f"- Max server RSS: `{summary['max_server_rss_peak_mb']}` MB",
         "",
+        "## Default Candidate Gate",
+        "",
+        f"- Real run: `{gate['real_run']}`",
+        f"- Coverage OK: `{gate['coverage_ok']}`",
+        f"- Transport passed: `{gate['transport_passed']}`",
+        f"- Correction min recall: `{gate['correction_min_term_recall']}`",
+        f"- Summary min recall: `{gate['summary_min_term_recall']}`",
+        f"- Summary JSON valid rate: `{gate['summary_json_valid_rate']}`",
+        f"- Answer min recall: `{gate['answer_min_term_recall']}`",
+        f"- Default candidate ready: `{gate['default_candidate_ready']}`",
+        "",
+        "## Case Type Summary",
+        "",
+        "| Case Type | Runs | Success | Mean Latency | Mean Term Recall | Min Term Recall | JSON Valid |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for case_type, case_summary in summary["by_case_type"].items():
+        lines.append(
+            "| {case_type} | {runs} | {success} | {latency} | {mean_recall} | {min_recall} | {json_valid} |".format(
+                case_type=case_type,
+                runs=case_summary["total_runs"],
+                success=case_summary["success_rate"],
+                latency=case_summary["mean_latency_seconds"],
+                mean_recall=case_summary["mean_term_recall"],
+                min_recall=case_summary["min_term_recall"],
+                json_valid=case_summary["json_valid_rate"],
+            )
+        )
+    lines.extend([
+        "",
+        "## Case Runs",
+        "",
         "| Case | Repeat | Status | Latency | Term Recall | Missing Terms | JSON | RSS MB | Error |",
         "|---|---:|---|---:|---:|---|---|---:|---|",
-    ]
+    ])
     for metric in metrics:
         lines.append(
             "| {case} | {repeat} | {status} | {latency} | {term} | {missing} | {json_valid} | {rss} | {error} |".format(
@@ -642,7 +751,7 @@ def main():
         if should_stop:
             break
 
-    write_json(output_root / "summary.json", aggregate(metrics))
+    write_json(output_root / "summary.json", summary_payload(metrics, manifest))
     write_summary_csv(output_root / "summary.csv", metrics)
     write_summary_md(output_root / "summary.md", manifest, metrics)
 
