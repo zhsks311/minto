@@ -1,0 +1,48 @@
+{
+  "base_url": "http://127.0.0.1:11434",
+  "case_id": "correction_terms_with_context",
+  "case_name": "Minto correction prompt with meeting context and glossary",
+  "case_type": "correction",
+  "compatibility": "ollama",
+  "correction_clean": false,
+  "correction_clean_failures": [
+    "multiline_output",
+    "marker:출력:",
+    "marker:교정합니다",
+    "marker:→"
+  ],
+  "error": null,
+  "expected_terms": [
+    "PDCR-2901",
+    "Liquibase",
+    "Confluence",
+    "dry-run"
+  ],
+  "found_terms": [
+    "PDCR-2901",
+    "Liquibase",
+    "Confluence",
+    "dry-run"
+  ],
+  "json_valid": null,
+  "latency_seconds": 11.589,
+  "missing_terms": [],
+  "model": "llama3.1:8b",
+  "num_ctx": 4096,
+  "output_chars": 206,
+  "output_preview": "오늘 PDCR-2901 마이그레이션과 Confluence 내보내기 리뷰에서 리퀴 베이스 → Liquibase, 컨플루언스 내보내기 드라이런 → dry-run으로 교정합니다.\n\n출력: 오늘 PDCR-2901 마이그레이션과 Confluence 내보내기 리뷰에서 Liquibase 마이그레이션 순서를 다시 확인했고 Confluence 내보내기 dry-run도 같이 봤습니다.",
+  "output_preview_chars": 800,
+  "output_preview_truncated": false,
+  "output_sha256": "f15cb0e8146dba696a402bb3282f5cce262b3a2729296dfc9151109f47903998",
+  "prompt_builder": "minto_correction",
+  "repeat_index": 1,
+  "required_field_recall": null,
+  "required_fields": [],
+  "required_fields_present": [],
+  "schema_version": 1,
+  "server_pid": 58693,
+  "server_rss_peak_mb": 77.92,
+  "server_rss_samples": 54,
+  "status": "passed",
+  "term_recall": 1.0
+}

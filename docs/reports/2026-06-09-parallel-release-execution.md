@@ -122,6 +122,7 @@
   - Benchmark `summary.csv` output now uses LF line endings so generated results pass `git diff --check` without manual normalization.
   - Benchmark metrics now keep a capped output preview and output SHA-256 per case, while summary CSV/Markdown exposes found and missing terms for failure triage.
   - Benchmark `summary.json`/`summary.md` now split correction, summary, and answer gate metrics so default-candidate blockers are separated by use case.
+  - Benchmark default-candidate gate now checks correction output cleanliness separately from term recall, so explanatory correction responses do not pass only because expected terms are present.
   - Real Ollama run for `deepseek-r1:8b` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b`; first correction case timed out after 120s and a direct 16-token request timed out after 60s, so this model is not promoted as a default candidate.
   - The `deepseek-r1:8b` failure happened with Ollama model context `131072`; rerun evidence should use a controlled context such as `--num-ctx 4096`.
   - Controlled `deepseek-r1:8b` rerun with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096`; timeout was resolved, but correction term recall was `0.0`, so default-candidate status remains on hold.
@@ -138,6 +139,7 @@
   - Prompt preservation v2 is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-prompt-preservation-v2-repeat3-numctx4096`; correction/summary recall stayed at `1.0`, but grounded answer recall stayed at `0.667`, missing `parent page` every repeat.
   - Prompt preservation v3 is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-prompt-preservation-v3-repeat3-numctx4096`; it passed 9/9 transport/format gates with mean latency `4.974s`, correction/summary recall `1.0`, and grounded answer recall `0.667, 1.0, 1.0`.
   - Because prompt-only tuning hit the 3-attempt limit and `grounded_answer` still missed `parent page` once in repeat-3, `llama3.1:8b` remains the best installed local candidate but is not promoted as a default.
+  - Gate breakdown rerun is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-gate-breakdown-repeat3-numctx4096`; it passed 9/9 transport calls with mean latency `15.905s`, but correction clean rate was `0.0` and answer min recall was `0.667`, so `default_candidate_ready=false`.
   - Provider smoke coverage confirms local LLM Ollama payloads for correction, final summary, and search answer use cases.
   - Search answer flow coverage now confirms `MeetingSearchAnswerUseCase` calls `LocalLLMProvider` with an Ollama `answer` payload, preserves citations, and uses `num_predict=1800` with the configured context window.
   - Rendered app UI QA now confirms the meeting search "AI 답변" button calls the Local LLM Ollama `/api/generate` flow and renders the returned answer with citations.
@@ -225,6 +227,7 @@
   - `python3 scripts/run_local_llm_benchmarks.py --mock --model mock-model --cases correction_terms_with_context,grounded_answer --num-ctx 4096 --output-root /tmp/minto2-local-llm-prompt-preservation-mock-3`: passed.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-prompt-preservation-test-2 --filter 'CorrectionPromptTests|MeetingSearchAnswerServiceTests'`: passed, 20 tests.
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context,summary_json,grounded_answer --num-ctx 4096 --repeat 3 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-prompt-preservation-v3-repeat3-numctx4096 --fail-fast`: passed, 9/9 runs, mean latency `4.974s`, correction/summary recall `1.0`, grounded answer term recall range `0.667...1.0`.
+  - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context,summary_json,grounded_answer --num-ctx 4096 --repeat 3 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-gate-breakdown-repeat3-numctx4096 --fail-fast`: passed, 9/9 runs, mean latency `15.905s`, correction clean rate `0.0`, answer min recall `0.667`, `default_candidate_ready=false`.
   - `CFFIXED_USER_HOME=/tmp/minto2-system-audio-ui-home-1780984552 HOME=/tmp/minto2-system-audio-ui-home-1780984552 .build/debug/minto2`: rendered setup UI opened from `새 회의`, selected `시스템` and observed `시스템 입력 가능` with `녹음 시작` enabled.
   - Same setup UI run selected `마이크+시스템` and observed `마이크+시스템 입력 가능`, explanatory copy `Echo cancellation은 적용하지 않습니다.`, and `녹음 시작` enabled.
   - `/tmp/minto2-system-audio-setup-mixed-ready.png`: window capture shows the rendered `마이크+시스템` ready state.
@@ -246,7 +249,7 @@
   - 실제 마이크와 화상회의 앱 출력을 동시에 넣은 `마이크+시스템` VAD/STT 결과 확인. ViewModel-level mixed source buffer to VAD handoff is covered by `AudioInputModeTests`.
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
-  - 설치된 후보 중 `llama3.1:8b`는 prompt preservation v3에서 correction/summary recall을 `1.0`까지 개선했지만, repeat-3 grounded answer가 `0.667, 1.0, 1.0`으로 한 번 흔들려 기본값 후보는 보류한다. 다음 기본값 판단은 추가 모델 설치 또는 답변 생성 후처리/평가 기준 분리로 진행한다.
+  - 설치된 후보 중 `llama3.1:8b`는 gate breakdown repeat-3에서 9/9 transport는 통과했지만 correction clean rate `0.0`, answer min recall `0.667`로 `default_candidate_ready=false`다. 다음 기본값 판단은 추가 모델 설치 또는 correction 출력 후처리/프롬프트 재설계로 진행한다.
 - Keychain reconnect UX:
   - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 Atlassian 인증 실패 렌더 확인. 서비스의 `needsReconnect` 상태 전환과 export sheet의 Settings handoff 조건은 자동 테스트로 검증됨.
   - invalid Notion token으로 관련 문서 검색 실패 후 실제 OAuth 실패, 재연결, 지우기 버튼 동작 확인. `needsReconnect` 상태의 검색 안내는 자동 검증됨.

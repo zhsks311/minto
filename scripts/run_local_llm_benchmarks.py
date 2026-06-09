@@ -16,6 +16,14 @@ from pathlib import Path
 
 
 OUTPUT_PREVIEW_CHARS = 800
+CORRECTION_EXPLANATION_MARKERS = [
+    "출력:",
+    "교정:",
+    "수정:",
+    "교정합니다",
+    "수정합니다",
+    "→",
+]
 
 BENCHMARK_CASES = [
     {
@@ -364,6 +372,7 @@ def evaluate(case, text):
             field for field in case["required_fields"]
             if field in parsed_json
         ]
+    correction_clean, correction_clean_failures = evaluate_correction_output(case, stripped_text)
 
     return {
         "output_chars": len(text),
@@ -388,7 +397,23 @@ def evaluate(case, text):
             len(required_fields_present) / len(case["required_fields"])
             if case["required_fields"] else None
         ),
+        "correction_clean": correction_clean,
+        "correction_clean_failures": correction_clean_failures,
     }
+
+
+def evaluate_correction_output(case, stripped_text):
+    if case["type"] != "correction":
+        return None, []
+
+    failures = []
+    if "\n" in stripped_text:
+        failures.append("multiline_output")
+    failures.extend(
+        f"marker:{marker}" for marker in CORRECTION_EXPLANATION_MARKERS
+        if marker in stripped_text
+    )
+    return len(failures) == 0, failures
 
 
 def run_case(args, case, repeat_index):
@@ -493,6 +518,8 @@ def write_summary_csv(path, metrics):
         "term_recall",
         "found_terms",
         "missing_terms",
+        "correction_clean",
+        "correction_clean_failures",
         "json_valid",
         "required_field_recall",
         "server_rss_peak_mb",
@@ -527,6 +554,10 @@ def aggregate(metrics):
         metric["server_rss_peak_mb"] for metric in metrics
         if isinstance(metric.get("server_rss_peak_mb"), (int, float))
     ]
+    correction_clean_values = [
+        metric["correction_clean"] for metric in passed
+        if metric.get("correction_clean") is not None
+    ]
     return {
         "total_runs": len(metrics),
         "passed_runs": len(passed),
@@ -538,6 +569,10 @@ def aggregate(metrics):
         "json_valid_rate": (
             sum(1 for metric in json_metrics if metric.get("json_valid")) / len(json_metrics)
             if json_metrics else None
+        ),
+        "correction_clean_rate": (
+            sum(1 for value in correction_clean_values if value) / len(correction_clean_values)
+            if correction_clean_values else None
         ),
         "max_server_rss_peak_mb": max(rss_values) if rss_values else None,
     }
@@ -568,6 +603,7 @@ def default_candidate_gate(metrics, manifest):
     coverage_ok = all(case_type in selected_case_types for case_type in required_case_types)
     transport_passed = bool(metrics) and all(metric["status"] == "passed" for metric in metrics)
     correction_min_recall = min_term_recall(metrics, "correction")
+    correction_clean_rate = clean_rate(metrics, "correction")
     summary_min_recall = min_term_recall(metrics, "summary")
     summary_json_valid_rate = json_valid_rate(metrics, "summary")
     answer_min_recall = min_term_recall(metrics, "answer")
@@ -576,6 +612,7 @@ def default_candidate_gate(metrics, manifest):
         and coverage_ok
         and transport_passed
         and correction_min_recall == 1.0
+        and correction_clean_rate == 1.0
         and summary_min_recall == 1.0
         and summary_json_valid_rate == 1.0
         and answer_min_recall == 1.0
@@ -588,6 +625,7 @@ def default_candidate_gate(metrics, manifest):
         "coverage_ok": coverage_ok,
         "transport_passed": transport_passed,
         "correction_min_term_recall": correction_min_recall,
+        "correction_clean_rate": correction_clean_rate,
         "summary_min_term_recall": summary_min_recall,
         "summary_json_valid_rate": summary_json_valid_rate,
         "answer_min_term_recall": answer_min_recall,
@@ -611,6 +649,19 @@ def json_valid_rate(metrics, case_type):
         if metric.get("case_type") == case_type
         and metric.get("status") == "passed"
         and metric.get("json_valid") is not None
+    ]
+    return (
+        sum(1 for value in values if value) / len(values)
+        if values else None
+    )
+
+
+def clean_rate(metrics, case_type):
+    values = [
+        metric["correction_clean"] for metric in metrics
+        if metric.get("case_type") == case_type
+        and metric.get("status") == "passed"
+        and metric.get("correction_clean") is not None
     ]
     return (
         sum(1 for value in values if value) / len(values)
@@ -642,6 +693,7 @@ def write_summary_md(path, manifest, metrics):
         f"- Coverage OK: `{gate['coverage_ok']}`",
         f"- Transport passed: `{gate['transport_passed']}`",
         f"- Correction min recall: `{gate['correction_min_term_recall']}`",
+        f"- Correction clean rate: `{gate['correction_clean_rate']}`",
         f"- Summary min recall: `{gate['summary_min_term_recall']}`",
         f"- Summary JSON valid rate: `{gate['summary_json_valid_rate']}`",
         f"- Answer min recall: `{gate['answer_min_term_recall']}`",
@@ -649,12 +701,12 @@ def write_summary_md(path, manifest, metrics):
         "",
         "## Case Type Summary",
         "",
-        "| Case Type | Runs | Success | Mean Latency | Mean Term Recall | Min Term Recall | JSON Valid |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Case Type | Runs | Success | Mean Latency | Mean Term Recall | Min Term Recall | JSON Valid | Correction Clean |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for case_type, case_summary in summary["by_case_type"].items():
         lines.append(
-            "| {case_type} | {runs} | {success} | {latency} | {mean_recall} | {min_recall} | {json_valid} |".format(
+            "| {case_type} | {runs} | {success} | {latency} | {mean_recall} | {min_recall} | {json_valid} | {clean} |".format(
                 case_type=case_type,
                 runs=case_summary["total_runs"],
                 success=case_summary["success_rate"],
@@ -662,24 +714,26 @@ def write_summary_md(path, manifest, metrics):
                 mean_recall=case_summary["mean_term_recall"],
                 min_recall=case_summary["min_term_recall"],
                 json_valid=case_summary["json_valid_rate"],
+                clean=case_summary["correction_clean_rate"],
             )
         )
     lines.extend([
         "",
         "## Case Runs",
         "",
-        "| Case | Repeat | Status | Latency | Term Recall | Missing Terms | JSON | RSS MB | Error |",
-        "|---|---:|---|---:|---:|---|---|---:|---|",
+        "| Case | Repeat | Status | Latency | Term Recall | Missing Terms | Correction Clean | JSON | RSS MB | Error |",
+        "|---|---:|---|---:|---:|---|---|---|---:|---|",
     ])
     for metric in metrics:
         lines.append(
-            "| {case} | {repeat} | {status} | {latency} | {term} | {missing} | {json_valid} | {rss} | {error} |".format(
+            "| {case} | {repeat} | {status} | {latency} | {term} | {missing} | {clean} | {json_valid} | {rss} | {error} |".format(
                 case=metric["case_id"],
                 repeat=metric["repeat_index"],
                 status=metric["status"],
                 latency=metric["latency_seconds"],
                 term=metric.get("term_recall"),
                 missing=markdown_terms(metric.get("missing_terms")),
+                clean=correction_clean_cell(metric),
                 json_valid=metric.get("json_valid"),
                 rss=metric.get("server_rss_peak_mb"),
                 error=markdown_cell(metric.get("error") or ""),
@@ -696,6 +750,16 @@ def markdown_terms(value):
 
 def markdown_cell(value):
     return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def correction_clean_cell(metric):
+    value = metric.get("correction_clean")
+    if value is None:
+        return ""
+    failures = metric.get("correction_clean_failures") or []
+    if not failures:
+        return str(value)
+    return markdown_cell(f"{value} ({', '.join(failures)})")
 
 
 def main():

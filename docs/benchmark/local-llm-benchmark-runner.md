@@ -122,6 +122,6 @@ python3 scripts/run_local_llm_benchmarks.py \
 - summary: required JSON fields and term recall
 - answer: grounded answer term recall and source-time preservation
 - all cases: latency, status, output length, capped output preview/hash, found/missing terms, optional sampled server RSS
-- default candidate gate: real non-mock run, correction/summary/answer coverage, transport pass, per-type minimum recall, and summary JSON validity
+- default candidate gate: real non-mock run, correction/summary/answer coverage, transport pass, correction-only output cleanliness, per-type minimum recall, and summary JSON validity
 
 Do not promote a local model as the default until a real non-mock run is recorded and reviewed.
