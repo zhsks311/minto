@@ -111,6 +111,7 @@
   - Single-source backlog is capped with passthrough fallback to avoid unbounded live input latency and memory growth.
   - Mixed readiness uses the same screen/system audio permission and availability gate as system audio.
   - Rendered setup UI QA confirms `시스템` and `마이크+시스템` selection both show ready states and enable `녹음 시작` when screen/system audio permission is already available.
+  - `SystemAudioLiveTests` provides an opt-in live QA gate that plays a generated WAV through `/usr/bin/afplay` and verifies `SystemAudioSource` receives buffer and level callbacks from a separate process.
 - Local LLM benchmark runner:
   - `scripts/run_local_llm_benchmarks.py` measures correction, summary JSON, and grounded answer cases.
   - The runner supports Ollama and OpenAI-compatible endpoints, dry-run, mock validation, repeat runs, and optional server RSS sampling.
@@ -188,13 +189,15 @@
   - Same setup UI run selected `마이크+시스템` and observed `마이크+시스템 입력 가능`, explanatory copy `Echo cancellation은 적용하지 않습니다.`, and `녹음 시작` enabled.
   - `/tmp/minto2-system-audio-setup-mixed-ready.png`: window capture shows the rendered `마이크+시스템` ready state.
   - Test cleanup: the direct SwiftPM app process was stopped. Permission-denied state was not exercised because this macOS environment already had screen/system audio permission available.
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-system-audio-live-default-test --filter 'SystemAudioLiveTests|AudioInputMode'`: passed, 14 tests. The live capture test is skipped by default unless `RUN_SYSTEM_AUDIO_LIVE_TEST=1` is set.
+  - `RUN_SYSTEM_AUDIO_LIVE_TEST=1 swift test --disable-sandbox --scratch-path /tmp/minto2-system-audio-live-default-test --filter SystemAudioLiveTests`: passed, 1 test. The opt-in run verified system audio buffer and level callbacks from external `afplay` output.
 
 ## Remaining Manual QA
 
 - System audio:
   - 권한 없음 상태에서 readiness warning, start disabled, 시스템 설정 열기 동작 확인. Current QA environment already had screen/system audio permission, so this state remains manual.
   - 권한 거부 상태에서 권한 허용 후 앱 복귀 시 readiness 갱신과 level meter 동작 확인
-  - 실제 화상회의 앱 출력으로 system audio capture 확인
+  - 실제 화상회의 앱 출력으로 source-specific system audio capture 확인. Generic external-process system output is covered by `SystemAudioLiveTests`.
   - `마이크+시스템` 선택 후 마이크와 시스템 출력이 모두 VAD/STT pipeline으로 들어오는지 확인
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
