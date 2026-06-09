@@ -344,6 +344,79 @@ struct ConfluenceExportTests {
     }
 }
 
+@Suite("Confluence 내보내기 재연결 상태")
+@MainActor
+struct ConfluenceExportReconnectTests {
+
+    @Test("공간 조회 401은 재연결 필요 상태로 남긴다")
+    func unauthorizedSpaceLookupMarksReconnectRequired() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 401, data: Data("unauthorized".utf8))
+        ])
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let service = makeConfiguredConfluenceService(httpClient: httpClient, tokenStorage: tokenStorage)
+
+        #expect(service.connectionState == .connected)
+
+        await #expect(throws: ConfluenceService.ExportError.unauthorized) {
+            _ = try await service.publishPage(title: "회의록", markdown: "# 회의록", spaceKey: "ENG")
+        }
+
+        #expect(service.connectionState == .needsReconnect)
+        #expect(!service.isConfigured)
+        #expect(tokenStorage.loadCallCount == 1)
+        #expect(httpClient.requests.count == 1)
+        #expect(httpClient.requests[0].httpMethod == "GET")
+        #expect(httpClient.requests[0].url?.path == "/wiki/api/v2/spaces")
+    }
+
+    @Test("페이지 생성 401은 재연결 필요 상태로 남긴다")
+    func unauthorizedPageCreateMarksReconnectRequired() async {
+        let spaceResponse = """
+        {
+          "results": [
+            { "id": "12345", "key": "ENG", "name": "Engineering" }
+          ]
+        }
+        """
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 200, data: Data(spaceResponse.utf8)),
+            .init(statusCode: 401, data: Data("unauthorized".utf8))
+        ])
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let service = makeConfiguredConfluenceService(httpClient: httpClient, tokenStorage: tokenStorage)
+
+        #expect(service.connectionState == .connected)
+
+        await #expect(throws: ConfluenceService.ExportError.unauthorized) {
+            _ = try await service.publishPage(title: "회의록", markdown: "# 회의록", spaceKey: "ENG")
+        }
+
+        #expect(service.connectionState == .needsReconnect)
+        #expect(!service.isConfigured)
+        #expect(tokenStorage.loadCallCount == 1)
+        #expect(httpClient.requests.count == 2)
+        #expect(httpClient.requests[0].httpMethod == "GET")
+        #expect(httpClient.requests[1].httpMethod == "POST")
+        #expect(httpClient.requests[1].url?.path == "/wiki/api/v2/pages")
+    }
+
+    private func makeConfiguredConfluenceService(
+        httpClient: StubConfluenceHTTPClient,
+        tokenStorage: StubConfluenceTokenStorageBackend
+    ) -> ConfluenceService {
+        let defaults = UserDefaults(suiteName: "test.confluence.export.reconnect.\(UUID().uuidString)")!
+        let service = ConfluenceService(
+            httpClient: httpClient,
+            defaults: defaults,
+            tokenStorage: tokenStorage
+        )
+        service.setBaseURL("https://acme.atlassian.net")
+        service.setEmail("user@example.com")
+        return service
+    }
+}
+
 @Suite("Confluence 자격·URL 정규화")
 @MainActor
 struct ConfluenceConfigTests {

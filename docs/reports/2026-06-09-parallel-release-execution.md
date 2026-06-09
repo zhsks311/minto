@@ -141,6 +141,7 @@
 - Related info reconnect status:
   - Related document search now prioritizes reconnect guidance over a generic empty-results message when Notion or Confluence enters `needsReconnect`.
   - Confluence search 401 and existing Notion reconnect state are covered through `RelatedInfoService` status-message tests.
+  - Confluence export 401 is covered at both space lookup and page create steps, and leaves the service in `needsReconnect`.
 - Settings UI QA:
   - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-ui-qa-rc1 ./scripts/dev.sh run` launched the RC integration app through build, signing, and app initialization.
   - Settings UI `GPT API` saved the test value `minto-ui-qa-not-a-secret` into `/tmp/minto2-dev-secrets-ui-qa-rc1/com.minto.app.llm-api__llm-api-key-gpt.json` with `-rw-------` permissions and showed `API 키 저장됨`.
@@ -193,6 +194,7 @@
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-system-audio-live-default-test --filter 'SystemAudioLiveTests|AudioInputMode'`: passed, 14 tests. The live capture test is skipped by default unless `RUN_SYSTEM_AUDIO_LIVE_TEST=1` is set.
   - `RUN_SYSTEM_AUDIO_LIVE_TEST=1 swift test --disable-sandbox --scratch-path /tmp/minto2-system-audio-live-default-test --filter SystemAudioLiveTests`: passed, 1 test. The opt-in run verified system audio buffer and level callbacks from external `afplay` output.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-viewmodel-pipeline-test --filter AudioInputMode`: passed, 14 tests. This includes `.mixed` selection and source-buffer-to-VAD handoff coverage.
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-confluence-export-reconnect-test --filter 'ConfluenceExportReconnectTests|IntegrationReconnectStateTests'`: passed, 8 tests.
 
 ## Remaining Manual QA
 
@@ -206,7 +208,7 @@
   - 실제 앱 화면에서 파일 가져오기 또는 녹음 종료 경로의 correction/summary 진행 상태 rendered QA. There are no standalone correction/summary buttons in the current UI; the automated file import pipeline test covers the stage order and corrected-transcript handoff.
   - correction term recall이 높은 추가 실제 후보 모델 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
-  - invalid Confluence token으로 Confluence 내보내기 실패 후 `다시 연결 필요` 표시 확인. 관련 문서 검색 401은 자동 검증됨.
+  - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 export sheet/Settings handoff 렌더 확인. 서비스의 `needsReconnect` 상태 전환은 export 401 자동 테스트로 검증됨.
   - invalid Notion token으로 관련 문서 검색 실패 후 실제 OAuth 실패, 재연결, 지우기 버튼 동작 확인. `needsReconnect` 상태의 검색 안내는 자동 검증됨.
   - Settings 진입만으로 반복 Keychain 원문 읽기 prompt가 늘지 않는지 확인
   - 개발 실행 file secret store에서 Settings UI delete 확인. App launch, save, and relaunch-load are verified with `/tmp/minto2-dev-secrets-ui-qa-rc1`; delete remains manual because it requires a GUI deletion action.
