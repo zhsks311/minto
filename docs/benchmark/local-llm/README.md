@@ -20,6 +20,7 @@
 | 2026-06-09 | Ollama | `llama3.1:8b` (`prompt preservation v2`, `num_ctx=4096`, repeat 3) | correction/summary recall 1.0, grounded answer recall 0.667 고정, 기본 후보 보류 | `2026-06-09-llama3.1-8b-prompt-preservation-v2-repeat3-numctx4096/` |
 | 2026-06-09 | Ollama | `llama3.1:8b` (`prompt preservation v3`, `num_ctx=4096`, repeat 3) | 9/9 응답, mean latency 4.974s, correction/summary recall 1.0, grounded answer 2/3만 recall 1.0, 기본 후보 보류 | `2026-06-09-llama3.1-8b-prompt-preservation-v3-repeat3-numctx4096/` |
 | 2026-06-09 | Ollama | `llama3.1:8b` (`gate breakdown`, `num_ctx=4096`, repeat 3) | 9/9 응답, mean latency 15.905s, correction clean rate 0.0, answer min recall 0.667, default candidate gate false | `2026-06-09-llama3.1-8b-gate-breakdown-repeat3-numctx4096/` |
+| 2026-06-09 | Ollama | `llama3.1:8b` (`app postprocess gate`, `num_ctx=4096`, repeat 3) | 9/9 응답, mean latency 28.813s, raw correction clean/length OK rate 0.0, app correction clean/length OK/term recall 1.0, app gate true. latency 정책 판단 전 기본 후보 보류 | `2026-06-09-llama3.1-8b-app-postprocess-repeat3-numctx4096/` |
 
 ## 판정 기준
 
@@ -31,5 +32,7 @@
 - Markdown/CSV summary는 누락 term을 바로 확인할 수 있어야 하며, 출력 preview는 built-in synthetic benchmark 응답 확인 용도로만 사용한다.
 - `summary.json`/`summary.md`는 correction, summary, answer gate를 분리해 어느 use case가 기본값 승격을 막는지 보여야 한다.
 - correction term recall이 `1.0`이어도 설명 문구, `출력:` 접두어, 줄바꿈 같은 non-correction output이 섞이면 기본값 gate를 통과하지 않는다.
+- 앱 correction postprocessor가 제거하는 wrapper는 `app_default_candidate_gate`로 별도 판정한다. raw `default_candidate_gate`는 모델 원응답 품질 추적용으로 유지한다.
+- `app_default_candidate_gate=true`여도 latency와 반복 안정성 정책이 만족되기 전에는 기본값으로 승격하지 않는다.
 - 교정 후보는 minimal prompt와 Minto형 meeting topic/glossary prompt를 구분해 본다.
 - timeout이 난 모델은 기본값 후보로 올리지 않는다.

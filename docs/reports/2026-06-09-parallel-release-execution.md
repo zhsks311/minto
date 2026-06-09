@@ -141,6 +141,9 @@
   - Because prompt-only tuning hit the 3-attempt limit and `grounded_answer` still missed `parent page` once in repeat-3, `llama3.1:8b` remains the best installed local candidate but is not promoted as a default.
   - Gate breakdown rerun is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-gate-breakdown-repeat3-numctx4096`; it passed 9/9 transport calls with mean latency `15.905s`, but correction clean rate was `0.0` and answer min recall was `0.667`, so `default_candidate_ready=false`.
   - App correction now applies a conservative output postprocessor after provider responses: explicit `출력:`/`교정 결과:` wrappers are stripped, while unmarked multi-line output is preserved.
+  - App postprocess benchmark rerun is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-app-postprocess-repeat3-numctx4096`; it passed 9/9 transport calls with mean latency `28.813s`.
+  - In that rerun, raw `default_candidate_ready=false` because raw correction clean rate and length OK rate were both `0.0`, but `app_default_candidate_ready=true` because app correction term recall, clean rate, length OK rate, summary JSON validity, and answer min recall were all `1.0`.
+  - This passes the app-postprocessed quality gate for installed `llama3.1:8b`, but default promotion remains a latency/stability policy decision because summary and answer mean latency were `35.352s` and `33.908s`.
   - Provider smoke coverage confirms local LLM Ollama payloads for correction, final summary, and search answer use cases.
   - Search answer flow coverage now confirms `MeetingSearchAnswerUseCase` calls `LocalLLMProvider` with an Ollama `answer` payload, preserves citations, and uses `num_predict=1800` with the configured context window.
   - Rendered app UI QA now confirms the meeting search "AI 답변" button calls the Local LLM Ollama `/api/generate` flow and renders the returned answer with citations.
@@ -230,6 +233,7 @@
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context,summary_json,grounded_answer --num-ctx 4096 --repeat 3 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-prompt-preservation-v3-repeat3-numctx4096 --fail-fast`: passed, 9/9 runs, mean latency `4.974s`, correction/summary recall `1.0`, grounded answer term recall range `0.667...1.0`.
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context,summary_json,grounded_answer --num-ctx 4096 --repeat 3 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-gate-breakdown-repeat3-numctx4096 --fail-fast`: passed, 9/9 runs, mean latency `15.905s`, correction clean rate `0.0`, answer min recall `0.667`, `default_candidate_ready=false`.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-correction-output-postprocessor-test --filter CorrectionPromptTests`: passed, 10 tests.
+  - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context,summary_json,grounded_answer --num-ctx 4096 --repeat 3 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-app-postprocess-repeat3-numctx4096 --fail-fast`: passed, 9/9 runs, mean latency `28.813s`, raw `default_candidate_ready=false`, app `app_default_candidate_ready=true`.
   - `CFFIXED_USER_HOME=/tmp/minto2-system-audio-ui-home-1780984552 HOME=/tmp/minto2-system-audio-ui-home-1780984552 .build/debug/minto2`: rendered setup UI opened from `새 회의`, selected `시스템` and observed `시스템 입력 가능` with `녹음 시작` enabled.
   - Same setup UI run selected `마이크+시스템` and observed `마이크+시스템 입력 가능`, explanatory copy `Echo cancellation은 적용하지 않습니다.`, and `녹음 시작` enabled.
   - `/tmp/minto2-system-audio-setup-mixed-ready.png`: window capture shows the rendered `마이크+시스템` ready state.
@@ -251,7 +255,7 @@
   - 실제 마이크와 화상회의 앱 출력을 동시에 넣은 `마이크+시스템` VAD/STT 결과 확인. ViewModel-level mixed source buffer to VAD handoff is covered by `AudioInputModeTests`.
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
-  - 설치된 후보 중 `llama3.1:8b`는 gate breakdown repeat-3에서 9/9 transport는 통과했지만 correction clean rate `0.0`, answer min recall `0.667`로 `default_candidate_ready=false`다. 앱 correction wrapper 후처리는 추가됐으므로, 다음 기본값 판단은 후처리 반영 benchmark 재측정, 추가 모델 설치, 또는 correction 전용 prompt 재설계로 진행한다.
+  - 설치된 후보 중 `llama3.1:8b`는 app-postprocessed quality gate에서 9/9 transport, app correction clean/length/term recall `1.0`, summary JSON valid `1.0`, answer min recall `1.0`으로 `app_default_candidate_ready=true`를 기록했다. 다만 mean latency가 `28.813s`이고 summary/answer case가 각각 평균 `35.352s`/`33.908s`이므로, 기본값 승격 전 latency 정책과 반복 안정성 판단이 남아 있다.
 - Keychain reconnect UX:
   - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 Atlassian 인증 실패 렌더 확인. 서비스의 `needsReconnect` 상태 전환과 export sheet의 Settings handoff 조건은 자동 테스트로 검증됨.
   - invalid Notion token으로 관련 문서 검색 실패 후 실제 OAuth 실패, 재연결, 지우기 버튼 동작 확인. `needsReconnect` 상태의 검색 안내는 자동 검증됨.
