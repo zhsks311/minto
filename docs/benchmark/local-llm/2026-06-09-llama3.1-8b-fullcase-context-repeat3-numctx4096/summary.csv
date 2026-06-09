@@ -1,0 +1,10 @@
+case_id,case_type,repeat_index,status,latency_seconds,term_recall,json_valid,required_field_recall,server_rss_peak_mb,error
+correction_terms_with_context,correction,0,passed,6.627,0.75,,,76.0,
+correction_terms_with_context,correction,1,passed,2.071,0.75,,,76.56,
+correction_terms_with_context,correction,2,passed,2.08,0.75,,,77.92,
+summary_json,summary,0,passed,7.852,1.0,True,1.0,78.83,
+summary_json,summary,1,passed,7.22,1.0,True,1.0,78.72,
+summary_json,summary,2,passed,7.385,1.0,True,1.0,79.81,
+grounded_answer,answer,0,passed,2.384,0.6666666666666666,,,70.89,
+grounded_answer,answer,1,passed,1.038,0.3333333333333333,,,71.58,
+grounded_answer,answer,2,passed,1.931,0.6666666666666666,,,72.84,
