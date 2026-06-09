@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
@@ -13,6 +14,8 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+
+OUTPUT_PREVIEW_CHARS = 800
 
 BENCHMARK_CASES = [
     {
@@ -346,6 +349,7 @@ def parse_json_object(text):
 
 
 def evaluate(case, text):
+    stripped_text = text.strip()
     normalized = text.lower()
     expected_terms = case["expected_terms"]
     found_terms = [
@@ -363,6 +367,13 @@ def evaluate(case, text):
 
     return {
         "output_chars": len(text),
+        "output_preview_chars": OUTPUT_PREVIEW_CHARS,
+        "output_preview": stripped_text[:OUTPUT_PREVIEW_CHARS],
+        "output_preview_truncated": len(stripped_text) > OUTPUT_PREVIEW_CHARS,
+        "output_sha256": (
+            hashlib.sha256(stripped_text.encode("utf-8")).hexdigest()
+            if stripped_text else None
+        ),
         "expected_terms": expected_terms,
         "found_terms": found_terms,
         "missing_terms": [
@@ -477,7 +488,11 @@ def write_summary_csv(path, metrics):
         "repeat_index",
         "status",
         "latency_seconds",
+        "output_chars",
+        "output_sha256",
         "term_recall",
+        "found_terms",
+        "missing_terms",
         "json_valid",
         "required_field_recall",
         "server_rss_peak_mb",
@@ -487,7 +502,14 @@ def write_summary_csv(path, metrics):
         writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for metric in metrics:
-            writer.writerow({field: metric.get(field) for field in fieldnames})
+            row = {field: csv_value(metric.get(field)) for field in fieldnames}
+            writer.writerow(row)
+
+
+def csv_value(value):
+    if isinstance(value, list):
+        return "; ".join(str(item) for item in value)
+    return value
 
 
 def aggregate(metrics):
@@ -537,23 +559,34 @@ def write_summary_md(path, manifest, metrics):
         f"- JSON valid rate: `{summary['json_valid_rate']}`",
         f"- Max server RSS: `{summary['max_server_rss_peak_mb']}` MB",
         "",
-        "| Case | Repeat | Status | Latency | Term Recall | JSON | RSS MB | Error |",
-        "|---|---:|---|---:|---:|---|---:|---|",
+        "| Case | Repeat | Status | Latency | Term Recall | Missing Terms | JSON | RSS MB | Error |",
+        "|---|---:|---|---:|---:|---|---|---:|---|",
     ]
     for metric in metrics:
         lines.append(
-            "| {case} | {repeat} | {status} | {latency} | {term} | {json_valid} | {rss} | {error} |".format(
+            "| {case} | {repeat} | {status} | {latency} | {term} | {missing} | {json_valid} | {rss} | {error} |".format(
                 case=metric["case_id"],
                 repeat=metric["repeat_index"],
                 status=metric["status"],
                 latency=metric["latency_seconds"],
                 term=metric.get("term_recall"),
+                missing=markdown_terms(metric.get("missing_terms")),
                 json_valid=metric.get("json_valid"),
                 rss=metric.get("server_rss_peak_mb"),
-                error=metric.get("error") or "",
+                error=markdown_cell(metric.get("error") or ""),
             )
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def markdown_terms(value):
+    if not value:
+        return ""
+    return markdown_cell(", ".join(str(item) for item in value))
+
+
+def markdown_cell(value):
+    return str(value).replace("|", "\\|").replace("\n", " ")
 
 
 def main():
