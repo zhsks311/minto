@@ -137,6 +137,8 @@
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-build`: passed
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-process-env-test-2 --filter SecretStore`: passed, 7 tests
   - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-process-env-qa swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-process-env-env-test --filter SecretStore`: passed, 7 tests
+  - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-ui-qa ./scripts/dev.sh run`: build/sign/run reached app initialization
+  - Settings UI save/load/delete was not verified in that run: `computer-use` did not target the direct SwiftPM `minto2` process, and shell accessibility inspection failed with System Events error `-1728`.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-context-test --filter LLMProviderTests`: passed, 28 tests
   - `python3 -m py_compile scripts/run_local_llm_benchmarks.py`: passed
   - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model deepseek-r1:8b --cases correction --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-dryrun`: passed, request body preview has `options.num_ctx=4096`
@@ -166,7 +168,7 @@
   - invalid Confluence token으로 검색/내보내기 실패 후 `다시 연결 필요` 표시 확인
   - invalid Notion token으로 관련 문서 검색 실패 후 재연결/지우기 동작 확인
   - Settings 진입만으로 반복 Keychain 원문 읽기 prompt가 늘지 않는지 확인
-  - 개발 실행에서 `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets`로 실제 Settings UI 저장, 앱 재시작 후 load, delete 확인
+  - 개발 실행에서 `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets`로 실제 Settings UI 저장, 앱 재시작 후 load, delete 확인. App launch with the env path has been verified, but the UI save/load/delete flow remains manual.
 
 ## Stop Conditions
 
