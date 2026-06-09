@@ -14,6 +14,7 @@
 - 기본 `KeychainSecretStore` 구현
 - 개발 opt-in `LocalDevSecretStore` 구현
 - `MINTO_DEV_SECRET_STORE=file`이면 file store 사용
+- `MINTO_DEV_SECRET_STORE_ROOT`로 개발 file store root 격리
 - LLM API key, MCP/OAuth token storage, Confluence API token storage가 공통 store를 사용하도록 연결
 
 ## 비범위
@@ -41,13 +42,14 @@
 
 - 기본 모드는 `KeychainSecretStore`를 사용한다.
 - `MINTO_DEV_SECRET_STORE=file` opt-in 모드는 `LocalDevSecretStore`를 사용한다.
-- 개발용 file store는 `~/Library/Application Support/Minto/dev-secrets` 아래에 0700 directory, 0600 file permission으로 secret 파일을 저장한다.
+- 개발용 file store는 기본적으로 `~/Library/Application Support/Minto/dev-secrets` 아래에 0700 directory, 0600 file permission으로 secret 파일을 저장한다.
+- `MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets`처럼 root override를 주면 App Support를 오염시키지 않고 실제 앱 실행 QA를 할 수 있다.
 - LLM API key, OAuth token, Confluence API token storage를 공통 `SecretStore` backend로 연결했다.
 - Settings 안내 문구는 `Keychain` 고정 표현 대신 기본 저장소가 Keychain인 `비밀 저장소` 표현으로 정리했다.
 
 ## 검증 결과
 
-- `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-test --filter SecretStore` 통과: 5 tests
-- `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-related-test --filter 'SecretStore|LLMProviderTests|RelatedInfoTests'` 통과: 70 tests
-- `swift build --disable-sandbox --scratch-path /tmp/minto2-secret-store-build` 통과
+- `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-test --filter SecretStore` 통과: 6 tests
+- `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-related-test --filter 'SecretStore|LLMProviderTests|RelatedInfoTests'` 통과: 71 tests
+- `swift build --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-build` 통과
 - `git diff --check` 통과

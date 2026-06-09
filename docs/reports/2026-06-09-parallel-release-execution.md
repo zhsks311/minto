@@ -107,6 +107,7 @@
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
+  - `MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets` can isolate dev secret files during app QA.
   - Dev secret files are written under the app support dev-secrets directory with restricted directory/file permissions.
   - Settings copy now says secret store instead of hardcoding Keychain-only storage.
 - Validation:
@@ -120,9 +121,9 @@
   - `python3 -m py_compile scripts/run_local_llm_benchmarks.py`: passed
   - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model mock-model --cases correction --output-root /tmp/minto2-local-llm-bench-dryrun`: passed
   - `python3 scripts/run_local_llm_benchmarks.py --mock --model mock-model --repeat 1 --output-root /tmp/minto2-local-llm-bench-mock`: passed, 3 mock cases
-  - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-test --filter SecretStore`: passed, 5 tests
-  - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-related-test --filter 'SecretStore|LLMProviderTests|RelatedInfoTests'`: passed, 70 tests
-  - `swift build --disable-sandbox --scratch-path /tmp/minto2-secret-store-build`: passed
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-test --filter SecretStore`: passed, 6 tests
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-related-test --filter 'SecretStore|LLMProviderTests|RelatedInfoTests'`: passed, 71 tests
+  - `swift build --disable-sandbox --scratch-path /tmp/minto2-secret-store-root-build`: passed
 
 ## Remaining Manual QA
 
@@ -140,7 +141,7 @@
   - invalid Confluence token으로 검색/내보내기 실패 후 `다시 연결 필요` 표시 확인
   - invalid Notion token으로 관련 문서 검색 실패 후 재연결/지우기 동작 확인
   - Settings 진입만으로 반복 Keychain 원문 읽기 prompt가 늘지 않는지 확인
-  - 개발 실행에서 `MINTO_DEV_SECRET_STORE=file`로 LLM API key, OAuth token, Confluence token save/load/delete 확인
+  - 개발 실행에서 `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto-dev-secrets`로 LLM API key, OAuth token, Confluence token save/load/delete 확인
 
 ## Stop Conditions
 

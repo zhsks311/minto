@@ -125,7 +125,7 @@ final class LocalDevSecretStore: SecretStore, @unchecked Sendable {
         return safe.isEmpty ? "secret" : safe
     }
 
-    private static func defaultRootDirectory() -> URL {
+    fileprivate static func defaultRootDirectory() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         return base
@@ -136,13 +136,23 @@ final class LocalDevSecretStore: SecretStore, @unchecked Sendable {
 
 enum SecretStoreFactory {
     static let devStoreModeEnvironmentKey = "MINTO_DEV_SECRET_STORE"
+    static let devStoreRootEnvironmentKey = "MINTO_DEV_SECRET_STORE_ROOT"
 
     static func make(environment: [String: String] = ProcessInfo.processInfo.environment) -> any SecretStore {
         switch environment[devStoreModeEnvironmentKey]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "file", "local-file", "local":
-            return LocalDevSecretStore()
+            return LocalDevSecretStore(rootDirectory: devStoreRootDirectory(environment: environment))
         default:
             return KeychainSecretStore()
         }
+    }
+
+    private static func devStoreRootDirectory(environment: [String: String]) -> URL {
+        guard let rawPath = environment[devStoreRootEnvironmentKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawPath.isEmpty
+        else {
+            return LocalDevSecretStore.defaultRootDirectory()
+        }
+        return URL(fileURLWithPath: (rawPath as NSString).expandingTildeInPath, isDirectory: true)
     }
 }
