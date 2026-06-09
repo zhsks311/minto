@@ -65,7 +65,7 @@ public struct SettingsView: View {
     public var body: some View {
         Form {
             aiProcessingSection
-            if aiProcessingEnabled {
+            if generalAIEnabled {
                 aiConnectionSection
             }
             glossarySection
@@ -96,6 +96,7 @@ public struct SettingsView: View {
         .onAppear {
             summarySettings.migrateIfNeeded(from: llmService.selectedProvider)
             normalizeSpeechEngineSelection()
+            normalizeSearchAnswerProviderIfNeeded()
             rememberCurrentProviderIfNeeded()
             Task { await refreshSpeechEngineAvailability() }
         }
@@ -140,27 +141,7 @@ public struct SettingsView: View {
             }
 
             if showGlossaryAddForm {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("정확한 표기 예: Liquibase", text: $glossaryCanonicalInput)
-                    TextField("잘못 인식되기 쉬운 표현 예: 리퀴베이스, liqui base", text: $glossaryAliasesInput)
-                    TextField("짧은 설명 예: DB 스키마 변경 관리", text: $glossaryDescriptionInput)
-                    TextField("태그 예: db, 마이그레이션", text: $glossaryTagsInput)
-                    Button("저장") {
-                        if glossaryStore.add(
-                            canonical: glossaryCanonicalInput,
-                            aliasesText: glossaryAliasesInput,
-                            description: glossaryDescriptionInput,
-                            tagsText: glossaryTagsInput
-                        ) {
-                            glossaryCanonicalInput = ""
-                            glossaryAliasesInput = ""
-                            glossaryDescriptionInput = ""
-                            glossaryTagsInput = ""
-                            showGlossaryAddForm = false
-                        }
-                    }
-                    .disabled(glossaryCanonicalInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
+                glossaryAddForm
             }
 
             if glossaryStore.entries.isEmpty {
@@ -215,6 +196,118 @@ public struct SettingsView: View {
         .padding(.vertical, 4)
     }
 
+    private var glossaryAddForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            glossaryInputField(
+                title: "정확한 표기",
+                placeholder: "Liquibase",
+                help: "회의록에 남기고 싶은 최종 표기입니다.",
+                text: $glossaryCanonicalInput
+            )
+            glossaryInputField(
+                title: "잘못 인식되기 쉬운 표현",
+                placeholder: "리퀴베이스, liqui base",
+                help: "쉼표로 여러 표현을 입력하세요.",
+                text: $glossaryAliasesInput
+            )
+            glossaryInputField(
+                title: "짧은 설명",
+                placeholder: "DB 스키마 변경 관리",
+                help: "회의 주제와 맞는 용어만 추천할 때 사용합니다.",
+                text: $glossaryDescriptionInput
+            )
+            glossaryInputField(
+                title: "태그",
+                placeholder: "db, 마이그레이션",
+                help: "검색과 추천 힌트입니다. 쉼표로 구분하세요.",
+                text: $glossaryTagsInput
+            )
+
+            HStack(spacing: 8) {
+                Button("저장") {
+                    saveGlossaryEntry()
+                }
+                .disabled(glossaryCanonicalInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button("입력 지우기") {
+                    clearGlossaryInputs()
+                }
+                .disabled(glossaryInputsAreEmpty)
+                .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func glossaryInputField(
+        title: String,
+        placeholder: String,
+        help: String,
+        text: Binding<String>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color(nsColor: .textBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                    )
+
+                if text.wrappedValue.isEmpty {
+                    Text(placeholder)
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .allowsHitTesting(false)
+                }
+
+                TextField("", text: text)
+                    .textFieldStyle(.plain)
+                    .font(.callout)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+            }
+            .frame(maxWidth: .infinity)
+            Text(help)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var glossaryInputsAreEmpty: Bool {
+        [
+            glossaryCanonicalInput,
+            glossaryAliasesInput,
+            glossaryDescriptionInput,
+            glossaryTagsInput
+        ]
+        .allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func saveGlossaryEntry() {
+        if glossaryStore.add(
+            canonical: glossaryCanonicalInput,
+            aliasesText: glossaryAliasesInput,
+            description: glossaryDescriptionInput,
+            tagsText: glossaryTagsInput
+        ) {
+            clearGlossaryInputs()
+            showGlossaryAddForm = false
+        }
+    }
+
+    private func clearGlossaryInputs() {
+        glossaryCanonicalInput = ""
+        glossaryAliasesInput = ""
+        glossaryDescriptionInput = ""
+        glossaryTagsInput = ""
+    }
+
     // MARK: - AI Section Rows
 
     private var aiProcessingSection: some View {
@@ -262,10 +355,12 @@ public struct SettingsView: View {
             .help("검색 결과 상위 근거를 선택한 AI 서비스로 보내 종합 답변을 생성합니다.")
 
             if answerSettings.isEnabled {
-                searchAnswerProviderRow
-                Text("검색 답변은 상위 회의 근거를 선택한 AI 서비스로 전송합니다. 민감한 회의는 API provider 설정을 확인하세요.")
-                    .font(.caption)
-                    .foregroundColor(.orange)
+                searchAnswerDetailRows
+                if !generalAIEnabled, let err = loginError {
+                    Text(err)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
             }
 
             Text(aiProcessingStateMessage)
@@ -286,16 +381,6 @@ public struct SettingsView: View {
                 llmActionRow
                 if deviceCodeInProgress {
                     deviceCodeRow
-                }
-            }
-
-            if answerSettings.isEnabled {
-                if generalAIEnabled, answerSettings.selectedProvider == activeAIProvider {
-                    Text("검색 답변도 위 AI 연결을 사용합니다.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                } else {
-                    searchAnswerConnectionRows
                 }
             }
 
@@ -345,10 +430,6 @@ public struct SettingsView: View {
         )
     }
 
-    private var aiProcessingEnabled: Bool {
-        llmService.selectedProvider != .none || summarySettings.isEnabled || answerSettings.isEnabled
-    }
-
     private var generalAIEnabled: Bool {
         llmService.selectedProvider != .none || summarySettings.isEnabled
     }
@@ -385,6 +466,15 @@ public struct SettingsView: View {
             lastLLMProviderRaw = summarySettings.selectedProvider.rawValue
         } else if answerSettings.selectedProvider != .none {
             lastLLMProviderRaw = answerSettings.selectedProvider.rawValue
+        }
+    }
+
+    private func normalizeSearchAnswerProviderIfNeeded() {
+        guard answerSettings.isEnabled else { return }
+        let provider = answerCapableProvider(from: answerSettings.selectedProvider)
+        if provider != answerSettings.selectedProvider {
+            answerSettings.selectedProvider = provider
+            lastLLMProviderRaw = provider.rawValue
         }
     }
 
@@ -667,6 +757,29 @@ public struct SettingsView: View {
     }
 
     @ViewBuilder
+    private var searchAnswerDetailRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            searchAnswerProviderRow
+            Text("검색 답변은 로컬 LLM 또는 공식 API provider만 지원합니다. Codex, Gemini, Copilot 계정 로그인은 전사 다듬기와 회의록 정리에만 사용합니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("검색 답변은 상위 회의 근거를 선택한 AI 서비스로 전송합니다. 민감한 회의는 선택한 AI 연결을 확인하세요.")
+                .font(.caption)
+                .foregroundColor(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if generalAIEnabled, answerCapableProvider(from: answerSettings.selectedProvider) == activeAIProvider {
+                Text("검색 답변도 아래 AI 연결 설정을 함께 사용합니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                searchAnswerConnectionRows
+            }
+        }
+    }
+
+    @ViewBuilder
     private var currentProviderModelPicker: some View {
         providerModelPicker(activeAIProvider, title: "AI 모델")
     }
@@ -756,7 +869,7 @@ public struct SettingsView: View {
               let providerID = provider.providerID,
               LLMProviderRegistry.shared.descriptor(for: providerID)?.supportedCapabilities.contains(.answer) == true
         else {
-            return .gptAPI
+            return localLLMConfigurationIsValid ? .local : .gptAPI
         }
         return provider
     }

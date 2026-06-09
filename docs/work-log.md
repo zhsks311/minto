@@ -16,6 +16,7 @@
 | 5 | 2026-06-01 | [회의 맥락 기반 후교정](work-log/2026-06-01-05-meeting-context-correction.md) | MeetingContext·CorrectionPrompt 중앙화+보수적 규칙, 회의 시작 시트 |
 | 6 | 2026-06-09 | [LLM/Search/Export 확장 구현 시작](work-log/2026-06-09-06-llm-search-export-expansion-start.md) | provider/search/export/glossary/file/system audio/mixed audio/local LLM/benchmark/keychain reconnect/SecretStore 병렬 통합 |
 | 7 | 2026-06-09 | [Local LLM Ollama 설치 모델 조회](work-log/2026-06-09-07-local-llm-ollama-model-discovery.md) | Ollama `/api/tags` 설치 모델 picker, 모델 확인 상태, 실패 fallback 테스트 |
+| 8 | 2026-06-10 | [Settings AI/Glossary UX 정리](work-log/2026-06-10-08-settings-ai-glossary-ux.md) | 검색 답변 연결 위치 정리, 로컬/API 안내, 용어집 입력 폼 개선 |
 
 ## 남은 과제
 
