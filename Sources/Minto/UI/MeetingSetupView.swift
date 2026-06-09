@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// "녹음 시작" 시 뜨는 회의 시작 시트.
@@ -11,6 +12,7 @@ public struct MeetingSetupView: View {
     @State private var showGlossary = false
     @State private var showDocument = false
     @State private var audioInputMode: AudioInputMode = .microphone
+    @State private var audioReadiness: AudioInputReadiness = .ready(for: .microphone)
     @State private var selectedGlossaryEntryIDs: Set<UUID> = []
     @State private var confluenceDocuments: [ConfluenceService.ContextDocument] = []
     @State private var confluenceStatus: String?
@@ -18,13 +20,16 @@ public struct MeetingSetupView: View {
 
     private let onStart: (String, String, String, AudioInputMode) -> Void
     private let onCancel: () -> Void
+    private let audioReadinessChecker: AudioInputReadinessChecker
 
     public init(
         onStart: @escaping (String, String, String, AudioInputMode) -> Void,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping () -> Void,
+        audioReadinessChecker: AudioInputReadinessChecker = .live
     ) {
         self.onStart = onStart
         self.onCancel = onCancel
+        self.audioReadinessChecker = audioReadinessChecker
     }
 
     public var body: some View {
@@ -60,10 +65,17 @@ public struct MeetingSetupView: View {
                 Button("녹음 시작") { onStart(topic, combinedGlossary, combinedDocument, audioInputMode) }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
+                    .disabled(!audioReadiness.canStartRecording)
             }
         }
         .padding(20)
         .frame(width: 440)
+        .task(id: audioInputMode) {
+            await refreshAudioReadiness(for: audioInputMode)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await refreshAudioReadiness(for: audioInputMode) }
+        }
     }
 
     private var audioInputPicker: some View {
@@ -85,6 +97,73 @@ public struct MeetingSetupView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
+
+            audioReadinessRow
+        }
+    }
+
+    private var audioReadinessRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            readinessIcon
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(audioReadiness.title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(audioReadinessColor)
+                Text(audioReadiness.detail)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle = audioReadiness.actionTitle {
+                    Button(actionTitle) {
+                        Task { await requestAudioPermissionAndRefresh() }
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.link)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(audioReadinessColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    @ViewBuilder
+    private var readinessIcon: some View {
+        if audioReadiness.state == .checking {
+            ProgressView()
+                .controlSize(.mini)
+        } else {
+            Image(systemName: readinessIconName)
+                .font(.caption)
+                .foregroundColor(audioReadinessColor)
+        }
+    }
+
+    private var readinessIconName: String {
+        switch audioReadiness.state {
+        case .checking:
+            return "hourglass"
+        case .ready:
+            return "checkmark.circle.fill"
+        case .permissionRequired:
+            return "exclamationmark.triangle.fill"
+        case .unavailable:
+            return "xmark.circle.fill"
+        }
+    }
+
+    private var audioReadinessColor: Color {
+        switch audioReadiness.state {
+        case .checking:
+            return .secondary
+        case .ready:
+            return .green
+        case .permissionRequired:
+            return .orange
+        case .unavailable:
+            return .red
         }
     }
 
@@ -369,5 +448,37 @@ public struct MeetingSetupView: View {
         confluenceStatus = documents.isEmpty
             ? "관련 Confluence 문서를 찾지 못했습니다."
             : "Confluence 문서 \(documents.count)개를 참고자료로 사용합니다."
+    }
+
+    @MainActor
+    private func refreshAudioReadiness(for mode: AudioInputMode) async {
+        audioReadiness = .checking(for: mode)
+        let readiness = await audioReadinessChecker.readiness(for: mode)
+        guard audioInputMode == mode else { return }
+        audioReadiness = readiness
+    }
+
+    @MainActor
+    private func requestAudioPermissionAndRefresh() async {
+        let mode = audioInputMode
+        audioReadiness = .checking(for: mode)
+        let readiness = await audioReadinessChecker.requestPermission(for: mode)
+        guard audioInputMode == mode else { return }
+        audioReadiness = readiness
+        if readiness.state == .permissionRequired {
+            openScreenCaptureSettings()
+        }
+    }
+
+    private func openScreenCaptureSettings() {
+        let settingsURLs = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture",
+        ]
+
+        for urlString in settingsURLs {
+            guard let url = URL(string: urlString), NSWorkspace.shared.open(url) else { continue }
+            return
+        }
     }
 }
