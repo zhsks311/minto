@@ -1,0 +1,77 @@
+# 2026-06-09 Parallel Release Execution
+
+## Release Baseline
+
+- Release branch: `release/llm-search-export-2026-06-09`
+- Baseline commit: `4bcff6d feat: add system audio input foundation`
+- Source branch: `feature/llm-correction-search-export`
+- Excluded from baseline: untracked local report `docs/reports/2026-06-09-task-summary-current-implementation-status.html`
+
+## Lane Split
+
+### Lane 1: System Audio Readiness
+
+- Branch: `feature/system-audio-readiness`
+- Worktree: `/Users/d66hjkxwt9/Idea/private/minto2-system-audio-readiness`
+- Scope:
+  - 녹음 전 system audio availability/readiness 표시
+  - 권한 필요 상태와 설정 안내
+  - audio input mode 관련 테스트
+- Do not touch:
+  - LLM provider
+  - Keychain/Confluence
+  - `SettingsView`
+  - `MeetingLibraryView`
+
+### Lane 2: Local Text LLM Adapter
+
+- Branch: `feature/local-llm-adapter`
+- Worktree: `/Users/d66hjkxwt9/Idea/private/minto2-local-llm-adapter`
+- Scope:
+  - 외부 로컬 런타임용 text generation adapter
+  - provider registry capability 전환
+  - provider 테스트
+- Do not touch:
+  - Settings UI
+  - Meeting library UI
+  - audio input
+  - Keychain/Confluence
+
+### Lane 3: Keychain Reconnect UX
+
+- Branch: `feature/keychain-reconnect-ux`
+- Worktree: `/Users/d66hjkxwt9/Idea/private/minto2-keychain-reconnect-ux`
+- Scope:
+  - stored credential existence와 actual credential validity 분리
+  - invalid/corrupt token 사용 실패 후 다시 연결 필요 상태 표시
+  - 관련 Keychain/Confluence/Notion/Settings 상태 테스트
+- Do not touch:
+  - LLM provider
+  - audio input
+  - Meeting search/export UI
+
+## Merge Order
+
+1. `feature/system-audio-readiness`
+   - UI 충돌 범위가 `MeetingSetupView` 중심이라 먼저 통합한다.
+2. `feature/keychain-reconnect-ux`
+   - `SettingsView`를 만질 수 있으므로 audio lane 다음에 통합한다.
+3. `feature/local-llm-adapter`
+   - UI를 건드리지 않는 provider lane으로 제한했기 때문에 마지막 통합 시 conflict risk가 낮다.
+4. Integration validation
+   - `git diff --check`
+   - `swift build --disable-sandbox --scratch-path /tmp/minto2-integration-build`
+   - `swift test --disable-sandbox --scratch-path /tmp/minto2-integration-test`
+
+## Baseline Validation
+
+- `git diff --check`: passed
+- `swift build --disable-sandbox --scratch-path /tmp/minto2-release-baseline-build`: passed
+- `swift test --disable-sandbox --scratch-path /tmp/minto2-release-baseline-test --filter 'LLMProviderTests|MeetingSearchAnswerService|AudioInputMode|RelatedInfoTests|MeetingFileImportUseCaseTests'`: passed, 81 tests
+
+## Stop Conditions
+
+- Stop integration if any lane edits an explicitly excluded file set.
+- Stop integration if any lane branch has uncommitted changes after its final report.
+- Stop integration if build/test failure reproduces twice with the same code failure.
+- Do not move the release branch after lane work starts.
