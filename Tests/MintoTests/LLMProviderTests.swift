@@ -98,7 +98,8 @@ struct LLMProviderTests {
             "MINTO_LOCAL_LLM_BASE_URL": "http://127.0.0.1:11434",
             "MINTO_LOCAL_LLM_MODEL": "env-model",
             "MINTO_LOCAL_LLM_COMPATIBILITY": "ollamaGenerate",
-            "MINTO_LOCAL_LLM_TIMEOUT_SECONDS": "90"
+            "MINTO_LOCAL_LLM_TIMEOUT_SECONDS": "90",
+            "MINTO_LOCAL_LLM_CONTEXT_WINDOW": "8192"
         ]
 
         var configuration = LocalLLMProviderConfiguration.stored(defaults: defaults, environment: environment)
@@ -106,18 +107,30 @@ struct LLMProviderTests {
         #expect(configuration.modelID == "env-model")
         #expect(configuration.compatibility == .ollamaGenerate)
         #expect(configuration.timeoutSeconds == 90)
+        #expect(configuration.contextWindow == 8_192)
 
         defaults.set("http://127.0.0.1:8080", forKey: LocalLLMProviderConfiguration.baseURLKey)
         defaults.set("qwen2.5:7b", forKey: LocalLLMProviderConfiguration.modelIDKey)
         defaults.set(LocalLLMEndpointCompatibility.openAIChatCompletions.rawValue, forKey: LocalLLMProviderConfiguration.compatibilityKey)
         defaults.set(30.0, forKey: LocalLLMProviderConfiguration.timeoutSecondsKey)
+        defaults.set(2_048, forKey: LocalLLMProviderConfiguration.contextWindowKey)
 
         configuration = LocalLLMProviderConfiguration.stored(defaults: defaults, environment: environment)
         #expect(configuration.baseURL.absoluteString == "http://127.0.0.1:8080")
         #expect(configuration.modelID == "qwen2.5:7b")
         #expect(configuration.compatibility == .openAIChatCompletions)
         #expect(configuration.timeoutSeconds == 30)
+        #expect(configuration.contextWindow == 2_048)
         #expect(configuration.isConfigured)
+    }
+
+    @Test("로컬 LLM context window는 안전 범위로 제한된다")
+    func localLLMConfigurationClampsContextWindow() {
+        let tooSmall = LocalLLMProviderConfiguration(modelID: "local", contextWindow: 64)
+        let tooLarge = LocalLLMProviderConfiguration(modelID: "local", contextWindow: 131_072)
+
+        #expect(tooSmall.contextWindow == LocalLLMProviderConfiguration.minimumContextWindow)
+        #expect(tooLarge.contextWindow == LocalLLMProviderConfiguration.maximumContextWindow)
     }
 
     @MainActor
@@ -277,7 +290,8 @@ struct LLMProviderTests {
             configuration: LocalLLMProviderConfiguration(
                 baseURL: URL(string: "http://127.0.0.1:11434")!,
                 modelID: "llama3.1:8b",
-                compatibility: .ollamaGenerate
+                compatibility: .ollamaGenerate,
+                contextWindow: 2_048
             ),
             transport: transport
         )
@@ -304,6 +318,7 @@ struct LLMProviderTests {
         #expect(body["stream"] as? Bool == false)
         let options = try #require(body["options"] as? [String: Any])
         #expect(options["num_predict"] as? Int == 3_000)
+        #expect(options["num_ctx"] as? Int == 2_048)
     }
 
     @Test("로컬 LLM provider는 OpenAI 호환 chat completions endpoint를 지원한다")
@@ -334,6 +349,7 @@ struct LLMProviderTests {
         let body = try Self.jsonObject(from: try #require(request.httpBody))
         #expect(body["model"] as? String == "manual-model")
         #expect(body["max_tokens"] as? Int == 1_800)
+        #expect(body["options"] == nil)
         let messages = try #require(body["messages"] as? [[String: String]])
         #expect(messages.first?["role"] == "system")
         #expect(messages.first?["content"] == "근거로만 답하세요.")

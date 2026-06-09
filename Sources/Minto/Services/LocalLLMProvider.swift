@@ -21,24 +21,31 @@ public struct LocalLLMProviderConfiguration: Equatable, Sendable {
     public static let modelIDKey = "localLLMModelID"
     public static let compatibilityKey = "localLLMCompatibility"
     public static let timeoutSecondsKey = "localLLMTimeoutSeconds"
+    public static let contextWindowKey = "localLLMContextWindow"
     public static let defaultBaseURL = URL(string: "http://127.0.0.1:11434")!
     public static let defaultTimeoutSeconds: TimeInterval = 120
+    public static let defaultContextWindow = 4_096
+    public static let minimumContextWindow = 512
+    public static let maximumContextWindow = 32_768
 
     public let baseURL: URL
     public let modelID: String
     public let compatibility: LocalLLMEndpointCompatibility
     public let timeoutSeconds: TimeInterval
+    public let contextWindow: Int
 
     public init(
         baseURL: URL = Self.defaultBaseURL,
         modelID: String = "",
         compatibility: LocalLLMEndpointCompatibility = .ollamaGenerate,
-        timeoutSeconds: TimeInterval = Self.defaultTimeoutSeconds
+        timeoutSeconds: TimeInterval = Self.defaultTimeoutSeconds,
+        contextWindow: Int = Self.defaultContextWindow
     ) {
         self.baseURL = baseURL
         self.modelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         self.compatibility = compatibility
         self.timeoutSeconds = max(5, timeoutSeconds)
+        self.contextWindow = Self.clampedContextWindow(contextWindow)
     }
 
     public var isConfigured: Bool {
@@ -51,12 +58,16 @@ public struct LocalLLMProviderConfiguration: Equatable, Sendable {
         let timeoutSeconds = environment["MINTO_LOCAL_LLM_TIMEOUT_SECONDS"]
             .flatMap(TimeInterval.init)
             ?? defaultTimeoutSeconds
+        let contextWindow = environment["MINTO_LOCAL_LLM_CONTEXT_WINDOW"]
+            .flatMap(Int.init)
+            ?? defaultContextWindow
         let compatibility = Self.compatibility(from: environment["MINTO_LOCAL_LLM_COMPATIBILITY"])
         return Self(
             baseURL: baseURL,
             modelID: modelID,
             compatibility: compatibility,
-            timeoutSeconds: timeoutSeconds
+            timeoutSeconds: timeoutSeconds,
+            contextWindow: contextWindow
         )
     }
 
@@ -70,12 +81,14 @@ public struct LocalLLMProviderConfiguration: Equatable, Sendable {
         let savedCompatibility = defaults.string(forKey: compatibilityKey)
         let savedCompatibilityValue = savedCompatibility.map(compatibility(from:))
         let savedTimeout = defaults.object(forKey: timeoutSecondsKey) as? TimeInterval
+        let savedContextWindow = defaults.object(forKey: contextWindowKey) as? Int
 
         return Self(
             baseURL: savedBaseURL ?? environmentConfiguration.baseURL,
             modelID: savedModelID ?? environmentConfiguration.modelID,
             compatibility: savedCompatibilityValue ?? environmentConfiguration.compatibility,
-            timeoutSeconds: savedTimeout ?? environmentConfiguration.timeoutSeconds
+            timeoutSeconds: savedTimeout ?? environmentConfiguration.timeoutSeconds,
+            contextWindow: savedContextWindow ?? environmentConfiguration.contextWindow
         )
     }
 
@@ -109,6 +122,10 @@ public struct LocalLLMProviderConfiguration: Equatable, Sendable {
             return nil
         }
         return url
+    }
+
+    private static func clampedContextWindow(_ value: Int) -> Int {
+        min(max(value, minimumContextWindow), maximumContextWindow)
     }
 }
 
@@ -215,7 +232,8 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
                 "stream": false,
                 "options": [
                     "temperature": 0.1,
-                    "num_predict": maxOutputTokens(for: request.useCase)
+                    "num_predict": maxOutputTokens(for: request.useCase),
+                    "num_ctx": configuration.contextWindow
                 ]
             ]
         case .openAIChatCompletions:

@@ -95,6 +95,12 @@ def parse_args():
         type=float,
         default=float(os.environ.get("MINTO_LOCAL_LLM_TIMEOUT_SECONDS", "120")),
     )
+    parser.add_argument(
+        "--num-ctx",
+        type=int,
+        default=int(os.environ.get("MINTO_LOCAL_LLM_CONTEXT_WINDOW", "4096")),
+        help="Ollama context window tokens. Applies only to --compatibility ollama.",
+    )
     parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument("--server-pid", type=int, default=None)
     parser.add_argument("--rss-sample-interval", type=float, default=0.2)
@@ -143,7 +149,7 @@ def endpoint_url(base_url, compatibility):
     return f"{base}/api/generate"
 
 
-def request_body(case, model, compatibility):
+def request_body(case, model, compatibility, num_ctx):
     if compatibility == "openai":
         return {
             "model": model,
@@ -163,8 +169,13 @@ def request_body(case, model, compatibility):
         "options": {
             "temperature": 0.1,
             "num_predict": max_output_tokens(case["type"]),
+            "num_ctx": clamped_num_ctx(num_ctx),
         },
     }
+
+
+def clamped_num_ctx(value):
+    return min(max(value, 512), 32768)
 
 
 def max_output_tokens(case_type):
@@ -176,7 +187,7 @@ def max_output_tokens(case_type):
 
 
 def call_endpoint(args, case):
-    body = request_body(case, args.model, args.compatibility)
+    body = request_body(case, args.model, args.compatibility, args.num_ctx)
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         endpoint_url(args.base_url, args.compatibility),
@@ -349,6 +360,7 @@ def run_case(args, case, repeat_index):
         "model": args.model,
         "compatibility": args.compatibility,
         "base_url": redact_base_url(args.base_url),
+        "num_ctx": clamped_num_ctx(args.num_ctx) if args.compatibility == "ollama" else None,
         "latency_seconds": round(elapsed, 3),
         "server_pid": args.server_pid,
         "server_rss_peak_mb": max(rss_samples) if rss_samples else None,
@@ -429,6 +441,7 @@ def aggregate(metrics):
 
 def write_summary_md(path, manifest, metrics):
     summary = aggregate(metrics)
+    context_window = manifest["num_ctx"] if manifest["num_ctx"] is not None else "n/a"
     lines = [
         "# Local LLM benchmark summary",
         "",
@@ -436,6 +449,7 @@ def write_summary_md(path, manifest, metrics):
         f"- Model: `{manifest['model']}`",
         f"- Compatibility: `{manifest['compatibility']}`",
         f"- Base URL: `{manifest['base_url']}`",
+        f"- Context window: `{context_window}`",
         f"- Runs: `{summary['passed_runs']}/{summary['total_runs']}` passed",
         f"- Mean latency: `{summary['mean_latency_seconds']}` seconds",
         f"- Mean term recall: `{summary['mean_term_recall']}`",
@@ -482,12 +496,22 @@ def main():
         "case_ids": [case["id"] for case in cases],
         "repeat": args.repeat,
         "timeout": args.timeout,
+        "num_ctx": clamped_num_ctx(args.num_ctx) if args.compatibility == "ollama" else None,
         "server_pid": args.server_pid,
         "mock": args.mock,
         "dry_run": args.dry_run,
         "output_root": str(output_root),
     }
     write_json(output_root / "run_manifest.json", manifest)
+    if args.dry_run:
+        request_bodies = [
+            {
+                "case_id": case["id"],
+                "body": request_body(case, args.model, args.compatibility, args.num_ctx),
+            }
+            for case in cases
+        ]
+        write_json(output_root / "request_bodies.json", request_bodies)
 
     metrics = []
     should_stop = False
