@@ -100,6 +100,10 @@
   - The mixer combines aligned buffered samples at 0.5 gain with clipping; echo cancellation and long-run drift correction remain measurement items.
   - Single-source backlog is capped with passthrough fallback to avoid unbounded live input latency and memory growth.
   - Mixed readiness uses the same screen/system audio permission and availability gate as system audio.
+- Local LLM benchmark runner:
+  - `scripts/run_local_llm_benchmarks.py` measures correction, summary JSON, and grounded answer cases.
+  - The runner supports Ollama and OpenAI-compatible endpoints, dry-run, mock validation, repeat runs, and optional server RSS sampling.
+  - Benchmark instructions are documented under `docs/benchmark/local-llm-benchmark-runner.md`.
 - Validation:
   - `git diff --check`: passed
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter LLMProviderTests`: passed, 27 tests
@@ -108,6 +112,9 @@
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-test --filter AudioInputMode`: passed, 13 tests
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-test --filter 'AudioInputMode|TranscriptionViewModelStopTests'`: passed, 21 tests
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-build`: passed
+  - `python3 -m py_compile scripts/run_local_llm_benchmarks.py`: passed
+  - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model mock-model --cases correction --output-root /tmp/minto2-local-llm-bench-dryrun`: passed
+  - `python3 scripts/run_local_llm_benchmarks.py --mock --model mock-model --repeat 1 --output-root /tmp/minto2-local-llm-bench-mock`: passed, 3 mock cases
 
 ## Remaining Manual QA
 
@@ -120,7 +127,7 @@
 - Local LLM:
   - Settings에서 local provider 선택, endpoint/model 저장, 상태 문구 확인
   - Ollama 또는 OpenAI-compatible local endpoint로 correction, summary, answer 호출 확인
-  - 한국어 회의 교정 품질, 요약 구조화 성공률, 검색 답변 근거 충실도, latency, RAM benchmark 기록
+  - 실제 후보 모델별 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
   - invalid Confluence token으로 검색/내보내기 실패 후 `다시 연결 필요` 표시 확인
   - invalid Notion token으로 관련 문서 검색 실패 후 재연결/지우기 동작 확인
