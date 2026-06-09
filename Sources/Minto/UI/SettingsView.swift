@@ -885,7 +885,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var currentProviderModelPicker: some View {
-        providerModelPicker(activeAIProvider, title: "AI 모델")
+        providerModelPicker(activeAIProvider, title: "사용할 모델")
     }
 
     @ViewBuilder
@@ -905,17 +905,23 @@ public struct SettingsView: View {
             Picker(title, selection: $codexModel) {
                 ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
-            Text("GPT 계정의 ‘자동’은 계정 플랜에 맞춰 안전한 모델을 선택합니다.")
+            Text("보통은 자동을 그대로 두면 됩니다. 계정 플랜과 앱 상태에 맞는 모델을 사용합니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .gemini:
             Picker(title, selection: $geminiModel) {
                 ForEach(GeminiOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
+            Text("보통은 기본 모델을 그대로 두면 됩니다. 더 높은 품질이 필요할 때만 Pro 계열을 선택하세요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         case .copilot:
             Picker(title, selection: $copilotModel) {
                 ForEach(CopilotOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
+            Text("Copilot 계정에서 사용할 대화 모델입니다. 특별한 이유가 없으면 기본값을 유지하세요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         case .none:
             EmptyView()
         }
@@ -1005,9 +1011,7 @@ public struct SettingsView: View {
 
     private func localLLMSettingsRows(title: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField(title, text: $localLLMModelID)
-                .textFieldStyle(.roundedBorder)
-            localLLMInstalledModelsRows
+            localLLMModelSelectionRows(title: title)
 
             Picker("문맥 창", selection: localLLMContextPresetBinding) {
                 ForEach(LocalLLMContextWindowPreset.allCases) { preset in
@@ -1020,43 +1024,10 @@ public struct SettingsView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            DisclosureGroup(isExpanded: $showLocalLLMAdvancedSettings) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Picker("로컬 런타임", selection: $localLLMCompatibilityRaw) {
-                        ForEach(LocalLLMEndpointCompatibility.allCases) { compatibility in
-                            Text(compatibility.displayName).tag(compatibility.rawValue)
-                        }
-                    }
-                    TextField("Endpoint URL", text: $localLLMBaseURL)
-                        .textFieldStyle(.roundedBorder)
-                    HStack(spacing: 8) {
-                        Button("Endpoint 확인") {
-                            Task { await detectLocalLLMCompatibility() }
-                        }
-                        .font(.caption)
-                        .disabled(localLLMBaseURLValue == nil || isDetectingLocalLLMCompatibility)
-                        if isDetectingLocalLLMCompatibility {
-                            ProgressView()
-                                .scaleEffect(0.65)
-                        }
-                    }
-                    Stepper(value: $localLLMTimeoutSeconds, in: 5...600, step: 5) {
-                        Text("응답 대기 \(Int(localLLMTimeoutSeconds))초")
-                            .font(.caption)
-                    }
-                    if localLLMCompatibilityValue != .ollamaGenerate {
-                        Text(localLLMStatusMessage)
-                            .font(.caption)
-                            .foregroundColor(localLLMConfigurationIsValid ? .secondary : .orange)
-                    }
-                    Text("OpenAI 호환 서버는 LM Studio, llama.cpp server, vLLM처럼 /v1/chat/completions 형식을 제공하는 로컬 또는 사설 서버입니다.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            } label: {
-                Text("고급 설정")
-                    .font(.caption)
+            localLLMAdvancedSettingsToggle
+
+            if showLocalLLMAdvancedSettings {
+                localLLMAdvancedSettingsRows
             }
 
             Text("API 키는 필요하지 않습니다. 다만 endpoint가 외부 주소이면 회의 원문이 그 서버로 전송됩니다.")
@@ -1069,40 +1040,116 @@ public struct SettingsView: View {
     }
 
     @ViewBuilder
-    private var localLLMInstalledModelsRows: some View {
-        if localLLMCompatibilityValue == .ollamaGenerate {
-            VStack(alignment: .leading, spacing: 6) {
-                if let catalog = localLLMModelCatalog,
-                   catalog.source == .live,
-                   !catalog.models.isEmpty {
-                    Picker("설치된 모델", selection: $localLLMModelID) {
-                        ForEach(catalog.models, id: \.id) { model in
-                            Text(model.displayName).tag(model.id)
-                        }
-                    }
-                }
-
-                HStack(spacing: 8) {
-                    Text(localLLMModelCatalogStatusText)
-                        .font(.caption)
-                        .foregroundColor(localLLMRuntimeIsConfirmed ? .secondary : .orange)
-                    if isLoadingLocalLLMModels {
-                        ProgressView()
-                            .scaleEffect(0.65)
-                    }
-                    Button(localLLMModelCatalog?.source == .live ? "새로고침" : "설치 모델 조회") {
-                        Task { await refreshLocalLLMModelCatalog(force: true) }
-                    }
-                    .font(.caption)
-                    .disabled(localLLMBaseURLValue == nil || isLoadingLocalLLMModels)
-                }
-
-                if let warning = localLLMModelCatalogWarningText {
-                    Text(warning)
-                        .font(.caption)
-                        .foregroundColor(.orange)
+    private func localLLMModelSelectionRows(title: String) -> some View {
+        if localLLMCompatibilityValue == .ollamaGenerate,
+           let catalog = localLLMModelCatalog,
+           catalog.source == .live,
+           !catalog.models.isEmpty {
+            Picker(title, selection: $localLLMModelID) {
+                ForEach(catalog.models, id: \.id) { model in
+                    Text(model.displayName).tag(model.id)
                 }
             }
+            Text("Ollama에서 설치된 모델을 확인했습니다. 모델명은 직접 입력하지 않아도 됩니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            localLLMModelCatalogActionRows
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("모델 ID", text: $localLLMModelID)
+                    .textFieldStyle(.roundedBorder)
+                Text(localLLMManualModelHelpText)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if localLLMCompatibilityValue == .ollamaGenerate {
+                    localLLMModelCatalogActionRows
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var localLLMModelCatalogActionRows: some View {
+        if localLLMCompatibilityValue == .ollamaGenerate {
+            HStack(spacing: 8) {
+                Text(localLLMModelCatalogStatusText)
+                    .font(.caption)
+                    .foregroundColor(localLLMRuntimeIsConfirmed ? .secondary : .orange)
+                if isLoadingLocalLLMModels {
+                    ProgressView()
+                        .scaleEffect(0.65)
+                }
+                Button(localLLMModelCatalog?.source == .live ? "새로고침" : "설치 모델 조회") {
+                    Task { await refreshLocalLLMModelCatalog(force: true) }
+                }
+                .font(.caption)
+                .disabled(localLLMBaseURLValue == nil || isLoadingLocalLLMModels)
+            }
+
+            if let warning = localLLMModelCatalogWarningText {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+
+    private var localLLMAdvancedSettingsToggle: some View {
+        Button {
+            showLocalLLMAdvancedSettings.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: showLocalLLMAdvancedSettings ? "chevron.down" : "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary)
+                Text("고급 설정")
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Text("endpoint, 런타임")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .contentShape(Rectangle())
+            .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+        .help("Endpoint URL과 로컬 런타임 형식을 설정합니다.")
+    }
+
+    private var localLLMAdvancedSettingsRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("로컬 런타임", selection: $localLLMCompatibilityRaw) {
+                ForEach(LocalLLMEndpointCompatibility.allCases) { compatibility in
+                    Text(compatibility.displayName).tag(compatibility.rawValue)
+                }
+            }
+            TextField("Endpoint URL", text: $localLLMBaseURL)
+                .textFieldStyle(.roundedBorder)
+            HStack(spacing: 8) {
+                Button("Endpoint 확인") {
+                    Task { await detectLocalLLMCompatibility() }
+                }
+                .font(.caption)
+                .disabled(localLLMBaseURLValue == nil || isDetectingLocalLLMCompatibility)
+                if isDetectingLocalLLMCompatibility {
+                    ProgressView()
+                        .scaleEffect(0.65)
+                }
+            }
+            Stepper(value: $localLLMTimeoutSeconds, in: 5...600, step: 5) {
+                Text("응답 대기 \(Int(localLLMTimeoutSeconds))초")
+                    .font(.caption)
+            }
+            if localLLMCompatibilityValue != .ollamaGenerate {
+                Text(localLLMStatusMessage)
+                    .font(.caption)
+                    .foregroundColor(localLLMConfigurationIsValid ? .secondary : .orange)
+            }
+            Text("OpenAI 호환 서버는 LM Studio, llama.cpp server, vLLM처럼 /v1/chat/completions 형식을 제공하는 로컬 또는 사설 서버입니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -1129,13 +1176,37 @@ public struct SettingsView: View {
         let catalog = apiModelCatalogs[providerID]
             ?? LLMAPIKeyTextProvider.bundledModelCatalog(for: providerID)
         return VStack(alignment: .leading, spacing: 6) {
-            Picker(title, selection: selection) {
-                ForEach(catalog.models, id: \.id) { model in
-                    Text(model.displayName).tag(model.id)
+            if catalog.models.isEmpty {
+                TextField("모델 ID", text: selection)
+                    .textFieldStyle(.roundedBorder)
+                Text(apiManualModelHelpText(providerID))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Picker(title, selection: selection) {
+                    ForEach(catalog.models, id: \.id) { model in
+                        Text(model.displayName).tag(model.id)
+                    }
+                }
+                Text(apiModelSelectionHelpText(catalog, providerID: providerID))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 6) {
+                        TextField("모델 ID", text: selection)
+                            .textFieldStyle(.roundedBorder)
+                        Text(apiManualModelHelpText(providerID))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } label: {
+                    Text("목록에 없는 모델 ID 직접 입력")
+                        .font(.caption)
                 }
             }
-            TextField("모델 ID 직접 입력", text: selection)
-                .textFieldStyle(.roundedBorder)
             HStack(spacing: 6) {
                 Text(modelCatalogStatusText(catalog, providerID: providerID))
                     .font(.caption)
@@ -1169,14 +1240,40 @@ public struct SettingsView: View {
     private func modelCatalogStatusText(_ catalog: LLMModelCatalog, providerID: LLMProviderID) -> String {
         switch catalog.source {
         case .live:
-            return "API 키로 확인한 모델 목록입니다. 원하는 모델 ID도 직접 입력할 수 있습니다."
+            return "API 키로 확인한 모델 목록입니다."
         case .bundledFallback:
             if LLMAPIKeyStore.shared.hasAPIKey(for: providerID) {
-                return "기본 추천 모델입니다. 모델 확인 링크에서 최신 ID를 확인해 직접 입력할 수 있습니다."
+                return "모델 목록을 확인하지 못해 기본 추천 모델을 표시합니다."
             }
             return "API 키를 저장하면 모델 목록을 확인합니다. 지금은 기본 추천 모델을 표시합니다."
         case .manualOnly:
             return "모델 ID를 직접 입력하세요."
+        }
+    }
+
+    private func apiModelSelectionHelpText(_ catalog: LLMModelCatalog, providerID: LLMProviderID) -> String {
+        switch catalog.source {
+        case .live:
+            return "목록에서 사용할 모델을 선택하면 됩니다. 특별한 이유가 없으면 추천 모델을 유지하세요."
+        case .bundledFallback:
+            return "\(providerID.displayName)의 기본 추천 모델입니다. API 키를 저장하거나 새로고침하면 실제 사용 가능 모델을 확인합니다."
+        case .manualOnly:
+            return apiManualModelHelpText(providerID)
+        }
+    }
+
+    private func apiManualModelHelpText(_ providerID: LLMProviderID) -> String {
+        switch providerID {
+        case .gpt:
+            return "OpenAI Platform의 모델 ID를 입력하세요. 예: gpt-5.2"
+        case .gemini:
+            return "Gemini API 문서의 모델 ID를 입력하세요. 예: gemini-2.5-flash"
+        case .claude:
+            return "Anthropic API의 모델 ID를 입력하세요. 예: claude-sonnet-4-20250514"
+        case .openRouter:
+            return "OpenRouter 모델 ID를 입력하세요. 예: openai/gpt-5.2"
+        case .local, .copilot, .chatGPTAccount, .geminiAccount:
+            return "선택한 서비스에서 요구하는 모델 ID를 입력하세요."
         }
     }
 
@@ -1470,6 +1567,15 @@ public struct SettingsView: View {
             return localLLMModelCatalogStatusText
         }
         return "OpenAI 호환 런타임은 표준 모델 목록 조회가 없어 입력한 모델 ID를 그대로 사용합니다."
+    }
+
+    private var localLLMManualModelHelpText: String {
+        switch localLLMCompatibilityValue {
+        case .ollamaGenerate:
+            return "설치 모델을 조회할 수 없을 때만 직접 입력하세요. Ollama에서는 `ollama list`의 NAME 값을 사용합니다. 예: llama3.1:8b"
+        case .openAIChatCompletions:
+            return "LM Studio, llama.cpp server, vLLM 같은 서버가 요구하는 모델 ID를 입력하세요. 서버의 모델 목록이나 실행 로그에 표시된 이름을 그대로 쓰면 됩니다."
+        }
     }
 
     private var localLLMModelCatalogStatusText: String {
