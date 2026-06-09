@@ -104,6 +104,7 @@
   - `scripts/run_local_llm_benchmarks.py` measures correction, summary JSON, and grounded answer cases.
   - The runner supports Ollama and OpenAI-compatible endpoints, dry-run, mock validation, repeat runs, and optional server RSS sampling.
   - Benchmark instructions are documented under `docs/benchmark/local-llm-benchmark-runner.md`.
+  - Real Ollama run for `deepseek-r1:8b` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b`; first correction case timed out after 120s and a direct 16-token request timed out after 60s, so this model is not promoted as a default candidate.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -136,7 +137,7 @@
 - Local LLM:
   - Settings에서 local provider 선택, endpoint/model 저장, 상태 문구 확인
   - Ollama 또는 OpenAI-compatible local endpoint로 correction, summary, answer 호출 확인
-  - 실제 후보 모델별 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
+  - `deepseek-r1:8b` 외 실제 후보 모델별 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
 - Keychain reconnect UX:
   - invalid Confluence token으로 검색/내보내기 실패 후 `다시 연결 필요` 표시 확인
   - invalid Notion token으로 관련 문서 검색 실패 후 재연결/지우기 동작 확인
