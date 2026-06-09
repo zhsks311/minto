@@ -14,6 +14,85 @@ struct AudioInputModeTests {
         #expect(AudioInputMode.mixed.requiresScreenCapturePermission == true)
     }
 
+    @Test("readiness checker는 마이크 입력을 바로 시작 가능으로 표시한다")
+    func microphoneReadinessAllowsStart() async {
+        let checker = AudioInputReadinessChecker(
+            hasScreenCapturePermission: { false },
+            requestScreenCapturePermission: { false },
+            systemAudioAvailability: { .unavailable("not used") }
+        )
+
+        let readiness = await checker.readiness(for: .microphone)
+
+        #expect(readiness.state == .ready)
+        #expect(readiness.canStartRecording)
+    }
+
+    @Test("시스템 입력은 화면 기록 권한이 없으면 시작을 막고 availability를 조회하지 않는다")
+    func systemAudioReadinessRequiresPermissionBeforeAvailability() async {
+        let availabilityCalls = InputModeCounter()
+        let checker = AudioInputReadinessChecker(
+            hasScreenCapturePermission: { false },
+            requestScreenCapturePermission: { false },
+            systemAudioAvailability: {
+                availabilityCalls.increment()
+                return .available
+            }
+        )
+
+        let readiness = await checker.readiness(for: .systemAudio)
+
+        #expect(readiness.state == .permissionRequired)
+        #expect(readiness.canStartRecording == false)
+        #expect(readiness.actionTitle == "시스템 설정 열기")
+        #expect(availabilityCalls.count == 0)
+    }
+
+    @Test("시스템 입력은 권한과 캡처 대상이 있으면 시작 가능으로 표시한다")
+    func systemAudioReadinessAllowsStartWhenAvailable() async {
+        let checker = AudioInputReadinessChecker(
+            hasScreenCapturePermission: { true },
+            requestScreenCapturePermission: { true },
+            systemAudioAvailability: { .available }
+        )
+
+        let readiness = await checker.readiness(for: .systemAudio)
+
+        #expect(readiness.state == .ready)
+        #expect(readiness.canStartRecording)
+    }
+
+    @Test("시스템 입력은 캡처 대상이 없으면 unavailable로 표시한다")
+    func systemAudioReadinessReportsUnavailableAvailability() async {
+        let checker = AudioInputReadinessChecker(
+            hasScreenCapturePermission: { true },
+            requestScreenCapturePermission: { true },
+            systemAudioAvailability: { .unavailable("캡처 가능한 디스플레이가 없습니다.") }
+        )
+
+        let readiness = await checker.readiness(for: .systemAudio)
+
+        #expect(readiness.state == .unavailable)
+        #expect(readiness.canStartRecording == false)
+        #expect(readiness.detail.contains("디스플레이"))
+    }
+
+    @Test("시스템 입력 권한 요청 후 readiness를 다시 계산한다")
+    func systemAudioReadinessRechecksAfterPermissionRequest() async {
+        let permission = InputModePermissionStub(initial: false, requestedValue: true)
+        let checker = AudioInputReadinessChecker(
+            hasScreenCapturePermission: { permission.hasPermission },
+            requestScreenCapturePermission: { permission.request() },
+            systemAudioAvailability: { .available }
+        )
+
+        let readiness = await checker.requestPermission(for: .systemAudio)
+
+        #expect(permission.requestCount == 1)
+        #expect(readiness.state == .ready)
+        #expect(readiness.canStartRecording)
+    }
+
     @Test("source factory는 입력 모드에 맞는 source를 만든다")
     func sourceFactoryCreatesMatchingSource() {
         #expect(AudioSourceFactory.makeSource(for: .microphone) is MicrophoneSource)
@@ -108,6 +187,56 @@ private final class InputModeErrorSink: @unchecked Sendable {
         lock.lock()
         receivedError = error
         lock.unlock()
+    }
+}
+
+private final class InputModeCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func increment() {
+        lock.lock()
+        value += 1
+        lock.unlock()
+    }
+}
+
+private final class InputModePermissionStub: @unchecked Sendable {
+    private let lock = NSLock()
+    private var currentValue: Bool
+    private let requestedValue: Bool
+    private var requests = 0
+
+    init(initial: Bool, requestedValue: Bool) {
+        self.currentValue = initial
+        self.requestedValue = requestedValue
+    }
+
+    var hasPermission: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return currentValue
+    }
+
+    var requestCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests
+    }
+
+    func request() -> Bool {
+        lock.lock()
+        requests += 1
+        currentValue = requestedValue
+        let value = currentValue
+        lock.unlock()
+        return value
     }
 }
 
