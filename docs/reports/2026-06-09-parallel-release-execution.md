@@ -150,6 +150,7 @@
   - Confluence export 401 is covered at both space lookup and page create steps, and leaves the service in `needsReconnect`.
   - Notion and Confluence status checks now cover the Settings prompt-count contract by proving status rendering paths do not load token payloads.
   - Confluence export sheet now shows a Settings handoff when the service enters `needsReconnect`.
+  - Confluence `연동 해제` now clears the token and persisted URL/email metadata through `ConfluenceService.disconnect()`, so Settings no longer relies on `@AppStorage` writes as the only metadata cleanup path.
 - Settings UI QA:
   - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-ui-qa-rc1 ./scripts/dev.sh run` launched the RC integration app through build, signing, and app initialization.
   - Settings UI `GPT API` saved the test value `minto-ui-qa-not-a-secret` into `/tmp/minto2-dev-secrets-ui-qa-rc1/com.minto.app.llm-api__llm-api-key-gpt.json` with `-rw-------` permissions and showed `API 키 저장됨`.
@@ -180,6 +181,9 @@
   - Initial Settings UI save/load/delete was not verified in that run: `computer-use` did not target the direct SwiftPM `minto2` process, and shell accessibility inspection failed with System Events error `-1728`.
   - `HOME=/tmp/minto2-settings-delete-ui-home-1780990000 CFFIXED_USER_HOME=/tmp/minto2-settings-delete-ui-home-1780990000 MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-delete-ui-qa-1780990000 ./scripts/dev.sh run`: build completed but run stopped at missing signing certificate `Minto2 Dev`; direct `.build/debug/minto2` was used for file-store-only GUI QA.
   - Settings UI delete QA passed: after `API 키 삭제`, the fake GPT API key file under `/tmp/minto2-dev-secrets-delete-ui-qa-1780990000` was gone, the directory was empty, and the Settings UI showed `API 키 필요`.
+  - Confluence delete QA found a cleanup gap: after the user pressed `연동 해제` in the isolated file-store app run, `/tmp/minto2-reconnect-delete-rendered-qa/dev-secrets/com.minto.app.oauth__confluence.json` was removed, but `confluenceBaseURL` and `confluenceEmail` remained in `/tmp/minto2-reconnect-delete-rendered-qa/home/Library/Preferences/com.minto.app.plist`.
+  - The cleanup gap is fixed by `ConfluenceService.disconnect()` and covered by `IntegrationReconnectStateTests`.
+  - Direct SwiftPM executable UI runs still rendered Confluence as `미연동` even with seeded file-store token and prefs, so the authoritative cleanup verification for this slice is the service-level regression plus the observed file deletion after the manual Settings click.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-context-test --filter LLMProviderTests`: passed, 28 tests
   - `python3 -m py_compile scripts/run_local_llm_benchmarks.py`: passed
   - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model deepseek-r1:8b --cases correction --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-dryrun`: passed, request body preview has `options.num_ctx=4096`
@@ -218,6 +222,7 @@
   - `RUN_SYSTEM_AUDIO_LIVE_TEST=1 swift test --disable-sandbox --scratch-path /tmp/minto2-system-audio-live-default-test --filter SystemAudioLiveTests`: passed, 1 test. The opt-in run verified system audio buffer and level callbacks from external `afplay` output.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-mixed-audio-viewmodel-pipeline-test --filter AudioInputMode`: passed, 14 tests. This includes `.mixed` selection and source-buffer-to-VAD handoff coverage.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-confluence-export-reconnect-test --filter 'ConfluenceExportReconnectTests|IntegrationReconnectStateTests'`: passed, 8 tests.
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-reconnect-delete-rendered-qa-build --filter IntegrationReconnectStateTests`: passed, 9 tests.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-settings-token-status-no-load-test --filter IntegrationReconnectStateTests`: passed, 8 tests.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-confluence-export-sheet-handoff-test --filter ConfluenceExportSheetTests`: passed, 1 test.
 

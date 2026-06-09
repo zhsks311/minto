@@ -527,6 +527,34 @@ struct IntegrationReconnectStateTests {
         #expect(tokenStorage.loadCallCount == 0)
     }
 
+    @Test("Confluence 연동 해제는 token과 URL/email을 함께 지운다")
+    func confluenceDisconnectClearsTokenAndMetadata() {
+        let suiteName = "test.confluence.disconnect.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let service = ConfluenceService(
+            httpClient: StubConfluenceHTTPClient(),
+            defaults: defaults,
+            tokenStorage: tokenStorage
+        )
+        service.setBaseURL("https://acme.atlassian.net/wiki")
+        service.setEmail("user@example.com")
+
+        #expect(service.connectionState == .connected)
+        #expect(tokenStorage.exists(account: "confluence"))
+
+        service.disconnect()
+
+        #expect(service.connectionState == .disconnected)
+        #expect(!service.canDisconnect)
+        #expect(!tokenStorage.exists(account: "confluence"))
+        #expect(defaults.string(forKey: ConfluenceService.baseURLKey) == nil)
+        #expect(defaults.string(forKey: ConfluenceService.emailKey) == nil)
+    }
+
     @Test("Confluence token decode 실패는 실제 사용 후 재연결 필요 상태로 남긴다")
     func confluenceInvalidStoredTokenMarksReconnectAfterUse() async {
         let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data([0xff]), existsResult: true)

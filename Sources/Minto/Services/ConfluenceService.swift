@@ -223,6 +223,15 @@ public final class ConfluenceService: ObservableObject {
         needsReconnect = false
     }
 
+    public func disconnect() {
+        tokenStorage.delete(account: keychainKey)
+        defaults.removeObject(forKey: Self.baseURLKey)
+        defaults.removeObject(forKey: Self.emailKey)
+        cachedAPIToken = nil
+        needsReconnect = false
+        hasToken = false
+    }
+
     public func setEmail(_ raw: String) {
         defaults.set(raw.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Self.emailKey)
         needsReconnect = false
