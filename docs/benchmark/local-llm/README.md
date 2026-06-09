@@ -12,6 +12,7 @@
 | 2026-06-09 | Ollama | `llama3.1:8b` (`num_ctx=4096`) | 3/3 응답, 평균 6.894s, correction term recall 0.0, 기본 후보 보류 | `2026-06-09-llama3.1-8b-numctx4096/` |
 | 2026-06-09 | Ollama | `qwen2.5:3b` (`correction_terms_with_context`, `num_ctx=4096`) | Minto형 용어집 prompt에서도 correction term recall 0.0, 기본 후보 보류 | `2026-06-09-qwen2.5-3b-correction-context-numctx4096/` |
 | 2026-06-09 | Ollama | `llama3.1:8b` (`correction_terms_with_context`, `num_ctx=4096`) | correction term recall 0.75, `Liquibase` 누락, latency 22.979s, 기본 후보 보류 | `2026-06-09-llama3.1-8b-correction-context-numctx4096/` |
+| 2026-06-09 | Ollama | `deepseek-r1:8b` (`correction_terms_with_context`, `num_ctx=4096`) | correction term recall 1.0, latency 43.994s, 전체 케이스 추가 검증 전 기본 후보 보류 | `2026-06-09-deepseek-r1-8b-correction-context-numctx4096/` |
 
 ## 판정 기준
 
