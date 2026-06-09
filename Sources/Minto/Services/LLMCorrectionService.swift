@@ -1,6 +1,28 @@
 import Foundation
 import SwiftUI
 
+public struct LLMCorrectionContext: Sendable, Equatable {
+    public let topic: String
+    public let glossary: String
+    public let previousText: String
+    public let runningSummary: String
+    public let document: String
+
+    public init(
+        topic: String = "",
+        glossary: String = "",
+        previousText: String = "",
+        runningSummary: String = "",
+        document: String = ""
+    ) {
+        self.topic = topic
+        self.glossary = glossary
+        self.previousText = previousText
+        self.runningSummary = runningSummary
+        self.document = document
+    }
+}
+
 @MainActor
 public final class LLMCorrectionService: ObservableObject {
 
@@ -23,25 +45,38 @@ public final class LLMCorrectionService: ObservableObject {
 
     /// 비동기 교정 수행. 실패 시 nil 반환 (원본 유지).
     public func correct(text: String, context: String) async -> String? {
+        let meeting = MeetingContext.shared
+        return await correct(
+            text: text,
+            context: LLMCorrectionContext(
+                topic: meeting.topic,
+                glossary: meeting.glossary,
+                previousText: context,
+                runningSummary: meeting.runningSummary,
+                document: meeting.document
+            )
+        )
+    }
+
+    /// 명시적 context로 교정한다. 파일 import처럼 live `MeetingContext`를 섞으면 안 되는 경로에서 사용한다.
+    public func correct(text: String, context: LLMCorrectionContext) async -> String? {
         guard selectedProvider != .none, !text.isEmpty else { return nil }
 
         activeCorrections += 1
         defer { activeCorrections -= 1 }
 
-        // 회의 맥락 + 직전 발화 + 현재 인식을 한 곳에서 프롬프트로 조립 (provider 공통)
-        let meeting = MeetingContext.shared
         let (instructions, userContent) = CorrectionPrompt.build(
-            topic: meeting.topic,
-            glossary: meeting.glossary,
-            context: context,
+            topic: context.topic,
+            glossary: context.glossary,
+            context: context.previousText,
             text: text,
-            summary: meeting.runningSummary,
-            document: meeting.document
+            summary: context.runningSummary,
+            document: context.document
         )
 
         guard let provider = selectedTextProvider() else { return nil }
 
-        fputs("[LLM] correcting via \(provider.descriptor.id.rawValue) (inputChars=\(text.count), contextChars=\(context.count))\n", stderr)
+        fputs("[LLM] correcting via \(provider.descriptor.id.rawValue) (inputChars=\(text.count), contextChars=\(context.previousText.count))\n", stderr)
         do {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: .correction,

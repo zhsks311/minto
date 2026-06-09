@@ -1,0 +1,1621 @@
+{
+  "version": "2.11",
+  "children": [
+    {
+      "type": "frame",
+      "id": "JVPES",
+      "x": 0,
+      "y": 0,
+      "name": "1. Meeting List",
+      "clip": true,
+      "width": 960,
+      "height": 640,
+      "fill": "$bg-window",
+      "cornerRadius": "$radius-lg",
+      "children": [
+        {
+          "type": "frame",
+          "id": "I0m6rF",
+          "name": "Sidebar",
+          "width": 220,
+          "height": "fill_container",
+          "fill": "$bg-sidebar",
+          "layout": "vertical",
+          "padding": [
+            16,
+            12
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "ybIuo",
+              "name": "App Header",
+              "width": "fill_container",
+              "gap": 8,
+              "padding": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "ieJIz",
+                  "name": "logoIcon",
+                  "width": 20,
+                  "height": 20,
+                  "iconFontName": "mic",
+                  "iconFontFamily": "lucide",
+                  "fill": "$accent"
+                },
+                {
+                  "type": "text",
+                  "id": "GZY4P",
+                  "name": "logoText",
+                  "fill": "$text-primary",
+                  "content": "Minto",
+                  "fontFamily": "$font-sans",
+                  "fontSize": 16,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "J6H5NC",
+              "name": "Nav Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "G68dvv",
+                  "name": "Nav All Meetings",
+                  "width": "fill_container",
+                  "fill": "$accent-light",
+                  "cornerRadius": "$radius-sm",
+                  "gap": 8,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "kDHDe",
+                      "name": "navAllIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "list",
+                      "iconFontFamily": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "GsJ9D",
+                      "name": "navAllText",
+                      "fill": "$accent",
+                      "content": "모든 회의",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "j43kg5",
+                  "name": "Nav Recent",
+                  "width": "fill_container",
+                  "cornerRadius": "$radius-sm",
+                  "gap": 8,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "fqCSa",
+                      "name": "navRecentIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "history",
+                      "iconFontFamily": "lucide",
+                      "fill": "$icon-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "hsOwb",
+                      "name": "navRecentText",
+                      "fill": "$text-secondary",
+                      "content": "최근",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 13
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YGjb0",
+                  "name": "Nav Favorites",
+                  "width": "fill_container",
+                  "cornerRadius": "$radius-sm",
+                  "gap": 8,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "wXSm5",
+                      "name": "navFavIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "star",
+                      "iconFontFamily": "lucide",
+                      "fill": "$icon-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "W9D0v3",
+                      "name": "navFavText",
+                      "fill": "$text-secondary",
+                      "content": "즐겨찾기",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 13
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "XnBOU",
+          "name": "Content",
+          "width": "fill_container",
+          "height": "fill_container",
+          "fill": "$bg-surface",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "e5LoSH",
+              "name": "Toolbar",
+              "width": "fill_container",
+              "padding": [
+                12,
+                20
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "cppGc",
+                  "name": "toolbarTitle",
+                  "fill": "$text-primary",
+                  "content": "모든 회의",
+                  "fontFamily": "$font-sans",
+                  "fontSize": 18,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "Ue49P",
+                  "name": "Toolbar Actions",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "PC20J",
+                      "name": "Search Button",
+                      "cornerRadius": "$radius-sm",
+                      "gap": 4,
+                      "padding": [
+                        6,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "N3OtT",
+                          "name": "searchIcon",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "search",
+                          "iconFontFamily": "lucide",
+                          "fill": "$icon-secondary"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NR2UL",
+                      "name": "Import Button",
+                      "fill": "$bg-sidebar",
+                      "cornerRadius": "$radius-sm",
+                      "gap": 6,
+                      "padding": [
+                        6,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "Iu4ld",
+                          "name": "importIcon",
+                          "width": 15,
+                          "height": 15,
+                          "iconFontName": "upload",
+                          "iconFontFamily": "lucide",
+                          "fill": "$text-secondary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Vbb30",
+                          "name": "importText",
+                          "fill": "$text-secondary",
+                          "content": "파일 가져오기",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "az22N",
+                      "name": "New Meeting Button",
+                      "fill": "$accent",
+                      "cornerRadius": "$radius-sm",
+                      "gap": 6,
+                      "padding": [
+                        6,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "aTgpQ",
+                          "name": "newIcon",
+                          "width": 15,
+                          "height": 15,
+                          "iconFontName": "plus",
+                          "iconFontFamily": "lucide",
+                          "fill": "$text-inverse"
+                        },
+                        {
+                          "type": "text",
+                          "id": "AF1Al",
+                          "name": "newText",
+                          "fill": "$text-inverse",
+                          "content": "새 회의",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "ruqZN",
+              "name": "Divider",
+              "fill": "$divider",
+              "width": "fill_container",
+              "height": 1
+            },
+            {
+              "type": "frame",
+              "id": "QaytT",
+              "name": "Meeting List",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 4,
+              "padding": [
+                8,
+                12
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "X9Wux1",
+                  "name": "Meeting Item 1",
+                  "width": "fill_container",
+                  "fill": "$bg-surface",
+                  "cornerRadius": "$radius-md",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "tEHNH",
+                      "name": "m1Left",
+                      "fill": "$accent-light",
+                      "cornerRadius": "$radius-sm",
+                      "layout": "vertical",
+                      "padding": [
+                        4,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "r2F7I",
+                          "name": "m1Day",
+                          "fill": "$accent",
+                          "content": "09",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 18,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "VMjgk",
+                          "name": "m1Mon",
+                          "fill": "$accent",
+                          "content": "6월",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "lRDeU",
+                      "name": "m1Center",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZNjHV",
+                          "name": "m1Title",
+                          "fill": "$text-primary",
+                          "content": "주간 스프린트 리뷰",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZvosY",
+                          "name": "m1Meta",
+                          "fill": "$text-secondary",
+                          "content": "오늘 10:00 · 45분 · 참여자 5명",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "Mb48V",
+                      "name": "m1Right",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "chevron-right",
+                      "iconFontFamily": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "WyY7d",
+                  "name": "Meeting Item 2",
+                  "width": "fill_container",
+                  "cornerRadius": "$radius-md",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "l8CWV",
+                      "name": "m2Left",
+                      "fill": "$bg-sidebar",
+                      "cornerRadius": "$radius-sm",
+                      "layout": "vertical",
+                      "padding": [
+                        4,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "GaZnl",
+                          "name": "m2Day",
+                          "fill": "$text-primary",
+                          "content": "06",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 18,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "vTQBD",
+                          "name": "m2Mon",
+                          "fill": "$text-secondary",
+                          "content": "6월",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x1UJa",
+                      "name": "m2Center",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "fcXgS",
+                          "name": "m2Title",
+                          "fill": "$text-primary",
+                          "content": "프로덕트 로드맵 논의",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "d2IdtN",
+                          "name": "m2Meta",
+                          "fill": "$text-secondary",
+                          "content": "6월 6일 14:00 · 1시간 12분 · 참여자 8명",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "V5ASat",
+                      "name": "m2Right",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "chevron-right",
+                      "iconFontFamily": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "U8LX48",
+                  "name": "Meeting Item 3",
+                  "width": "fill_container",
+                  "cornerRadius": "$radius-md",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "peh7k",
+                      "name": "m3Left",
+                      "fill": "$bg-sidebar",
+                      "cornerRadius": "$radius-sm",
+                      "layout": "vertical",
+                      "padding": [
+                        4,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xApu4",
+                          "name": "m3Day",
+                          "fill": "$text-primary",
+                          "content": "04",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 18,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Yxq3j",
+                          "name": "m3Mon",
+                          "fill": "$text-secondary",
+                          "content": "6월",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ikzwf",
+                      "name": "m3Center",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n6hya",
+                          "name": "m3Title",
+                          "fill": "$text-primary",
+                          "content": "디자인 시스템 리뷰",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "XTonr",
+                          "name": "m3Meta",
+                          "fill": "$text-secondary",
+                          "content": "6월 4일 11:00 · 32분 · 참여자 3명",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "X43Rf",
+                      "name": "m3Right",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "chevron-right",
+                      "iconFontFamily": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mjeNb",
+                  "name": "Meeting Item 4",
+                  "width": "fill_container",
+                  "cornerRadius": "$radius-md",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "vQf03",
+                      "name": "m4Left",
+                      "fill": "$bg-sidebar",
+                      "cornerRadius": "$radius-sm",
+                      "layout": "vertical",
+                      "padding": [
+                        4,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "AANuD",
+                          "name": "m4Day",
+                          "fill": "$text-primary",
+                          "content": "02",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 18,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Xprfq",
+                          "name": "m4Mon",
+                          "fill": "$text-secondary",
+                          "content": "6월",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YlI7j",
+                      "name": "m4Center",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Gues2",
+                          "name": "m4Title",
+                          "fill": "$text-primary",
+                          "content": "백엔드 아키텍처 회의",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "wppqg",
+                          "name": "m4Meta",
+                          "fill": "$text-secondary",
+                          "content": "6월 2일 16:00 · 55분 · 참여자 4명",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12
+                        }
+                      ]
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "Q3kFbN",
+                      "name": "m4Right",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "chevron-right",
+                      "iconFontFamily": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "qnj6O",
+      "x": 1020,
+      "y": 0,
+      "name": "2. Import Sheet",
+      "clip": true,
+      "width": 960,
+      "height": 640,
+      "fill": "$bg-window",
+      "cornerRadius": "$radius-lg",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "LrRPB",
+          "x": 0,
+          "y": 0,
+          "name": "BG Sidebar",
+          "opacity": 0.5,
+          "width": 220,
+          "height": 640,
+          "fill": "$bg-sidebar"
+        },
+        {
+          "type": "frame",
+          "id": "fg2DI",
+          "x": 220,
+          "y": 0,
+          "name": "BG Content",
+          "opacity": 0.5,
+          "width": 740,
+          "height": 640,
+          "fill": "$bg-surface"
+        },
+        {
+          "type": "rectangle",
+          "id": "sYIo5",
+          "x": 0,
+          "y": 0,
+          "name": "Overlay",
+          "fill": "$bg-overlay",
+          "width": 960,
+          "height": 640
+        },
+        {
+          "type": "frame",
+          "id": "R7iaBK",
+          "x": 230,
+          "y": 80,
+          "name": "Import Modal",
+          "clip": true,
+          "width": 500,
+          "fill": "$bg-surface",
+          "cornerRadius": "$radius-xl",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#00000033",
+            "offset": {
+              "x": 0,
+              "y": 8
+            },
+            "blur": 32
+          },
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "q9FdE",
+              "name": "Modal Header",
+              "width": "fill_container",
+              "padding": [
+                20,
+                24,
+                16,
+                24
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "M3YHSg",
+                  "name": "modalTitle",
+                  "fill": "$text-primary",
+                  "content": "파일로 회의록 만들기",
+                  "fontFamily": "$font-sans",
+                  "fontSize": 17,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "icon_font",
+                  "id": "t2VSx1",
+                  "name": "closeBtn",
+                  "width": 20,
+                  "height": 20,
+                  "iconFontName": "x",
+                  "iconFontFamily": "lucide",
+                  "fill": "$text-tertiary"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "s9HQz",
+              "name": "Modal Body",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 20,
+              "padding": [
+                0,
+                24
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "q3ypP",
+                  "name": "Drop Zone",
+                  "width": "fill_container",
+                  "fill": "$bg-drop-zone",
+                  "cornerRadius": "$radius-md",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 2,
+                    "fill": "$border-drop"
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    40,
+                    20
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "mgRNr",
+                      "name": "dropIcon",
+                      "width": 40,
+                      "height": 40,
+                      "iconFontName": "upload",
+                      "iconFontFamily": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "E6DVvC",
+                      "name": "dropTitle",
+                      "fill": "$text-primary",
+                      "content": "음성 또는 영상 파일을 놓으세요",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 15,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "JGCNr",
+                      "name": "dropSubtitle",
+                      "fill": "$accent",
+                      "content": "또는 클릭하여 파일 선택",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "Q8ziK4",
+                      "name": "dropFormats",
+                      "fill": "$text-tertiary",
+                      "content": "MP3, M4A, WAV, MP4, MOV · 최대 2GB",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mLkQj",
+                  "name": "Title Input Section",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lYNe5",
+                      "name": "titleLabel",
+                      "fill": "$text-secondary",
+                      "content": "회의 제목 (선택)",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XV5t8",
+                      "name": "Title Input",
+                      "width": "fill_container",
+                      "cornerRadius": "$radius-sm",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$border"
+                      },
+                      "padding": [
+                        10,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "abKmu",
+                          "name": "titlePlaceholder",
+                          "fill": "$text-tertiary",
+                          "content": "파일명이 기본 제목으로 사용됩니다",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 13
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "uRB3T",
+                  "name": "Settings Section",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "hbVaB",
+                      "name": "Auto Correct Toggle",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "BQa8m",
+                          "name": "settingsLabel",
+                          "fill": "$text-primary",
+                          "content": "전사 후 자동 교정",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 13
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Et7D7",
+                          "name": "Toggle",
+                          "width": 40,
+                          "height": 24,
+                          "fill": "$accent",
+                          "cornerRadius": 12,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "BKlRi",
+                              "x": 18,
+                              "y": 2,
+                              "name": "toggleKnob",
+                              "fill": "$text-inverse",
+                              "width": 20,
+                              "height": 20
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "nxd3s",
+              "name": "Modal Footer",
+              "width": "fill_container",
+              "gap": 10,
+              "padding": [
+                20,
+                24,
+                24,
+                24
+              ],
+              "justifyContent": "end",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "B7rg8",
+                  "name": "Cancel Button",
+                  "cornerRadius": "$radius-sm",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$border"
+                  },
+                  "padding": [
+                    8,
+                    20
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "IKgT7",
+                      "name": "cancelText",
+                      "fill": "$text-primary",
+                      "content": "취소",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "T8jwOn",
+                  "name": "Import Button",
+                  "fill": "$accent",
+                  "cornerRadius": "$radius-sm",
+                  "gap": 6,
+                  "padding": [
+                    8,
+                    20
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "mrKDT",
+                      "name": "importBtnIcon",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "upload",
+                      "iconFontFamily": "lucide",
+                      "fill": "$text-inverse"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ziPKy",
+                      "name": "importBtnText",
+                      "fill": "$text-inverse",
+                      "content": "가져오기",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "WYEwn",
+      "x": 2040,
+      "y": 0,
+      "name": "3. Processing",
+      "clip": true,
+      "width": 960,
+      "height": 640,
+      "fill": "$bg-window",
+      "cornerRadius": "$radius-lg",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "QjLI4",
+          "x": 0,
+          "y": 0,
+          "name": "BG Sidebar",
+          "opacity": 0.5,
+          "width": 220,
+          "height": 640,
+          "fill": "$bg-sidebar"
+        },
+        {
+          "type": "frame",
+          "id": "kkn35",
+          "x": 220,
+          "y": 0,
+          "name": "BG Content",
+          "opacity": 0.5,
+          "width": 740,
+          "height": 640,
+          "fill": "$bg-surface"
+        },
+        {
+          "type": "rectangle",
+          "id": "LHSte",
+          "x": 0,
+          "y": 0,
+          "name": "Overlay",
+          "fill": "$bg-overlay",
+          "width": 960,
+          "height": 640
+        },
+        {
+          "type": "frame",
+          "id": "JBVdW",
+          "x": 255,
+          "y": 160,
+          "name": "Processing Modal",
+          "width": 450,
+          "fill": "$bg-surface",
+          "cornerRadius": "$radius-xl",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#00000033",
+            "offset": {
+              "x": 0,
+              "y": 8
+            },
+            "blur": 32
+          },
+          "layout": "vertical",
+          "gap": 24,
+          "padding": [
+            32,
+            32,
+            28,
+            32
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "v8vRi",
+              "name": "Spinner Area",
+              "width": 64,
+              "height": 64,
+              "fill": "$accent-light",
+              "cornerRadius": 32,
+              "layout": "vertical",
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "kQsl1",
+                  "name": "spinnerIcon",
+                  "width": 28,
+                  "height": 28,
+                  "iconFontName": "loader",
+                  "iconFontFamily": "lucide",
+                  "fill": "$accent"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "LJK1P",
+              "name": "statusTitle",
+              "fill": "$text-primary",
+              "content": "회의록을 만들고 있어요",
+              "fontFamily": "$font-sans",
+              "fontSize": 17,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "T38mPk",
+              "name": "File Info",
+              "width": "fill_container",
+              "fill": "$bg-sidebar",
+              "cornerRadius": "$radius-md",
+              "gap": 10,
+              "padding": [
+                12,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "v1dP1",
+                  "name": "fileIcon",
+                  "width": 18,
+                  "height": 18,
+                  "iconFontName": "file",
+                  "iconFontFamily": "lucide",
+                  "fill": "$icon-secondary"
+                },
+                {
+                  "type": "frame",
+                  "id": "qVPeq",
+                  "name": "fileDetails",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "d3L6K",
+                      "name": "fileName",
+                      "fill": "$text-primary",
+                      "content": "product-review-20260609.m4a",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "QA2VO",
+                      "name": "fileSize",
+                      "fill": "$text-secondary",
+                      "content": "45분 23초 · 38.2 MB",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ZZtO1",
+              "name": "Progress Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "x68ni",
+                  "name": "progressRow",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "E5KHU",
+                      "name": "progressLabel",
+                      "fill": "$accent",
+                      "content": "전사 중...",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ySxL4",
+                      "name": "progressPercent",
+                      "fill": "$accent",
+                      "content": "62%",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "a72TZD",
+                  "name": "Progress Bar BG",
+                  "width": "fill_container",
+                  "height": 6,
+                  "fill": "$bg-progress",
+                  "cornerRadius": 3,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "rjsWk",
+                      "x": 0,
+                      "y": 0,
+                      "name": "Progress Bar Fill",
+                      "fill": "$accent",
+                      "width": 240,
+                      "height": 6
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "z7m3I",
+              "name": "Steps",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "dzBbR",
+                  "name": "step1",
+                  "gap": 4,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "AkuYE",
+                      "name": "step1Check",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "circle-check",
+                      "iconFontFamily": "lucide",
+                      "fill": "$success"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ksDOt",
+                      "name": "step1Text",
+                      "fill": "$success",
+                      "content": "파일 분석",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "zTFVw",
+                  "name": "step2",
+                  "gap": 4,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "hpkct",
+                      "name": "step2Dot",
+                      "fill": "$accent",
+                      "width": 14,
+                      "height": 14
+                    },
+                    {
+                      "type": "text",
+                      "id": "S6u8Pe",
+                      "name": "step2Text",
+                      "fill": "$accent",
+                      "content": "음성 전사",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "D1TMlQ",
+                  "name": "step3",
+                  "gap": 4,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "uBZor",
+                      "name": "step3Dot",
+                      "fill": "$bg-progress",
+                      "width": 14,
+                      "height": 14
+                    },
+                    {
+                      "type": "text",
+                      "id": "PupW6",
+                      "name": "step3Text",
+                      "fill": "$text-tertiary",
+                      "content": "교정",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "r6Seq",
+                  "name": "step4",
+                  "gap": 4,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "OiqpT",
+                      "name": "step4Dot",
+                      "fill": "$bg-progress",
+                      "width": 14,
+                      "height": 14
+                    },
+                    {
+                      "type": "text",
+                      "id": "frAtV",
+                      "name": "step4Text",
+                      "fill": "$text-tertiary",
+                      "content": "요약",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "V5EDk",
+              "name": "Cancel Row",
+              "width": "fill_container",
+              "justifyContent": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "qBGi4",
+                  "name": "cancelLink",
+                  "fill": "$text-secondary",
+                  "content": "취소",
+                  "fontFamily": "$font-sans",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "B0h4I",
+      "x": 0,
+      "y": -40,
+      "name": "label1",
+      "fill": "$text-primary",
+      "content": "1. 회의 목록 — 진입점",
+      "fontFamily": "$font-sans",
+      "fontSize": 14,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "cdAb0",
+      "x": 0,
+      "y": -20,
+      "name": "desc1",
+      "fill": "$text-secondary",
+      "content": "\"파일 가져오기\" 버튼으로 임포트 플로우 시작",
+      "fontFamily": "$font-sans",
+      "fontSize": 11
+    },
+    {
+      "type": "text",
+      "id": "HjZ5N",
+      "x": 1020,
+      "y": -40,
+      "name": "label2",
+      "fill": "$text-primary",
+      "content": "2. 파일 가져오기 시트",
+      "fontFamily": "$font-sans",
+      "fontSize": 14,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "jRSmb",
+      "x": 1020,
+      "y": -20,
+      "name": "desc2",
+      "fill": "$text-secondary",
+      "content": "드래그&드롭 또는 클릭으로 파일 선택, 교정 옵션 토글",
+      "fontFamily": "$font-sans",
+      "fontSize": 11
+    },
+    {
+      "type": "text",
+      "id": "JY0Yn",
+      "x": 2040,
+      "y": -40,
+      "name": "label3",
+      "fill": "$text-primary",
+      "content": "3. 처리 중",
+      "fontFamily": "$font-sans",
+      "fontSize": 14,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "gBWS0",
+      "x": 2040,
+      "y": -20,
+      "name": "desc3",
+      "fill": "$text-secondary",
+      "content": "파일 분석 → 전사 → 교정 → 요약 단계별 진행 표시",
+      "fontFamily": "$font-sans",
+      "fontSize": 11
+    },
+    {
+      "type": "text",
+      "id": "sFDbA",
+      "x": 975,
+      "y": 310,
+      "name": "arrow1",
+      "fill": "$text-tertiary",
+      "content": "→",
+      "fontFamily": "$font-sans",
+      "fontSize": 24,
+      "fontWeight": "300"
+    },
+    {
+      "type": "text",
+      "id": "E4wlR",
+      "x": 1995,
+      "y": 310,
+      "name": "arrow2",
+      "fill": "$text-tertiary",
+      "content": "→",
+      "fontFamily": "$font-sans",
+      "fontSize": 24,
+      "fontWeight": "300"
+    }
+  ],
+  "variables": {
+    "accent": {
+      "type": "color",
+      "value": "#007AFF"
+    },
+    "accent-hover": {
+      "type": "color",
+      "value": "#0066DD"
+    },
+    "accent-light": {
+      "type": "color",
+      "value": "#E3F0FF"
+    },
+    "bg-drop-zone": {
+      "type": "color",
+      "value": "#F0F4FF"
+    },
+    "bg-hover": {
+      "type": "color",
+      "value": "#E8E8ED"
+    },
+    "bg-overlay": {
+      "type": "color",
+      "value": "#00000066"
+    },
+    "bg-progress": {
+      "type": "color",
+      "value": "#E5E5EA"
+    },
+    "bg-sidebar": {
+      "type": "color",
+      "value": "#F0F0F2"
+    },
+    "bg-surface": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "bg-window": {
+      "type": "color",
+      "value": "#F5F5F7"
+    },
+    "border": {
+      "type": "color",
+      "value": "#E5E5EA"
+    },
+    "border-drop": {
+      "type": "color",
+      "value": "#007AFF"
+    },
+    "divider": {
+      "type": "color",
+      "value": "#E5E5EA"
+    },
+    "font-sans": {
+      "type": "string",
+      "value": "Inter"
+    },
+    "icon-secondary": {
+      "type": "color",
+      "value": "#8E8E93"
+    },
+    "radius-lg": {
+      "type": "number",
+      "value": 12
+    },
+    "radius-md": {
+      "type": "number",
+      "value": 10
+    },
+    "radius-sm": {
+      "type": "number",
+      "value": 6
+    },
+    "radius-xl": {
+      "type": "number",
+      "value": 16
+    },
+    "success": {
+      "type": "color",
+      "value": "#34C759"
+    },
+    "text-inverse": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "text-primary": {
+      "type": "color",
+      "value": "#1D1D1F"
+    },
+    "text-secondary": {
+      "type": "color",
+      "value": "#86868B"
+    },
+    "text-tertiary": {
+      "type": "color",
+      "value": "#AEAEB2"
+    }
+  }
+}

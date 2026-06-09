@@ -1,6 +1,25 @@
 import Foundation
 import SwiftUI
 
+public struct SummaryGenerationContext: Sendable, Equatable {
+    public let topic: String
+    public let glossary: String
+    public let runningSummary: String
+    public let document: String
+
+    public init(
+        topic: String = "",
+        glossary: String = "",
+        runningSummary: String = "",
+        document: String = ""
+    ) {
+        self.topic = topic
+        self.glossary = glossary
+        self.runningSummary = runningSummary
+        self.document = document
+    }
+}
+
 /// 회의 요약 생성 서비스.
 ///
 /// 요약 provider는 교정 provider와 별도 설정으로 관리한다.
@@ -42,28 +61,42 @@ public final class SummaryService: ObservableObject {
     /// LLM 실패/파싱 실패 시: 평문 폴백(마지막 runningSummary 또는 raw 텍스트). 모두 비면 nil.
     public func generateFinal(transcript: String) async -> MeetingSummary? {
         let meeting = MeetingContext.shared
+        let context = SummaryGenerationContext(
+            topic: meeting.topic,
+            glossary: meeting.glossary,
+            runningSummary: meeting.runningSummary,
+            document: meeting.document
+        )
+        let summary = await generateFinal(transcript: transcript, context: context)
+        if let summary {
+            meeting.finalSummary = summary
+        }
+        return summary
+    }
+
+    /// 명시적 context로 최종 요약을 생성한다.
+    ///
+    /// 파일 import처럼 live `MeetingContext`를 건드리면 안 되는 사후 처리 경로에서 사용한다.
+    public func generateFinal(transcript: String, context: SummaryGenerationContext) async -> MeetingSummary? {
         // 빈 회의(전사 없음)는 요약할 내용이 없으므로 LLM을 호출하지 않는다.
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
 
         let prompt = SummaryPrompt.buildFinal(
-            topic: meeting.topic,
-            glossary: meeting.glossary,
+            topic: context.topic,
+            glossary: context.glossary,
             transcript: transcript,
-            document: meeting.document
+            document: context.document
         )
 
         if let raw = await dispatch(prompt, useCase: .finalSummary) {
             // JSON 파싱 시도 → 실패하면 raw를 평문 요약으로 감싼다(빈 화면 방지).
             let summary = Self.parseStructured(raw) ?? .plain(raw)
-            meeting.finalSummary = summary
             return summary
         }
         // 최종 LLM 호출 실패 → 마지막 증분 요약을 평문 폴백(빈 요약이면 nil).
-        let fallback = meeting.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = context.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !fallback.isEmpty else { return nil }
-        let summary = MeetingSummary.plain(fallback)
-        meeting.finalSummary = summary
-        return summary
+        return MeetingSummary.plain(fallback)
     }
 
     /// LLM 응답에서 JSON 객체를 추출해 MeetingSummary로 디코딩한다.

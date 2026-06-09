@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 private enum LibraryPalette {
     static let background = Color(nsColor: .windowBackgroundColor)
@@ -25,6 +26,7 @@ public struct MeetingLibraryView: View {
     @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
     @StateObject private var searchAnswerController = MeetingSearchAnswerController()
+    @StateObject private var fileImportUseCase = MeetingFileImportUseCase()
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var showingLiveMeeting = false
@@ -34,6 +36,7 @@ public struct MeetingLibraryView: View {
     @State private var isSearchAnswerExpanded = false
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
+    @State private var fileImportTask: Task<Void, Never>?
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
@@ -121,6 +124,13 @@ public struct MeetingLibraryView: View {
             isSearchAnswerExpanded = false
             searchAnswerController.refreshReadiness()
         }
+        .onChange(of: fileImportUseCase.state) { _, state in
+            if let record = state.record {
+                selectedID = record.id
+                showingLiveMeeting = false
+                detailTab = .summary
+            }
+        }
         .confirmationDialog(
             "회의록 내보내기",
             isPresented: $showingExportOptions,
@@ -173,6 +183,14 @@ public struct MeetingLibraryView: View {
             searchField
                 .frame(width: 360)
 
+            Button { selectFileForImport() } label: {
+                Label("파일 가져오기", systemImage: "tray.and.arrow.down")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .controlSize(.large)
+            .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
+            .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있습니다." : "음성 또는 영상 파일로 회의록을 만듭니다.")
+
             Button { onNewMeeting() } label: {
                 Label("새 회의", systemImage: "mic.circle.fill")
                     .font(.system(size: 13, weight: .semibold))
@@ -222,6 +240,7 @@ public struct MeetingLibraryView: View {
     private var resultsColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             searchReadiness
+            fileImportStatusCard
 
             if isSearching {
                 searchSummary
@@ -503,6 +522,61 @@ public struct MeetingLibraryView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var fileImportStatusCard: some View {
+        let importState = fileImportUseCase.state
+        if importState.stage != .idle {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .top, spacing: 8) {
+                    fileImportIcon(importState.stage)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(importState.stage.title)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.primary)
+                        if !importState.fileName.isEmpty {
+                            Text(importState.fileName)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    if importState.isRunning {
+                        Button("취소") {
+                            fileImportTask?.cancel()
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                    } else {
+                        Button {
+                            fileImportUseCase.reset()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .frame(width: 20, height: 20)
+                        }
+                        .buttonStyle(.plain)
+                        .help("상태 닫기")
+                    }
+                }
+
+                if importState.isRunning {
+                    ProgressView(value: importState.progress)
+                        .progressViewStyle(.linear)
+                }
+
+                Text(importState.errorMessage ?? importState.detailText)
+                    .font(.system(size: 11))
+                    .foregroundColor(importState.stage == .failed ? .red : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(fileImportBackground(importState.stage))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(fileImportBorder(importState.stage), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     private var liveMeetingRow: some View {
@@ -1790,6 +1864,81 @@ public struct MeetingLibraryView: View {
     private func openSettingsWindow() {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
+    private func selectFileForImport() {
+        guard !hasLiveMeeting, !fileImportUseCase.state.isRunning else { return }
+
+        let panel = NSOpenPanel()
+        panel.title = "파일로 회의록 만들기"
+        panel.prompt = "가져오기"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = MeetingFileImportUseCase.supportedContentTypes
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            fileImportTask?.cancel()
+            fileImportTask = Task { @MainActor in
+                do {
+                    _ = try await fileImportUseCase.importFile(url)
+                } catch is CancellationError {
+                    // 취소 상태는 use-case가 이미 반영한다.
+                } catch {
+                    // 실패 상태는 use-case가 이미 반영한다.
+                }
+            }
+        }
+    }
+
+    private func fileImportIcon(_ stage: MeetingFileImportStage) -> some View {
+        let symbol: String
+        let color: Color
+        switch stage {
+        case .idle:
+            symbol = "tray"
+            color = .secondary
+        case .analyzing, .transcribing, .correcting, .summarizing, .saving:
+            symbol = "arrow.triangle.2.circlepath"
+            color = .accentColor
+        case .completed:
+            symbol = "checkmark.circle.fill"
+            color = .green
+        case .failed:
+            symbol = "exclamationmark.triangle.fill"
+            color = .red
+        case .cancelled:
+            symbol = "xmark.circle.fill"
+            color = .secondary
+        }
+        return Image(systemName: symbol)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(color)
+            .frame(width: 20, height: 20)
+    }
+
+    private func fileImportBackground(_ stage: MeetingFileImportStage) -> Color {
+        switch stage {
+        case .completed:
+            return Color.green.opacity(0.08)
+        case .failed:
+            return Color.red.opacity(0.08)
+        case .cancelled:
+            return Color.secondary.opacity(0.08)
+        case .idle, .analyzing, .transcribing, .correcting, .summarizing, .saving:
+            return LibraryPalette.elevated
+        }
+    }
+
+    private func fileImportBorder(_ stage: MeetingFileImportStage) -> Color {
+        switch stage {
+        case .completed:
+            return Color.green.opacity(0.25)
+        case .failed:
+            return Color.red.opacity(0.25)
+        case .idle, .analyzing, .transcribing, .correcting, .summarizing, .saving, .cancelled:
+            return LibraryPalette.border
+        }
     }
 }
 

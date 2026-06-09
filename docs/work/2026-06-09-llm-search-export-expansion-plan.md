@@ -496,19 +496,26 @@ Pencil 작업이 필요한 경우:
 
 작업:
 
-- 회의 목록 첫 화면에 "파일로 회의록 만들기" 추가
+- 회의 목록 첫 화면에 "파일 가져오기" 보조 액션 추가
 - `NSOpenPanel`로 audio/video 선택
-- `AVAssetReader` 기반 `FileTranscriptionJob` 추가
-- 16kHz mono PCM 변환 후 기존 STT/VAD/요약 pipeline 재사용
-- 긴 파일 진행률/취소 지원
-- 생성된 회의는 MeetingStore에 일반 회의와 동일하게 저장
+- `FileAudioExtractor`로 파일을 16kHz mono PCM chunk stream으로 변환
+- `MeetingFileImportUseCase`를 추가해 파일 분석, chunk별 전사, 교정, 요약, 저장 workflow를 조합
+- live recording용 `TranscriptionViewModel`에는 파일 처리 상태를 넣지 않는다
+- 생성된 회의는 기존 `MeetingRecord`와 `MeetingStore.save`를 그대로 사용해 검색 sidecar index까지 동일하게 갱신
+- 긴 파일 진행률/취소는 use-case 상태 enum으로 UI에 노출한다
+- 파일 전체를 `[Float]`로 올리지 않고 extractor가 chunk callback을 통해 use-case에 순차 전달한다. VAD 기반 세분화 재사용은 파일 처리 품질 측정 후 별도 최적화로 둔다.
 
 검증:
 
 - 짧은 wav/mp4 fixture 처리
+- 실제 작은 wav fixture의 AVFoundation extractor 경로 검증
 - 지원하지 않는 파일 형식 메시지
 - 긴 파일 취소 시 partial artifact 정리
 - 전사 실패해도 앱 크래시 없음
+- 저장 후 회의 목록과 검색 인덱스에 새 회의가 나타남
+- 파일 import 중 live recording 상태와 선택 상태가 섞이지 않음
+- 코드리뷰: 파일 IO/AVFoundation adapter와 use-case/UI 경계 확인
+- ADR: `docs/adr/0002-file-import-streaming-architecture.md`
 
 ### Phase 8. 시스템 사운드 입력
 
