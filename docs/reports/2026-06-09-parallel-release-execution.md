@@ -136,6 +136,7 @@
   - Search answer flow coverage now confirms `MeetingSearchAnswerUseCase` calls `LocalLLMProvider` with an Ollama `answer` payload, preserves citations, and uses `num_predict=1800` with the configured context window.
   - Rendered app UI QA now confirms the meeting search "AI 답변" button calls the Local LLM Ollama `/api/generate` flow and renders the returned answer with citations.
   - File import pipeline QA now confirms correction and final summary run as pipeline stages rather than standalone buttons: `전사 다듬는 중`/`.correcting` is observed before the corrected transcript is passed to `회의록 정리 중`/`.summarizing`.
+  - Rendered file import QA now confirms the app status card shows `전사 다듬는 중`, then `회의록 정리 중`, then `회의록 생성 완료` while importing `minto-import-qa.wav` through the actual `파일 가져오기` button.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -198,6 +199,12 @@
   - `/tmp/minto2-local-llm-ui-answer-window.png`: window-id capture shows the rendered search answer card, citation list `[1]...[4]`, and the isolated one-meeting search result.
   - Test cleanup: app and mock server processes were stopped; real `com.minto.app` defaults were restored to no `meetingSearchAnswer*` keys, no local endpoint override keys, and `localLLMModelID=qwen2.5:3b`.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-correction-summary-pipeline-test --filter MeetingFileImportUseCaseTests`: passed, 10 tests
+  - `swift build --disable-sandbox --scratch-path /tmp/minto2-file-import-rendered-qa-build`: passed.
+  - `HOME=/tmp/minto2-file-import-rendered-qa/home3 CFFIXED_USER_HOME=/tmp/minto2-file-import-rendered-qa/home3 ... /tmp/minto2-file-import-rendered-qa-build/debug/minto2`: rendered file import QA selected `/tmp/minto2-file-import-rendered-qa/minto-import-qa.wav` through `파일 가져오기`.
+  - `/tmp/minto2-file-import-rendered-qa/import-sfspeech-hits.txt`: accessibility polling captured `전사 다듬는 중`, `회의록 정리 중`, and `회의록 생성 완료` for `minto-import-qa.wav`.
+  - `/tmp/minto2-file-import-rendered-qa/llm-requests.jsonl`: mock local LLM recorded correction and final-summary `/api/generate` requests with `options.num_ctx=4096`.
+  - `/tmp/minto2-file-import-rendered-qa/home3/Library/Application Support/Minto/meetings/B82DDC3A-EC49-48B5-AF40-8F05EA9F52BC.json`: saved meeting `파일 import rendered QA` with one segment and summary lead answer.
+  - `swift test --disable-sandbox --scratch-path /tmp/minto2-file-import-rendered-qa-build --filter MeetingFileImportUseCaseTests`: passed, 10 tests.
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context --num-ctx 4096 --repeat 3 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-repeat3-numctx4096 --fail-fast`: passed, 3/3 runs, mean latency `5.617s`, correction term recall `0.75`, missing term `Liquibase`
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model deepseek-r1:8b --cases correction_terms_with_context --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-correction-context-numctx4096 --fail-fast`: passed, 1/1 run, latency `43.994s`, correction term recall `1.0`
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model deepseek-r1:8b --cases correction_terms_with_context,summary_json,grounded_answer --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-fullcase-context-numctx4096 --fail-fast`: passed, 3/3 runs, mean latency `36.874s`, summary JSON valid rate `1.0`, grounded answer term recall `0.333`
@@ -223,7 +230,6 @@
   - 실제 마이크와 화상회의 앱 출력을 동시에 넣은 `마이크+시스템` VAD/STT 결과 확인. ViewModel-level mixed source buffer to VAD handoff is covered by `AudioInputModeTests`.
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
-  - 실제 앱 화면에서 파일 가져오기 또는 녹음 종료 경로의 correction/summary 진행 상태 rendered QA. There are no standalone correction/summary buttons in the current UI; the automated file import pipeline test covers the stage order and corrected-transcript handoff.
   - 설치된 후보 중 `llama3.1:8b`는 가장 빠른 full-case run이지만 repeat-3에서도 correction recall `0.75`, grounded answer recall `0.333...0.667`이라 기본값 후보는 보류한다. 다음 기본값 판단은 추가 모델 설치 또는 prompt 조정 benchmark 후 진행한다.
 - Keychain reconnect UX:
   - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 Atlassian 인증 실패 렌더 확인. 서비스의 `needsReconnect` 상태 전환과 export sheet의 Settings handoff 조건은 자동 테스트로 검증됨.
