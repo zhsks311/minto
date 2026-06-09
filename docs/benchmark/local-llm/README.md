@@ -28,5 +28,6 @@
 - Ollama 후보는 context window를 통제하고 `run_manifest.json`에 기록한 실제 run만 후보 판단에 사용한다.
 - case별 JSON/JSONL은 capped `output_preview`, `output_sha256`, `found_terms`, `missing_terms`를 남겨 누락 원인을 재실행 없이 추적한다.
 - Markdown/CSV summary는 누락 term을 바로 확인할 수 있어야 하며, 출력 preview는 built-in synthetic benchmark 응답 확인 용도로만 사용한다.
+- `summary.json`/`summary.md`는 correction, summary, answer gate를 분리해 어느 use case가 기본값 승격을 막는지 보여야 한다.
 - 교정 후보는 minimal prompt와 Minto형 meeting topic/glossary prompt를 구분해 본다.
 - timeout이 난 모델은 기본값 후보로 올리지 않는다.

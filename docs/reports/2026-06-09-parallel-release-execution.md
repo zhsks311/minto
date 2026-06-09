@@ -121,6 +121,7 @@
   - Benchmark instructions are documented under `docs/benchmark/local-llm-benchmark-runner.md`.
   - Benchmark `summary.csv` output now uses LF line endings so generated results pass `git diff --check` without manual normalization.
   - Benchmark metrics now keep a capped output preview and output SHA-256 per case, while summary CSV/Markdown exposes found and missing terms for failure triage.
+  - Benchmark `summary.json`/`summary.md` now split correction, summary, and answer gate metrics so default-candidate blockers are separated by use case.
   - Real Ollama run for `deepseek-r1:8b` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b`; first correction case timed out after 120s and a direct 16-token request timed out after 60s, so this model is not promoted as a default candidate.
   - The `deepseek-r1:8b` failure happened with Ollama model context `131072`; rerun evidence should use a controlled context such as `--num-ctx 4096`.
   - Controlled `deepseek-r1:8b` rerun with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096`; timeout was resolved, but correction term recall was `0.0`, so default-candidate status remains on hold.
