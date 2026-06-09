@@ -123,15 +123,21 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
         case .gpt:
             return [
                 LLMModelInfo(
-                    id: "gpt-5.2",
-                    displayName: "GPT-5.2",
+                    id: "gpt-5.5",
+                    displayName: "GPT-5.5",
                     description: "회의 교정과 요약 품질을 우선할 때",
                     capabilities: textCapabilities.union([.embedding]),
                     isRecommended: true
                 ),
                 LLMModelInfo(
-                    id: "gpt-4.1-mini",
-                    displayName: "GPT-4.1 mini",
+                    id: "gpt-5.4",
+                    displayName: "GPT-5.4",
+                    description: "품질과 속도의 균형이 필요할 때",
+                    capabilities: textCapabilities
+                ),
+                LLMModelInfo(
+                    id: "gpt-5.4-mini",
+                    displayName: "GPT-5.4 mini",
                     description: "비용과 속도를 더 중시할 때",
                     capabilities: textCapabilities
                 )
@@ -139,48 +145,78 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
         case .gemini:
             return [
                 LLMModelInfo(
-                    id: "gemini-2.5-flash",
-                    displayName: "Gemini 2.5 Flash",
+                    id: "gemini-3.5-flash",
+                    displayName: "Gemini 3.5 Flash",
                     description: "빠른 회의 교정과 요약",
                     capabilities: textCapabilities,
                     isRecommended: true
                 ),
                 LLMModelInfo(
-                    id: "gemini-2.5-pro",
-                    displayName: "Gemini 2.5 Pro",
+                    id: "gemini-3.1-pro-preview",
+                    displayName: "Gemini 3.1 Pro Preview",
                     description: "긴 문맥과 높은 품질이 필요할 때",
+                    capabilities: textCapabilities
+                ),
+                LLMModelInfo(
+                    id: "gemini-3.1-flash-lite",
+                    displayName: "Gemini 3.1 Flash-Lite",
+                    description: "비용과 지연 시간을 낮출 때",
                     capabilities: textCapabilities
                 )
             ]
         case .claude:
             return [
                 LLMModelInfo(
-                    id: "claude-sonnet-4-20250514",
-                    displayName: "Claude Sonnet 4",
+                    id: "claude-sonnet-4-6",
+                    displayName: "Claude Sonnet 4.6",
                     description: "긴 회의 맥락 정리와 구조화",
                     capabilities: textCapabilities,
                     isRecommended: true
+                ),
+                LLMModelInfo(
+                    id: "claude-haiku-4-5-20251001",
+                    displayName: "Claude Haiku 4.5",
+                    description: "빠른 교정과 짧은 요약",
+                    capabilities: textCapabilities
+                ),
+                LLMModelInfo(
+                    id: "claude-opus-4-8",
+                    displayName: "Claude Opus 4.8",
+                    description: "복잡한 회의 구조화 품질을 우선할 때",
+                    capabilities: textCapabilities
+                ),
+                LLMModelInfo(
+                    id: "claude-fable-5",
+                    displayName: "Claude Fable 5",
+                    description: "최고 성능 모델을 직접 선택할 때",
+                    capabilities: textCapabilities
                 )
             ]
         case .openRouter:
             return [
                 LLMModelInfo(
-                    id: "openai/gpt-5.2",
-                    displayName: "OpenAI GPT-5.2",
+                    id: "openai/gpt-5.5",
+                    displayName: "OpenAI GPT-5.5",
                     description: "OpenRouter를 통한 GPT 고품질 모델",
                     capabilities: textCapabilities,
                     isRecommended: true
                 ),
                 LLMModelInfo(
-                    id: "anthropic/claude-sonnet-4.5",
-                    displayName: "Claude Sonnet 4.5",
+                    id: "anthropic/claude-sonnet-4.6",
+                    displayName: "Claude Sonnet 4.6",
                     description: "긴 회의 구조화에 강한 모델",
                     capabilities: textCapabilities
                 ),
                 LLMModelInfo(
-                    id: "google/gemini-2.5-flash",
-                    displayName: "Gemini 2.5 Flash",
+                    id: "google/gemini-3.5-flash",
+                    displayName: "Gemini 3.5 Flash",
                     description: "빠른 교정과 요약",
+                    capabilities: textCapabilities
+                ),
+                LLMModelInfo(
+                    id: "openai/gpt-5.4-mini",
+                    displayName: "OpenAI GPT-5.4 mini",
+                    description: "비용과 속도를 낮출 때",
                     capabilities: textCapabilities
                 )
             ]

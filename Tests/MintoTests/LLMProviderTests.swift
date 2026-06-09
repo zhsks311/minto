@@ -324,9 +324,42 @@ struct LLMProviderTests {
         #expect(await provider.isConfigured() == false)
         let catalog = await provider.modelCatalog()
         #expect(catalog.source == .bundledFallback)
-        #expect(catalog.models.first?.id == "claude-sonnet-4-20250514")
+        #expect(catalog.models.first?.id == "claude-sonnet-4-6")
         #expect(catalog.manualModelHelpURL != nil)
         #expect(catalog.warning?.contains("API 키") == true)
+    }
+
+    @Test("API key 공급자 기본 카탈로그는 현재 provider 모델 ID를 사용한다")
+    func apiKeyProviderBundledCatalogUsesCurrentModelIDs() {
+        #expect(LLMAPIKeyTextProvider.defaultModelID(for: .gpt) == "gpt-5.5")
+        #expect(LLMAPIKeyTextProvider.bundledModels(for: .gpt).map(\.id) == [
+            "gpt-5.5",
+            "gpt-5.4",
+            "gpt-5.4-mini"
+        ])
+
+        #expect(LLMAPIKeyTextProvider.defaultModelID(for: .gemini) == "gemini-3.5-flash")
+        #expect(LLMAPIKeyTextProvider.bundledModels(for: .gemini).map(\.id) == [
+            "gemini-3.5-flash",
+            "gemini-3.1-pro-preview",
+            "gemini-3.1-flash-lite"
+        ])
+
+        #expect(LLMAPIKeyTextProvider.defaultModelID(for: .claude) == "claude-sonnet-4-6")
+        #expect(LLMAPIKeyTextProvider.bundledModels(for: .claude).map(\.id) == [
+            "claude-sonnet-4-6",
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-8",
+            "claude-fable-5"
+        ])
+
+        #expect(LLMAPIKeyTextProvider.defaultModelID(for: .openRouter) == "openai/gpt-5.5")
+        #expect(LLMAPIKeyTextProvider.bundledModels(for: .openRouter).map(\.id) == [
+            "openai/gpt-5.5",
+            "anthropic/claude-sonnet-4.6",
+            "google/gemini-3.5-flash",
+            "openai/gpt-5.4-mini"
+        ])
     }
 
     @Test("OpenAI API provider는 Responses API 요청을 만든다")
@@ -372,7 +405,7 @@ struct LLMProviderTests {
                 useCase: .answer,
                 instructions: "답변",
                 userContent: "질문",
-                modelID: "openai/gpt-5.2"
+                modelID: "openai/gpt-5.5"
             ))
         }
     }

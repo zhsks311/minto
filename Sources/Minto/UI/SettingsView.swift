@@ -1265,13 +1265,13 @@ public struct SettingsView: View {
     private func apiManualModelHelpText(_ providerID: LLMProviderID) -> String {
         switch providerID {
         case .gpt:
-            return "OpenAI Platform의 모델 ID를 입력하세요. 예: gpt-5.2"
+            return "OpenAI Platform의 모델 ID를 입력하세요. 예: gpt-5.5, gpt-5.4-mini"
         case .gemini:
-            return "Gemini API 문서의 모델 ID를 입력하세요. 예: gemini-2.5-flash"
+            return "Gemini API 문서의 모델 ID를 입력하세요. 예: gemini-3.5-flash, gemini-3.1-flash-lite"
         case .claude:
-            return "Anthropic API의 모델 ID를 입력하세요. 예: claude-sonnet-4-20250514"
+            return "Anthropic API의 모델 ID를 입력하세요. 예: claude-sonnet-4-6, claude-haiku-4-5-20251001"
         case .openRouter:
-            return "OpenRouter 모델 ID를 입력하세요. 예: openai/gpt-5.2"
+            return "OpenRouter 모델 ID를 입력하세요. 예: openai/gpt-5.5, anthropic/claude-sonnet-4.6"
         case .local, .copilot, .chatGPTAccount, .geminiAccount:
             return "선택한 서비스에서 요구하는 모델 ID를 입력하세요."
         }
