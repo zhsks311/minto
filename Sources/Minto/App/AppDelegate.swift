@@ -29,11 +29,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     @MainActor
     public func requestStartSession() {
         meetingSetupManager.show(
-            onStart: { [weak self] topic, glossary, document in
+            onStart: { [weak self] topic, glossary, document, inputMode in
                 guard let self else { return }
                 MeetingContext.shared.start(topic: topic, glossary: glossary, document: document)
                 self.reportService.startNewReport(startedAt: Date())
-                self.viewModel.startNewRecordingSession()
+                self.viewModel.startNewRecordingSession(inputMode: inputMode)
                 self.mainWindowManager.show()
             },
             onCancel: {}

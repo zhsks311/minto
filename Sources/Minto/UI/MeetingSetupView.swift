@@ -10,16 +10,17 @@ public struct MeetingSetupView: View {
     @State private var document: String = ""
     @State private var showGlossary = false
     @State private var showDocument = false
+    @State private var audioInputMode: AudioInputMode = .microphone
     @State private var selectedGlossaryEntryIDs: Set<UUID> = []
     @State private var confluenceDocuments: [ConfluenceService.ContextDocument] = []
     @State private var confluenceStatus: String?
     @State private var isSearchingConfluence = false
 
-    private let onStart: (String, String, String) -> Void
+    private let onStart: (String, String, String, AudioInputMode) -> Void
     private let onCancel: () -> Void
 
     public init(
-        onStart: @escaping (String, String, String) -> Void,
+        onStart: @escaping (String, String, String, AudioInputMode) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.onStart = onStart
@@ -46,6 +47,8 @@ public struct MeetingSetupView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            audioInputPicker
+
             glossaryContextEditor
 
             documentContextEditor
@@ -54,13 +57,35 @@ public struct MeetingSetupView: View {
                 Spacer()
                 Button("닫기") { onCancel() }
                     .keyboardShortcut(.cancelAction)
-                Button("녹음 시작") { onStart(topic, combinedGlossary, combinedDocument) }
+                Button("녹음 시작") { onStart(topic, combinedGlossary, combinedDocument, audioInputMode) }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
             }
         }
         .padding(20)
         .frame(width: 440)
+    }
+
+    private var audioInputPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("입력")
+                .font(.subheadline.weight(.medium))
+            Picker("입력", selection: $audioInputMode) {
+                ForEach(AudioInputMode.selectableCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            HStack(spacing: 6) {
+                Image(systemName: audioInputMode.requiresScreenCapturePermission ? "rectangle.on.rectangle" : "mic")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(audioInputMode.detail)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 
     private var glossaryContextEditor: some View {

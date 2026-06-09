@@ -39,6 +39,7 @@ public final class TranscriptionViewModel: ObservableObject {
     @Published public var recordingDuration: TimeInterval = 0
     @Published public var audioLevel: Float = 0
     @Published public var isFinalizingMeeting: Bool = false
+    @Published public private(set) var audioInputMode: AudioInputMode = .microphone
 
     // MARK: - Private
 
@@ -49,7 +50,8 @@ public final class TranscriptionViewModel: ObservableObject {
     private var previewTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
     private var chunkContinuation: AsyncStream<AudioChunk>.Continuation?
-    private let audioSource: AudioSourceProtocol
+    private var audioSource: any AudioSourceProtocol
+    private let audioSourceFactory: @MainActor (AudioInputMode) -> any AudioSourceProtocol
     private let vadProcessor: any VoiceActivityDetector
     private let emptyFinalRepairPolicy: EmptyFinalRepairPolicy
     private let audioSampleBuffer: TranscriptionAudioSampleBuffer
@@ -82,20 +84,24 @@ public final class TranscriptionViewModel: ObservableObject {
         self.init(
             sttService: STTService(),
             audioSource: MicrophoneSource(),
-            vadProcessor: VoiceActivityDetectorFactory.makeDefault()
+            vadProcessor: VoiceActivityDetectorFactory.makeDefault(),
+            audioSourceFactory: AudioSourceFactory.makeSource(for:)
         )
     }
 
     init(
         sttService: any TranscriptionSTTServicing,
-        audioSource: AudioSourceProtocol,
+        audioSource: any AudioSourceProtocol,
         vadProcessor: any VoiceActivityDetector,
         summaryService: any TranscriptionSummaryGenerating = SummaryService.shared,
-        emptyFinalRepairPolicy: EmptyFinalRepairPolicy = .fromEnvironment()
+        emptyFinalRepairPolicy: EmptyFinalRepairPolicy = .fromEnvironment(),
+        audioSourceFactory: (@MainActor (AudioInputMode) -> any AudioSourceProtocol)? = nil
     ) {
+        let initialAudioSource = audioSource
         self.sttService = sttService
         self.summaryService = summaryService
         self.audioSource = audioSource
+        self.audioSourceFactory = audioSourceFactory ?? { _ in initialAudioSource }
         self.vadProcessor = vadProcessor
         self.emptyFinalRepairPolicy = emptyFinalRepairPolicy
         self.audioSampleBuffer = TranscriptionAudioSampleBuffer(
@@ -181,10 +187,18 @@ public final class TranscriptionViewModel: ObservableObject {
 
     // MARK: - Recording control
 
-    public func startNewRecordingSession() {
+    public func startNewRecordingSession(inputMode: AudioInputMode = .microphone) {
         guard !isRecording else { return }
+        setAudioInputMode(inputMode)
         clearTranscript()
         startRecording()
+    }
+
+    public func setAudioInputMode(_ mode: AudioInputMode) {
+        guard !isRecording else { return }
+        audioSource.stop()
+        audioSource = audioSourceFactory(mode)
+        audioInputMode = mode
     }
 
     public func startRecording() {
@@ -224,8 +238,10 @@ public final class TranscriptionViewModel: ObservableObject {
 
         // AudioSource → VADProcessor + 레벨 미터
         audioSource.onBuffer = { [weak self] samples in
-            self?.audioSampleBuffer.append(samples)
-            self?.vadProcessor.process(samples: samples)
+            Task { @MainActor [weak self] in
+                self?.audioSampleBuffer.append(samples)
+                self?.vadProcessor.process(samples: samples)
+            }
         }
         audioSource.onLevel = { [weak self] level in
             Task { @MainActor [weak self] in
@@ -501,6 +517,13 @@ public final class TranscriptionViewModel: ObservableObject {
         switch error {
         case .permissionDenied:
             isPermissionDenied = true
+            isRecording = false
+        case .screenCapturePermissionDenied:
+            isPermissionDenied = true
+            isRecording = false
+            errorMessage = "시스템 사운드 입력을 사용하려면 화면 기록 권한이 필요합니다."
+        case .systemAudioUnavailable(let reason):
+            errorMessage = "시스템 사운드 입력을 사용할 수 없습니다: \(reason)"
             isRecording = false
         case .configChangeFailed(let underlying):
             errorMessage = "오디오 설정 변경 실패: \(underlying.localizedDescription)"

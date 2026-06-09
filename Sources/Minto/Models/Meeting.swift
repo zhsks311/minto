@@ -72,8 +72,46 @@ public struct AudioDevice: Identifiable, Equatable, Sendable {
     }
 }
 
+public enum AudioInputMode: String, CaseIterable, Identifiable, Codable, Sendable {
+    case microphone
+    case systemAudio
+    case mixed
+
+    public var id: String { rawValue }
+
+    public static let selectableCases: [AudioInputMode] = [.microphone, .systemAudio]
+
+    public var title: String {
+        switch self {
+        case .microphone:
+            return "마이크"
+        case .systemAudio:
+            return "시스템"
+        case .mixed:
+            return "마이크+시스템"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .microphone:
+            return "내 목소리 중심"
+        case .systemAudio:
+            return "화상회의 상대방 소리"
+        case .mixed:
+            return "후속 mixer 보강 후 지원"
+        }
+    }
+
+    public var requiresScreenCapturePermission: Bool {
+        self != .microphone
+    }
+}
+
 public enum AudioSourceError: Error, Sendable {
     case permissionDenied
+    case screenCapturePermissionDenied
+    case systemAudioUnavailable(String)
     case configChangeFailed(Error)
     case deviceNotFound(AudioDevice)
     case engineStartFailed(Error)
