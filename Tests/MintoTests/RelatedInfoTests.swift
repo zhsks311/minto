@@ -501,6 +501,32 @@ struct IntegrationReconnectStateTests {
         #expect(!service.isConfigured)
     }
 
+    @Test("Notion 상태 조회는 token 원문을 읽지 않는다")
+    func notionStatusChecksDoNotLoadTokenPayload() {
+        let storageBackend = StubOAuthTokenStorageBackend(loadData: Data("stored-token".utf8), existsResult: true)
+        let tokenStorage = KeychainTokenStorage(keychainKey: "test-notion-status", storage: storageBackend)
+        let service = NotionMCPService(tokenStorage: tokenStorage)
+
+        #expect(service.connectionState == .connected)
+        #expect(service.isConnected)
+        #expect(service.isConfigured)
+        service.refreshConnectionStateFromStorage()
+        #expect(service.connectionState == .connected)
+        #expect(storageBackend.loadCallCount == 0)
+    }
+
+    @Test("Confluence 상태 조회는 token 원문을 읽지 않는다")
+    func confluenceStatusChecksDoNotLoadTokenPayload() {
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let service = makeConfiguredConfluenceService(tokenStorage: tokenStorage)
+
+        #expect(service.connectionState == .connected)
+        #expect(service.isConfigured)
+        #expect(service.canDisconnect)
+        #expect(service.connectionState == .connected)
+        #expect(tokenStorage.loadCallCount == 0)
+    }
+
     @Test("Confluence token decode 실패는 실제 사용 후 재연결 필요 상태로 남긴다")
     func confluenceInvalidStoredTokenMarksReconnectAfterUse() async {
         let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data([0xff]), existsResult: true)
