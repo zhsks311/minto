@@ -404,13 +404,13 @@ public struct SettingsView: View {
             DisclosureGroup(isExpanded: $showNotionSettings) {
                 notionSettingsBody
             } label: {
-                integrationStatusRow(title: "Notion", connected: notionMCP.isConnected)
+                integrationStatusRow(title: "Notion", state: notionIntegrationState)
             }
 
             DisclosureGroup(isExpanded: $showConfluenceSettings) {
                 confluenceSettingsBody
             } label: {
-                integrationStatusRow(title: "Confluence", connected: confluence.isConfigured)
+                integrationStatusRow(title: "Confluence", state: confluenceIntegrationState)
             }
         }
     }
@@ -432,8 +432,38 @@ public struct SettingsView: View {
 
     private var nextSearchSetupAction: String {
         if connectedSearchSourceCount == 2 { return "추가 설정 없이 사용할 수 있습니다" }
+        if notionIntegrationState == .needsReconnect { return "다음 단계: Notion 다시 연결" }
+        if confluenceIntegrationState == .needsReconnect { return "다음 단계: Confluence 다시 연결" }
         if !notionMCP.isConnected { return "다음 단계: Notion 연결" }
         return "다음 단계: Confluence 연결"
+    }
+
+    private enum IntegrationConnectionState {
+        case disconnected
+        case connected
+        case needsReconnect
+    }
+
+    private var notionIntegrationState: IntegrationConnectionState {
+        switch notionMCP.connectionState {
+        case .disconnected:
+            return .disconnected
+        case .connected:
+            return .connected
+        case .needsReconnect:
+            return .needsReconnect
+        }
+    }
+
+    private var confluenceIntegrationState: IntegrationConnectionState {
+        switch confluence.connectionState {
+        case .disconnected:
+            return .disconnected
+        case .connected:
+            return .connected
+        case .needsReconnect:
+            return .needsReconnect
+        }
     }
 
     @ViewBuilder
@@ -455,7 +485,17 @@ public struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
         } else {
-            Button("Notion 연결") {
+            if notionIntegrationState == .needsReconnect {
+                Text("저장된 Notion 토큰을 사용할 수 없습니다. 다시 연결해 주세요.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                Button("연결 정보 지우기") {
+                    notionMCP.disconnect()
+                    notionConnectError = nil
+                }
+                .foregroundColor(.red)
+            }
+            Button(notionIntegrationState == .needsReconnect ? "Notion 다시 연결" : "Notion 연결") {
                 notionConnectError = nil
                 notionConnectLoading = true
                 Task {
@@ -484,12 +524,10 @@ public struct SettingsView: View {
     private var confluenceSettingsBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 6) {
-                Image(systemName: confluence.isConfigured ? "link.circle.fill" : "link.circle")
+                Image(systemName: confluenceStatusIcon)
                     .font(.caption)
-                    .foregroundColor(confluence.isConfigured ? .green : .secondary)
-                Text(confluence.isConfigured
-                     ? "관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기에 사용됩니다."
-                     : "연결하면 관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기를 사용할 수 있습니다.")
+                    .foregroundColor(confluenceStatusColor)
+                Text(confluenceStatusMessage)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -521,7 +559,7 @@ public struct SettingsView: View {
                     confluenceTokenInput = ""
                 }
                 .disabled(confluenceTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                if confluence.isConfigured {
+                if confluence.canDisconnect {
                     Button("연동 해제") {
                         confluence.setAPIToken("")
                         confluenceEmail = ""
@@ -536,16 +574,66 @@ public struct SettingsView: View {
         }
     }
 
-    private func integrationStatusRow(title: String, connected: Bool) -> some View {
+    private var confluenceStatusIcon: String {
+        confluenceIntegrationState == .needsReconnect
+            ? "exclamationmark.circle.fill"
+            : (confluence.isConfigured ? "link.circle.fill" : "link.circle")
+    }
+
+    private var confluenceStatusColor: Color {
+        switch confluenceIntegrationState {
+        case .connected:
+            return .green
+        case .needsReconnect:
+            return .orange
+        case .disconnected:
+            return .secondary
+        }
+    }
+
+    private var confluenceStatusMessage: String {
+        switch confluenceIntegrationState {
+        case .connected:
+            return "관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기에 사용됩니다."
+        case .needsReconnect:
+            return "저장된 Confluence token을 사용할 수 없습니다. API token을 다시 저장해 주세요."
+        case .disconnected:
+            return "연결하면 관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기를 사용할 수 있습니다."
+        }
+    }
+
+    private func integrationStatusRow(title: String, state: IntegrationConnectionState) -> some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(connected ? Color.green : Color.secondary.opacity(0.4))
+                .fill(integrationStatusColor(for: state))
                 .frame(width: 7, height: 7)
             Text(title).font(.callout)
             Spacer()
-            Text(connected ? "연동됨" : "미연동")
+            Text(integrationStatusText(for: state))
                 .font(.caption)
                 .foregroundColor(.secondary)
+        }
+    }
+
+    private func integrationStatusColor(for state: IntegrationConnectionState) -> Color {
+        switch state {
+        case .connected:
+            return .green
+        case .needsReconnect:
+            return .orange
+        case .disconnected:
+            return Color.secondary.opacity(0.4)
+        }
+    }
+
+    private func integrationStatusText(for state: IntegrationConnectionState) -> String {
+        switch state {
+        case .connected:
+            return "연동됨"
+        case .needsReconnect:
+            return "다시 연결 필요"
+        case .disconnected:
+            return "미연동"
         }
     }
 

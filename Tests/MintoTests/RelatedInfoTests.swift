@@ -1,6 +1,7 @@
 import Testing
 @testable import MintoCore
 import Foundation
+import MCP
 
 /// notion-search MCP 응답 파싱 테스트.
 ///
@@ -350,7 +351,14 @@ struct ConfluenceConfigTests {
     private func makeService() -> (ConfluenceService, UserDefaults) {
         let suite = "test.confluence.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        return (ConfluenceService(defaults: defaults), defaults)
+        return (
+            ConfluenceService(
+                httpClient: StubConfluenceHTTPClient(),
+                defaults: defaults,
+                tokenStorage: StubConfluenceTokenStorageBackend()
+            ),
+            defaults
+        )
     }
 
     @Test("baseURL: 끝의 / 와 /wiki 제거")
@@ -385,6 +393,96 @@ struct ConfluenceConfigTests {
     }
 }
 
+@Suite("연동 token 재연결 상태")
+@MainActor
+struct IntegrationReconnectStateTests {
+
+    @Test("OAuth token decode 실패는 원문 재조회 없이 재연결 필요로 캐시된다")
+    func oauthTokenDecodeFailureIsCachedAsReconnectRequired() {
+        let storageBackend = StubOAuthTokenStorageBackend(loadData: Data("not-json".utf8), existsResult: true)
+        let storage = KeychainTokenStorage(keychainKey: "test-notion", storage: storageBackend)
+
+        #expect(storage.hasToken())
+        #expect(storageBackend.loadCallCount == 0)
+
+        #expect(storage.load() == nil)
+        #expect(storage.requiresReconnect)
+        #expect(!storage.hasToken())
+        #expect(storageBackend.loadCallCount == 1)
+
+        #expect(storage.load() == nil)
+        #expect(storageBackend.loadCallCount == 1)
+    }
+
+    @Test("Notion OAuth 인증 실패는 다시 연결 필요 상태로 남긴다")
+    func notionAuthorizationFailureMarksReconnectRequired() {
+        let storageBackend = StubOAuthTokenStorageBackend(loadData: nil, existsResult: true)
+        let tokenStorage = KeychainTokenStorage(keychainKey: "test-notion", storage: storageBackend)
+        let service = NotionMCPService(tokenStorage: tokenStorage)
+
+        #expect(service.connectionState == .connected)
+
+        service.handleConnectionFailure(MCPError.internalError("Authorization flow failed: Token request failed with status 401"))
+
+        #expect(service.connectionState == .needsReconnect)
+        #expect(!service.isConfigured)
+    }
+
+    @Test("Confluence token decode 실패는 실제 사용 후 재연결 필요 상태로 남긴다")
+    func confluenceInvalidStoredTokenMarksReconnectAfterUse() async {
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data([0xff]), existsResult: true)
+        let service = makeConfiguredConfluenceService(tokenStorage: tokenStorage)
+
+        #expect(service.connectionState == .connected)
+        #expect(tokenStorage.loadCallCount == 0)
+
+        let docs = await service.search("회의 안건")
+
+        #expect(docs.isEmpty)
+        #expect(service.connectionState == .needsReconnect)
+        #expect(!service.isConfigured)
+        #expect(tokenStorage.loadCallCount == 1)
+
+        _ = await service.search("다시 조회")
+        #expect(tokenStorage.loadCallCount == 1)
+    }
+
+    @Test("Confluence 401 응답은 token 원문 없이 재연결 필요 상태를 남긴다")
+    func confluenceUnauthorizedSearchMarksReconnectRequired() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 401, data: Data("unauthorized".utf8))
+        ])
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let service = makeConfiguredConfluenceService(httpClient: httpClient, tokenStorage: tokenStorage)
+
+        #expect(service.connectionState == .connected)
+
+        let docs = await service.search("회의 안건")
+
+        #expect(docs.isEmpty)
+        #expect(service.connectionState == .needsReconnect)
+        #expect(!service.isConfigured)
+        #expect(tokenStorage.loadCallCount == 1)
+        #expect(httpClient.requests.count == 1)
+        #expect(httpClient.requests[0].value(forHTTPHeaderField: "Authorization")?.hasPrefix("Basic ") == true)
+    }
+
+    private func makeConfiguredConfluenceService(
+        httpClient: StubConfluenceHTTPClient = StubConfluenceHTTPClient(),
+        tokenStorage: StubConfluenceTokenStorageBackend
+    ) -> ConfluenceService {
+        let defaults = UserDefaults(suiteName: "test.confluence.reconnect.\(UUID().uuidString)")!
+        let service = ConfluenceService(
+            httpClient: httpClient,
+            defaults: defaults,
+            tokenStorage: tokenStorage
+        )
+        service.setBaseURL("https://acme.atlassian.net")
+        service.setEmail("user@example.com")
+        return service
+    }
+}
+
 @Suite("Confluence CQL 이스케이프")
 struct ConfluenceCQLTests {
 
@@ -404,5 +502,124 @@ struct ConfluenceCQLTests {
     func escapesTrailingBackslash() {
         let cql = ConfluenceService.cqlQuery(for: "foo\\")
         #expect(cql == "text ~ \"foo\\\\\"")
+    }
+}
+
+private final class StubOAuthTokenStorageBackend: OAuthTokenStorageBackend, @unchecked Sendable {
+    private let lock = NSLock()
+    private var data: Data?
+    private var existsResult: Bool?
+    private var _loadCallCount = 0
+
+    init(loadData: Data?, existsResult: Bool? = nil) {
+        self.data = loadData
+        self.existsResult = existsResult
+    }
+
+    var loadCallCount: Int {
+        lock.withLock { _loadCallCount }
+    }
+
+    func exists(key: String) -> Bool {
+        lock.withLock { existsResult ?? (data != nil) }
+    }
+
+    func load(key: String) -> Data? {
+        lock.withLock {
+            _loadCallCount += 1
+            return data
+        }
+    }
+
+    func save(key: String, data: Data) {
+        lock.withLock {
+            self.data = data
+            existsResult = true
+        }
+    }
+
+    func delete(key: String) {
+        lock.withLock {
+            data = nil
+            existsResult = false
+        }
+    }
+}
+
+private final class StubConfluenceTokenStorageBackend: ConfluenceTokenStorageBackend, @unchecked Sendable {
+    private let lock = NSLock()
+    private var data: Data?
+    private var existsResult: Bool?
+    private var _loadCallCount = 0
+
+    init(loadData: Data? = nil, existsResult: Bool? = nil) {
+        self.data = loadData
+        self.existsResult = existsResult
+    }
+
+    var loadCallCount: Int {
+        lock.withLock { _loadCallCount }
+    }
+
+    func exists(account: String) -> Bool {
+        lock.withLock { existsResult ?? (data != nil) }
+    }
+
+    func load(account: String) -> Data? {
+        lock.withLock {
+            _loadCallCount += 1
+            return data
+        }
+    }
+
+    func save(account: String, data: Data) {
+        lock.withLock {
+            self.data = data
+            existsResult = true
+        }
+    }
+
+    func delete(account: String) {
+        lock.withLock {
+            data = nil
+            existsResult = false
+        }
+    }
+}
+
+private final class StubConfluenceHTTPClient: ConfluenceHTTPClient, @unchecked Sendable {
+    struct Response: Sendable {
+        let statusCode: Int
+        let data: Data
+    }
+
+    private let lock = NSLock()
+    private var responses: [Response]
+    private var _requests: [URLRequest] = []
+
+    init(responses: [Response] = []) {
+        self.responses = responses
+    }
+
+    var requests: [URLRequest] {
+        lock.withLock { _requests }
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let response = lock.withLock { () -> Response in
+            _requests.append(request)
+            if responses.isEmpty {
+                return Response(statusCode: 200, data: Data(#"{"results":[]}"#.utf8))
+            }
+            return responses.removeFirst()
+        }
+        let url = request.url ?? URL(string: "https://acme.atlassian.net")!
+        let http = HTTPURLResponse(
+            url: url,
+            statusCode: response.statusCode,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        return (response.data, http)
     }
 }

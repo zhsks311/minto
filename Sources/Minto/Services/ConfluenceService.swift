@@ -1,5 +1,46 @@
 import Foundation
 
+protocol ConfluenceHTTPClient: Sendable {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
+}
+
+final class URLSessionConfluenceHTTPClient: ConfluenceHTTPClient, @unchecked Sendable {
+    private let session: URLSession
+
+    init(session: URLSession) {
+        self.session = session
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try await session.data(for: request)
+    }
+}
+
+protocol ConfluenceTokenStorageBackend: Sendable {
+    func exists(account: String) -> Bool
+    func load(account: String) -> Data?
+    func save(account: String, data: Data)
+    func delete(account: String)
+}
+
+struct KeychainConfluenceTokenStorageBackend: ConfluenceTokenStorageBackend {
+    func exists(account: String) -> Bool {
+        KeychainService.exists(provider: account)
+    }
+
+    func load(account: String) -> Data? {
+        KeychainService.load(provider: account)
+    }
+
+    func save(account: String, data: Data) {
+        KeychainService.save(provider: account, data: data)
+    }
+
+    func delete(account: String) {
+        KeychainService.delete(provider: account)
+    }
+}
+
 /// Confluence Cloud REST API(CQL 검색)로 페이지를 조회한다.
 ///
 /// 인증(OAuth 3LO 대신 Basic): 사용자가
@@ -9,6 +50,12 @@ import Foundation
 @MainActor
 public final class ConfluenceService: ObservableObject {
     public static let shared = ConfluenceService()
+
+    public enum ConnectionState: Equatable, Sendable {
+        case disconnected
+        case connected
+        case needsReconnect
+    }
 
     public struct ContextDocument: Identifiable, Sendable, Hashable {
         public var id: String { url }
@@ -70,33 +117,57 @@ public final class ConfluenceService: ObservableObject {
     static let baseURLKey = "confluenceBaseURL"
     static let emailKey = "confluenceEmail"
     private let keychainKey = "confluence"
-    private let session: URLSession
+    private let httpClient: any ConfluenceHTTPClient
     private let defaults: UserDefaults
+    private let tokenStorage: any ConfluenceTokenStorageBackend
 
     /// 토큰 존재 여부 캐시 — isConfigured가 매 렌더마다 Keychain을 읽지 않도록 init에서 1회 로드.
     @Published private var hasToken: Bool = false
+    @Published private var needsReconnect: Bool = false
     private var cachedAPIToken: String?
 
-    public init(session: URLSession = .shared, defaults: UserDefaults = .standard) {
-        self.session = session
+    public convenience init(session: URLSession = .shared, defaults: UserDefaults = .standard) {
+        self.init(
+            httpClient: URLSessionConfluenceHTTPClient(session: session),
+            defaults: defaults,
+            tokenStorage: KeychainConfluenceTokenStorageBackend()
+        )
+    }
+
+    init(
+        httpClient: any ConfluenceHTTPClient,
+        defaults: UserDefaults = .standard,
+        tokenStorage: any ConfluenceTokenStorageBackend
+    ) {
+        self.httpClient = httpClient
         self.defaults = defaults
+        self.tokenStorage = tokenStorage
         self.cachedAPIToken = nil
-        self.hasToken = KeychainService.exists(provider: keychainKey)
+        self.hasToken = tokenStorage.exists(account: keychainKey)
     }
 
     // MARK: - 자격 관리
 
     /// 토큰 원문은 외부로 노출하지 않는다(로그·UI 유출 방지). search() 내부에서만 사용.
     private var apiToken: String? {
+        guard !needsReconnect else { return nil }
         if let cachedAPIToken { return cachedAPIToken }
-        let token = Self.loadAPIToken(keychainKey: keychainKey)
+        let hadToken = hasToken
+        let token = Self.loadAPIToken(keychainKey: keychainKey, tokenStorage: tokenStorage)
+        if token == nil, hadToken {
+            markNeedsReconnect()
+            return nil
+        }
         cachedAPIToken = token
         hasToken = (token != nil)
         return token
     }
 
-    private static func loadAPIToken(keychainKey: String) -> String? {
-        guard let data = KeychainService.load(provider: keychainKey) else { return nil }
+    private static func loadAPIToken(
+        keychainKey: String,
+        tokenStorage: any ConfluenceTokenStorageBackend
+    ) -> String? {
+        guard let data = tokenStorage.load(account: keychainKey) else { return nil }
         let value = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (value?.isEmpty == false) ? value : nil
     }
@@ -122,28 +193,45 @@ public final class ConfluenceService: ObservableObject {
 
     /// hasToken은 캐시(Keychain 비접근), email·baseURL은 UserDefaults(인메모리)라 렌더 경로에서 가볍다.
     public var isConfigured: Bool {
-        hasToken && email != nil && baseURL != nil
+        connectionState == .connected
+    }
+
+    public var connectionState: ConnectionState {
+        if needsReconnect { return .needsReconnect }
+        return hasToken && email != nil && baseURL != nil ? .connected : .disconnected
+    }
+
+    public var canDisconnect: Bool {
+        hasToken || needsReconnect
     }
 
     public func setAPIToken(_ raw: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            KeychainService.delete(provider: keychainKey)
+            tokenStorage.delete(account: keychainKey)
         } else {
-            KeychainService.save(provider: keychainKey, data: Data(trimmed.utf8))
+            tokenStorage.save(account: keychainKey, data: Data(trimmed.utf8))
         }
         cachedAPIToken = trimmed.isEmpty ? nil : trimmed
         hasToken = !trimmed.isEmpty  // @Published라 objectWillChange 자동 발행
+        needsReconnect = false
     }
 
     public func setEmail(_ raw: String) {
         defaults.set(raw.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Self.emailKey)
+        needsReconnect = false
         objectWillChange.send()
     }
 
     public func setBaseURL(_ raw: String) {
         defaults.set(raw.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Self.baseURLKey)
+        needsReconnect = false
         objectWillChange.send()
+    }
+
+    private func markNeedsReconnect() {
+        cachedAPIToken = nil
+        needsReconnect = true
     }
 
     // MARK: - 검색
@@ -212,10 +300,13 @@ public final class ConfluenceService: ObservableObject {
         )
 
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await httpClient.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw ExportError.badResponse }
             guard (200...299).contains(http.statusCode) else {
                 FileHandle.standardError.write(Data("[Confluence] 내보내기 HTTP \(http.statusCode)\n".utf8))
+                if http.statusCode == 401 {
+                    markNeedsReconnect()
+                }
                 throw Self.exportError(forHTTPStatus: http.statusCode)
             }
             guard let page = Self.parsePublishedPage(data, fallbackBase: "\(baseURL)/wiki") else {
@@ -254,10 +345,13 @@ public final class ConfluenceService: ObservableObject {
         request.setValue("Basic \(credential)", forHTTPHeaderField: "Authorization")
 
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await httpClient.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw ExportError.badResponse }
             guard (200...299).contains(http.statusCode) else {
                 FileHandle.standardError.write(Data("[Confluence] 공간 조회 HTTP \(http.statusCode)\n".utf8))
+                if http.statusCode == 401 {
+                    markNeedsReconnect()
+                }
                 throw Self.exportError(forHTTPStatus: http.statusCode)
             }
             guard let spaceID = Self.parseSpaceID(data, matchingKey: spaceKey) else {
@@ -294,10 +388,13 @@ public final class ConfluenceService: ObservableObject {
         request.setValue("Basic \(credential)", forHTTPHeaderField: "Authorization")
 
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await httpClient.data(for: request)
             guard let http = response as? HTTPURLResponse else { return [] }
             guard http.statusCode == 200 else {
                 FileHandle.standardError.write(Data("[Confluence] 검색 HTTP \(http.statusCode)\n".utf8))
+                if http.statusCode == 401 {
+                    markNeedsReconnect()
+                }
                 return []
             }
             return Self.parseSearchHits(data, fallbackBase: "\(baseURL)/wiki", limit: limit)
@@ -327,10 +424,13 @@ public final class ConfluenceService: ObservableObject {
         request.setValue("Basic \(credential)", forHTTPHeaderField: "Authorization")
 
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await httpClient.data(for: request)
             guard let http = response as? HTTPURLResponse else { return nil }
             guard http.statusCode == 200 else {
                 FileHandle.standardError.write(Data("[Confluence] 본문 HTTP \(http.statusCode)\n".utf8))
+                if http.statusCode == 401 {
+                    markNeedsReconnect()
+                }
                 return nil
             }
             return Self.parseContentBodyText(data)
