@@ -1,0 +1,30 @@
+{
+  "base_url": "http://127.0.0.1:11434",
+  "case_id": "correction_terms",
+  "case_name": "Korean transcript correction with domain terms",
+  "case_type": "correction",
+  "compatibility": "ollama",
+  "error": null,
+  "expected_terms": [
+    "PDCR-2901",
+    "Liquibase",
+    "Confluence",
+    "dry-run"
+  ],
+  "found_terms": [],
+  "json_valid": null,
+  "latency_seconds": 10.733,
+  "model": "llama3.1:8b",
+  "num_ctx": 4096,
+  "output_chars": 72,
+  "repeat_index": 0,
+  "required_field_recall": null,
+  "required_fields": [],
+  "required_fields_present": [],
+  "schema_version": 1,
+  "server_pid": 58693,
+  "server_rss_peak_mb": 121.31,
+  "server_rss_samples": 48,
+  "status": "passed",
+  "term_recall": 0.0
+}

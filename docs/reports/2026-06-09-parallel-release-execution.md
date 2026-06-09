@@ -109,6 +109,7 @@
   - The `deepseek-r1:8b` failure happened with Ollama model context `131072`; rerun evidence should use a controlled context such as `--num-ctx 4096`.
   - Controlled `deepseek-r1:8b` rerun with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096`; timeout was resolved, but correction term recall was `0.0`, so default-candidate status remains on hold.
   - Controlled `qwen2.5:3b` run with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-numctx4096`; it completed 3/3 cases with mean latency `6.957s`, but correction term recall was `0.0`, so default-candidate status remains on hold.
+  - Controlled `llama3.1:8b` run with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-numctx4096`; it completed 3/3 cases with mean latency `6.894s`, but correction term recall was `0.0`, so default-candidate status remains on hold.
 - SecretStore dev mode:
   - Default secret storage remains Keychain.
   - `MINTO_DEV_SECRET_STORE=file` selects the opt-in local dev file store for LLM API keys, OAuth tokens, and Confluence API tokens.
@@ -136,6 +137,7 @@
   - `swift build --disable-sandbox --scratch-path /tmp/minto2-local-llm-context-build`: passed
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model deepseek-r1:8b --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-numctx4096 --fail-fast`: passed transport/format gates, 3 cases completed, correction term recall `0.0`
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model qwen2.5:3b --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-numctx4096 --fail-fast`: passed transport/format gates, 3 cases completed, mean latency `6.957s`, correction term recall `0.0`
+  - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-numctx4096 --fail-fast`: passed transport/format gates, 3 cases completed, mean latency `6.894s`, correction term recall `0.0`
 
 ## Remaining Manual QA
 
