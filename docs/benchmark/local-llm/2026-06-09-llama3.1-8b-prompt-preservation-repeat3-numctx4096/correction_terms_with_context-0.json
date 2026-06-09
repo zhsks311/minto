@@ -1,0 +1,37 @@
+{
+  "base_url": "http://127.0.0.1:11434",
+  "case_id": "correction_terms_with_context",
+  "case_name": "Minto correction prompt with meeting context and glossary",
+  "case_type": "correction",
+  "compatibility": "ollama",
+  "error": null,
+  "expected_terms": [
+    "PDCR-2901",
+    "Liquibase",
+    "Confluence",
+    "dry-run"
+  ],
+  "found_terms": [
+    "PDCR-2901",
+    "Liquibase",
+    "Confluence",
+    "dry-run"
+  ],
+  "json_valid": null,
+  "latency_seconds": 16.799,
+  "missing_terms": [],
+  "model": "llama3.1:8b",
+  "num_ctx": 4096,
+  "output_chars": 215,
+  "prompt_builder": "minto_correction",
+  "repeat_index": 0,
+  "required_field_recall": null,
+  "required_fields": [],
+  "required_fields_present": [],
+  "schema_version": 1,
+  "server_pid": 58693,
+  "server_rss_peak_mb": 114.36,
+  "server_rss_samples": 62,
+  "status": "passed",
+  "term_recall": 1.0
+}

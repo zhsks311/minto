@@ -20,6 +20,16 @@ struct CorrectionPromptTests {
         #expect(p.instructions.contains("교정 원칙"))
     }
 
+    @Test("instructions는 용어집 exact spelling 보존 규칙을 포함한다")
+    func instructionsPreserveGlossaryExactSpelling() {
+        let p = CorrectionPrompt.build(topic: "", glossary: "", context: "", text: "리퀴 베이스")
+
+        #expect(p.instructions.contains("exact spelling"))
+        #expect(p.instructions.contains("리퀴 베이스"))
+        #expect(p.instructions.contains("Liquibase"))
+        #expect(p.instructions.contains("dry-run"))
+    }
+
     @Test("빈 회의 맥락이면 userContent에 회의 블록이 없다")
     func emptyMeetingContext() {
         let p = CorrectionPrompt.build(topic: "", glossary: "", context: "이전 발화", text: "현재 발화")
