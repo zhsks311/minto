@@ -63,13 +63,27 @@ struct LLMProviderTests {
         #expect(embeddingResponse.vector == [0.1, 0.2])
     }
 
-    @Test("로컬 provider는 구현된 embedding capability만 노출한다")
-    func localProviderOnlyExposesImplementedCapabilities() {
+    @Test("로컬 provider는 text generation과 embedding capability를 노출한다")
+    func localProviderExposesTextAndEmbeddingCapabilities() {
         let descriptor = LLMProviderRegistry.shared.descriptor(for: .local)
 
-        #expect(descriptor?.supportedCapabilities == [.embedding])
-        #expect(LLMProviderRegistry.shared.textGenerationProvider(for: .local) == nil)
+        #expect(descriptor?.supportedCapabilities == [.textGeneration, .correction, .summary, .answer, .embedding])
+        #expect(LLMProviderRegistry.shared.textGenerationProvider(for: .local) != nil)
         #expect(LLMProviderRegistry.shared.embeddingProvider(for: .local) != nil)
+    }
+
+    @Test("로컬 LLM provider는 모델 ID가 있어야 설정 완료로 본다")
+    func localLLMProviderRequiresModelID() async {
+        let unconfigured = LocalLLMProvider(configuration: LocalLLMProviderConfiguration(modelID: ""))
+        #expect(await unconfigured.isConfigured() == false)
+
+        let configured = LocalLLMProvider(configuration: LocalLLMProviderConfiguration(modelID: "llama3.1:8b"))
+        #expect(await configured.isConfigured())
+
+        let catalog = await configured.modelCatalog()
+        #expect(catalog.source == .manualOnly)
+        #expect(catalog.models.first?.id == "llama3.1:8b")
+        #expect(catalog.models.first?.capabilities == [.textGeneration, .correction, .summary, .answer])
     }
 
     @MainActor
@@ -220,6 +234,117 @@ struct LLMProviderTests {
             caughtCancellation = true
         }
         #expect(caughtCancellation)
+    }
+
+    @Test("로컬 LLM provider는 Ollama generate 요청을 만들고 응답을 파싱한다")
+    func localLLMProviderBuildsOllamaGenerateRequest() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"model":"llama3.1:8b","response":"정리됨","done":true,"done_reason":"stop"}"#.utf8))
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(
+                baseURL: URL(string: "http://127.0.0.1:11434")!,
+                modelID: "llama3.1:8b",
+                compatibility: .ollamaGenerate
+            ),
+            transport: transport
+        )
+
+        let response = try await provider.generateText(LLMTextRequest(
+            useCase: .finalSummary,
+            instructions: "회의를 구조화하세요.",
+            userContent: "회의 원문",
+            modelID: nil
+        ))
+
+        let request = try #require(transport.requests.first)
+        #expect(request.url?.absoluteString == "http://127.0.0.1:11434/api/generate")
+        #expect(request.httpMethod == "POST")
+        #expect(response.text == "정리됨")
+        #expect(response.providerID == .local)
+        #expect(response.modelID == "llama3.1:8b")
+        #expect(response.finishReason == .stop)
+
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        #expect(body["model"] as? String == "llama3.1:8b")
+        #expect(body["system"] as? String == "회의를 구조화하세요.")
+        #expect(body["prompt"] as? String == "회의 원문")
+        #expect(body["stream"] as? Bool == false)
+        let options = try #require(body["options"] as? [String: Any])
+        #expect(options["num_predict"] as? Int == 3_000)
+    }
+
+    @Test("로컬 LLM provider는 OpenAI 호환 chat completions endpoint를 지원한다")
+    func localLLMProviderBuildsOpenAICompatibleRequest() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"model":"qwen2.5:7b","choices":[{"message":{"content":"답변입니다. [1]"},"finish_reason":"length"}]}"#.utf8))
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(
+                baseURL: URL(string: "http://127.0.0.1:8080")!,
+                modelID: "qwen2.5:7b",
+                compatibility: .openAIChatCompletions
+            ),
+            transport: transport
+        )
+
+        let response = try await provider.generateText(LLMTextRequest(
+            useCase: .answer,
+            instructions: "근거로만 답하세요.",
+            userContent: "질문과 근거",
+            modelID: "manual-model"
+        ))
+
+        let request = try #require(transport.requests.first)
+        #expect(request.url?.absoluteString == "http://127.0.0.1:8080/v1/chat/completions")
+        #expect(response.text == "답변입니다. [1]")
+        #expect(response.modelID == "qwen2.5:7b")
+        #expect(response.finishReason == .length)
+
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        #expect(body["model"] as? String == "manual-model")
+        #expect(body["max_tokens"] as? Int == 1_800)
+        let messages = try #require(body["messages"] as? [[String: String]])
+        #expect(messages.first?["role"] == "system")
+        #expect(messages.first?["content"] == "근거로만 답하세요.")
+        #expect(messages.last?["role"] == "user")
+        #expect(messages.last?["content"] == "질문과 근거")
+    }
+
+    @Test("로컬 LLM endpoint 실패는 prompt 원문 없이 공통 오류로 정규화한다")
+    func localLLMProviderMapsEndpointFailureWithoutPromptBody() async throws {
+        let echoedPrompt = "회의 원문이 포함된 서버 오류"
+        let transport = StubLLMAPITransport(data: Data(echoedPrompt.utf8), statusCode: 500)
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(modelID: "llama3.1:8b"),
+            transport: transport
+        )
+
+        do {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .correction,
+                instructions: "규칙",
+                userContent: "회의 원문"
+            ))
+            Issue.record("로컬 endpoint 실패가 오류로 반환되어야 합니다.")
+        } catch let error as LLMProviderError {
+            #expect(error == .network("로컬 LLM endpoint HTTP 500"))
+            if case .network(let message) = error {
+                #expect(!message.contains("회의 원문"))
+            }
+        }
+    }
+
+    @Test("로컬 LLM provider 네트워크 오류는 공통 network 오류로 매핑된다")
+    func localLLMProviderMapsTransportError() async throws {
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(modelID: "llama3.1:8b"),
+            transport: StubLLMAPITransport(error: StubTransportError())
+        )
+
+        await #expect(throws: LLMProviderError.network("timeout")) {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .answer,
+                instructions: "답변",
+                userContent: "질문"
+            ))
+        }
     }
 
     @Test("API key 저장소는 OAuth와 다른 Keychain service namespace를 쓴다")

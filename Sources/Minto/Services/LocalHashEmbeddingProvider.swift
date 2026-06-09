@@ -10,9 +10,9 @@ public struct LocalHashEmbeddingProvider: LLMEmbeddingProvider {
     public init(registry: LLMProviderRegistry = .shared, dimensions: Int = Self.dimensions) {
         self.descriptor = registry.descriptor(for: .local) ?? LLMProviderDescriptor(
             id: .local,
-            description: "저장된 회의를 기기 안에서 검색할 때 사용합니다.",
+            description: "외부 로컬 런타임으로 교정, 요약, 검색 답변과 기기 내 검색을 실행합니다.",
             authKind: .local,
-            supportedCapabilities: [.embedding]
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer, .embedding]
         )
         self.dimensions = max(8, dimensions)
     }
