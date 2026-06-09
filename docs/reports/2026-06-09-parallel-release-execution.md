@@ -152,6 +152,8 @@
   - Settings UI `GPT API` saved the test value `minto-ui-qa-not-a-secret` into `/tmp/minto2-dev-secrets-ui-qa-rc1/com.minto.app.llm-api__llm-api-key-gpt.json` with `-rw-------` permissions and showed `API 키 저장됨`.
   - Relaunching with the same `MINTO_DEV_SECRET_STORE_ROOT` loaded the saved Settings state and still showed `API 키 저장됨`.
   - Settings UI `로컬 LLM` showed `모델 ID 필요` when the model field was empty, then showed `로컬 런타임 설정됨` after entering `qwen2.5:3b`, with `API 키는 필요하지 않습니다` copy visible.
+  - Isolated delete QA used `HOME=/tmp/minto2-settings-delete-ui-home-1780990000 CFFIXED_USER_HOME=/tmp/minto2-settings-delete-ui-home-1780990000 MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-delete-ui-qa-1780990000 .build/debug/minto2` after `./scripts/dev.sh run` built but stopped on missing signing certificate `Minto2 Dev`.
+  - After the user pressed `API 키 삭제`, Settings changed from `API 키 저장됨` to `API 키 필요`, `/tmp/minto2-dev-secrets-delete-ui-qa-1780990000/com.minto.app.llm-api__llm-api-key-gpt.json` was removed, and the store directory was empty.
 - Validation:
   - `git diff --check`: passed
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-settings-test --filter LLMProviderTests`: passed, 27 tests
@@ -172,7 +174,9 @@
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-process-env-test-2 --filter SecretStore`: passed, 7 tests
   - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-process-env-qa swift test --disable-sandbox --scratch-path /tmp/minto2-secret-store-process-env-env-test --filter SecretStore`: passed, 7 tests
   - `MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-ui-qa ./scripts/dev.sh run`: build/sign/run reached app initialization
-  - Settings UI save/load/delete was not verified in that run: `computer-use` did not target the direct SwiftPM `minto2` process, and shell accessibility inspection failed with System Events error `-1728`.
+  - Initial Settings UI save/load/delete was not verified in that run: `computer-use` did not target the direct SwiftPM `minto2` process, and shell accessibility inspection failed with System Events error `-1728`.
+  - `HOME=/tmp/minto2-settings-delete-ui-home-1780990000 CFFIXED_USER_HOME=/tmp/minto2-settings-delete-ui-home-1780990000 MINTO_DEV_SECRET_STORE=file MINTO_DEV_SECRET_STORE_ROOT=/tmp/minto2-dev-secrets-delete-ui-qa-1780990000 ./scripts/dev.sh run`: build completed but run stopped at missing signing certificate `Minto2 Dev`; direct `.build/debug/minto2` was used for file-store-only GUI QA.
+  - Settings UI delete QA passed: after `API 키 삭제`, the fake GPT API key file under `/tmp/minto2-dev-secrets-delete-ui-qa-1780990000` was gone, the directory was empty, and the Settings UI showed `API 키 필요`.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-context-test --filter LLMProviderTests`: passed, 28 tests
   - `python3 -m py_compile scripts/run_local_llm_benchmarks.py`: passed
   - `python3 scripts/run_local_llm_benchmarks.py --dry-run --model deepseek-r1:8b --cases correction --num-ctx 4096 --output-root /tmp/minto2-local-llm-context-dryrun`: passed, request body preview has `options.num_ctx=4096`
@@ -221,7 +225,6 @@
   - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 Atlassian 인증 실패 렌더 확인. 서비스의 `needsReconnect` 상태 전환과 export sheet의 Settings handoff 조건은 자동 테스트로 검증됨.
   - invalid Notion token으로 관련 문서 검색 실패 후 실제 OAuth 실패, 재연결, 지우기 버튼 동작 확인. `needsReconnect` 상태의 검색 안내는 자동 검증됨.
   - 실제 Settings 화면 반복 진입 시 macOS Keychain prompt 카운트 확인. Settings 상태 조회 경로가 token 원문을 읽지 않는 계약은 자동 검증됨.
-  - 개발 실행 file secret store에서 Settings UI delete 확인. App launch, save, and relaunch-load are verified with `/tmp/minto2-dev-secrets-ui-qa-rc1`; delete remains manual because it requires a GUI deletion action.
 
 ## Stop Conditions
 
