@@ -566,9 +566,10 @@ public struct SettingsView: View {
                 .disabled(confluenceTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
                 if confluence.canDisconnect {
                     Button("연동 해제") {
-                        confluence.setAPIToken("")
+                        confluence.disconnect()
                         confluenceEmail = ""
                         confluenceBaseURL = ""
+                        confluenceTokenInput = ""
                     }
                     .foregroundColor(.red)
                 }
