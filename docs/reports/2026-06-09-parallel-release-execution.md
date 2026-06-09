@@ -126,6 +126,7 @@
   - Controlled `llama3.1:8b` run with `--num-ctx 4096` is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-numctx4096`; it completed 3/3 cases with mean latency `6.894s`, but correction term recall was `0.0`, so default-candidate status remains on hold.
   - The runner now includes `correction_terms_with_context`, which mirrors Minto's meeting topic/glossary correction prompt more closely than the minimal correction case.
   - Context correction reruns are recorded under `docs/benchmark/local-llm/2026-06-09-qwen2.5-3b-correction-context-numctx4096` and `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-numctx4096`; qwen remained at term recall `0.0`, while llama improved to `0.75` but missed `Liquibase`, so default-candidate status remains on hold.
+  - `deepseek-r1:8b` context correction rerun is recorded under `docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-correction-context-numctx4096`; term recall improved to `1.0`, but latency was `43.994s` and full correction/summary/answer coverage is still required before default-candidate promotion.
   - `llama3.1:8b` context correction repeat-3 is recorded under `docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-repeat3-numctx4096`; recall was stable at `0.75` for all 3 repeats, but still missed `Liquibase` every time, so it is the current best local candidate but not a default.
   - Provider smoke coverage confirms local LLM Ollama payloads for correction, final summary, and search answer use cases.
   - Search answer flow coverage now confirms `MeetingSearchAnswerUseCase` calls `LocalLLMProvider` with an Ollama `answer` payload, preserves citations, and uses `num_predict=1800` with the configured context window.
@@ -189,6 +190,7 @@
   - Test cleanup: app and mock server processes were stopped; real `com.minto.app` defaults were restored to no `meetingSearchAnswer*` keys, no local endpoint override keys, and `localLLMModelID=qwen2.5:3b`.
   - `swift test --disable-sandbox --scratch-path /tmp/minto2-local-llm-correction-summary-pipeline-test --filter MeetingFileImportUseCaseTests`: passed, 10 tests
   - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model llama3.1:8b --cases correction_terms_with_context --num-ctx 4096 --repeat 3 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-llama3.1-8b-correction-context-repeat3-numctx4096 --fail-fast`: passed, 3/3 runs, mean latency `5.617s`, correction term recall `0.75`, missing term `Liquibase`
+  - `python3 scripts/run_local_llm_benchmarks.py --compatibility ollama --base-url http://127.0.0.1:11434 --model deepseek-r1:8b --cases correction_terms_with_context --num-ctx 4096 --repeat 1 --server-pid 58693 --output-root docs/benchmark/local-llm/2026-06-09-deepseek-r1-8b-correction-context-numctx4096 --fail-fast`: passed, 1/1 run, latency `43.994s`, correction term recall `1.0`
   - `CFFIXED_USER_HOME=/tmp/minto2-system-audio-ui-home-1780984552 HOME=/tmp/minto2-system-audio-ui-home-1780984552 .build/debug/minto2`: rendered setup UI opened from `새 회의`, selected `시스템` and observed `시스템 입력 가능` with `녹음 시작` enabled.
   - Same setup UI run selected `마이크+시스템` and observed `마이크+시스템 입력 가능`, explanatory copy `Echo cancellation은 적용하지 않습니다.`, and `녹음 시작` enabled.
   - `/tmp/minto2-system-audio-setup-mixed-ready.png`: window capture shows the rendered `마이크+시스템` ready state.
@@ -210,7 +212,7 @@
   - echo 상황과 장시간 녹음 drift 측정
 - Local LLM:
   - 실제 앱 화면에서 파일 가져오기 또는 녹음 종료 경로의 correction/summary 진행 상태 rendered QA. There are no standalone correction/summary buttons in the current UI; the automated file import pipeline test covers the stage order and corrected-transcript handoff.
-  - correction term recall이 높은 추가 실제 후보 모델 benchmark를 `docs/benchmark/local-llm/`에 기록하고 기본값 후보를 결정
+  - `deepseek-r1:8b` context correction에서 term recall `1.0` 후보를 찾았지만 latency와 전체 correction/summary/answer coverage가 부족하다. 기본값 후보 결정은 full-case repeat benchmark 후 진행한다.
 - Keychain reconnect UX:
   - invalid Confluence token으로 Confluence 내보내기 실패 후 실제 Atlassian 인증 실패 렌더 확인. 서비스의 `needsReconnect` 상태 전환과 export sheet의 Settings handoff 조건은 자동 테스트로 검증됨.
   - invalid Notion token으로 관련 문서 검색 실패 후 실제 OAuth 실패, 재연결, 지우기 버튼 동작 확인. `needsReconnect` 상태의 검색 안내는 자동 검증됨.
