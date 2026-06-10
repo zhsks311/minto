@@ -59,11 +59,19 @@ public struct MeetingSearchAnswerUseCase: Sendable {
     public let maxChunks: Int
     public let maxContextCharacters: Int
     public let maxChunksPerMeeting: Int
+    /// 답변 생성 시 의미 재랭킹에 사용할 후보 상위 N개.
+    public let semanticRerankCandidateCount: Int
 
-    public init(maxChunks: Int = 8, maxContextCharacters: Int = 5_000, maxChunksPerMeeting: Int = 3) {
+    public init(
+        maxChunks: Int = 8,
+        maxContextCharacters: Int = 5_000,
+        maxChunksPerMeeting: Int = 3,
+        semanticRerankCandidateCount: Int = 16
+    ) {
         self.maxChunks = max(1, maxChunks)
         self.maxContextCharacters = max(500, maxContextCharacters)
         self.maxChunksPerMeeting = max(1, maxChunksPerMeeting)
+        self.semanticRerankCandidateCount = max(1, semanticRerankCandidateCount)
     }
 
     public func retrieve(query: String, index: MeetingSearchIndex) -> [MeetingSearchResult] {
@@ -75,21 +83,30 @@ public struct MeetingSearchAnswerUseCase: Sendable {
     public func answer(
         query: String,
         index: MeetingSearchIndex,
-        provider: any LLMTextGenerationProvider
+        provider: any LLMTextGenerationProvider,
+        embeddingProvider: (any LLMEmbeddingProvider)? = nil
     ) async throws -> MeetingSearchAnswer {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw MeetingSearchAnswerError.emptyQuery }
-        return try await answer(query: trimmed, results: retrieve(query: trimmed, index: index), provider: provider)
+        return try await answer(
+            query: trimmed,
+            results: retrieve(query: trimmed, index: index),
+            provider: provider,
+            embeddingProvider: embeddingProvider
+        )
     }
 
     public func answer(
         query: String,
         results: [MeetingSearchResult],
-        provider: any LLMTextGenerationProvider
+        provider: any LLMTextGenerationProvider,
+        embeddingProvider: (any LLMEmbeddingProvider)? = nil
     ) async throws -> MeetingSearchAnswer {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw MeetingSearchAnswerError.emptyQuery }
-        let context = contextBlock(from: results)
+        // 답변 생성 직전에 의미 재랭킹 — 실패 시 원 results 그대로 진행(fail-soft)
+        let rerankedResults = await semanticRerank(query: trimmed, results: results, embeddingProvider: embeddingProvider)
+        let context = contextBlock(from: rerankedResults)
         guard !context.citations.isEmpty else { throw MeetingSearchAnswerError.noResults }
         guard provider.descriptor.supportedCapabilities.contains(.answer) else {
             throw MeetingSearchAnswerError.providerUnsupported
@@ -193,5 +210,60 @@ public struct MeetingSearchAnswerUseCase: Sendable {
             time: chunk.time,
             preview: result.preview
         )
+    }
+
+    /// 상위 후보를 on-demand 임베딩해 의미 재랭킹한다.
+    /// 임베딩 실패·미설정이면 원 results 그대로 반환(fail-soft — 답변 생성을 절대 막지 않는다).
+    private func semanticRerank(
+        query: String,
+        results: [MeetingSearchResult],
+        embeddingProvider: (any LLMEmbeddingProvider)?
+    ) async -> [MeetingSearchResult] {
+        // embeddingProvider가 없으면 LocalHash 사용
+        let provider: any LLMEmbeddingProvider = embeddingProvider ?? LocalHashEmbeddingProvider()
+
+        let candidates = Array(results.prefix(semanticRerankCandidateCount))
+        guard !candidates.isEmpty else { return results }
+
+        do {
+            // 쿼리 벡터 1개
+            let queryResponse = try await provider.generateEmbedding(
+                LLMEmbeddingRequest(input: query, sourceID: nil)
+            )
+            // 후보 청크 벡터
+            var records: [MeetingSearchEmbeddingRecord] = []
+            records.reserveCapacity(candidates.count)
+            for result in candidates {
+                let response = try await provider.generateEmbedding(
+                    LLMEmbeddingRequest(input: result.chunk.text, sourceID: result.chunk.id)
+                )
+                records.append(MeetingSearchEmbeddingRecord(
+                    chunkID: result.chunk.id,
+                    meetingID: result.chunk.meetingID,
+                    providerID: response.providerID,
+                    modelID: response.modelID,
+                    embeddingKind: response.kind,
+                    vector: response.vector
+                ))
+            }
+            let embeddingIndex = MeetingSearchEmbeddingIndex(
+                providerID: queryResponse.providerID,
+                modelID: queryResponse.modelID,
+                embeddingKind: queryResponse.kind,
+                dimensions: queryResponse.vector.count,
+                records: records
+            )
+            // 상위 candidates만 재랭킹하고, 나머지는 원순위 그대로 뒤에 붙인다
+            let rerankedCandidates = MeetingSearchEmbeddingIndex.rerank(
+                results: candidates,
+                queryVector: queryResponse.vector,
+                embeddings: embeddingIndex
+            )
+            let rest = results.dropFirst(semanticRerankCandidateCount)
+            return rerankedCandidates + rest
+        } catch {
+            // 임베딩 실패 시 원 results 반환 — 답변 생성 진행
+            return results
+        }
     }
 }

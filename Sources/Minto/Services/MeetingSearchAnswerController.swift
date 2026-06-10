@@ -136,10 +136,19 @@ public final class MeetingSearchAnswerController: ObservableObject {
         let token = UUID()
         generationToken = token
 
+        // 로컬 LLM이 설정된 경우 ollama 임베딩으로 의미 재랭킹을 시도한다.
+        // 실패·미설정이면 UseCase 내부에서 LocalHash로 자동 fallback한다.
+        let embeddingProvider: (any LLMEmbeddingProvider)? = LocalLLMProvider()
+
         Log.search.info("search answer generation start resultCount=\(results.count, privacy: .public)")
         generationTask = Task {
             do {
-                let generated = try await useCase.answer(query: trimmed, results: results, provider: provider)
+                let generated = try await useCase.answer(
+                    query: trimmed,
+                    results: results,
+                    provider: provider,
+                    embeddingProvider: embeddingProvider
+                )
                 let citationCount = generated.citations.count
                 await MainActor.run {
                     guard generationToken == token else { return }
