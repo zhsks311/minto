@@ -129,6 +129,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 await viewModel.loadSpeechEngine(fallback)
             }
         }
+        // 이전 저장 실패 복구본이 있으면 자동 복원한다.
+        let restored = MeetingSaveRecovery.restorePendingRecords(into: MeetingStore.shared)
+        if restored > 0 {
+            Log.store.info("복구 완료: \(restored, privacy: .public)건")
+        }
+
         // 런치 시 회의 목록 메인 윈도우를 띄워 저장된 회의를 바로 볼 수 있게 한다.
         mainWindowManager.show()
     }
