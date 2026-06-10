@@ -81,6 +81,16 @@ Minto2는 macOS 회의 기록 앱이다.
 - 복잡한 화면은 Pencil로 설계하고 `Resources/designs/`에 저장한다.
 - `.buttonStyle(.borderedProminent)` 금지: 비활성(non-key) 윈도우에서 강조 배경이 사라져 흰 라벨만 남는다(macOS 기본 동작이지만 이 앱은 다른 창과 나란히 쓰는 대시보드형이라 부적합). 강조 버튼은 MeetingLibraryView의 `ProminentActionButtonStyle`처럼 배경을 직접 그리는 스타일을 쓴다.
 
+### 이벤트 로깅
+
+배포 후 사용자의 "안 돼요" 보고를 로그만으로 추적할 수 있어야 한다.
+
+- 로그는 `Log.<category>`(`Sources/Minto/Services/Log.swift`, os.Logger)만 쓴다. `print`/`fputs`/`NSLog` 금지 — stderr는 배포 바이너리에서 전량 소실된다.
+- 사용자 동작 단위 기능(녹음, 임포트, 교정, 요약, 답변 생성, 저장, 내보내기, 연동)을 추가/수정하면 **시작·성공·실패 로그를 함께** 추가한다. 실패만 로깅하면 "어디까지 진행됐는지"를 알 수 없다.
+- 레벨: 흐름 추적 = `.info`, 실패 = `.error`, 고빈도 내부 진단 = `.debug`(배포에서 디스크 영속이 보장되지 않음 — 핵심 이벤트에 쓰지 않는다).
+- **금지 값**: 전사·요약·주제·검색어·용어집 내용·문서 문맥·프롬프트·토큰/키·API 응답 body 원문·홈 디렉터리가 포함된 절대경로. **허용 값**: 글자 수/개수/길이, enum 케이스명, provider/모델/엔진 식별자, HTTP status, `lastPathComponent`, 에러 설명(localizedDescription).
+- privacy 마스킹을 안전장치로 믿지 않는다 — 설정의 "진단 로그 내보내기"가 같은 프로세스의 `composedMessage`(마스킹 미적용 원문)를 파일로 쓴다. 안전은 "민감값을 아예 넣지 않기"에서만 나온다. 비민감 값은 `privacy: .public`을 명시한다(누락 시 `<private>`로 가려져 진단 가치를 잃는다).
+
 ## 문서 산출물
 
 - 구현 계획: `docs/work/`
