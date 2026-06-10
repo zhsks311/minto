@@ -436,3 +436,46 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
         }
     }
 }
+
+// MARK: - LLMEmbeddingProvider (Ollama 전용)
+
+extension LocalLLMProvider: LLMEmbeddingProvider {
+    /// Ollama `/api/embeddings` 엔드포인트를 통해 임베딩을 생성한다.
+    /// `openAIChatCompletions` 호환 모드이거나 modelID가 설정되지 않은 경우 `.notConfigured` throw —
+    /// 호출측에서 LocalHashEmbeddingProvider로 fallback한다.
+    public func generateEmbedding(_ request: LLMEmbeddingRequest) async throws -> LLMEmbeddingResponse {
+        guard configuration.compatibility == .ollamaGenerate else {
+            throw LLMProviderError.notConfigured
+        }
+        let modelID = selectedModelID(requestModelID: request.modelID)
+        guard !modelID.isEmpty else {
+            throw LLMProviderError.notConfigured
+        }
+
+        let url = configuration.baseURL
+            .appendingPathComponent("api")
+            .appendingPathComponent("embeddings")
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.timeoutInterval = min(configuration.timeoutSeconds, 30)
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: [
+            "model": modelID,
+            "prompt": request.input
+        ])
+
+        let json = try await sendJSON(urlRequest, modelID: modelID)
+        guard let rawVector = json["embedding"] as? [Double], !rawVector.isEmpty else {
+            throw LLMProviderError.badResponse("ollama 임베딩 응답에 embedding 배열이 없습니다.")
+        }
+
+        return LLMEmbeddingResponse(
+            vector: rawVector,
+            providerID: .local,
+            modelID: modelID,
+            sourceID: request.sourceID,
+            kind: .semantic
+        )
+    }
+}

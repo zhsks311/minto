@@ -82,6 +82,38 @@ public struct MeetingSearchEmbeddingIndex: Codable, Sendable, Equatable {
         guard lhsNorm > 0, rhsNorm > 0 else { return 0 }
         return dot / (sqrt(lhsNorm) * sqrt(rhsNorm))
     }
+
+    /// 토큰 기반 검색 결과를 임베딩 코사인 유사도로 재랭킹한다.
+    ///
+    /// - Parameters:
+    ///   - results: 원 검색 결과 (토큰 점수 기준 정렬)
+    ///   - queryVector: 쿼리 임베딩 벡터
+    ///   - embeddings: 청크 임베딩 인덱스
+    ///   - weight: 코사인 기여 비중 (0~1). 0이면 원순위 반환
+    /// - Returns: 혼합 점수 `(1-weight)*정규화토큰점수 + weight*코사인` 기준 정렬 결과.
+    ///   차원 불일치·벡터 없음·정규화 불가 등 어떤 문제든 원순위 그대로 반환(fail-soft).
+    public static func rerank(
+        results: [MeetingSearchResult],
+        queryVector: [Double],
+        embeddings: MeetingSearchEmbeddingIndex,
+        weight: Double = 0.25
+    ) -> [MeetingSearchResult] {
+        guard !results.isEmpty, weight > 0 else { return results }
+
+        let maxScore = results.map(\.score).max() ?? 0
+        guard maxScore > 0 else { return results }
+
+        let reranked = results.map { result -> (result: MeetingSearchResult, mixedScore: Double) in
+            let normalizedTokenScore = result.score / maxScore
+            let cosine = embeddings.similarity(queryVector: queryVector, chunkID: result.chunk.id) ?? normalizedTokenScore
+            let mixedScore = (1 - weight) * normalizedTokenScore + weight * cosine
+            return (result: result, mixedScore: mixedScore)
+        }
+
+        return reranked
+            .sorted { $0.mixedScore > $1.mixedScore }
+            .map(\.result)
+    }
 }
 
 public actor MeetingSearchEmbeddingBuilder {

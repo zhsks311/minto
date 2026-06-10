@@ -146,7 +146,11 @@ public struct MeetingSearchIndex: Sendable, Equatable {
         return builder.chunks
     }
 
-    public func search(_ query: String, limit: Int = 20) -> [MeetingSearchResult] {
+    public func search(
+        _ query: String,
+        limit: Int = 20,
+        expandedTokens: [(token: String, weight: Double)] = []
+    ) -> [MeetingSearchResult] {
         let normalizedQuery = Self.normalized(query)
         let terms = Self.queryTerms(query)
         guard !normalizedQuery.isEmpty, !terms.isEmpty else { return [] }
@@ -154,12 +158,20 @@ public struct MeetingSearchIndex: Sendable, Equatable {
         return chunks.compactMap { chunk -> MeetingSearchResult? in
             let normalizedText = Self.normalized(chunk.text)
             let matched = terms.filter { normalizedText.contains($0) }
-            guard !matched.isEmpty || normalizedText.contains(normalizedQuery) else { return nil }
+
+            // 확장 토큰 매치: 원토큰과 중복되지 않는 토큰만 추가 기여
+            let matchedExpanded = expandedTokens.filter { normalizedText.contains($0.token) }
+
+            guard !matched.isEmpty || normalizedText.contains(normalizedQuery) || !matchedExpanded.isEmpty else {
+                return nil
+            }
 
             let exactPhraseScore: Double = normalizedText.contains(normalizedQuery) ? 20 : 0
             let termScore = Double(matched.count) * 6
             let coverageScore = Double(matched.count) / Double(max(terms.count, 1)) * 10
-            let score = exactPhraseScore + termScore + coverageScore + chunk.kind.rankWeight
+            // 확장 토큰 기여: 원토큰 term 점수(6점)에 weight를 곱한 만큼만 추가
+            let expandedScore = matchedExpanded.reduce(0.0) { $0 + 6.0 * $1.weight }
+            let score = exactPhraseScore + termScore + coverageScore + expandedScore + chunk.kind.rankWeight
 
             return MeetingSearchResult(
                 chunk: chunk,
@@ -191,7 +203,9 @@ public struct MeetingSearchIndex: Sendable, Equatable {
         tokenize(text).joined(separator: " ")
     }
 
-    private static func tokenize(_ text: String) -> [String] {
+    /// 텍스트를 검색 토큰으로 분해한다.
+    /// 같은 모듈 내 다른 타입(GlossaryQueryExpander 등)에서 공유해 folding 동작을 일치시킨다.
+    static func tokenize(_ text: String) -> [String] {
         let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
         var scalars = String.UnicodeScalarView()
         for scalar in folded.lowercased().unicodeScalars {
