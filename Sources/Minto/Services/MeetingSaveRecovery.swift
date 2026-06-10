@@ -1,13 +1,15 @@
 import os
 import Foundation
 
-/// 디스크 저장 실패 시 전사·요약 데이터를 복구 파일로 보존한다.
-/// 저장 위치: ~/Library/Application Support/Minto/recovery/<timestamp>_<id>.md
+/// 디스크 저장 실패 시 전사·요약 데이터를 복구 파일로 보존하고, 앱 재시작 시 자동 복원한다.
+/// 저장 위치: ~/Library/Application Support/Minto/recovery/<timestamp>_<id>.{md,json}
+/// - .md: 사람용 백업 (기존 동작 유지)
+/// - .json: 프로그래밍 복원용 (MeetingRecord Codable)
 ///
 /// AppDelegate에서 직접 인라인으로 처리하지 않고 이 타입으로 분리해 단위 테스트가 가능하게 한다.
 public enum MeetingSaveRecovery {
 
-    /// 복구 파일을 기록한다. 전체 경로는 stderr 로그에만 남긴다.
+    /// 복구 파일을 기록한다. .md(사람용)와 .json(복원용)을 동시에 저장한다.
     /// - Parameters:
     ///   - record: 저장에 실패한 회의 기록.
     ///   - recoveryDirectory: 복구 파일을 쓸 디렉터리. nil이면 기본 경로를 사용.
@@ -27,16 +29,80 @@ public enum MeetingSaveRecovery {
         formatter.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime]
         let timestamp = formatter.string(from: record.startedAt)
             .replacingOccurrences(of: ":", with: "-")
-        let filename = "\(timestamp)_\(record.id.uuidString).md"
-        let fileURL = dir.appendingPathComponent(filename)
+        let stem = "\(timestamp)_\(record.id.uuidString)"
 
+        // .md: 사람용 백업
+        let mdURL = dir.appendingPathComponent("\(stem).md")
         let content = buildMarkdown(for: record)
         do {
-            try Data(content.utf8).write(to: fileURL, options: .atomic)
-            Log.store.info("복구 파일 저장됨: \(fileURL.lastPathComponent, privacy: .public)")
+            try Data(content.utf8).write(to: mdURL, options: .atomic)
+            Log.store.info("복구 파일 저장됨: \(mdURL.lastPathComponent, privacy: .public)")
         } catch {
             Log.store.error("복구 파일 쓰기 실패: \(error.localizedDescription, privacy: .public)")
         }
+
+        // .json: 프로그래밍 복원용 (MeetingStore와 동일한 encoder 설정)
+        let jsonURL = dir.appendingPathComponent("\(stem).json")
+        let encoder = makeEncoder()
+        guard let data = try? encoder.encode(record) else {
+            Log.store.error("복구 JSON 인코딩 실패: \(record.id.uuidString, privacy: .public)")
+            return
+        }
+        do {
+            try data.write(to: jsonURL, options: .atomic)
+            Log.store.info("복구 JSON 저장됨: \(jsonURL.lastPathComponent, privacy: .public)")
+        } catch {
+            Log.store.error("복구 JSON 쓰기 실패: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - 자동 복원
+
+    /// recovery/*.json 전체를 디코드해 store에 upsert한다.
+    /// - 디코드 실패(손상 파일): 파일 유지 + Log.store.error, 다음 파일 계속
+    /// - store.save() == .success: .json + 짝 .md 삭제
+    /// - store.save() != .success: 파일 유지 + Log.store.error
+    /// - 반환값: 복원 성공 건수
+    @MainActor
+    public static func restorePendingRecords(
+        into store: MeetingStore,
+        recoveryDirectory: URL? = nil
+    ) -> Int {
+        let dir = recoveryDirectory ?? defaultRecoveryDirectory()
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil
+        ) else {
+            return 0
+        }
+
+        let jsonURLs = urls.filter { $0.pathExtension == "json" }
+        guard !jsonURLs.isEmpty else { return 0 }
+
+        let decoder = makeDecoder()
+        var successCount = 0
+
+        for jsonURL in jsonURLs {
+            guard let data = try? Data(contentsOf: jsonURL),
+                  let record = try? decoder.decode(MeetingRecord.self, from: data) else {
+                Log.store.error("복구 파일 디코드 실패: \(jsonURL.lastPathComponent, privacy: .public)")
+                continue
+            }
+
+            let result = store.save(record)
+            switch result {
+            case .success:
+                try? FileManager.default.removeItem(at: jsonURL)
+                let mdURL = jsonURL.deletingPathExtension().appendingPathExtension("md")
+                try? FileManager.default.removeItem(at: mdURL)
+                successCount += 1
+            case .failed:
+                Log.store.error("복구 재저장 실패 — 파일 유지: \(jsonURL.lastPathComponent, privacy: .public)")
+            case .skippedEmpty:
+                Log.store.error("복구 파일이 빈 회의 — 파일 유지: \(jsonURL.lastPathComponent, privacy: .public)")
+            }
+        }
+
+        return successCount
     }
 
     // MARK: - Internal
@@ -47,6 +113,20 @@ public enum MeetingSaveRecovery {
             .first ?? FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/Application Support")
         return base.appendingPathComponent("Minto/recovery", isDirectory: true)
+    }
+
+    // MeetingStore와 동일한 설정으로 독립 인스턴스를 생성한다.
+    static func makeEncoder() -> JSONEncoder {
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return enc
+    }
+
+    static func makeDecoder() -> JSONDecoder {
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        return dec
     }
 
     static func buildMarkdown(for record: MeetingRecord) -> String {
