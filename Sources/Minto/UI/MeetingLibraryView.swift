@@ -1948,7 +1948,10 @@ public struct MeetingLibraryView: View {
             activeSearchFilter = .all
             return
         }
-        let all = searchIndex.search(trimmedSearch, limit: Int.max)
+        let queryTokens = MeetingSearchIndex.queryTerms(trimmedSearch)
+        let usableEntries = GlossaryStore.shared.entries.filter(\.isUsable)
+        let expandedTokens = GlossaryQueryExpander.expand(queryTokens: queryTokens, entries: usableEntries)
+        let all = searchIndex.search(trimmedSearch, limit: Int.max, expandedTokens: expandedTokens)
         allMeetingSearchResults = all
         meetingSearchResults = activeSearchFilter == .all ? all : all.filter { activeSearchFilter.matches($0) }
     }
