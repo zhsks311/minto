@@ -2454,8 +2454,9 @@ public struct SettingsView: View {
                 var lines: [String] = []
                 for entry in entries {
                     if let logEntry = entry as? OSLogEntryLog {
-                        // composedMessage: privacy: .public 으로 마킹된 값만 평문,
-                        // 나머지는 <private> 로 표시됨 — 민감 정보 노출 없음
+                        // 주의: 같은 프로세스에서 읽는 composedMessage는 privacy 마스킹이
+                        // 적용되지 않은 원문이다. 내보내기 안전의 전제는 마스킹이 아니라
+                        // "Logger에 전사·주제·검색어·절대경로 같은 민감/식별 값을 넣지 않기"다.
                         lines.append("[\(logEntry.date)] [\(logEntry.category)] \(logEntry.composedMessage)")
                     }
                 }
