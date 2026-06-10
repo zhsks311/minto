@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 @MainActor
 public final class MeetingSearchAnswerController: ObservableObject {
@@ -135,11 +136,14 @@ public final class MeetingSearchAnswerController: ObservableObject {
         let token = UUID()
         generationToken = token
 
+        Log.search.info("search answer generation start resultCount=\(results.count, privacy: .public)")
         generationTask = Task {
             do {
                 let generated = try await useCase.answer(query: trimmed, results: results, provider: provider)
+                let citationCount = generated.citations.count
                 await MainActor.run {
                     guard generationToken == token else { return }
+                    Log.search.info("search answer success citations=\(citationCount, privacy: .public)")
                     answer = generated
                     errorMessage = nil
                     isGenerating = false
@@ -150,11 +154,12 @@ public final class MeetingSearchAnswerController: ObservableObject {
                     isGenerating = false
                 }
             } catch {
-                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                let errorCase = String(describing: error).components(separatedBy: "(").first ?? String(describing: error)
                 await MainActor.run {
                     guard generationToken == token else { return }
+                    Log.search.error("search answer failed error=\(errorCase, privacy: .public)")
                     answer = nil
-                    errorMessage = message
+                    errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     isGenerating = false
                 }
             }

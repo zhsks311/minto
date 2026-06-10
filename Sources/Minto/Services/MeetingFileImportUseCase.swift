@@ -1,5 +1,6 @@
 import Foundation
 import UniformTypeIdentifiers
+import os
 
 public enum MeetingFileImportStage: String, Sendable, Equatable {
     case idle
@@ -191,12 +192,14 @@ public final class MeetingFileImportUseCase: ObservableObject {
         var segments: [Segment] = []
         var previousContext: [String] = []
 
+        Log.importer.info("import start file=\(fileName, privacy: .public) engine=\(engineID.rawValue, privacy: .public)")
         do {
             update(.analyzing, progress: 0.05, fileName: fileName, detail: "음성 인식 엔진을 준비하고 있습니다.")
             try await ensureSTTLoaded(engineID)
             try Task.checkCancellation()
 
             update(.analyzing, progress: 0.12, fileName: fileName, detail: "음성 트랙을 확인하고 있습니다.")
+            Log.importer.info("import extract start file=\(fileName, privacy: .public)")
             let extraction = try await extractor.extractChunks(
                 from: url,
                 chunkSeconds: chunkSeconds,
@@ -216,11 +219,13 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 }
             )
             extractionDuration = extraction.durationSeconds
+            Log.importer.info("import extract done file=\(fileName, privacy: .public) segments=\(segments.count, privacy: .public)")
             try Task.checkCancellation()
 
             guard !segments.isEmpty else { throw MeetingFileImportError.emptyTranscript }
 
             update(.summarizing, progress: 0.86, fileName: fileName, detail: "회의 내용을 정리하고 있습니다.")
+            Log.importer.info("import summarize start file=\(fileName, privacy: .public)")
             let summary = await summaryService.generateFinal(
                 transcript: Self.transcriptText(from: segments, startedAt: startedAt),
                 context: summaryContext
@@ -228,6 +233,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             try Task.checkCancellation()
 
             update(.saving, progress: 0.96, fileName: fileName, detail: "회의 목록에 저장하고 있습니다.")
+            Log.importer.info("import save start file=\(fileName, privacy: .public)")
             let record = MeetingRecordFactory.makeRecord(
                 summary: summary,
                 segments: segments,
@@ -239,6 +245,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             )
             guard store.save(record) == .success else { throw MeetingFileImportError.saveFailed }
 
+            Log.importer.info("import success file=\(fileName, privacy: .public)")
             state = MeetingFileImportState(
                 stage: .completed,
                 progress: 1,
@@ -248,6 +255,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             )
             return record
         } catch is CancellationError {
+            Log.importer.info("import cancelled file=\(fileName, privacy: .public)")
             state = MeetingFileImportState(
                 stage: .cancelled,
                 progress: state.progress,
@@ -256,6 +264,8 @@ public final class MeetingFileImportUseCase: ObservableObject {
             )
             throw CancellationError()
         } catch {
+            let errorCase = String(describing: error).components(separatedBy: "(").first ?? String(describing: error)
+            Log.importer.error("import failed file=\(fileName, privacy: .public) error=\(errorCase, privacy: .public)")
             state = MeetingFileImportState(
                 stage: .failed,
                 progress: state.progress,

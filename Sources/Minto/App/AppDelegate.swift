@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import os
 
 public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, @unchecked Sendable {
     public let viewModel: TranscriptionViewModel
@@ -105,6 +106,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
 
     @MainActor
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        Log.app.info("app launched version=\(version, privacy: .public) build=\(build, privacy: .public)")
+
         NSApp.setActivationPolicy(.regular)
         LLMSummarySettingsService.shared.migrateIfNeeded(from: LLMCorrectionService.shared.selectedProvider)
         SpeechEnginePreferences.normalizeLegacyValues()
@@ -112,13 +117,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             let savedEngine = SpeechEnginePreferences.selectedEngine()
             let availability = await STTService.engineAvailability(for: savedEngine)
             if availability.isSelectable {
+                Log.app.info("stt engine selected=\(savedEngine.rawValue, privacy: .public)")
                 await viewModel.loadSpeechEngine(savedEngine)
             } else {
+                let fallback = SpeechEngineID.defaultEngine
+                Log.app.info("stt engine unavailable=\(savedEngine.rawValue, privacy: .public) fallback=\(fallback.rawValue, privacy: .public)")
                 UserDefaults.standard.set(
-                    SpeechEngineID.defaultEngine.rawValue,
+                    fallback.rawValue,
                     forKey: SpeechEnginePreferences.selectedEngineKey
                 )
-                await viewModel.loadSpeechEngine(.defaultEngine)
+                await viewModel.loadSpeechEngine(fallback)
             }
         }
         // 런치 시 회의 목록 메인 윈도우를 띄워 저장된 회의를 바로 볼 수 있게 한다.

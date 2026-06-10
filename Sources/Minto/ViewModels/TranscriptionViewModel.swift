@@ -302,6 +302,8 @@ public final class TranscriptionViewModel: ObservableObject {
         do {
             try audioSource.start()
             isRecording = true
+            let engineID = sttService.speechEngineID.rawValue
+            Log.app.info("recording started engine=\(engineID, privacy: .public)")
             startTimer()
         } catch {
             chunkContinuation?.finish()
@@ -322,6 +324,8 @@ public final class TranscriptionViewModel: ObservableObject {
 
         audioSource.stop()
         isRecording = false
+        let segmentCount = committedSegments.count
+        Log.app.info("recording stopped duration=\(finalRecordingDuration, privacy: .public)s segments=\(segmentCount, privacy: .public)")
         audioLevel = 0
         stopTimer()
         recordingDuration = finalRecordingDuration

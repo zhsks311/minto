@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 public final class ReportService: @unchecked Sendable {
 
@@ -41,6 +42,7 @@ public final class ReportService: @unchecked Sendable {
                 attributes: nil
             )
         } catch {
+            Log.report.error("report dir create failed: \(error.localizedDescription, privacy: .public)")
             DispatchQueue.main.async { [weak self] in
                 self?.onError?(error)
             }
@@ -62,6 +64,7 @@ public final class ReportService: @unchecked Sendable {
             fileHandle = handle
             currentFilePath = filePath
         } catch {
+            Log.report.error("report file open failed: \(error.localizedDescription, privacy: .public)")
             DispatchQueue.main.async { [weak self] in
                 self?.onError?(error)
             }
@@ -97,6 +100,7 @@ public final class ReportService: @unchecked Sendable {
             do {
                 try handle.write(contentsOf: data)
             } catch {
+                Log.report.error("report segment write failed: \(error.localizedDescription, privacy: .public)")
                 DispatchQueue.main.async { [weak self] in
                     self?.onError?(error)
                 }
@@ -116,6 +120,7 @@ public final class ReportService: @unchecked Sendable {
             do {
                 try handle.write(contentsOf: data)
             } catch {
+                Log.report.error("report summary write failed: \(error.localizedDescription, privacy: .public)")
                 DispatchQueue.main.async { [weak self] in
                     self?.onError?(error)
                 }
