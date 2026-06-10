@@ -77,9 +77,7 @@ struct SummaryServiceTests {
 
     @Test("요약 설정 migration은 교정 provider를 한 번만 복사한다")
     func summarySettingsMigrationRunsOnce() {
-        let suiteName = "minto-summary-settings-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = InMemoryUserDefaults()
 
         let settings = LLMSummarySettingsService(defaults: defaults)
         settings.migrateIfNeeded(from: .gptAPI)

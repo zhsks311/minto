@@ -168,9 +168,7 @@ struct LLMProviderTests {
 
     @Test("로컬 LLM 설정은 저장값을 우선하고 환경변수를 fallback으로 쓴다")
     func localLLMConfigurationReadsStoredSettingsBeforeEnvironment() throws {
-        let suiteName = "LocalLLMProviderTests-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = InMemoryUserDefaults()
 
         let environment = [
             "MINTO_LOCAL_LLM_BASE_URL": "http://127.0.0.1:11434",
