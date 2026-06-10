@@ -56,6 +56,8 @@ public struct MeetingLibraryView: View {
     @State private var embeddingBuildTask: Task<Void, Never>?
     /// 파일 선택 후 맥락 입력 시트를 띄울 URL. nil이면 시트 미표시.
     @State private var fileImportSetupURL: URL?
+    @State private var isRetrying = false
+    @State private var retryErrorMessage: String?
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
     @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -1132,6 +1134,9 @@ public struct MeetingLibraryView: View {
                     }
 
                     if detailTab == .summary {
+                        if record.summary.isPlainFallback {
+                            plainFallbackBanner(record)
+                        }
                         leadSummary(record)
                         meetingTableOfContents(record.summary.sections, scrollProxy: proxy)
                         meetingNotes(record.summary.sections)
@@ -1274,6 +1279,60 @@ public struct MeetingLibraryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(LibraryPalette.accentSoft)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor.opacity(0.22), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private func plainFallbackBanner(_ record: MeetingRecord) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.orange)
+                Text("구조화 요약을 만들지 못해 임시 요약만 저장됐어요. 목차·키워드 없이 표시됩니다.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if isRetrying {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("다시 요약하는 중…")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Button("다시 요약") {
+                        retryErrorMessage = nil
+                        isRetrying = true
+                        Task {
+                            let useCase = MeetingSummaryRetryUseCase()
+                            let result = await useCase.retry(record: record)
+                            isRetrying = false
+                            if case .failure = result {
+                                retryErrorMessage = "요약을 다시 만들지 못했어요. 다시 시도해 보세요."
+                            }
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(hasLiveMeeting)
+
+                    if let errorMessage = retryErrorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.07))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.3), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
