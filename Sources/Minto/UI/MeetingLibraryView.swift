@@ -1171,7 +1171,7 @@ public struct MeetingLibraryView: View {
                 Button { copyFullMeeting(record) } label: {
                     Label("전체 복사", systemImage: "doc.on.doc")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(ProminentActionButtonStyle())
                 Button { copyTranscript(record) } label: {
                     Label("전사 복사", systemImage: "text.quote")
                 }
@@ -1653,7 +1653,7 @@ public struct MeetingLibraryView: View {
                 } label: {
                     Label("현재 회의로 조회", systemImage: "magnifyingglass")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(ProminentActionButtonStyle())
                 .disabled(query.isEmpty || !relatedInfo.isAnyConfigured || relatedInfo.isSearching)
                 .help(relatedInfo.isAnyConfigured ? "현재 회의 요약과 전사로 Notion·Confluence를 검색합니다." : "설정에서 Notion 또는 Confluence를 먼저 연결하세요.")
             }
@@ -2435,7 +2435,7 @@ private struct ConfluenceExportSheet: View {
                         Label("내보내기", systemImage: "square.and.arrow.up")
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(ProminentActionButtonStyle())
                 .disabled(!canPublish)
             }
         }
