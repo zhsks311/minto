@@ -251,4 +251,162 @@ struct GlossaryStoreTests {
         #expect(merged.count <= 40)
         #expect(merged.contains("Term1"))
     }
+
+    // MARK: - GlossaryCandidate 테스트
+
+    @Test("pendingCandidates 없는 기존 JSON 로드 시 빈 배열 반환")
+    func loadLegacySnapshotWithoutPendingCandidates() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        // pendingCandidates 없는 기존 snapshot JSON 직접 작성
+        let json = """
+        {
+          "schemaVersion": 1,
+          "entries": []
+        }
+        """
+        try json.data(using: .utf8)!.write(to: url, options: .atomic)
+
+        let store = GlossaryStore(fileURL: url)
+        #expect(store.pendingCandidates.isEmpty)
+    }
+
+    @Test("dismissCandidate는 해당 후보를 제거하고 영속한다")
+    func dismissCandidateRemovesAndPersists() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let meetingID = UUID()
+        let store = GlossaryStore(fileURL: url)
+        let candidate = GlossaryCandidate(term: "Liquibase", sourceMeetingID: meetingID)
+        store.addCandidates([candidate])
+        #expect(store.pendingCandidates.count == 1)
+
+        store.dismissCandidate(candidate.id)
+        #expect(store.pendingCandidates.isEmpty)
+
+        let reloaded = GlossaryStore(fileURL: url)
+        #expect(reloaded.pendingCandidates.isEmpty)
+    }
+
+    @Test("approveCandidate는 해당 후보를 제거하고 영속한다")
+    func approveCandidateRemovesAndPersists() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let meetingID = UUID()
+        let store = GlossaryStore(fileURL: url)
+        let candidate = GlossaryCandidate(term: "Flyway", sourceMeetingID: meetingID)
+        store.addCandidates([candidate])
+        #expect(store.pendingCandidates.count == 1)
+
+        store.approveCandidate(candidate.id)
+        #expect(store.pendingCandidates.isEmpty)
+
+        let reloaded = GlossaryStore(fileURL: url)
+        #expect(reloaded.pendingCandidates.isEmpty)
+    }
+
+    @Test("addCandidates는 pendingCandidates를 영속한다")
+    func addCandidatesPersists() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let meetingID = UUID()
+        let store = GlossaryStore(fileURL: url)
+        store.addCandidates([
+            GlossaryCandidate(term: "ArgoCD", sourceMeetingID: meetingID),
+            GlossaryCandidate(term: "Terraform", sourceMeetingID: meetingID)
+        ])
+        #expect(store.pendingCandidates.count == 2)
+
+        let reloaded = GlossaryStore(fileURL: url)
+        #expect(reloaded.pendingCandidates.count == 2)
+        #expect(reloaded.pendingCandidates.map(\.term).sorted() == ["ArgoCD", "Terraform"])
+    }
+
+    // MARK: - extractNewCandidates 순수 함수 테스트
+
+    @Test("extractNewCandidates: 기존 entries canonical과 일치하는 키워드 제외")
+    func extractExcludesExistingCanonical() {
+        let entries = [GlossaryEntry(canonical: "Liquibase")]
+        let result = GlossaryStore.extractNewCandidates(
+            keywords: ["Liquibase", "Flyway"],
+            existingEntries: entries,
+            existingPending: [],
+            sourceMeetingID: UUID()
+        )
+        #expect(result.map(\.term) == ["Flyway"])
+    }
+
+    @Test("extractNewCandidates: 기존 entries alias와 case-insensitive 일치 제외")
+    func extractExcludesExistingAlias() {
+        let entries = [GlossaryEntry(canonical: "Liquibase", aliases: ["리퀴베이스", "LIQUI BASE"])]
+        let result = GlossaryStore.extractNewCandidates(
+            keywords: ["리퀴베이스", "ArgoCD"],
+            existingEntries: entries,
+            existingPending: [],
+            sourceMeetingID: UUID()
+        )
+        #expect(result.map(\.term) == ["ArgoCD"])
+    }
+
+    @Test("extractNewCandidates: 기존 pending 중복 제외")
+    func extractExcludesExistingPending() {
+        let meetingID = UUID()
+        let pending = [GlossaryCandidate(term: "Terraform", sourceMeetingID: meetingID)]
+        let result = GlossaryStore.extractNewCandidates(
+            keywords: ["Terraform", "ArgoCD"],
+            existingEntries: [],
+            existingPending: pending,
+            sourceMeetingID: meetingID
+        )
+        #expect(result.map(\.term) == ["ArgoCD"])
+    }
+
+    @Test("extractNewCandidates: 2자 미만 키워드 제외")
+    func extractExcludesShortKeywords() {
+        let result = GlossaryStore.extractNewCandidates(
+            keywords: ["A", "DB", "ArgoCD"],
+            existingEntries: [],
+            existingPending: [],
+            sourceMeetingID: UUID()
+        )
+        #expect(result.map(\.term) == ["DB", "ArgoCD"])
+    }
+
+    @Test("addCandidates: 상한 20개 초과 시 오래된 것부터 교체")
+    func addCandidatesEnforcesLimit() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url)
+        let meetingID = UUID()
+
+        // 19개 먼저 추가 (suggestedAt 간격 1초)
+        let existing = (1...19).map { i in
+            GlossaryCandidate(
+                term: "Term\(i)",
+                sourceMeetingID: meetingID,
+                suggestedAt: Date(timeIntervalSince1970: Double(i))
+            )
+        }
+        store.addCandidates(existing)
+        #expect(store.pendingCandidates.count == 19)
+
+        // 3개 더 추가 → 총 22개 → 상한 20이므로 가장 오래된 2개(Term1, Term2) 제거
+        let newer = (1...3).map { i in
+            GlossaryCandidate(
+                term: "New\(i)",
+                sourceMeetingID: meetingID,
+                suggestedAt: Date(timeIntervalSince1970: Double(100 + i))
+            )
+        }
+        store.addCandidates(newer)
+        #expect(store.pendingCandidates.count == 20)
+        #expect(!store.pendingCandidates.map(\.term).contains("Term1"))
+        #expect(!store.pendingCandidates.map(\.term).contains("Term2"))
+        #expect(store.pendingCandidates.map(\.term).contains("Term3"))
+    }
 }

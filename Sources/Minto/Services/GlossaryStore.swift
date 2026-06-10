@@ -8,10 +8,12 @@ public final class GlossaryStore: ObservableObject {
     public static let schemaVersion = 1
 
     @Published public private(set) var entries: [GlossaryEntry] = []
+    @Published public private(set) var pendingCandidates: [GlossaryCandidate] = []
 
     private let fileURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private var meetingObservationCancellable: AnyCancellable?
 
     public init(fileURL: URL? = nil) {
         if let fileURL {
@@ -33,22 +35,112 @@ public final class GlossaryStore: ObservableObject {
         decoder = dec
 
         reload()
+        // init 완료 후 이벤트 루프에서 배선 — MeetingStore.shared와의 순환 초기화 방지.
+        Task { @MainActor [weak self] in
+            self?.startObservingMeetings()
+        }
     }
 
     public func reload() {
         guard let data = try? Data(contentsOf: fileURL) else {
             entries = []
+            pendingCandidates = []
             return
         }
         if let snapshot = try? decoder.decode(GlossarySnapshot.self, from: data),
            snapshot.schemaVersion == Self.schemaVersion {
             entries = Self.cleaned(snapshot.entries)
+            pendingCandidates = snapshot.pendingCandidates
         } else if let legacy = try? decoder.decode([GlossaryEntry].self, from: data) {
             entries = Self.cleaned(legacy)
+            pendingCandidates = []
             _ = save()
         } else {
             entries = []
+            pendingCandidates = []
         }
+    }
+
+    /// 신규 회의의 keywords에서 후보를 추출해 pendingCandidates에 추가한다.
+    /// GlossaryStore.init 완료 후 비동기로 호출되어 MeetingStore.shared와의 순환 초기화를 피한다.
+    public func startObservingMeetings() {
+        var knownIDs = Set(MeetingStore.shared.meetings.map(\.id))
+        meetingObservationCancellable = MeetingStore.shared.$meetings
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] meetings in
+                guard let self else { return }
+                let newMeetings = meetings.filter { !knownIDs.contains($0.id) }
+                knownIDs = Set(meetings.map(\.id))
+                guard !newMeetings.isEmpty else { return }
+                let newCandidates = newMeetings.flatMap { meeting in
+                    Self.extractNewCandidates(
+                        keywords: meeting.summary.keywords,
+                        existingEntries: self.entries,
+                        existingPending: self.pendingCandidates,
+                        sourceMeetingID: meeting.id
+                    )
+                }
+                guard !newCandidates.isEmpty else { return }
+                self.addCandidates(newCandidates)
+            }
+    }
+
+    /// 후보를 pendingCandidates에 병합하고 상한 20개를 유지한다 (초과 시 오래된 것 교체).
+    public func addCandidates(_ newCandidates: [GlossaryCandidate]) {
+        var next = pendingCandidates + newCandidates
+        if next.count > 20 {
+            next.sort { $0.suggestedAt < $1.suggestedAt }
+            next = Array(next.suffix(20))
+        }
+        guard save(entries, pendingCandidates: next) else { return }
+        pendingCandidates = next
+        let count = newCandidates.count
+        Log.store.info("glossary candidates added count=\(count, privacy: .public)")
+    }
+
+    /// 후보를 승인 처리(폼 프리필용) — 실제 등록은 UI 폼에서 사용자가 직접 한다. 후보 목록에서만 제거.
+    public func approveCandidate(_ id: UUID) {
+        let next = pendingCandidates.filter { $0.id != id }
+        guard save(entries, pendingCandidates: next) else { return }
+        pendingCandidates = next
+    }
+
+    /// 후보를 무시(제거)한다.
+    public func dismissCandidate(_ id: UUID) {
+        let next = pendingCandidates.filter { $0.id != id }
+        guard save(entries, pendingCandidates: next) else { return }
+        pendingCandidates = next
+    }
+
+    /// 새 회의의 keywords에서 추가할 후보를 추출하는 순수 함수.
+    /// - Parameters:
+    ///   - keywords: 신규 회의의 summary.keywords
+    ///   - existingEntries: 현재 등록된 용어집 entries
+    ///   - existingPending: 현재 pendingCandidates
+    ///   - sourceMeetingID: 출처 회의 ID
+    /// - Returns: 추가해야 할 신규 후보 목록
+    nonisolated public static func extractNewCandidates(
+        keywords: [String],
+        existingEntries: [GlossaryEntry],
+        existingPending: [GlossaryCandidate],
+        sourceMeetingID: UUID
+    ) -> [GlossaryCandidate] {
+        let blockedByEntries = Set(
+            existingEntries.flatMap { [$0.canonical] + $0.aliases }
+                .map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) }
+        )
+        let blockedByPending = Set(
+            existingPending.map { $0.term.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) }
+        )
+
+        return keywords
+            .filter { $0.count >= 2 }
+            .filter { keyword in
+                let key = keyword.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                return !blockedByEntries.contains(key) && !blockedByPending.contains(key)
+            }
+            .map { GlossaryCandidate(term: $0, sourceMeetingID: sourceMeetingID) }
     }
 
     @discardableResult
@@ -178,10 +270,15 @@ public final class GlossaryStore: ObservableObject {
         }
     }
 
-    private func save(_ entriesToSave: [GlossaryEntry]? = nil) -> Bool {
+    @discardableResult
+    private func save(_ entriesToSave: [GlossaryEntry]? = nil, pendingCandidates pendingToSave: [GlossaryCandidate]? = nil) -> Bool {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let snapshot = GlossarySnapshot(schemaVersion: Self.schemaVersion, entries: entriesToSave ?? entries)
+            let snapshot = GlossarySnapshot(
+                schemaVersion: Self.schemaVersion,
+                entries: entriesToSave ?? entries,
+                pendingCandidates: pendingToSave ?? pendingCandidates
+            )
             let data = try encoder.encode(snapshot)
             try data.write(to: fileURL, options: .atomic)
             return true
@@ -246,10 +343,24 @@ public final class GlossaryStore: ObservableObject {
 public struct GlossarySnapshot: Codable, Sendable, Equatable {
     public let schemaVersion: Int
     public let entries: [GlossaryEntry]
+    public let pendingCandidates: [GlossaryCandidate]
 
-    public init(schemaVersion: Int, entries: [GlossaryEntry]) {
+    public init(schemaVersion: Int, entries: [GlossaryEntry], pendingCandidates: [GlossaryCandidate] = []) {
         self.schemaVersion = schemaVersion
         self.entries = entries
+        self.pendingCandidates = pendingCandidates
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, entries, pendingCandidates
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        entries = try c.decode([GlossaryEntry].self, forKey: .entries)
+        // 기존 schemaVersion 1 파일에는 pendingCandidates가 없으므로 tolerant 디코딩.
+        pendingCandidates = (try? c.decode([GlossaryCandidate].self, forKey: .pendingCandidates)) ?? []
     }
 }
 
