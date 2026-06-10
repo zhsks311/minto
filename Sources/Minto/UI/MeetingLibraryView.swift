@@ -56,8 +56,11 @@ public struct MeetingLibraryView: View {
     @State private var embeddingBuildTask: Task<Void, Never>?
     /// 파일 선택 후 맥락 입력 시트를 띄울 URL. nil이면 시트 미표시.
     @State private var fileImportSetupURL: URL?
-    @State private var isRetrying = false
-    @State private var retryErrorMessage: String?
+    /// 재요약 진행 중인 회의 ID. nil이면 재요약 없음.
+    /// record.id에 바인딩해 다른 회의 선택 시 상태 오염을 방지한다.
+    @State private var retryingRecordID: UUID?
+    /// 재요약 실패 정보. id가 현재 표시 중인 record와 일치할 때만 에러를 렌더한다.
+    @State private var retryError: (id: UUID, message: String)?
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
     @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -1284,6 +1287,10 @@ public struct MeetingLibraryView: View {
 
     @ViewBuilder
     private func plainFallbackBanner(_ record: MeetingRecord) -> some View {
+        // record는 호출 시점의 값 복사본 — 버튼 클로저가 캡처해도 시점이 고정된다.
+        let isThisRetrying = retryingRecordID == record.id
+        let thisError = retryError?.id == record.id ? retryError?.message : nil
+
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle")
@@ -1295,7 +1302,7 @@ public struct MeetingLibraryView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if isRetrying {
+            if isThisRetrying {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
@@ -1306,21 +1313,28 @@ public struct MeetingLibraryView: View {
             } else {
                 HStack(spacing: 8) {
                     Button("다시 요약") {
-                        retryErrorMessage = nil
-                        isRetrying = true
+                        retryError = nil
+                        retryingRecordID = record.id
                         Task {
                             let useCase = MeetingSummaryRetryUseCase()
+                            // record: 버튼 누른 시점의 복사본을 캡처 — 다른 회의 선택 후에도 올바른 record로 재시도
                             let result = await useCase.retry(record: record)
-                            isRetrying = false
-                            if case .failure = result {
-                                retryErrorMessage = "요약을 다시 만들지 못했어요. 다시 시도해 보세요."
+                            retryingRecordID = nil
+                            if case .failure(let reason) = result {
+                                let message: String
+                                if case .saveFailed = reason {
+                                    message = "다시 요약 결과 저장에 실패했어요. 다시 시도해 보세요."
+                                } else {
+                                    message = "요약을 다시 만들지 못했어요. 다시 시도해 보세요."
+                                }
+                                retryError = (id: record.id, message: message)
                             }
                         }
                     }
                     .buttonStyle(.bordered)
                     .disabled(hasLiveMeeting)
 
-                    if let errorMessage = retryErrorMessage {
+                    if let errorMessage = thisError {
                         Text(errorMessage)
                             .font(.system(size: 12))
                             .foregroundColor(.red)

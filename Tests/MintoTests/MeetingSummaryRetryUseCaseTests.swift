@@ -24,10 +24,13 @@ private final class StubRetryGenerator: MeetingSummaryRetryGenerating {
 @MainActor
 private final class StubRetryStore: MeetingSummaryRetryStoring {
     var savedRecords: [MeetingRecord] = []
+    var saveResult: MeetingSaveResult = .success
 
     func save(_ record: MeetingRecord) -> MeetingSaveResult {
-        savedRecords.append(record)
-        return .success
+        if saveResult == .success {
+            savedRecords.append(record)
+        }
+        return saveResult
     }
 }
 
@@ -140,7 +143,8 @@ struct MeetingSummaryRetryUseCaseTests {
         let useCase = MeetingSummaryRetryUseCase(
             summaryService: generator,
             store: store,
-            glossaryStore: ingester
+            glossaryStore: ingester,
+            glossaryResolver: { _ in "" }
         )
 
         let result = await useCase.retry(record: record)
@@ -166,7 +170,8 @@ struct MeetingSummaryRetryUseCaseTests {
         let useCase = MeetingSummaryRetryUseCase(
             summaryService: generator,
             store: store,
-            glossaryStore: ingester
+            glossaryStore: ingester,
+            glossaryResolver: { _ in "" }
         )
 
         let result = await useCase.retry(record: record)
@@ -191,7 +196,8 @@ struct MeetingSummaryRetryUseCaseTests {
         let useCase = MeetingSummaryRetryUseCase(
             summaryService: generator,
             store: store,
-            glossaryStore: ingester
+            glossaryStore: ingester,
+            glossaryResolver: { _ in "" }
         )
 
         let result = await useCase.retry(record: record)
@@ -216,7 +222,8 @@ struct MeetingSummaryRetryUseCaseTests {
         let useCase = MeetingSummaryRetryUseCase(
             summaryService: generator,
             store: store,
-            glossaryStore: ingester
+            glossaryStore: ingester,
+            glossaryResolver: { _ in "" }
         )
 
         let result = await useCase.retry(record: record)
@@ -248,21 +255,75 @@ struct MeetingSummaryRetryUseCaseTests {
         #expect(lines[2] == "[61:01] 감사합니다")
     }
 
-    @Test("retry 호출 시 topic을 context에 전달한다")
-    func retryPassesTopicToContext() async {
+    @Test("retry 호출 시 topic과 주입된 glossary를 context에 전달한다")
+    func retryPassesTopicAndGlossaryToContext() async {
         let segments = makeSegments(texts: ["발언"])
         let record = makePlainRecord(transcript: segments, topic: "스프린트 회고")
         let generator = StubRetryGenerator(result: makeStructuredSummary())
         let useCase = MeetingSummaryRetryUseCase(
             summaryService: generator,
             store: StubRetryStore(),
-            glossaryStore: StubRetryCandidateIngester()
+            glossaryStore: StubRetryCandidateIngester(),
+            glossaryResolver: { topic in "용어: \(topic)" }
         )
 
         _ = await useCase.retry(record: record)
 
         #expect(generator.receivedContext?.topic == "스프린트 회고")
-        #expect(generator.receivedContext?.glossary == "")
+        #expect(generator.receivedContext?.glossary == "용어: 스프린트 회고")
         #expect(generator.receivedContext?.document == "")
+    }
+
+    @Test("store 저장 실패 시 후보 미추가 + saveFailed 반환")
+    func retryStoreSaveFailedDoesNotIngestCandidates() async {
+        let segments = makeSegments(texts: ["발언 내용"])
+        let record = makePlainRecord(transcript: segments)
+        let generator = StubRetryGenerator(result: makeStructuredSummary())
+        let store = StubRetryStore()
+        store.saveResult = .failed
+        let ingester = StubRetryCandidateIngester()
+        let useCase = MeetingSummaryRetryUseCase(
+            summaryService: generator,
+            store: store,
+            glossaryStore: ingester,
+            glossaryResolver: { _ in "" }
+        )
+
+        let result = await useCase.retry(record: record)
+
+        guard case .failure(let reason) = result else {
+            Issue.record("실패 기대했지만 성공")
+            return
+        }
+        #expect(reason == .saveFailed)
+        #expect(store.savedRecords.isEmpty)
+        #expect(ingester.ingestedRecords.isEmpty)
+    }
+
+    @Test("LLM이 빈 JSON {}을 반환하면 isEmpty=true로 거부 + stillPlainFallback")
+    func retryEmptyStructuredSummaryIsRejected() async {
+        let segments = makeSegments(texts: ["발언 내용"])
+        let record = makePlainRecord(transcript: segments)
+        // MeetingSummary()는 isEmpty=true, isPlainFallback=false — 두 조건 모두 거부해야 한다
+        let emptySummary = MeetingSummary()
+        let generator = StubRetryGenerator(result: emptySummary)
+        let store = StubRetryStore()
+        let ingester = StubRetryCandidateIngester()
+        let useCase = MeetingSummaryRetryUseCase(
+            summaryService: generator,
+            store: store,
+            glossaryStore: ingester,
+            glossaryResolver: { _ in "" }
+        )
+
+        let result = await useCase.retry(record: record)
+
+        guard case .failure(let reason) = result else {
+            Issue.record("실패 기대했지만 성공")
+            return
+        }
+        #expect(reason == .stillPlainFallback)
+        #expect(store.savedRecords.isEmpty)
+        #expect(ingester.ingestedRecords.isEmpty)
     }
 }
