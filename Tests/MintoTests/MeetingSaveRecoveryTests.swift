@@ -49,7 +49,8 @@ struct MeetingSaveRecoveryTests {
         MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: dir)
 
         let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-        let filename = files.first?.lastPathComponent ?? ""
+        let mdFile = files.first { $0.pathExtension == "md" }
+        let filename = mdFile?.lastPathComponent ?? ""
         #expect(filename.contains(record.id.uuidString))
         #expect(filename.hasSuffix(".md"))
     }
@@ -63,7 +64,8 @@ struct MeetingSaveRecoveryTests {
         MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: dir)
 
         let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-        let content = try String(contentsOf: files[0], encoding: .utf8)
+        let mdFile = try #require(files.first { $0.pathExtension == "md" })
+        let content = try String(contentsOf: mdFile, encoding: .utf8)
         #expect(content.contains("안녕하세요"))
         #expect(content.contains("## 전사"))
     }
@@ -77,7 +79,8 @@ struct MeetingSaveRecoveryTests {
         MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: dir)
 
         let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-        let content = try String(contentsOf: files[0], encoding: .utf8)
+        let mdFile = try #require(files.first { $0.pathExtension == "md" })
+        let content = try String(contentsOf: mdFile, encoding: .utf8)
         #expect(content.contains("# 테스트 회의"))
     }
 
@@ -128,5 +131,108 @@ struct MeetingSaveRecoveryTests {
         let unwritable = URL(fileURLWithPath: "/dev/null/nonexistent-\(UUID().uuidString)")
         let store = MeetingStore(directory: unwritable)
         #expect(store.save(sampleRecord()) == .failed)
+    }
+
+    // MARK: - JSON 왕복 테스트
+
+    @Test("writeRecoveryFile: .json 파일이 생성되고 디코딩 후 id가 일치한다")
+    func jsonRoundTrip() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let record = sampleRecord()
+        MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: dir)
+
+        let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+        let jsonFile = try #require(files.first { $0.pathExtension == "json" })
+        let data = try Data(contentsOf: jsonFile)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let restored = try decoder.decode(MeetingRecord.self, from: data)
+        #expect(restored.id == record.id)
+    }
+
+    // MARK: - restorePendingRecords 테스트
+
+    @Test("restorePendingRecords: 복원 성공 시 .json과 .md 모두 삭제된다")
+    func restoreSuccessDeletesBothFiles() throws {
+        let recoveryDir = tempDir()
+        let storeDir = tempDir()
+        defer {
+            try? FileManager.default.removeItem(at: recoveryDir)
+            try? FileManager.default.removeItem(at: storeDir)
+        }
+
+        let record = sampleRecord()
+        MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: recoveryDir)
+
+        let store = MeetingStore(directory: storeDir)
+        let count = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
+
+        #expect(count == 1)
+        let remaining = try FileManager.default.contentsOfDirectory(at: recoveryDir, includingPropertiesForKeys: nil)
+        #expect(remaining.isEmpty)
+    }
+
+    @Test("restorePendingRecords: store 재저장 실패 시 파일이 유지된다")
+    func restoreFailRetainsFile() throws {
+        let recoveryDir = tempDir()
+        defer { try? FileManager.default.removeItem(at: recoveryDir) }
+
+        let record = sampleRecord()
+        MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: recoveryDir)
+
+        // 쓰기 불가 경로로 store를 초기화해 .failed 유도
+        let unwritable = URL(fileURLWithPath: "/dev/null/nonexistent-\(UUID().uuidString)")
+        let failingStore = MeetingStore(directory: unwritable)
+        let count = MeetingSaveRecovery.restorePendingRecords(into: failingStore, recoveryDirectory: recoveryDir)
+
+        #expect(count == 0)
+        let remaining = try FileManager.default.contentsOfDirectory(at: recoveryDir, includingPropertiesForKeys: nil)
+        let jsonFiles = remaining.filter { $0.pathExtension == "json" }
+        #expect(jsonFiles.count == 1)
+    }
+
+    @Test("restorePendingRecords: 손상 JSON은 skip하고 정상 파일은 계속 처리한다")
+    func restoreCorruptJsonSkips() throws {
+        let recoveryDir = tempDir()
+        let storeDir = tempDir()
+        defer {
+            try? FileManager.default.removeItem(at: recoveryDir)
+            try? FileManager.default.removeItem(at: storeDir)
+        }
+
+        // 손상 파일
+        try FileManager.default.createDirectory(at: recoveryDir, withIntermediateDirectories: true)
+        let corruptURL = recoveryDir.appendingPathComponent("corrupt.json")
+        try Data("not valid json".utf8).write(to: corruptURL)
+
+        // 정상 파일
+        let record = sampleRecord()
+        MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: recoveryDir)
+
+        let store = MeetingStore(directory: storeDir)
+        let count = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
+
+        // 정상 파일 1건은 복원, 손상 파일은 유지
+        #expect(count == 1)
+        let remaining = try FileManager.default.contentsOfDirectory(at: recoveryDir, includingPropertiesForKeys: nil)
+        #expect(remaining.count == 1)
+        #expect(remaining[0].lastPathComponent == "corrupt.json")
+    }
+
+    @Test("restorePendingRecords: 빈 디렉터리에서 크래시 없이 0을 반환한다")
+    func restoreEmptyDirectoryIsNoop() throws {
+        let recoveryDir = tempDir()
+        let storeDir = tempDir()
+        defer {
+            try? FileManager.default.removeItem(at: recoveryDir)
+            try? FileManager.default.removeItem(at: storeDir)
+        }
+
+        try FileManager.default.createDirectory(at: recoveryDir, withIntermediateDirectories: true)
+        let store = MeetingStore(directory: storeDir)
+        let count = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
+        #expect(count == 0)
     }
 }
