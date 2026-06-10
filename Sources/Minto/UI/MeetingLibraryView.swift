@@ -65,6 +65,8 @@ public struct MeetingLibraryView: View {
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @State private var fileImportTask: Task<Void, Never>?
+    /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
+    @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
@@ -721,14 +723,23 @@ public struct MeetingLibraryView: View {
                 .padding(.vertical, 5)
                 .background(LibraryPalette.elevated)
                 .clipShape(Capsule())
-            ForEach(["요약", "전사", "주제"], id: \.self) { label in
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(Color.secondary.opacity(0.10))
-                    .clipShape(Capsule())
+            // .all은 칩을 표시하지 않는다 — 전체 칩이 없어도 모두 선택 해제하면 .all로 돌아온다.
+            ForEach([SearchKindFilter.summary, .transcript, .topic], id: \.label) { filter in
+                let active = activeSearchFilter == filter
+                Button {
+                    activeSearchFilter = active ? .all : filter
+                    refreshSearchResults()
+                    selectFirstAvailableIfNeeded(preferFirstResult: true)
+                } label: {
+                    Text(filter.label)
+                        .font(.system(size: 11, weight: active ? .semibold : .medium))
+                        .foregroundColor(active ? .white : .secondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(active ? Color.accentColor : Color.secondary.opacity(0.10))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -1760,6 +1771,44 @@ public struct MeetingLibraryView: View {
         }
     }
 
+    // MARK: - Search kind filter
+
+    /// 검색 결과를 chunk 종류로 좁히는 필터.
+    /// 칩 라벨 ↔ Kind 집합 매핑:
+    ///   요약  → summary, section, decision, actionItem, openQuestion
+    ///   전사  → transcript
+    ///   주제  → topic, title, keywords
+    private enum SearchKindFilter: CaseIterable {
+        case all
+        case summary
+        case transcript
+        case topic
+
+        var label: String {
+            switch self {
+            case .all: return "전체"
+            case .summary: return "요약"
+            case .transcript: return "전사"
+            case .topic: return "주제"
+            }
+        }
+
+        /// 이 필터가 허용하는 MeetingSearchChunk.Kind 집합. nil이면 전체 허용.
+        var allowedKinds: Set<MeetingSearchChunk.Kind>? {
+            switch self {
+            case .all: return nil
+            case .summary: return [.summary, .section, .decision, .actionItem, .openQuestion]
+            case .transcript: return [.transcript]
+            case .topic: return [.topic, .title, .keywords]
+            }
+        }
+
+        func matches(_ result: MeetingSearchResult) -> Bool {
+            guard let kinds = allowedKinds else { return true }
+            return kinds.contains(result.chunk.kind)
+        }
+    }
+
     // MARK: - Detail content state
 
     private enum DetailContent {
@@ -1866,7 +1915,13 @@ public struct MeetingLibraryView: View {
     }
 
     private func refreshSearchResults() {
-        meetingSearchResults = isSearching ? searchIndex.search(trimmedSearch, limit: Int.max) : []
+        guard isSearching else {
+            meetingSearchResults = []
+            activeSearchFilter = .all
+            return
+        }
+        let all = searchIndex.search(trimmedSearch, limit: Int.max)
+        meetingSearchResults = activeSearchFilter == .all ? all : all.filter { activeSearchFilter.matches($0) }
     }
 
     private func selectSearchAnswerCitation(_ citation: MeetingSearchAnswerCitation) {
