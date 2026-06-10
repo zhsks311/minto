@@ -1910,6 +1910,18 @@ public struct MeetingLibraryView: View {
     }
 
     private func rebuildSearchIndex() {
+        // 디스크 인덱스가 있고 현재 meetings와 ID 집합이 일치하면 재빌드를 생략한다.
+        // MeetingSearchIndexStore.load()는 schemaVersion·chunkingVersion 불일치 시 nil을 반환한다.
+        let indexStore = MeetingSearchIndexStore(directory: store.storageDirectory)
+        if let loaded = indexStore.load() {
+            let indexedIDs = Set(loaded.chunks.map(\.meetingID))
+            let currentIDs = Set(store.meetings.map(\.id))
+            if indexedIDs == currentIDs {
+                searchIndex = loaded
+                refreshSearchResults()
+                return
+            }
+        }
         searchIndex = MeetingSearchIndex(records: store.meetings)
         refreshSearchResults()
     }
