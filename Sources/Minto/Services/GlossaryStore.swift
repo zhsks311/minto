@@ -80,6 +80,54 @@ public final class GlossaryStore: ObservableObject {
         return true
     }
 
+    /// 기존 용어를 제자리에서 수정한다. id·enabled는 보존하고 updatedAt만 갱신.
+    /// 바뀐 canonical이 다른 항목과 겹치면 add와 같은 의미로 그 항목을 대체한다.
+    @discardableResult
+    public func update(
+        _ id: UUID,
+        canonical: String,
+        aliasesText: String = "",
+        description: String = "",
+        category: String = "",
+        tagsText: String = ""
+    ) -> Bool {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return false }
+        let trimmedCanonical = canonical.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedCanonical.isEmpty else { return false }
+
+        var nextEntries = entries
+        nextEntries.removeAll {
+            $0.id != id
+                && $0.normalizedCanonical.compare(trimmedCanonical, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }
+        guard let nextIndex = nextEntries.firstIndex(where: { $0.id == id }) else { return false }
+        nextEntries[nextIndex].canonical = trimmedCanonical
+        nextEntries[nextIndex].aliases = Self.parseList(aliasesText)
+        nextEntries[nextIndex].description = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        nextEntries[nextIndex].category = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        nextEntries[nextIndex].tags = Self.parseList(tagsText)
+        nextEntries[nextIndex].updatedAt = Date()
+        nextEntries = Self.cleaned(nextEntries)
+        guard save(nextEntries) else { return false }
+        entries = nextEntries
+        return true
+    }
+
+    /// 등록된 용어들이 실제로 쓰는 묶음 이름 목록 (가나다순).
+    public var categories: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for entry in entries {
+            let category = entry.category.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !category.isEmpty else { continue }
+            let key = category.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            result.append(category)
+        }
+        return result.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
     public func setEnabled(_ id: UUID, enabled: Bool) {
         var nextEntries = entries
         guard let index = nextEntries.firstIndex(where: { $0.id == id }) else { return }
@@ -111,6 +159,9 @@ public final class GlossaryStore: ObservableObject {
             .map(\.entry)
     }
 
+    /// 프롬프트 한 줄에 포함하는 설명 최대 길이. 길게 저장해도 AI에는 이만큼만 전달된다.
+    nonisolated public static let promptDescriptionMaxLength = 80
+
     nonisolated public static func promptLines(for entries: [GlossaryEntry]) -> [String] {
         cleaned(entries, sortByUpdatedAt: false).filter(\.isUsable).map { entry in
             var line = entry.normalizedCanonical
@@ -120,7 +171,7 @@ public final class GlossaryStore: ObservableObject {
             }
             let description = entry.description.trimmingCharacters(in: .whitespacesAndNewlines)
             if !description.isEmpty {
-                line += " — \(String(description.prefix(80)))"
+                line += " — \(String(description.prefix(promptDescriptionMaxLength)))"
             }
             return line
         }
