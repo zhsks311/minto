@@ -405,7 +405,7 @@ struct ConfluenceExportReconnectTests {
         httpClient: StubConfluenceHTTPClient,
         tokenStorage: StubConfluenceTokenStorageBackend
     ) -> ConfluenceService {
-        let defaults = UserDefaults(suiteName: "test.confluence.export.reconnect.\(UUID().uuidString)")!
+        let defaults = InMemoryUserDefaults()
         let service = ConfluenceService(
             httpClient: httpClient,
             defaults: defaults,
@@ -422,8 +422,7 @@ struct ConfluenceExportReconnectTests {
 struct ConfluenceConfigTests {
 
     private func makeService() -> (ConfluenceService, UserDefaults) {
-        let suite = "test.confluence.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
+        let defaults = InMemoryUserDefaults()
         return (
             ConfluenceService(
                 httpClient: StubConfluenceHTTPClient(),
@@ -529,11 +528,7 @@ struct IntegrationReconnectStateTests {
 
     @Test("Confluence 연동 해제는 token과 URL/email을 함께 지운다")
     func confluenceDisconnectClearsTokenAndMetadata() {
-        let suiteName = "test.confluence.disconnect.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
+        let defaults = InMemoryUserDefaults()
         let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
         let service = ConfluenceService(
             httpClient: StubConfluenceHTTPClient(),
@@ -641,7 +636,7 @@ struct IntegrationReconnectStateTests {
         httpClient: StubConfluenceHTTPClient = StubConfluenceHTTPClient(),
         tokenStorage: StubConfluenceTokenStorageBackend
     ) -> ConfluenceService {
-        let defaults = UserDefaults(suiteName: "test.confluence.reconnect.\(UUID().uuidString)")!
+        let defaults = InMemoryUserDefaults()
         let service = ConfluenceService(
             httpClient: httpClient,
             defaults: defaults,

@@ -145,9 +145,7 @@ struct MeetingSearchAnswerServiceTests {
     @MainActor
     @Test("검색 답변 설정은 요약 설정과 별도 키를 사용한다")
     func answerSettingsAreSeparateFromSummarySettings() {
-        let suiteName = "minto-search-answer-settings-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = InMemoryUserDefaults()
 
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
@@ -162,9 +160,7 @@ struct MeetingSearchAnswerServiceTests {
     @MainActor
     @Test("컨트롤러는 provider 설정 완료 전에는 생성 버튼을 막는다")
     func controllerChecksProviderReadiness() async throws {
-        let suiteName = "minto-search-answer-controller-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = InMemoryUserDefaults()
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
         settings.selectedProvider = .gptAPI
@@ -191,10 +187,8 @@ struct MeetingSearchAnswerServiceTests {
     @MainActor
     @Test("컨트롤러는 API key 변경 notification 후 readiness를 갱신한다")
     func controllerRefreshesReadinessAfterAPIKeyChangeNotification() async throws {
-        let suiteName = "minto-search-answer-controller-notification-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = InMemoryUserDefaults()
         let center = NotificationCenter()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
         settings.selectedProvider = .gptAPI
@@ -218,9 +212,7 @@ struct MeetingSearchAnswerServiceTests {
     @MainActor
     @Test("검색어 변경용 reset은 provider readiness를 유지한다")
     func controllerResetKeepsReadinessByDefault() async throws {
-        let suiteName = "minto-search-answer-controller-reset-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = InMemoryUserDefaults()
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
         settings.selectedProvider = .gptAPI
@@ -243,9 +235,7 @@ struct MeetingSearchAnswerServiceTests {
     @MainActor
     @Test("같은 검색어 재생성 중 이전 요청은 최신 답변 상태를 덮지 않는다")
     func repeatedGenerateUsesLatestGenerationOnly() async throws {
-        let suiteName = "minto-search-answer-controller-generation-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = InMemoryUserDefaults()
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
         settings.selectedProvider = .gptAPI

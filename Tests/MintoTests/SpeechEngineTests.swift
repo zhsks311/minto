@@ -58,9 +58,7 @@ struct SpeechEngineTests {
 
     @Test("legacy selectedModel에서 새 selectedSpeechEngine을 복원한다")
     func restoresEngineFromLegacySelectedModel() {
-        let suiteName = "minto-speech-engine-test-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = InMemoryUserDefaults()
 
         defaults.set("openai_whisper-small", forKey: SpeechEnginePreferences.selectedModelKey)
 
@@ -72,9 +70,7 @@ struct SpeechEngineTests {
 
     @Test("deprecated Whisper 모델은 기본 엔진으로 마이그레이션한다")
     func migratesDeprecatedWhisperModelToDefaultEngine() {
-        let suiteName = "minto-deprecated-engine-test-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = InMemoryUserDefaults()
 
         defaults.set("openai_whisper-tiny", forKey: SpeechEnginePreferences.selectedModelKey)
 
