@@ -137,6 +137,9 @@ public struct MeetingLibraryView: View {
         .onChange(of: viewModel.isRecording) { _, isRecording in
             showingLiveMeeting = isRecording || viewModel.isFinalizingMeeting
             if !showingLiveMeeting {
+                // 회의가 저장되지 않고 끝나면 store.meetings onChange가 안 불려
+                // 이전 검색의 답변 디테일이 남을 수 있어 여기서도 닫는다.
+                showingSearchAnswerDetail = false
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
@@ -145,6 +148,7 @@ public struct MeetingLibraryView: View {
                 showingLiveMeeting = true
             } else if !viewModel.isRecording {
                 showingLiveMeeting = false
+                showingSearchAnswerDetail = false
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
@@ -400,7 +404,6 @@ public struct MeetingLibraryView: View {
                         .font(.system(size: 13.5))
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
 
                     if !searchAnswer.citations.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
@@ -622,6 +625,8 @@ public struct MeetingLibraryView: View {
     private func generateAnswerButton(title: String) -> some View {
         Button {
             searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+            // generate()가 가드(provider 미준비)로 조기 반환해도 디테일을 연다 —
+            // 에러 메시지를 디테일 영역에서 크게 보여주는 것이 의도.
             showingSearchAnswerDetail = true
         } label: {
             Label(title, systemImage: "sparkles")
@@ -819,7 +824,9 @@ public struct MeetingLibraryView: View {
     }
 
     private func meetingRow(_ record: MeetingRecord) -> some View {
-        let selected = selectedID == record.id
+        // 오른쪽이 AI 답변 디테일을 보여주는 동안에는 행 강조를 억제해
+        // 좌우가 서로 다른 대상을 가리키는 것처럼 보이지 않게 한다. 선택 자체는 보존.
+        let selected = selectedID == record.id && !(isSearching && showingSearchAnswerDetail)
         let match = primaryMatch(for: record)
 
         return Button {
