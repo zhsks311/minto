@@ -2349,10 +2349,8 @@ public struct SettingsView: View {
 
     private func selectSpeechEngine(_ engine: SpeechEngineID) {
         selectedSpeechEngineRaw = engine.rawValue
-        UserDefaults.standard.set(engine.rawValue, forKey: SpeechEnginePreferences.selectedEngineKey)
         if let variant = engine.whisperVariant {
             selectedModel = variant
-            UserDefaults.standard.set(variant, forKey: SpeechEnginePreferences.selectedModelKey)
         }
     }
 
@@ -2381,7 +2379,6 @@ public struct SettingsView: View {
     private func applySelectedSpeechEngine() async {
         if let variant = selectedSpeechEngineID.whisperVariant {
             selectedModel = variant
-            UserDefaults.standard.set(variant, forKey: SpeechEnginePreferences.selectedModelKey)
         }
         await viewModel.loadSpeechEngine(selectedSpeechEngineID)
         await refreshSpeechEngineAvailability()
