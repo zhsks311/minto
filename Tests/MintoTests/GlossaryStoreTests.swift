@@ -82,6 +82,81 @@ struct GlossaryStoreTests {
         #expect(store.entries[0].description == "new")
     }
 
+    @Test("용어 수정은 id와 enabled를 보존하고 내용만 바꾼다")
+    func updatePreservesIdentityAndEnabled() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url)
+
+        #expect(store.add(canonical: "Liquibase", description: "old", category: "개발") == true)
+        let entry = store.entries[0]
+        store.setEnabled(entry.id, enabled: false)
+
+        #expect(store.update(
+            entry.id,
+            canonical: "Liquibase",
+            aliasesText: "리퀴베이스",
+            description: "DB 스키마 변경 관리",
+            category: "백엔드팀"
+        ) == true)
+
+        #expect(store.entries.count == 1)
+        let updated = store.entries[0]
+        #expect(updated.id == entry.id)
+        #expect(updated.enabled == false)
+        #expect(updated.aliases == ["리퀴베이스"])
+        #expect(updated.description == "DB 스키마 변경 관리")
+        #expect(updated.category == "백엔드팀")
+
+        let reloaded = GlossaryStore(fileURL: url)
+        #expect(reloaded.entries[0].category == "백엔드팀")
+    }
+
+    @Test("수정한 canonical이 다른 항목과 겹치면 그 항목을 대체한다")
+    func updateReplacesCollidingCanonical() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url)
+
+        #expect(store.add(canonical: "Flyway") == true)
+        #expect(store.add(canonical: "Liquibase") == true)
+        let liquibaseID = store.entries.first { $0.canonical == "Liquibase" }!.id
+
+        #expect(store.update(liquibaseID, canonical: "flyway", description: "병합됨") == true)
+
+        #expect(store.entries.count == 1)
+        #expect(store.entries[0].id == liquibaseID)
+        #expect(store.entries[0].canonical == "flyway")
+    }
+
+    @Test("빈 canonical이나 없는 id로는 수정하지 않는다")
+    func updateRejectsEmptyCanonicalAndUnknownID() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url)
+
+        #expect(store.add(canonical: "Liquibase", description: "유지") == true)
+        let id = store.entries[0].id
+
+        #expect(store.update(id, canonical: "   ") == false)
+        #expect(store.update(UUID(), canonical: "Flyway") == false)
+        #expect(store.entries[0].description == "유지")
+    }
+
+    @Test("categories는 사용 중인 묶음을 중복 없이 가나다순으로 돌려준다")
+    func categoriesListsUsedCategories() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url)
+
+        #expect(store.add(canonical: "Liquibase", category: "개발") == true)
+        #expect(store.add(canonical: "FBK", category: "나만의-백엔드팀") == true)
+        #expect(store.add(canonical: "Flyway", category: "개발") == true)
+        #expect(store.add(canonical: "KC", category: "  ") == true)
+
+        #expect(store.categories == ["개발", "나만의-백엔드팀"])
+    }
+
     @Test("저장 실패 시 메모리 상태를 먼저 바꾸지 않는다")
     func doesNotPublishUnsavedChanges() throws {
         let directoryURL = FileManager.default.temporaryDirectory

@@ -90,7 +90,11 @@ public struct SettingsView: View {
     @State private var glossaryDescriptionInput = ""
     @State private var glossaryTagsInput = ""
     @State private var glossaryCategoryInput = "개발"
+    @State private var glossaryNewCategoryInput = ""
     @State private var showGlossaryAddForm = false
+    /// nil이 아니면 폼이 해당 용어의 수정 모드로 동작한다.
+    @State private var editingGlossaryEntryID: UUID? = nil
+    @State private var collapsedGlossaryCategories: Set<String> = []
     @State private var showLocalLLMAdvancedSettings = false
     @State private var isDetectingLocalLLMCompatibility = false
 
@@ -188,93 +192,190 @@ public struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                Button(showGlossaryAddForm ? "접기" : "용어 추가") {
-                    showGlossaryAddForm.toggle()
-                }
-            }
-
-            if showGlossaryAddForm {
-                glossaryAddForm
-            }
-
-            if glossaryStore.entries.isEmpty {
-                Text("개발, 인프라, 제품, 조직처럼 묶음별 용어를 추가하면 새 회의 시작 때 관련 용어만 선택할 수 있습니다.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(glossaryGroupedEntries, id: \.category) { group in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(group.category)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.secondary)
-                        ForEach(group.entries) { entry in
-                            glossaryEntryRow(entry)
-                        }
+                Button(glossaryEditorVisible ? "접기" : "용어 추가") {
+                    if glossaryEditorVisible {
+                        cancelGlossaryEditing()
+                    } else {
+                        showGlossaryAddForm = true
                     }
                 }
             }
 
-            Text("AI에는 전체 용어집이 아니라 회의 주제와 선택한 묶음에 맞는 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달됩니다.")
+            if glossaryEditorVisible {
+                glossaryEditorForm
+            }
+
+            if glossaryStore.entries.isEmpty {
+                Text("개발, 인프라, 제품, 조직처럼 묶음별 용어를 추가하면 새 회의 시작 때 관련 용어만 선택할 수 있습니다. 묶음 이름은 직접 만들 수도 있습니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(glossaryGroupedEntries, id: \.category) { group in
+                    glossaryCategoryCard(group)
+                }
+            }
+
+            Text("저장 개수에는 제한이 없습니다. AI에는 회의 주제와 선택한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달됩니다.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private func glossaryEntryRow(_ entry: GlossaryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(entry.normalizedCanonical)
+    /// 묶음 하나를 헤더 + 용어 행들로 묶은 카드. 헤더 클릭으로 접고 펼친다.
+    private func glossaryCategoryCard(_ group: (category: String, entries: [GlossaryEntry])) -> some View {
+        let collapsed = collapsedGlossaryCategories.contains(group.category)
+        let activeCount = group.entries.filter(\.enabled).count
+
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                if collapsed {
+                    collapsedGlossaryCategories.remove(group.category)
+                } else {
+                    collapsedGlossaryCategories.insert(group.category)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder.fill")
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                    Text(group.category)
                         .font(.callout.weight(.semibold))
-                    if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(entry.description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    let tags = entry.tags.joined(separator: ", ")
-                    if !tags.isEmpty {
-                        Text("태그: \(tags)")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    let aliases = entry.aliases.joined(separator: ", ")
-                    if !aliases.isEmpty {
-                        Text("오인식 표현: \(aliases)")
-                            .font(.caption2)
+                    Text("\(group.entries.count)개")
+                        .font(.caption2.weight(.semibold))
                         .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12))
+                        .clipShape(Capsule())
+                    if activeCount < group.entries.count {
+                        Text("추천 포함 \(activeCount)개")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                     }
+                    Spacer()
+                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.secondary)
                 }
-
-                Spacer()
-
-                Button(role: .destructive) {
-                    glossaryStore.delete(entry.id)
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless)
-                .help("삭제")
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .background(Color.secondary.opacity(0.07))
 
-            Toggle("회의 시작 때 추천에 포함", isOn: Binding(
+            if !collapsed {
+                ForEach(Array(group.entries.enumerated()), id: \.element.id) { position, entry in
+                    if position > 0 {
+                        Divider()
+                            .padding(.leading, 10)
+                    }
+                    glossaryEntryRow(entry)
+                }
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// 압축 행: 표기 + 설명/별칭은 한 줄로 잘라 길어져도 행 높이를 유지한다.
+    private func glossaryEntryRow(_ entry: GlossaryEntry) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Toggle("", isOn: Binding(
                 get: { entry.enabled },
                 set: { glossaryStore.setEnabled(entry.id, enabled: $0) }
             ))
-            .font(.caption)
             .toggleStyle(.checkbox)
-        }
-        .padding(.vertical, 4)
-    }
+            .labelsHidden()
+            .help("회의 시작 때 추천에 포함")
 
-    private var glossaryAddForm: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("묶음", selection: $glossaryCategoryInput) {
-                ForEach(glossaryCategoryPresets, id: \.self) { category in
-                    Text(category).tag(category)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.normalizedCanonical)
+                    .font(.callout.weight(.semibold))
+                    .foregroundColor(entry.enabled ? .primary : .secondary)
+                if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(entry.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                let meta = glossaryEntryMeta(entry)
+                if !meta.isEmpty {
+                    Text(meta)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
             }
-            .pickerStyle(.segmented)
+
+            Spacer()
+
+            Button {
+                beginEditingGlossaryEntry(entry)
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
+            .help("편집")
+
+            Button(role: .destructive) {
+                if editingGlossaryEntryID == entry.id {
+                    cancelGlossaryEditing()
+                }
+                glossaryStore.delete(entry.id)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("삭제")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+    }
+
+    private func glossaryEntryMeta(_ entry: GlossaryEntry) -> String {
+        var parts: [String] = []
+        if !entry.aliases.isEmpty {
+            parts.append("오인식: \(entry.aliases.joined(separator: ", "))")
+        }
+        if !entry.tags.isEmpty {
+            parts.append("태그: \(entry.tags.joined(separator: ", "))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var glossaryEditorForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(editingGlossaryEntryID == nil ? "새 용어" : "용어 수정")
+                .font(.caption.weight(.bold))
+                .foregroundColor(.accentColor)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("묶음")
+                    .font(.caption.weight(.semibold))
+                Picker("", selection: $glossaryCategoryInput) {
+                    ForEach(glossaryCategoryOptions, id: \.self) { category in
+                        Text(category).tag(category)
+                    }
+                    Text("새 묶음 만들기…").tag(Self.glossaryNewCategoryTag)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 220, alignment: .leading)
+
+                if glossaryCategoryInput == Self.glossaryNewCategoryTag {
+                    glossaryInputField(
+                        title: "새 묶음 이름",
+                        placeholder: "예: 백엔드팀, 프로젝트-X",
+                        help: "팀이나 프로젝트 이름으로 나만의 용어집을 만들 수 있습니다.",
+                        text: $glossaryNewCategoryInput
+                    )
+                }
+            }
 
             glossaryInputField(
                 title: "정확한 표기",
@@ -285,15 +386,34 @@ public struct SettingsView: View {
             glossaryInputField(
                 title: "잘못 인식되기 쉬운 표현",
                 placeholder: "리퀴베이스, liqui base",
-                help: "쉼표로 여러 표현을 입력하세요.",
+                help: "쉼표나 줄바꿈으로 여러 표현을 입력하세요.",
                 text: $glossaryAliasesInput
             )
-            glossaryInputField(
-                title: "짧은 설명",
-                placeholder: "DB 스키마 변경 관리",
-                help: "회의 주제와 맞는 용어만 추천할 때 사용합니다.",
-                text: $glossaryDescriptionInput
-            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("짧은 설명")
+                    .font(.caption.weight(.semibold))
+                TextEditor(text: $glossaryDescriptionInput)
+                    .font(.callout)
+                    .frame(height: 52)
+                    .padding(4)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                HStack {
+                    Text("회의 주제와 맞는 용어만 추천할 때 사용합니다.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(glossaryDescriptionInput.count)자 · AI에는 앞 \(GlossaryStore.promptDescriptionMaxLength)자만 전달")
+                        .font(.caption2)
+                        .foregroundColor(glossaryDescriptionInput.count > GlossaryStore.promptDescriptionMaxLength ? .orange : .secondary)
+                }
+            }
+
             glossaryInputField(
                 title: "태그",
                 placeholder: "db, 마이그레이션",
@@ -301,16 +421,33 @@ public struct SettingsView: View {
                 text: $glossaryTagsInput
             )
 
+            if let promptLine = glossaryPromptPreviewLine {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("AI 전달 형식")
+                        .font(.caption.weight(.semibold))
+                    Text(promptLine)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                    Text("이 용어는 전달 예산 \(GlossaryContextResolver.defaultMaxCharacters)자 중 약 \(promptLine.count)자를 차지합니다.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.secondary.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
             HStack(spacing: 8) {
-                Button("저장") {
+                Button(editingGlossaryEntryID == nil ? "저장" : "수정 저장") {
                     saveGlossaryEntry()
                 }
-                .disabled(glossaryCanonicalInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canSaveGlossaryEntry)
 
-                Button("입력 지우기") {
-                    clearGlossaryInputs()
+                Button("취소") {
+                    cancelGlossaryEditing()
                 }
-                .disabled(glossaryInputsAreEmpty)
                 .foregroundColor(.secondary)
             }
         }
@@ -357,34 +494,101 @@ public struct SettingsView: View {
         }
     }
 
-    private var glossaryInputsAreEmpty: Bool {
-        [
-            glossaryCanonicalInput,
-            glossaryAliasesInput,
-            glossaryDescriptionInput,
-            glossaryTagsInput
-        ]
-        .allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private static let glossaryNewCategoryTag = "__new-glossary-category__"
+
+    private var glossaryEditorVisible: Bool {
+        showGlossaryAddForm || editingGlossaryEntryID != nil
+    }
+
+    /// 사용 중인 묶음 + 프리셋을 합친 선택지. 사용자가 만든 묶음이 먼저 보인다.
+    private var glossaryCategoryOptions: [String] {
+        var seen = Set<String>()
+        var options: [String] = []
+        for category in glossaryStore.categories + glossaryCategoryPresets {
+            let key = category.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            options.append(category)
+        }
+        return options
+    }
+
+    private var effectiveGlossaryCategory: String {
+        if glossaryCategoryInput == Self.glossaryNewCategoryTag {
+            return glossaryNewCategoryInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return glossaryCategoryInput
+    }
+
+    private var canSaveGlossaryEntry: Bool {
+        !glossaryCanonicalInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !effectiveGlossaryCategory.isEmpty
+    }
+
+    /// 현재 입력으로 AI 프롬프트에 들어갈 한 줄 미리보기.
+    private var glossaryPromptPreviewLine: String? {
+        let draft = GlossaryEntry(
+            canonical: glossaryCanonicalInput,
+            aliases: glossaryAliasesInput
+                .components(separatedBy: CharacterSet(charactersIn: ",\n"))
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty },
+            description: glossaryDescriptionInput
+        )
+        guard draft.isUsable else { return nil }
+        return GlossaryStore.promptLines(for: [draft]).first
     }
 
     private func saveGlossaryEntry() {
-        if glossaryStore.add(
-            canonical: glossaryCanonicalInput,
-            aliasesText: glossaryAliasesInput,
-            description: glossaryDescriptionInput,
-            category: glossaryCategoryInput,
-            tagsText: glossaryTagsInput
-        ) {
-            clearGlossaryInputs()
-            showGlossaryAddForm = false
+        let saved: Bool
+        if let editingID = editingGlossaryEntryID {
+            saved = glossaryStore.update(
+                editingID,
+                canonical: glossaryCanonicalInput,
+                aliasesText: glossaryAliasesInput,
+                description: glossaryDescriptionInput,
+                category: effectiveGlossaryCategory,
+                tagsText: glossaryTagsInput
+            )
+        } else {
+            saved = glossaryStore.add(
+                canonical: glossaryCanonicalInput,
+                aliasesText: glossaryAliasesInput,
+                description: glossaryDescriptionInput,
+                category: effectiveGlossaryCategory,
+                tagsText: glossaryTagsInput
+            )
+        }
+        if saved {
+            // 새 묶음에 저장했으면 그 묶음이 펼쳐진 상태로 보이게 한다.
+            collapsedGlossaryCategories.remove(effectiveGlossaryCategory)
+            cancelGlossaryEditing()
         }
     }
 
-    private func clearGlossaryInputs() {
+    private func beginEditingGlossaryEntry(_ entry: GlossaryEntry) {
+        editingGlossaryEntryID = entry.id
+        showGlossaryAddForm = false
+        glossaryCanonicalInput = entry.canonical
+        glossaryAliasesInput = entry.aliases.joined(separator: ", ")
+        glossaryDescriptionInput = entry.description
+        glossaryTagsInput = entry.tags.joined(separator: ", ")
+        glossaryNewCategoryInput = ""
+        let category = entry.category.trimmingCharacters(in: .whitespacesAndNewlines)
+        glossaryCategoryInput = category.isEmpty ? "기타" : category
+    }
+
+    private func cancelGlossaryEditing() {
+        editingGlossaryEntryID = nil
+        showGlossaryAddForm = false
         glossaryCanonicalInput = ""
         glossaryAliasesInput = ""
         glossaryDescriptionInput = ""
         glossaryTagsInput = ""
+        glossaryNewCategoryInput = ""
+        if glossaryCategoryInput == Self.glossaryNewCategoryTag {
+            glossaryCategoryInput = glossaryCategoryOptions.first ?? "개발"
+        }
     }
 
     private var glossaryCategoryPresets: [String] {
