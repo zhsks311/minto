@@ -75,6 +75,8 @@ public struct MeetingLibraryView: View {
     // 오른쪽 디테일 영역에 AI 답변 전문을 표시할지 여부.
     // 라이브 회의 디테일이 항상 우선하고, 회의 행/인용 클릭 시 꺼진다.
     @State private var showingSearchAnswerDetail = false
+    /// AI 답변의 인용을 클릭했을 때 회의 미리보기에서 스크롤·하이라이트할 근거 위치.
+    @State private var searchAnswerCitationAnchor: SearchAnswerCitationAnchor?
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @State private var fileImportTask: Task<Void, Never>?
@@ -130,12 +132,14 @@ public struct MeetingLibraryView: View {
         .onChange(of: store.meetings) { _, _ in
             searchAnswerController.reset()
             showingSearchAnswerDetail = false
+            searchAnswerCitationAnchor = nil
             rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
         }
         .onChange(of: searchText) { _, _ in
             searchAnswerController.reset()
             showingSearchAnswerDetail = false
+            searchAnswerCitationAnchor = nil
             if hasLiveMeeting {
                 showingLiveMeeting = true
                 selectedID = nil
@@ -159,6 +163,7 @@ public struct MeetingLibraryView: View {
                 // 회의가 저장되지 않고 끝나면 store.meetings onChange가 안 불려
                 // 이전 검색의 답변 디테일이 남을 수 있어 여기서도 닫는다.
                 showingSearchAnswerDetail = false
+                searchAnswerCitationAnchor = nil
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
@@ -168,17 +173,20 @@ public struct MeetingLibraryView: View {
             } else if !viewModel.isRecording {
                 showingLiveMeeting = false
                 showingSearchAnswerDetail = false
+                searchAnswerCitationAnchor = nil
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
         .onChange(of: answerSettings.isEnabled) { _, _ in
             searchAnswerController.reset(clearReadiness: true)
             showingSearchAnswerDetail = false
+            searchAnswerCitationAnchor = nil
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: answerSettings.selectedProvider) { _, _ in
             searchAnswerController.reset(clearReadiness: true)
             showingSearchAnswerDetail = false
+            searchAnswerCitationAnchor = nil
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: fileImportUseCase.state) { _, state in
@@ -418,7 +426,7 @@ public struct MeetingLibraryView: View {
                     }
                     .padding(.top, 6)
                 } else if let searchAnswer = searchAnswerController.answer, searchAnswer.query == trimmedSearch {
-                    Text(searchAnswer.text)
+                    markdownText(searchAnswer.text)
                         .font(.system(size: 13.5))
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -439,6 +447,7 @@ public struct MeetingLibraryView: View {
                         .buttonStyle(.bordered)
                         Button {
                             searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                            searchAnswerCitationAnchor = nil
                         } label: {
                             Label("다시 만들기", systemImage: "arrow.clockwise")
                         }
@@ -453,6 +462,7 @@ public struct MeetingLibraryView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Button {
                             searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                            searchAnswerCitationAnchor = nil
                         } label: {
                             Label("다시 시도", systemImage: "arrow.clockwise")
                         }
@@ -480,6 +490,7 @@ public struct MeetingLibraryView: View {
     private var backToSearchAnswerButton: some View {
         Button {
             showingSearchAnswerDetail = true
+            searchAnswerCitationAnchor = nil
         } label: {
             Label("AI 답변으로 돌아가기", systemImage: "sparkles")
                 .font(.system(size: 12, weight: .semibold))
@@ -487,43 +498,95 @@ public struct MeetingLibraryView: View {
         .buttonStyle(.bordered)
     }
 
-    /// 디테일 영역용 근거 목록.
+    /// 디테일 영역용 근거 목록. 같은 회의의 인용을 하나의 카드로 묶어
+    /// "어느 회의의 어느 대목"인지 한눈에 보이게 한다.
     private func searchAnswerDetailCitationList(_ citations: [MeetingSearchAnswerCitation]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(citations) { citation in
-                Button {
-                    selectSearchAnswerCitation(citation)
-                } label: {
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("[\(citation.number)]")
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(searchAnswerCitationGroups(citations), id: \.meetingID) { group in
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
+                        Text(group.meetingTitle)
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.accentColor)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(citation.meetingTitle)
-                                .font(.system(size: 12, weight: .semibold))
-                                .lineLimit(1)
-                            Text(searchAnswerCitationMeta(citation))
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                            if !citation.preview.isEmpty {
-                                Text(citation.preview)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(3)
-                            }
-                        }
+                            .lineLimit(1)
                     }
-                    .padding(10)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(LibraryPalette.elevated)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .background(Color.secondary.opacity(0.06))
+
+                    ForEach(Array(group.citations.enumerated()), id: \.element.id) { position, citation in
+                        if position > 0 {
+                            Divider()
+                                .padding(.leading, 12)
+                        }
+                        Button {
+                            selectSearchAnswerCitation(citation)
+                        } label: {
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("[\(citation.number)]")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.accentColor)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(searchAnswerCitationMeta(citation))
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                    if !citation.preview.isEmpty {
+                                        // 회의 요약 원문에 **강조** 마크다운이 저장돼 있어 평문 Text면 그대로 노출된다.
+                                        markdownText(citation.preview)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.primary)
+                                            .lineLimit(3)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 2)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("이 근거 대목으로 이동")
+                    }
                 }
-                .buttonStyle(.plain)
-                .help("근거 회의 열기")
+                .background(LibraryPalette.elevated)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
+    }
+
+    private struct SearchAnswerCitationGroup {
+        let meetingID: UUID
+        let meetingTitle: String
+        var citations: [MeetingSearchAnswerCitation]
+    }
+
+    /// 인용을 등장 순서를 유지한 채 회의별로 묶는다. 번호([n])는 답변 본문 표기와 같게 유지.
+    private func searchAnswerCitationGroups(_ citations: [MeetingSearchAnswerCitation]) -> [SearchAnswerCitationGroup] {
+        var groups: [SearchAnswerCitationGroup] = []
+        var indexByMeeting: [UUID: Int] = [:]
+        for citation in citations {
+            if let index = indexByMeeting[citation.meetingID] {
+                groups[index].citations.append(citation)
+            } else {
+                indexByMeeting[citation.meetingID] = groups.count
+                groups.append(SearchAnswerCitationGroup(
+                    meetingID: citation.meetingID,
+                    meetingTitle: citation.meetingTitle,
+                    citations: [citation]
+                ))
+            }
+        }
+        return groups
     }
 
     // MARK: - Left column blocks
@@ -600,19 +663,24 @@ public struct MeetingLibraryView: View {
                         .foregroundColor(.secondary)
                 }
             } else if let searchAnswer = searchAnswerController.answer, searchAnswer.query == trimmedSearch {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(searchAnswer.text)
-                        .font(.system(size: 12))
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-                    Button {
-                        showingSearchAnswerDetail = true
-                    } label: {
+                // 미리보기 2줄 + 레이블 전체를 하나의 버튼으로 — 텍스트만 클릭되는 좁은 히트 영역을 피한다.
+                Button {
+                    showingSearchAnswerDetail = true
+                } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        markdownText(searchAnswer.text)
+                            .font(.system(size: 12))
+                            .foregroundColor(.primary)
+                            .lineLimit(2)
                         Label("전체 답변 보기", systemImage: "arrow.right.circle.fill")
                             .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.accentColor)
                     }
-                    .buttonStyle(.borderless)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .help("전체 답변 보기")
             } else if let errorMessage = searchAnswerController.errorMessage {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(errorMessage)
@@ -646,6 +714,7 @@ public struct MeetingLibraryView: View {
             // generate()가 가드(provider 미준비)로 조기 반환해도 디테일을 연다 —
             // 에러 메시지를 디테일 영역에서 크게 보여주는 것이 의도.
             showingSearchAnswerDetail = true
+            searchAnswerCitationAnchor = nil
         } label: {
             Label(title, systemImage: "sparkles")
                 .font(.system(size: 12, weight: .semibold))
@@ -655,11 +724,12 @@ public struct MeetingLibraryView: View {
     }
 
     private func searchAnswerCitationMeta(_ citation: MeetingSearchAnswerCitation) -> String {
+        // citation.label은 time이 비면 kind.label과 같은 값이라 붙이면 "제목 · 제목"처럼 중복된다.
         var parts = [citation.kind.label]
-        if !citation.time.isEmpty {
-            parts.append(citation.time)
+        let time = citation.time.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !time.isEmpty {
+            parts.append(time)
         }
-        parts.append(citation.label)
         return parts.joined(separator: " · ")
     }
 
@@ -851,6 +921,7 @@ public struct MeetingLibraryView: View {
             selectedID = record.id
             showingLiveMeeting = false
             showingSearchAnswerDetail = false
+            searchAnswerCitationAnchor = nil
         } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline) {
@@ -1058,6 +1129,12 @@ public struct MeetingLibraryView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(LibraryPalette.background)
+            .onAppear {
+                scrollToCitationAnchor(in: record, proxy: proxy)
+            }
+            .onChange(of: searchAnswerCitationAnchor) { _, _ in
+                scrollToCitationAnchor(in: record, proxy: proxy)
+            }
         }
     }
 
@@ -1221,8 +1298,15 @@ public struct MeetingLibraryView: View {
         }
         .padding(18)
         .background(LibraryPalette.elevated)
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    citationCardBorder(Self.searchAnswerLeadAnchorID),
+                    lineWidth: isCitationHighlightTarget(Self.searchAnswerLeadAnchorID) ? 1.5 : 1
+                )
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .id(Self.searchAnswerLeadAnchorID)
     }
 
     @ViewBuilder
@@ -1251,6 +1335,8 @@ public struct MeetingLibraryView: View {
                             outcomeTextRow(time: decision.time, text: decision.text)
                         }
                     }
+                    .background(citationHighlightBackground(outcomeAnchorID("decisions")))
+                    .id(outcomeAnchorID("decisions"))
                 }
 
                 if !decisions.isEmpty && (!actions.isEmpty || !questions.isEmpty) {
@@ -1263,6 +1349,8 @@ public struct MeetingLibraryView: View {
                             actionItemRow(item)
                         }
                     }
+                    .background(citationHighlightBackground(outcomeAnchorID("actions")))
+                    .id(outcomeAnchorID("actions"))
                 }
 
                 if !actions.isEmpty && !questions.isEmpty {
@@ -1275,6 +1363,8 @@ public struct MeetingLibraryView: View {
                             outcomeTextRow(time: question.time, text: question.text)
                         }
                     }
+                    .background(citationHighlightBackground(outcomeAnchorID("questions")))
+                    .id(outcomeAnchorID("questions"))
                 }
             }
             .padding(18)
@@ -1414,6 +1504,7 @@ public struct MeetingLibraryView: View {
                 VStack(alignment: .leading, spacing: detailCardSpacing) {
                     ForEach(Array(noteSections.enumerated()), id: \.element.sectionIndex) { position, section in
                         meetingNoteSection(section)
+                            .background(citationHighlightBackground(tocAnchorID(section.sectionIndex)))
                             .id(tocAnchorID(section.sectionIndex))
 
                         if position < noteSections.count - 1 {
@@ -1529,7 +1620,7 @@ public struct MeetingLibraryView: View {
                     .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
-                ForEach(segments) { segment in
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                     HStack(alignment: .top, spacing: 10) {
                         Text(relativeTimestamp(segment, in: record, fallbackSegments: segments))
                             .font(.system(size: detailTimestampFontSize, weight: .bold, design: .monospaced))
@@ -1540,6 +1631,9 @@ public struct MeetingLibraryView: View {
                             .lineSpacing(detailLineSpacing)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    // record가 없으면 라이브 전사라 인용 딥링크 대상이 아니다.
+                    .background(record == nil ? nil : citationHighlightBackground(transcriptAnchorID(index), inset: -4))
+                    .id(transcriptAnchorID(index))
                 }
             }
         }
@@ -1764,6 +1858,85 @@ public struct MeetingLibraryView: View {
         showingLiveMeeting = false
         showingSearchAnswerDetail = false
         detailTab = citation.kind == .transcript ? .transcript : .summary
+        searchAnswerCitationAnchor = SearchAnswerCitationAnchor(
+            meetingID: citation.meetingID,
+            sourcePath: citation.sourcePath
+        )
+    }
+
+    // MARK: - Search answer citation deep link
+
+    private struct SearchAnswerCitationAnchor: Equatable {
+        let meetingID: UUID
+        let sourcePath: String
+    }
+
+    private static let searchAnswerLeadAnchorID = "meeting-lead-summary"
+
+    private func outcomeAnchorID(_ group: String) -> String {
+        "meeting-outcome-\(group)"
+    }
+
+    private func transcriptAnchorID(_ index: Int) -> String {
+        "transcript-segment-\(index)"
+    }
+
+    /// sourcePath("summary.sections[2]" 등)를 미리보기의 스크롤 앵커 ID로 변환한다.
+    /// 결정/할일/질문은 UI가 빈 항목을 걸러 행 인덱스가 어긋날 수 있어 그룹 단위로 이동한다.
+    private func citationScrollTargetID(_ anchor: SearchAnswerCitationAnchor) -> String? {
+        let path = anchor.sourcePath
+        if path == "summary.lead" || path == "title" || path == "topic" || path == "summary.keywords" {
+            return Self.searchAnswerLeadAnchorID
+        }
+        if let index = indexedSourcePath(path, prefix: "summary.sections") {
+            return tocAnchorID(index)
+        }
+        if indexedSourcePath(path, prefix: "summary.decisions") != nil {
+            return outcomeAnchorID("decisions")
+        }
+        if indexedSourcePath(path, prefix: "summary.actionItems") != nil {
+            return outcomeAnchorID("actions")
+        }
+        if indexedSourcePath(path, prefix: "summary.openQuestions") != nil {
+            return outcomeAnchorID("questions")
+        }
+        if let index = indexedSourcePath(path, prefix: "transcript") {
+            return transcriptAnchorID(index)
+        }
+        return nil
+    }
+
+    private func indexedSourcePath(_ path: String, prefix: String) -> Int? {
+        guard path.hasPrefix("\(prefix)["), path.hasSuffix("]") else { return nil }
+        return Int(path.dropFirst(prefix.count + 1).dropLast())
+    }
+
+    private func isCitationHighlightTarget(_ id: String) -> Bool {
+        guard let anchor = searchAnswerCitationAnchor else { return false }
+        return citationScrollTargetID(anchor) == id
+    }
+
+    private func citationCardBorder(_ id: String) -> Color {
+        isCitationHighlightTarget(id) ? Color.accentColor.opacity(0.55) : LibraryPalette.border
+    }
+
+    /// 행/그룹용 하이라이트. 음수 패딩으로 레이아웃을 건드리지 않고 칠만 확장한다.
+    private func citationHighlightBackground(_ id: String, inset: CGFloat = -6) -> some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(isCitationHighlightTarget(id) ? LibraryPalette.accentSoft : Color.clear)
+            .padding(inset)
+    }
+
+    private func scrollToCitationAnchor(in record: MeetingRecord, proxy: ScrollViewProxy) {
+        guard let anchor = searchAnswerCitationAnchor,
+              anchor.meetingID == record.id,
+              let targetID = citationScrollTargetID(anchor) else { return }
+        // 디테일 → 미리보기 전환 직후에는 앵커 뷰가 아직 레이아웃 전이라 한 틱 미룬다.
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(targetID, anchor: .top)
+            }
+        }
     }
 
     private func primaryMatch(for record: MeetingRecord) -> MeetingSearchMatch {

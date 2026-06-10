@@ -52,12 +52,18 @@ extension MeetingSearchAnswerError: LocalizedError {
 }
 
 public struct MeetingSearchAnswerUseCase: Sendable {
+    /// 랭킹에는 유용하지만 인용 근거로는 빈 껍데기인 메타데이터 chunk 종류.
+    /// (제목 chunk의 preview는 제목 그 자체라 근거 카드에 같은 문장이 반복된다)
+    public static let metadataKinds: Set<MeetingSearchChunk.Kind> = [.title, .topic, .keywords]
+
     public let maxChunks: Int
     public let maxContextCharacters: Int
+    public let maxChunksPerMeeting: Int
 
-    public init(maxChunks: Int = 8, maxContextCharacters: Int = 5_000) {
+    public init(maxChunks: Int = 8, maxContextCharacters: Int = 5_000, maxChunksPerMeeting: Int = 3) {
         self.maxChunks = max(1, maxChunks)
         self.maxContextCharacters = max(500, maxContextCharacters)
+        self.maxChunksPerMeeting = max(1, maxChunksPerMeeting)
     }
 
     public func retrieve(query: String, index: MeetingSearchIndex) -> [MeetingSearchResult] {
@@ -118,12 +124,30 @@ public struct MeetingSearchAnswerUseCase: Sendable {
         }
     }
 
+    /// 인용 후보 선별: 메타데이터 chunk 제외 + 회의당 상한으로 같은 회의 도배를 막는다.
+    /// 검색어가 제목/주제에만 걸린 경우는 근거가 비어버리므로 원본 결과로 폴백한다.
+    func citationCandidates(from results: [MeetingSearchResult]) -> [MeetingSearchResult] {
+        let contentResults = results.filter { !Self.metadataKinds.contains($0.chunk.kind) }
+        let pool = contentResults.isEmpty ? results : contentResults
+
+        var perMeetingCount: [UUID: Int] = [:]
+        var selected: [MeetingSearchResult] = []
+        for result in pool {
+            guard selected.count < maxChunks else { break }
+            let count = perMeetingCount[result.meetingID, default: 0]
+            guard count < maxChunksPerMeeting else { continue }
+            perMeetingCount[result.meetingID] = count + 1
+            selected.append(result)
+        }
+        return selected
+    }
+
     private func contextBlock(from results: [MeetingSearchResult]) -> (text: String, citations: [MeetingSearchAnswerCitation]) {
         var blocks: [String] = []
         var citations: [MeetingSearchAnswerCitation] = []
         var usedCharacters = 0
 
-        for result in results.prefix(maxChunks) {
+        for result in citationCandidates(from: results) {
             let number = citations.count + 1
             let block = Self.citationBlock(number: number, result: result)
             let separatorLength = blocks.isEmpty ? 0 : 2

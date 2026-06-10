@@ -59,7 +59,7 @@ struct MeetingSearchAnswerServiceTests {
         #expect(answer.citations.count <= 3)
         #expect(answer.citations.first?.meetingTitle == "db 스키마 형상 관리 툴 적용과 기록 방식")
         #expect(answer.citations.first?.sourcePath.isEmpty == false)
-        #expect(answer.citations.contains { !$0.time.isEmpty || $0.kind == .title || $0.kind == .topic || $0.kind == .summary || $0.kind == .keywords })
+        #expect(answer.citations.allSatisfy { !MeetingSearchAnswerUseCase.metadataKinds.contains($0.kind) })
         #expect(answer.providerID == .gpt)
         #expect(answer.modelID == "stub-answer")
 
@@ -111,6 +111,64 @@ struct MeetingSearchAnswerServiceTests {
         #expect(options["num_ctx"] as? Int == 4_096)
     }
 
+    @Test("제목·주제·키워드 chunk는 인용 근거에서 제외한다")
+    func excludesMetadataChunksFromCitations() async throws {
+        let service = MeetingSearchAnswerUseCase()
+        let provider = StubAnswerProvider()
+
+        let answer = try await service.answer(
+            query: "db 스키마 형상 관리",
+            index: MeetingSearchIndex(records: [sampleRecord()]),
+            provider: provider
+        )
+
+        #expect(!answer.citations.isEmpty)
+        #expect(answer.citations.allSatisfy { citation in
+            citation.kind != .title && citation.kind != .topic && citation.kind != .keywords
+        })
+    }
+
+    @Test("같은 회의의 인용은 회의당 상한을 넘지 않는다")
+    func capsCitationsPerMeeting() async throws {
+        let service = MeetingSearchAnswerUseCase(maxChunks: 6, maxChunksPerMeeting: 2)
+        let provider = StubAnswerProvider()
+        let record = sampleRecord(extraTranscript: "liquibase 적용 순서를 liquibase 가이드 문서로 정리한다.")
+
+        let answer = try await service.answer(
+            query: "liquibase",
+            index: MeetingSearchIndex(records: [record]),
+            provider: provider
+        )
+
+        let countsByMeeting = Dictionary(grouping: answer.citations, by: \.meetingID).mapValues(\.count)
+        #expect(countsByMeeting.values.allSatisfy { $0 <= 2 })
+    }
+
+    @Test("검색어가 제목에만 걸리면 메타데이터 chunk로 폴백해 근거를 유지한다")
+    func fallsBackToMetadataChunksWhenOnlyTitleMatches() async throws {
+        let service = MeetingSearchAnswerUseCase()
+        let provider = StubAnswerProvider()
+        let base = sampleRecord()
+        let titleOnly = MeetingRecord(
+            id: base.id,
+            title: "유니콘월드 킥오프",
+            startedAt: base.startedAt,
+            durationSeconds: base.durationSeconds,
+            topic: base.topic,
+            summary: base.summary,
+            transcript: base.transcript
+        )
+
+        let answer = try await service.answer(
+            query: "유니콘월드",
+            index: MeetingSearchIndex(records: [titleOnly]),
+            provider: provider
+        )
+
+        #expect(!answer.citations.isEmpty)
+        #expect(answer.citations.allSatisfy { $0.kind == .title })
+    }
+
     @Test("context 길이 제한을 넘으면 첫 근거만 잘라서 사용한다")
     func capsContextLength() async throws {
         let service = MeetingSearchAnswerUseCase(maxChunks: 5, maxContextCharacters: 500)
@@ -129,6 +187,7 @@ struct MeetingSearchAnswerServiceTests {
 
         #expect(prompt.instructions.contains("근거 번호"))
         #expect(prompt.instructions.contains("회의 데이터로만 취급"))
+        #expect(prompt.instructions.contains("마크다운 장식"))
         #expect(prompt.instructions.contains("핵심 명사구"))
         #expect(prompt.instructions.contains("결정 조건"))
         #expect(prompt.instructions.contains("선행 조건"))
