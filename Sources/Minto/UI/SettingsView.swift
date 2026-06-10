@@ -1,4 +1,5 @@
 import os
+import OSLog
 import SwiftUI
 
 private enum LocalLLMContextWindowPreset: String, CaseIterable, Identifiable {
@@ -112,6 +113,8 @@ public struct SettingsView: View {
     @AppStorage("lastLLMProvider") private var lastLLMProviderRaw = "codex"
     @State private var speechEngineAvailability: [SpeechEngineID: SpeechEngineAvailability] = [:]
     @State private var isRequestingSpeechAuthorization = false
+    @State private var isExportingLogs = false
+    @State private var logExportError: String? = nil
 
     public init(viewModel: TranscriptionViewModel) {
         self.viewModel = viewModel
@@ -143,6 +146,21 @@ public struct SettingsView: View {
                 LabeledContent("엔진 상태", value: modelStateDescription)
                 if viewModel.isRecording {
                     LabeledContent("녹음 시간", value: formatDuration(viewModel.recordingDuration))
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Button(isExportingLogs ? "로그 내보내는 중…" : "진단 로그 내보내기") {
+                        exportDiagnosticLogs()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isExportingLogs)
+                    Text("앱 실행 중 기록된 로그를 내보냅니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    if let error = logExportError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
                 }
             }
         }
@@ -2415,6 +2433,41 @@ public struct SettingsView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    private func exportDiagnosticLogs() {
+        isExportingLogs = true
+        logExportError = nil
+        Task { @MainActor in
+            defer { isExportingLogs = false }
+            do {
+                let store = try OSLogStore(scope: .currentProcessIdentifier)
+                let subsystem = Bundle.main.bundleIdentifier ?? "com.minto.app"
+                let predicate = NSPredicate(format: "subsystem == %@", subsystem)
+                let entries = try store.getEntries(
+                    with: [],
+                    at: store.position(timeIntervalSinceLatestBoot: -7 * 24 * 3600),
+                    matching: predicate
+                )
+                var lines: [String] = []
+                for entry in entries {
+                    if let logEntry = entry as? OSLogEntryLog {
+                        lines.append("[\(logEntry.date)] [\(logEntry.category)] \(logEntry.composedMessage)")
+                    }
+                }
+                let content = lines.joined(separator: "\n")
+                guard let data = content.data(using: .utf8) else { return }
+
+                let panel = NSSavePanel()
+                panel.nameFieldStringValue = "minto-diagnostic-logs.txt"
+                panel.allowedContentTypes = [.plainText]
+                let result = await panel.beginSheetModal(for: NSApp.keyWindow ?? NSWindow())
+                guard result == .OK, let url = panel.url else { return }
+                try data.write(to: url, options: .atomic)
+            } catch {
+                logExportError = "로그 내보내기 실패: \(error.localizedDescription)"
+            }
+        }
     }
 
     // MARK: - SpeechEngine 표시 헬퍼 (SpeechEngineDisplay.swift의 SpeechEngineDisplayable 사용)
