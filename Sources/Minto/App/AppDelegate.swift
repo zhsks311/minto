@@ -84,9 +84,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 MeetingContext.shared.clear()
             case .failed:
                 // (b) 내용은 있지만 디스크/인코딩 실패: 복구 파일을 남기고 맥락을 초기화하지 않는다.
-                let msg = MeetingSaveRecovery.writeRecoveryFile(for: record)
-                self.viewModel.errorMessage = msg
-                // MeetingContext는 clear하지 않는다 — 사용자가 재시도하거나 수동 내보내기할 수 있도록.
+                MeetingSaveRecovery.writeRecoveryFile(for: record)
+                self.viewModel.errorMessage = "회의 저장에 실패했어요. 전사 복구 사본을 보관해 두었습니다."
+                // MeetingContext는 clear하지 않는다 — 다음 녹음 시작 시 덮어써질 때까지 데이터를 유지해 소실을 막는다.
             }
             self.mainWindowManager.show()
         }

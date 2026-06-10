@@ -54,18 +54,6 @@ struct MeetingSaveRecoveryTests {
         #expect(filename.hasSuffix(".md"))
     }
 
-    @Test("반환 메시지에 복구 파일 경로가 포함된다")
-    func returnMessageContainsPath() {
-        let dir = tempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        let record = sampleRecord()
-        let msg = MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: dir)
-
-        #expect(msg.contains(dir.path))
-        #expect(msg.contains("저장 실패"))
-    }
-
     @Test("복구 파일 내용에 전사 텍스트가 포함된다")
     func recoveryFileContainsTranscript() throws {
         let dir = tempDir()

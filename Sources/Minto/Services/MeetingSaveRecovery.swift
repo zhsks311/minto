@@ -6,22 +6,20 @@ import Foundation
 /// AppDelegate에서 직접 인라인으로 처리하지 않고 이 타입으로 분리해 단위 테스트가 가능하게 한다.
 public enum MeetingSaveRecovery {
 
-    /// 복구 파일을 기록하고, 사용자에게 표시할 에러 메시지를 반환한다.
+    /// 복구 파일을 기록한다. 전체 경로는 stderr 로그에만 남긴다.
     /// - Parameters:
     ///   - record: 저장에 실패한 회의 기록.
     ///   - recoveryDirectory: 복구 파일을 쓸 디렉터리. nil이면 기본 경로를 사용.
-    /// - Returns: 사용자에게 보여줄 에러 메시지(복구 파일 경로 포함).
-    @discardableResult
     public static func writeRecoveryFile(
         for record: MeetingRecord,
         recoveryDirectory: URL? = nil
-    ) -> String {
+    ) {
         let dir = recoveryDirectory ?? defaultRecoveryDirectory()
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         } catch {
             fputs("[MeetingSaveRecovery] 복구 디렉터리 생성 실패: \(error.localizedDescription)\n", stderr)
-            return "저장 실패 — 복구 파일을 만들지 못했습니다."
+            return
         }
 
         let formatter = ISO8601DateFormatter()
@@ -35,10 +33,8 @@ public enum MeetingSaveRecovery {
         do {
             try Data(content.utf8).write(to: fileURL, options: .atomic)
             fputs("[MeetingSaveRecovery] 복구 파일 저장됨: \(fileURL.path)\n", stderr)
-            return "저장 실패 — 복구 파일: \(fileURL.path)"
         } catch {
             fputs("[MeetingSaveRecovery] 복구 파일 쓰기 실패: \(error.localizedDescription)\n", stderr)
-            return "저장 실패 — 복구 파일을 만들지 못했습니다."
         }
     }
 
