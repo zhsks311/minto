@@ -1,0 +1,3482 @@
+{
+  "version": "2.13",
+  "children": [
+    {
+      "type": "frame",
+      "id": "iCnhu",
+      "x": 0,
+      "y": 0,
+      "name": "AI답변개선 1 — 검색+CTA",
+      "clip": true,
+      "width": 1280,
+      "height": 800,
+      "fill": "#ECECEC",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "DcmRf",
+          "name": "Header",
+          "width": "fill_container",
+          "gap": 14,
+          "padding": [
+            16,
+            22
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "b11RjV",
+              "name": "TitleBlock",
+              "layout": "vertical",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "byqlp",
+                  "name": "Minto",
+                  "fill": "#1D1D1F",
+                  "content": "Minto",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "kRF5N",
+                  "name": "필요한 회의와 근거를 찾고 있어요",
+                  "fill": "#6E6E73",
+                  "content": "필요한 회의와 근거를 찾고 있어요",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 12
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "in9Np",
+              "name": "HSpacer",
+              "width": "fill_container",
+              "height": 1
+            },
+            {
+              "type": "frame",
+              "id": "xVFK4",
+              "name": "SearchField",
+              "width": 360,
+              "height": 36,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": "#D9D9D9",
+              "strokeWidth": 1,
+              "gap": 8,
+              "padding": [
+                0,
+                12
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "lyNs5",
+                  "name": "ic-search",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "search",
+                  "library": "lucide",
+                  "fill": "#6E6E73"
+                },
+                {
+                  "type": "text",
+                  "id": "H3ryG",
+                  "name": "스키마 관리",
+                  "fill": "#1D1D1F",
+                  "content": "스키마 관리",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 14
+                },
+                {
+                  "type": "frame",
+                  "id": "j9P8K",
+                  "name": "SfSp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "icon",
+                  "id": "lm3nh",
+                  "name": "ic-x",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "x",
+                  "library": "lucide",
+                  "fill": "#6E6E73"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xq09m",
+              "name": "ImportBtn",
+              "fill": "#FFFFFF",
+              "cornerRadius": 7,
+              "stroke": "#D9D9D9",
+              "strokeWidth": 1,
+              "gap": 6,
+              "padding": [
+                8,
+                14
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "v554gx",
+                  "name": "ic-download",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "download",
+                  "library": "lucide",
+                  "fill": "#1D1D1F"
+                },
+                {
+                  "type": "text",
+                  "id": "IXNhZ",
+                  "name": "파일 가져오기",
+                  "fill": "#1D1D1F",
+                  "content": "파일 가져오기",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "dKHRA",
+              "name": "NewMeetingBtn",
+              "fill": "#007AFF",
+              "cornerRadius": 18,
+              "gap": 6,
+              "padding": [
+                9,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "Y7pDB",
+                  "name": "ic-mic",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "mic",
+                  "library": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "yLrNq",
+                  "name": "새 회의",
+                  "fill": "#FFFFFF",
+                  "content": "새 회의",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "x1kgVa",
+          "name": "HDivider",
+          "fill": "#D9D9D9",
+          "width": "fill_container",
+          "height": 1
+        },
+        {
+          "type": "frame",
+          "id": "EYKpl",
+          "name": "Content",
+          "width": "fill_container",
+          "height": "fill_container",
+          "children": [
+            {
+              "type": "frame",
+              "id": "hsAVH",
+              "name": "LeftColumn",
+              "width": 360,
+              "height": "fill_container",
+              "fill": "#F1F1F1",
+              "layout": "vertical",
+              "gap": 14,
+              "padding": 18,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "MLNmK",
+                  "name": "Readiness",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "Y2WPD",
+                      "name": "ic-circle-check",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle-check",
+                      "library": "lucide",
+                      "fill": "#34A853"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "y9hWQn",
+                      "name": "RTexts",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Foclv",
+                          "name": "검색 준비됨",
+                          "fill": "#1D1D1F",
+                          "content": "검색 준비됨",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "dy0k5",
+                          "name": "저장된 회의 12개에서 바로 찾습",
+                          "fill": "#6E6E73",
+                          "content": "저장된 회의 12개에서 바로 찾습니다",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "OtrQg",
+                  "name": "SearchSummary",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 5,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "PhOXz",
+                      "name": "“스키마 관리” 검색 중",
+                      "fill": "#1D1D1F",
+                      "content": "“스키마 관리” 검색 중",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ELC92",
+                      "name": "가장 가까운 회의부터 보여줍니다",
+                      "fill": "#6E6E73",
+                      "content": "가장 가까운 회의부터 보여줍니다",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "r41zMM",
+                  "name": "AICard",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 9,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "tXRBY",
+                      "name": "CardHead",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "AYuNA",
+                          "name": "ic-sparkles",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "sparkles",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "R8JIS",
+                          "name": "AI 답변",
+                          "fill": "#1D1D1F",
+                          "content": "AI 답변",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "J4Jqeh",
+                      "name": "검색 결과 3개를 근거로 답변을 ",
+                      "fill": "#6E6E73",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "검색 결과 3개를 근거로 답변을 만들 수 있습니다.",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "C4NKE",
+                      "name": "CTAButton",
+                      "fill": "#007AFF",
+                      "cornerRadius": 14,
+                      "gap": 6,
+                      "padding": [
+                        6,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "brcQv",
+                          "name": "ic-sparkles",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "sparkles",
+                          "library": "lucide",
+                          "fill": "#FFFFFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "w29d4q",
+                          "name": "AI 답변 만들기",
+                          "fill": "#FFFFFF",
+                          "content": "AI 답변 만들기",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "wwx1n",
+                  "name": "Chips",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "i42W6",
+                      "name": "Chip-필터",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ulmzk",
+                          "name": "필터",
+                          "fill": "#6E6E73",
+                          "content": "필터",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "UJWnu",
+                      "name": "Chip-요약",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xEA84",
+                          "name": "요약",
+                          "fill": "#6E6E73",
+                          "content": "요약",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "b2Mtw",
+                      "name": "Chip-전사",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xuubr",
+                          "name": "전사",
+                          "fill": "#6E6E73",
+                          "content": "전사",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "f6w6o3",
+                      "name": "Chip-주제",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "eXy3i",
+                          "name": "주제",
+                          "fill": "#6E6E73",
+                          "content": "주제",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZKVRb",
+                  "name": "ResultHead",
+                  "width": "fill_container",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "EZCPL",
+                      "name": "검색 결과",
+                      "fill": "#1D1D1F",
+                      "content": "검색 결과",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "U3NLJ",
+                      "name": "RhSp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "mm6Op",
+                      "name": "3",
+                      "fill": "#6E6E73",
+                      "content": "3",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZwOGD",
+                  "name": "Row-DB 스키마 관리 개선 회의",
+                  "width": "fill_container",
+                  "fill": "#E8F1FF",
+                  "cornerRadius": 8,
+                  "stroke": "#7FB3F0",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "uNPjX",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "QyOyV",
+                          "name": "DB 스키마 관리 개선 회의",
+                          "fill": "#1D1D1F",
+                          "content": "DB 스키마 관리 개선 회의",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "gExMk",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "MM8I0",
+                          "name": "6월 5일",
+                          "fill": "#6E6E73",
+                          "content": "6월 5일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "p3JLU",
+                      "name": "34분 · 참석 3명",
+                      "fill": "#6E6E73",
+                      "content": "34분 · 참석 3명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qbBN4",
+                      "name": "R3",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "MovS0",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "lDfNj",
+                              "name": "결정",
+                              "fill": "#007AFF",
+                              "content": "결정",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "a6F2Iu",
+                          "name": "flyway를 우선 검토하기로 결",
+                          "fill": "#6E6E73",
+                          "content": "flyway를 우선 검토하기로 결정",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "t4PC3",
+                  "name": "Row-백엔드 주간 싱크",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "k52LG",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "NyOov",
+                          "name": "백엔드 주간 싱크",
+                          "fill": "#1D1D1F",
+                          "content": "백엔드 주간 싱크",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "dQArL",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "gxYXr",
+                          "name": "6월 3일",
+                          "fill": "#6E6E73",
+                          "content": "6월 3일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "prlOQ",
+                      "name": "41분 · 참석 5명",
+                      "fill": "#6E6E73",
+                      "content": "41분 · 참석 5명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NnoyQ",
+                      "name": "R3",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "xcezh",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xj0Vp",
+                              "name": "전사",
+                              "fill": "#007AFF",
+                              "content": "전사",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "c9zFh",
+                          "name": "스키마 변경 이력 관리가 어렵다는",
+                          "fill": "#6E6E73",
+                          "content": "스키마 변경 이력 관리가 어렵다는 의견",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xzNrf",
+                  "name": "Row-인프라 운영 회고",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LDOAA",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "aqEGo",
+                          "name": "인프라 운영 회고",
+                          "fill": "#1D1D1F",
+                          "content": "인프라 운영 회고",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Bxt3p",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "nwtsC",
+                          "name": "5월 28일",
+                          "fill": "#6E6E73",
+                          "content": "5월 28일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Of4lv",
+                      "name": "52분 · 참석 4명",
+                      "fill": "#6E6E73",
+                      "content": "52분 · 참석 4명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "PCxtq",
+                      "name": "R3",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "KK39n",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "vD8qN",
+                              "name": "요약",
+                              "fill": "#007AFF",
+                              "content": "요약",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "ufyra",
+                          "name": "운영 DB 마이그레이션 절차 정리",
+                          "fill": "#6E6E73",
+                          "content": "운영 DB 마이그레이션 절차 정리",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "lLjxm",
+              "name": "VDivider",
+              "fill": "#D9D9D9",
+              "width": 1,
+              "height": "fill_container"
+            },
+            {
+              "type": "frame",
+              "id": "v4HR3",
+              "name": "RightDetail",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 18,
+              "padding": 28,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "HRzxP",
+                  "name": "PreviewHead",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YhHd7",
+                      "name": "PTitle",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "wuzka",
+                          "name": "DB 스키마 관리 개선 회의",
+                          "fill": "#1D1D1F",
+                          "content": "DB 스키마 관리 개선 회의",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 26,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "E6Rzx",
+                          "name": "2026년 6월 5일 · 34분 ",
+                          "fill": "#6E6E73",
+                          "content": "2026년 6월 5일 · 34분 · 참석 3명",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "USuvT",
+                      "name": "PhSp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mB7Ug",
+                      "name": "ExportBtn",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 7,
+                      "stroke": "#D9D9D9",
+                      "strokeWidth": 1,
+                      "gap": 6,
+                      "padding": [
+                        7,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "glLZK",
+                          "name": "ic-share",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "share",
+                          "library": "lucide",
+                          "fill": "#1D1D1F"
+                        },
+                        {
+                          "type": "text",
+                          "id": "GTOtq",
+                          "name": "내보내기",
+                          "fill": "#1D1D1F",
+                          "content": "내보내기",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "q3mL4B",
+                  "name": "WhyCard",
+                  "width": "fill_container",
+                  "fill": "#E8F1FF",
+                  "cornerRadius": 8,
+                  "stroke": "#9CC3F5",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "hSh8f",
+                      "name": "W1",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "s21Da",
+                          "name": "ic-search",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "search",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "q4CJV",
+                          "name": "이 회의가 먼저 보이는 이유",
+                          "fill": "#1D1D1F",
+                          "content": "이 회의가 먼저 보이는 이유",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NYL9N",
+                      "name": "W2",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "S7u36",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Bt9fl",
+                              "name": "결정",
+                              "fill": "#007AFF",
+                              "content": "결정",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "z7FUh",
+                          "name": "flyway를 우선 검토하기로 결",
+                          "fill": "#6E6E73",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "flyway를 우선 검토하기로 결정",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QyGV1",
+                  "name": "Summary",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YEswj",
+                      "name": "ST",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "ES2A2",
+                          "name": "ic-list",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "list",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "giAPG",
+                          "name": "요약",
+                          "fill": "#1D1D1F",
+                          "content": "요약",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 15,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "KxZDU",
+                      "name": "DB 형상 관리 도구로 flywa",
+                      "fill": "#1D1D1F",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "DB 형상 관리 도구로 flyway를 우선 검토하기로 결정했다. 마이그레이션 스크립트 리뷰 절차와 운영 DB 적용 순서는 다음 회의 전까지 정리한다.",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "pAcS1",
+                      "name": "• 결정 — flyway 우선 검",
+                      "fill": "#6E6E73",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "• 결정 — flyway 우선 검토, PoC는 이번 스프린트 내 진행",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "F7VUtI",
+                      "name": "• 할 일 — 마이그레이션 테스트",
+                      "fill": "#6E6E73",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "• 할 일 — 마이그레이션 테스트 케이스 정리 (담당: 민수)",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "Xg9hu",
+                      "name": "• 미해결 — 운영 DB 적용 절",
+                      "fill": "#6E6E73",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "• 미해결 — 운영 DB 적용 절차는 추가 확인 필요",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "aLR1s",
+      "x": 1360,
+      "y": 0,
+      "name": "AI답변개선 2 — 답변 디테일",
+      "clip": true,
+      "width": 1280,
+      "height": 800,
+      "fill": "#ECECEC",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "B2rVUb",
+          "name": "Header",
+          "width": "fill_container",
+          "gap": 14,
+          "padding": [
+            16,
+            22
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "E2y49",
+              "name": "TitleBlock",
+              "layout": "vertical",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "dOxyE",
+                  "name": "Minto",
+                  "fill": "#1D1D1F",
+                  "content": "Minto",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "bsqlw",
+                  "name": "필요한 회의와 근거를 찾고 있어요",
+                  "fill": "#6E6E73",
+                  "content": "필요한 회의와 근거를 찾고 있어요",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 12
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "CciaW",
+              "name": "HSpacer",
+              "width": "fill_container",
+              "height": 1
+            },
+            {
+              "type": "frame",
+              "id": "N10Jyj",
+              "name": "SearchField",
+              "width": 360,
+              "height": 36,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": "#D9D9D9",
+              "strokeWidth": 1,
+              "gap": 8,
+              "padding": [
+                0,
+                12
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "YJKOH",
+                  "name": "ic-search",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "search",
+                  "library": "lucide",
+                  "fill": "#6E6E73"
+                },
+                {
+                  "type": "text",
+                  "id": "IgkHI",
+                  "name": "스키마 관리",
+                  "fill": "#1D1D1F",
+                  "content": "스키마 관리",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 14
+                },
+                {
+                  "type": "frame",
+                  "id": "Wa1MB",
+                  "name": "SfSp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "icon",
+                  "id": "bt8KF",
+                  "name": "ic-x",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "x",
+                  "library": "lucide",
+                  "fill": "#6E6E73"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qHtfZ",
+              "name": "ImportBtn",
+              "fill": "#FFFFFF",
+              "cornerRadius": 7,
+              "stroke": "#D9D9D9",
+              "strokeWidth": 1,
+              "gap": 6,
+              "padding": [
+                8,
+                14
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "g4Q3mQ",
+                  "name": "ic-download",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "download",
+                  "library": "lucide",
+                  "fill": "#1D1D1F"
+                },
+                {
+                  "type": "text",
+                  "id": "iTfIf",
+                  "name": "파일 가져오기",
+                  "fill": "#1D1D1F",
+                  "content": "파일 가져오기",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "f11Wh",
+              "name": "NewMeetingBtn",
+              "fill": "#007AFF",
+              "cornerRadius": 18,
+              "gap": 6,
+              "padding": [
+                9,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "NOfP5",
+                  "name": "ic-mic",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "mic",
+                  "library": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "n8zDtS",
+                  "name": "새 회의",
+                  "fill": "#FFFFFF",
+                  "content": "새 회의",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "SUZye",
+          "name": "HDivider",
+          "fill": "#D9D9D9",
+          "width": "fill_container",
+          "height": 1
+        },
+        {
+          "type": "frame",
+          "id": "ha4ur",
+          "name": "Content",
+          "width": "fill_container",
+          "height": "fill_container",
+          "children": [
+            {
+              "type": "frame",
+              "id": "z1vQls",
+              "name": "LeftColumn",
+              "width": 360,
+              "height": "fill_container",
+              "fill": "#F1F1F1",
+              "layout": "vertical",
+              "gap": 14,
+              "padding": 18,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "kIzBI",
+                  "name": "Readiness",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "KqXUo",
+                      "name": "ic-circle-check",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle-check",
+                      "library": "lucide",
+                      "fill": "#34A853"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "g7YOVE",
+                      "name": "RTexts",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ot0ni",
+                          "name": "검색 준비됨",
+                          "fill": "#1D1D1F",
+                          "content": "검색 준비됨",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "bxXml",
+                          "name": "저장된 회의 12개에서 바로 찾습",
+                          "fill": "#6E6E73",
+                          "content": "저장된 회의 12개에서 바로 찾습니다",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "WysO8",
+                  "name": "SearchSummary",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 5,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cDpLO",
+                      "name": "“스키마 관리” 검색 중",
+                      "fill": "#1D1D1F",
+                      "content": "“스키마 관리” 검색 중",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "zeN4Q",
+                      "name": "가장 가까운 회의부터 보여줍니다",
+                      "fill": "#6E6E73",
+                      "content": "가장 가까운 회의부터 보여줍니다",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "DHFdf",
+                  "name": "AICard",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 9,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "QrpO9",
+                      "name": "CardHead",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "bYKfJ",
+                          "name": "ic-sparkles",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "sparkles",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "k5GYPV",
+                          "name": "AI 답변",
+                          "fill": "#1D1D1F",
+                          "content": "AI 답변",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "erKWk",
+                      "name": "스키마 관리는 flyway 도입을",
+                      "fill": "#1D1D1F",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "스키마 관리는 flyway 도입을 우선 검토하기로 했고, 운영 DB 적용 절차는 추가 확인이 필요합니다.",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12
+                    },
+                    {
+                      "type": "frame",
+                      "id": "PABPd",
+                      "name": "ViewFull",
+                      "gap": 5,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "q8KyU",
+                          "name": "ic-arrow-right",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "AUmmn",
+                          "name": "전체 답변 보기",
+                          "fill": "#007AFF",
+                          "content": "전체 답변 보기",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "H7RIG4",
+                  "name": "Chips",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "lqQYF",
+                      "name": "Chip-필터",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "KByaP",
+                          "name": "필터",
+                          "fill": "#6E6E73",
+                          "content": "필터",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kjrU3",
+                      "name": "Chip-요약",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "g1NeA",
+                          "name": "요약",
+                          "fill": "#6E6E73",
+                          "content": "요약",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "spV3O",
+                      "name": "Chip-전사",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LQgDL",
+                          "name": "전사",
+                          "fill": "#6E6E73",
+                          "content": "전사",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Nu7uv",
+                      "name": "Chip-주제",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "JCQWI",
+                          "name": "주제",
+                          "fill": "#6E6E73",
+                          "content": "주제",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "VLugU",
+                  "name": "ResultHead",
+                  "width": "fill_container",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "SdnEE",
+                      "name": "검색 결과",
+                      "fill": "#1D1D1F",
+                      "content": "검색 결과",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Sc83F",
+                      "name": "RhSp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "ocoVt",
+                      "name": "3",
+                      "fill": "#6E6E73",
+                      "content": "3",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YdcJr",
+                  "name": "Row-DB 스키마 관리 개선 회의",
+                  "width": "fill_container",
+                  "fill": "#E8F1FF",
+                  "cornerRadius": 8,
+                  "stroke": "#7FB3F0",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ibtOQ",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "D8ynd",
+                          "name": "DB 스키마 관리 개선 회의",
+                          "fill": "#1D1D1F",
+                          "content": "DB 스키마 관리 개선 회의",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xJ8Tk",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "YlJJW",
+                          "name": "6월 5일",
+                          "fill": "#6E6E73",
+                          "content": "6월 5일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "rYeys",
+                      "name": "34분 · 참석 3명",
+                      "fill": "#6E6E73",
+                      "content": "34분 · 참석 3명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "L0NpC",
+                      "name": "R3",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "iDaQi",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "BfO7w",
+                              "name": "결정",
+                              "fill": "#007AFF",
+                              "content": "결정",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "s54Elc",
+                          "name": "flyway를 우선 검토하기로 결",
+                          "fill": "#6E6E73",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "flyway를 우선 검토하기로 결정",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "MgwWA",
+                  "name": "Row-백엔드 주간 싱크",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "DRB9j",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "K7VXC",
+                          "name": "백엔드 주간 싱크",
+                          "fill": "#1D1D1F",
+                          "content": "백엔드 주간 싱크",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xwGyt",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "huOHv",
+                          "name": "6월 3일",
+                          "fill": "#6E6E73",
+                          "content": "6월 3일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "rb1kh",
+                      "name": "41분 · 참석 5명",
+                      "fill": "#6E6E73",
+                      "content": "41분 · 참석 5명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Nci0I",
+                      "name": "R3",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "D8onp",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "jr4b5",
+                              "name": "전사",
+                              "fill": "#007AFF",
+                              "content": "전사",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "fPsLV",
+                          "name": "스키마 변경 이력 관리가 어렵다는",
+                          "fill": "#6E6E73",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "스키마 변경 이력 관리가 어렵다는 의견",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QdXXC",
+                  "name": "Row-인프라 운영 회고",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "R5eF1",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "k4f8Lc",
+                          "name": "인프라 운영 회고",
+                          "fill": "#1D1D1F",
+                          "content": "인프라 운영 회고",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "LOxom",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "uNpvA",
+                          "name": "5월 28일",
+                          "fill": "#6E6E73",
+                          "content": "5월 28일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "aUJsn",
+                      "name": "52분 · 참석 4명",
+                      "fill": "#6E6E73",
+                      "content": "52분 · 참석 4명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DlDOx",
+                      "name": "R3",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "tahiB",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OmJKI",
+                              "name": "요약",
+                              "fill": "#007AFF",
+                              "content": "요약",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "XjorT",
+                          "name": "운영 DB 마이그레이션 절차 정리",
+                          "fill": "#6E6E73",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "운영 DB 마이그레이션 절차 정리",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "iHnw9",
+              "name": "VDivider",
+              "fill": "#D9D9D9",
+              "width": 1,
+              "height": "fill_container"
+            },
+            {
+              "type": "frame",
+              "id": "E7Tzy",
+              "name": "RightDetail",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 18,
+              "padding": 28,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "huxkm",
+                  "name": "AnswerHead",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "fDUl3",
+                      "name": "A1",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "xdZaO",
+                          "name": "ic-sparkles",
+                          "width": 24,
+                          "height": 24,
+                          "icon": "sparkles",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "q5ufcY",
+                          "name": "AI 답변",
+                          "fill": "#1D1D1F",
+                          "content": "AI 답변",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 26,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "h3AYW",
+                      "name": "“스키마 관리” — 저장된 회의 ",
+                      "fill": "#6E6E73",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "“스키마 관리” — 저장된 회의 근거로 답변합니다",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "U0p3zF",
+                  "name": "스키마 관리는 DB 형상 관리 도",
+                  "fill": "#1D1D1F",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "스키마 관리는 DB 형상 관리 도구로 flyway를 우선 검토하기로 결정했습니다 [1]. 마이그레이션 스크립트는 리뷰 절차를 거쳐 적용하고, PoC는 이번 스프린트 내에 진행합니다 [1][2]. 다만 운영 DB 적용 절차는 아직 합의되지 않아 추가 확인이 필요합니다 [3].",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 14
+                },
+                {
+                  "type": "frame",
+                  "id": "gU0hV",
+                  "name": "Evidence",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YH2Mr",
+                      "name": "ET",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "O1olY",
+                          "name": "ic-quote",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "quote",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "k2hSMr",
+                          "name": "근거",
+                          "fill": "#1D1D1F",
+                          "content": "근거",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 15,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ycSmV",
+                      "name": "Cit-1",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": "#D9D9D9",
+                      "strokeWidth": 1,
+                      "gap": 8,
+                      "padding": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "HobcK",
+                          "name": "[1]",
+                          "fill": "#007AFF",
+                          "content": "[1]",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "r90QtN",
+                          "name": "CitBody",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Tm9fu",
+                              "name": "DB 스키마 관리 개선 회의",
+                              "fill": "#1D1D1F",
+                              "content": "DB 스키마 관리 개선 회의",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 12,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Zs6Ah",
+                              "name": "결정 · 00:40 · 결정사항",
+                              "fill": "#6E6E73",
+                              "content": "결정 · 00:40 · 결정사항",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 11
+                            },
+                            {
+                              "type": "text",
+                              "id": "G1iYL1",
+                              "name": "DB 형상 관리 도구로 flywa",
+                              "fill": "#6E6E73",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "DB 형상 관리 도구로 flyway를 우선 검토하기로 결정",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 12
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qgjme",
+                      "name": "Cit-2",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": "#D9D9D9",
+                      "strokeWidth": 1,
+                      "gap": 8,
+                      "padding": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xkYBB",
+                          "name": "[2]",
+                          "fill": "#007AFF",
+                          "content": "[2]",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ZfxjY",
+                          "name": "CitBody",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "QC2LP",
+                              "name": "DB 스키마 관리 개선 회의",
+                              "fill": "#1D1D1F",
+                              "content": "DB 스키마 관리 개선 회의",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 12,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "D2VyKr",
+                              "name": "전사 · 12:03 · 전사",
+                              "fill": "#6E6E73",
+                              "content": "전사 · 12:03 · 전사",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 11
+                            },
+                            {
+                              "type": "text",
+                              "id": "O8GzF",
+                              "name": "PoC는 이번 스프린트 안에 마치",
+                              "fill": "#6E6E73",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "PoC는 이번 스프린트 안에 마치는 걸로 하고 리뷰 절차는…",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 12
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CjxQZ",
+                      "name": "Cit-3",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": "#D9D9D9",
+                      "strokeWidth": 1,
+                      "gap": 8,
+                      "padding": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pJJ0k",
+                          "name": "[3]",
+                          "fill": "#007AFF",
+                          "content": "[3]",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vmjj9",
+                          "name": "CitBody",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "e4qJ1",
+                              "name": "인프라 운영 회고",
+                              "fill": "#1D1D1F",
+                              "content": "인프라 운영 회고",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 12,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "TcIAV",
+                              "name": "요약 · 핵심 답변",
+                              "fill": "#6E6E73",
+                              "content": "요약 · 핵심 답변",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 11
+                            },
+                            {
+                              "type": "text",
+                              "id": "m0oYG",
+                              "name": "운영 DB 마이그레이션 절차 정리",
+                              "fill": "#6E6E73",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "운영 DB 마이그레이션 절차 정리가 필요하다는 의견",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "dq9Wj",
+                  "name": "Actions",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "bLwHK",
+                      "name": "Btn-답변과 근거 복사",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 7,
+                      "stroke": "#D9D9D9",
+                      "strokeWidth": 1,
+                      "gap": 6,
+                      "padding": [
+                        7,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "Mn8is",
+                          "name": "ic-copy",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "copy",
+                          "library": "lucide",
+                          "fill": "#1D1D1F"
+                        },
+                        {
+                          "type": "text",
+                          "id": "NCO8D",
+                          "name": "답변과 근거 복사",
+                          "fill": "#1D1D1F",
+                          "content": "답변과 근거 복사",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "N8Try",
+                      "name": "Btn-다시 만들기",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 7,
+                      "stroke": "#D9D9D9",
+                      "strokeWidth": 1,
+                      "gap": 6,
+                      "padding": [
+                        7,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "PfivV",
+                          "name": "ic-rotate-cw",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "rotate-cw",
+                          "library": "lucide",
+                          "fill": "#1D1D1F"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Z9sf0l",
+                          "name": "다시 만들기",
+                          "fill": "#1D1D1F",
+                          "content": "다시 만들기",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "DKmGi",
+      "x": 2720,
+      "y": 0,
+      "name": "AI답변개선 3 — 인용 클릭 후",
+      "clip": true,
+      "width": 1280,
+      "height": 800,
+      "fill": "#ECECEC",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "W9rBV",
+          "name": "Header",
+          "width": "fill_container",
+          "gap": 14,
+          "padding": [
+            16,
+            22
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "V2cRU",
+              "name": "TitleBlock",
+              "layout": "vertical",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "UYyF7",
+                  "name": "Minto",
+                  "fill": "#1D1D1F",
+                  "content": "Minto",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "EAUDY",
+                  "name": "필요한 회의와 근거를 찾고 있어요",
+                  "fill": "#6E6E73",
+                  "content": "필요한 회의와 근거를 찾고 있어요",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 12
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "er3li",
+              "name": "HSpacer",
+              "width": "fill_container",
+              "height": 1
+            },
+            {
+              "type": "frame",
+              "id": "ajSgh",
+              "name": "SearchField",
+              "width": 360,
+              "height": 36,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": "#D9D9D9",
+              "strokeWidth": 1,
+              "gap": 8,
+              "padding": [
+                0,
+                12
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "lgBFM",
+                  "name": "ic-search",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "search",
+                  "library": "lucide",
+                  "fill": "#6E6E73"
+                },
+                {
+                  "type": "text",
+                  "id": "Wck5C",
+                  "name": "스키마 관리",
+                  "fill": "#1D1D1F",
+                  "content": "스키마 관리",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 14
+                },
+                {
+                  "type": "frame",
+                  "id": "mUPmH",
+                  "name": "SfSp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "icon",
+                  "id": "c4uvvA",
+                  "name": "ic-x",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "x",
+                  "library": "lucide",
+                  "fill": "#6E6E73"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "aBF6T",
+              "name": "ImportBtn",
+              "fill": "#FFFFFF",
+              "cornerRadius": 7,
+              "stroke": "#D9D9D9",
+              "strokeWidth": 1,
+              "gap": 6,
+              "padding": [
+                8,
+                14
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "TlILz",
+                  "name": "ic-download",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "download",
+                  "library": "lucide",
+                  "fill": "#1D1D1F"
+                },
+                {
+                  "type": "text",
+                  "id": "Jxurc",
+                  "name": "파일 가져오기",
+                  "fill": "#1D1D1F",
+                  "content": "파일 가져오기",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "m9oRz",
+              "name": "NewMeetingBtn",
+              "fill": "#007AFF",
+              "cornerRadius": 18,
+              "gap": 6,
+              "padding": [
+                9,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "qEcnp",
+                  "name": "ic-mic",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "mic",
+                  "library": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "H6StNy",
+                  "name": "새 회의",
+                  "fill": "#FFFFFF",
+                  "content": "새 회의",
+                  "fontFamily": "Noto Sans KR",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "UZ2XH",
+          "name": "HDivider",
+          "fill": "#D9D9D9",
+          "width": "fill_container",
+          "height": 1
+        },
+        {
+          "type": "frame",
+          "id": "YDYU7",
+          "name": "Content",
+          "width": "fill_container",
+          "height": "fill_container",
+          "children": [
+            {
+              "type": "frame",
+              "id": "ENP8L",
+              "name": "LeftColumn",
+              "width": 360,
+              "height": "fill_container",
+              "fill": "#F1F1F1",
+              "layout": "vertical",
+              "gap": 14,
+              "padding": 18,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "DnKW5",
+                  "name": "Readiness",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "agcOr",
+                      "name": "ic-circle-check",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle-check",
+                      "library": "lucide",
+                      "fill": "#34A853"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yDuZH",
+                      "name": "RTexts",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "dXddf",
+                          "name": "검색 준비됨",
+                          "fill": "#1D1D1F",
+                          "content": "검색 준비됨",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "TzLuu",
+                          "name": "저장된 회의 12개에서 바로 찾습",
+                          "fill": "#6E6E73",
+                          "content": "저장된 회의 12개에서 바로 찾습니다",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "HiAuZ",
+                  "name": "SearchSummary",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 5,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "NIdwa",
+                      "name": "“스키마 관리” 검색 중",
+                      "fill": "#1D1D1F",
+                      "content": "“스키마 관리” 검색 중",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "bSy49",
+                      "name": "가장 가까운 회의부터 보여줍니다",
+                      "fill": "#6E6E73",
+                      "content": "가장 가까운 회의부터 보여줍니다",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "GSr8N",
+                  "name": "AICard",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 9,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "hj6Xu",
+                      "name": "CardHead",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "Rev7l",
+                          "name": "ic-sparkles",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "sparkles",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y3kjfa",
+                          "name": "AI 답변",
+                          "fill": "#1D1D1F",
+                          "content": "AI 답변",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "OSJdo",
+                      "name": "스키마 관리는 flyway 도입을",
+                      "fill": "#1D1D1F",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "스키마 관리는 flyway 도입을 우선 검토하기로 했고, 운영 DB 적용 절차는 추가 확인이 필요합니다.",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n8G6DA",
+                      "name": "ViewFull",
+                      "gap": 5,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "xJCaS",
+                          "name": "ic-arrow-right",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "eQa45",
+                          "name": "전체 답변 보기",
+                          "fill": "#007AFF",
+                          "content": "전체 답변 보기",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "P9Lfw",
+                  "name": "Chips",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "E5qjCA",
+                      "name": "Chip-필터",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "RE2qs",
+                          "name": "필터",
+                          "fill": "#6E6E73",
+                          "content": "필터",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "L9c9g",
+                      "name": "Chip-요약",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lY83m",
+                          "name": "요약",
+                          "fill": "#6E6E73",
+                          "content": "요약",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "f98beQ",
+                      "name": "Chip-전사",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xhGWE",
+                          "name": "전사",
+                          "fill": "#6E6E73",
+                          "content": "전사",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MzTp8",
+                      "name": "Chip-주제",
+                      "fill": "#E4E4E6",
+                      "cornerRadius": 99,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VJSrp",
+                          "name": "주제",
+                          "fill": "#6E6E73",
+                          "content": "주제",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "oShyX",
+                  "name": "ResultHead",
+                  "width": "fill_container",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "h4X455",
+                      "name": "검색 결과",
+                      "fill": "#1D1D1F",
+                      "content": "검색 결과",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CPAI9",
+                      "name": "RhSp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "S8XAa",
+                      "name": "3",
+                      "fill": "#6E6E73",
+                      "content": "3",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "RSct0",
+                  "name": "Row-DB 스키마 관리 개선 회의",
+                  "width": "fill_container",
+                  "fill": "#E8F1FF",
+                  "cornerRadius": 8,
+                  "stroke": "#7FB3F0",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ev1Re",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LzTDO",
+                          "name": "DB 스키마 관리 개선 회의",
+                          "fill": "#1D1D1F",
+                          "content": "DB 스키마 관리 개선 회의",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Hovud",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "uRoON",
+                          "name": "6월 5일",
+                          "fill": "#6E6E73",
+                          "content": "6월 5일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Mi7Sb",
+                      "name": "34분 · 참석 3명",
+                      "fill": "#6E6E73",
+                      "content": "34분 · 참석 3명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "INBIg",
+                      "name": "R3",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Z7s2x",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "qewZ2",
+                              "name": "결정",
+                              "fill": "#007AFF",
+                              "content": "결정",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "AQt6F",
+                          "name": "flyway를 우선 검토하기로 결",
+                          "fill": "#6E6E73",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "flyway를 우선 검토하기로 결정",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "UOVoe",
+                  "name": "Row-백엔드 주간 싱크",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "NYW1w",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ycTWy",
+                          "name": "백엔드 주간 싱크",
+                          "fill": "#1D1D1F",
+                          "content": "백엔드 주간 싱크",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "wMkfl",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "aejzs",
+                          "name": "6월 3일",
+                          "fill": "#6E6E73",
+                          "content": "6월 3일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "fVli7",
+                      "name": "41분 · 참석 5명",
+                      "fill": "#6E6E73",
+                      "content": "41분 · 참석 5명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "N86zeh",
+                      "name": "R3",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "B1Vzb3",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "KtUGB",
+                              "name": "전사",
+                              "fill": "#007AFF",
+                              "content": "전사",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "sIljV",
+                          "name": "스키마 변경 이력 관리가 어렵다는",
+                          "fill": "#6E6E73",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "스키마 변경 이력 관리가 어렵다는 의견",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Hd97X",
+                  "name": "Row-인프라 운영 회고",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#D9D9D9",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "jDZXl",
+                      "name": "R1",
+                      "width": "fill_container",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "DX7c2",
+                          "name": "인프라 운영 회고",
+                          "fill": "#1D1D1F",
+                          "content": "인프라 운영 회고",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BX6Cn",
+                          "name": "R1Sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "yrAi1",
+                          "name": "5월 28일",
+                          "fill": "#6E6E73",
+                          "content": "5월 28일",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 10,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "PBIBa",
+                      "name": "52분 · 참석 4명",
+                      "fill": "#6E6E73",
+                      "content": "52분 · 참석 4명",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 11
+                    },
+                    {
+                      "type": "frame",
+                      "id": "enUhl",
+                      "name": "R3",
+                      "width": "fill_container",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "CvWSR",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "C45u4G",
+                              "name": "요약",
+                              "fill": "#007AFF",
+                              "content": "요약",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "RNzUm",
+                          "name": "운영 DB 마이그레이션 절차 정리",
+                          "fill": "#6E6E73",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "운영 DB 마이그레이션 절차 정리",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 11
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "zmBiY",
+              "name": "VDivider",
+              "fill": "#D9D9D9",
+              "width": 1,
+              "height": "fill_container"
+            },
+            {
+              "type": "frame",
+              "id": "oJAZ4",
+              "name": "RightDetail",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 18,
+              "padding": 28,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "jKIlA",
+                  "name": "BackToAnswerBtn",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 7,
+                  "stroke": "#9CC3F5",
+                  "strokeWidth": 1,
+                  "gap": 6,
+                  "padding": [
+                    7,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "Zwojq",
+                      "name": "ic-sparkles",
+                      "width": 13,
+                      "height": 13,
+                      "icon": "sparkles",
+                      "library": "lucide",
+                      "fill": "#007AFF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "hAjjz",
+                      "name": "AI 답변으로 돌아가기",
+                      "fill": "#007AFF",
+                      "content": "AI 답변으로 돌아가기",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "J2ym6E",
+                  "name": "PreviewHead",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "j3cRo",
+                      "name": "PTitle",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "S38wZQ",
+                          "name": "DB 스키마 관리 개선 회의",
+                          "fill": "#1D1D1F",
+                          "content": "DB 스키마 관리 개선 회의",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 26,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "EnrfJ",
+                          "name": "2026년 6월 5일 · 34분 ",
+                          "fill": "#6E6E73",
+                          "content": "2026년 6월 5일 · 34분 · 참석 3명",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jdfyk",
+                      "name": "PhSp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pZoYX",
+                      "name": "ExportBtn",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 7,
+                      "stroke": "#D9D9D9",
+                      "strokeWidth": 1,
+                      "gap": 6,
+                      "padding": [
+                        7,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "eWL5k",
+                          "name": "ic-share",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "share",
+                          "library": "lucide",
+                          "fill": "#1D1D1F"
+                        },
+                        {
+                          "type": "text",
+                          "id": "mzBQe",
+                          "name": "내보내기",
+                          "fill": "#1D1D1F",
+                          "content": "내보내기",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "DXrMJ",
+                  "name": "WhyCard",
+                  "width": "fill_container",
+                  "fill": "#E8F1FF",
+                  "cornerRadius": 8,
+                  "stroke": "#9CC3F5",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "H4jP0",
+                      "name": "W1",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "n8ao3O",
+                          "name": "ic-search",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "search",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "j3PbA",
+                          "name": "이 회의가 먼저 보이는 이유",
+                          "fill": "#1D1D1F",
+                          "content": "이 회의가 먼저 보이는 이유",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "xN8wq",
+                      "name": "W2",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "WMsv9",
+                          "name": "Badge",
+                          "fill": "#E8F1FF",
+                          "cornerRadius": 99,
+                          "padding": [
+                            2,
+                            7
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Qq7NV",
+                              "name": "결정",
+                              "fill": "#007AFF",
+                              "content": "결정",
+                              "fontFamily": "Noto Sans KR",
+                              "fontSize": 10,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "KOXkY",
+                          "name": "flyway를 우선 검토하기로 결",
+                          "fill": "#6E6E73",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "flyway를 우선 검토하기로 결정",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 13
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "EoPb7",
+                  "name": "Summary",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "U6CCcC",
+                      "name": "ST",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "Qa7bR",
+                          "name": "ic-list",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "list",
+                          "library": "lucide",
+                          "fill": "#007AFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "H3Nf3",
+                          "name": "요약",
+                          "fill": "#1D1D1F",
+                          "content": "요약",
+                          "fontFamily": "Noto Sans KR",
+                          "fontSize": 15,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "LiaaD",
+                      "name": "DB 형상 관리 도구로 flywa",
+                      "fill": "#1D1D1F",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "DB 형상 관리 도구로 flyway를 우선 검토하기로 결정했다. 마이그레이션 스크립트 리뷰 절차와 운영 DB 적용 순서는 다음 회의 전까지 정리한다.",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "k2ihGy",
+                      "name": "• 결정 — flyway 우선 검",
+                      "fill": "#6E6E73",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "• 결정 — flyway 우선 검토, PoC는 이번 스프린트 내 진행 (00:40)",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "RL0nF",
+                      "name": "• 할 일 — 마이그레이션 테스트",
+                      "fill": "#6E6E73",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "• 할 일 — 마이그레이션 테스트 케이스 정리 (담당: 민수)",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "S53iz0",
+                      "name": "• 미해결 — 운영 DB 적용 절",
+                      "fill": "#6E6E73",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "• 미해결 — 운영 DB 적용 절차는 추가 확인 필요",
+                      "fontFamily": "Noto Sans KR",
+                      "fontSize": 13
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
