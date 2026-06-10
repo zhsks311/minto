@@ -2109,7 +2109,7 @@ public struct SettingsView: View {
 
                     HStack(spacing: 4) {
                         ForEach(family.choiceChips, id: \.self) { chip in
-                            engineChip(chip, tint: engineTint(for: family))
+                            engineChip(chip, tint: family.tint)
                         }
                         Text(family.requirementNote)
                             .font(.system(size: 12))
@@ -2142,8 +2142,8 @@ public struct SettingsView: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 8)
-            .background(selectionBackground(for: family))
-            .overlay(selectionBorder(for: family))
+            .background(selectionBackground(isSelected: selectedSpeechEngineFamily == family))
+            .overlay(selectionBorder(isSelected: selectedSpeechEngineFamily == family))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -2155,7 +2155,7 @@ public struct SettingsView: View {
     private var localModelPicker: some View {
         HStack(alignment: .top, spacing: 10) {
             Rectangle()
-                .fill(engineTint(for: SpeechEngineFamily.localAI).opacity(0.32))
+                .fill(SpeechEngineFamily.localAI.tint.opacity(0.32))
                 .frame(width: 3)
                 .clipShape(Capsule())
                 .padding(.vertical, 8)
@@ -2180,7 +2180,7 @@ public struct SettingsView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(engineTint(for: SpeechEngineFamily.localAI).opacity(0.06))
+                .fill(SpeechEngineFamily.localAI.tint.opacity(0.06))
         )
     }
 
@@ -2206,7 +2206,7 @@ public struct SettingsView: View {
                         .foregroundColor(.secondary)
                     HStack(spacing: 4) {
                         ForEach(model.choiceChips, id: \.self) { chip in
-                            engineChip(chip, tint: engineTint(for: model))
+                            engineChip(chip, tint: model.tint)
                         }
                     }
                 }
@@ -2227,58 +2227,12 @@ public struct SettingsView: View {
             }
             .padding(.vertical, 7)
             .padding(.horizontal, 8)
-            .background(selectionBackground(for: model))
-            .overlay(selectionBorder(for: model))
+            .background(selectionBackground(isSelected: selectedSpeechEngineID == model))
+            .overlay(selectionBorder(isSelected: selectedSpeechEngineID == model))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("\(model.technicalName) · \(model.requirementNote)")
-    }
-
-    private func engineIcon(for family: SpeechEngineFamily) -> some View {
-        Image(systemName: engineIconName(for: family))
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(engineTint(for: family))
-            .frame(width: 28, height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(engineTint(for: family).opacity(0.12))
-            )
-    }
-
-    private func engineIcon(for model: SpeechEngineID) -> some View {
-        Image(systemName: engineIconName(for: model))
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(engineTint(for: model))
-            .frame(width: 28, height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(engineTint(for: model).opacity(0.12))
-            )
-    }
-
-    private func choiceBadge(for family: SpeechEngineFamily) -> some View {
-        Text(family.choiceBadge)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundColor(engineTint(for: family))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(engineTint(for: family).opacity(0.12))
-            )
-    }
-
-    private func choiceBadge(for model: SpeechEngineID) -> some View {
-        Text(model.choiceBadge)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundColor(engineTint(for: model))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(engineTint(for: model).opacity(0.12))
-            )
     }
 
     private func engineChip(_ text: String, tint: Color) -> some View {
@@ -2291,78 +2245,6 @@ public struct SettingsView: View {
                 Capsule()
                     .fill(tint.opacity(0.08))
             )
-    }
-
-    private func selectionBackground(for family: SpeechEngineFamily) -> some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(selectedSpeechEngineFamily == family ? Color.accentColor.opacity(0.08) : Color.clear)
-    }
-
-    private func selectionBorder(for family: SpeechEngineFamily) -> some View {
-        RoundedRectangle(cornerRadius: 8)
-            .stroke(selectedSpeechEngineFamily == family ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
-    }
-
-    private func selectionBackground(for model: SpeechEngineID) -> some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(selectedSpeechEngineID == model ? Color.accentColor.opacity(0.08) : Color.clear)
-    }
-
-    private func selectionBorder(for model: SpeechEngineID) -> some View {
-        RoundedRectangle(cornerRadius: 8)
-            .stroke(selectedSpeechEngineID == model ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
-    }
-
-    private func engineIconName(for family: SpeechEngineFamily) -> String {
-        switch family {
-        case .localAI:
-            return "checkmark.seal.fill"
-        case .speechAnalyzer:
-            return "sparkles"
-        case .sfSpeechOnDevice:
-            return "lock.shield.fill"
-        }
-    }
-
-    private func engineIconName(for model: SpeechEngineID) -> String {
-        switch model {
-        case .whisperAccurate:
-            return "checkmark.seal.fill"
-        case .whisperBalanced:
-            return "slider.horizontal.3"
-        case .whisperFast:
-            return "bolt.fill"
-        case .speechAnalyzer:
-            return "sparkles"
-        case .sfSpeechOnDevice:
-            return "lock.shield.fill"
-        }
-    }
-
-    private func engineTint(for family: SpeechEngineFamily) -> Color {
-        switch family {
-        case .localAI:
-            return .green
-        case .speechAnalyzer:
-            return .indigo
-        case .sfSpeechOnDevice:
-            return .teal
-        }
-    }
-
-    private func engineTint(for model: SpeechEngineID) -> Color {
-        switch model {
-        case .whisperAccurate:
-            return .green
-        case .whisperBalanced:
-            return .blue
-        case .whisperFast:
-            return .orange
-        case .speechAnalyzer:
-            return .indigo
-        case .sfSpeechOnDevice:
-            return .teal
-        }
     }
 
     private func statusBadge(for availability: SpeechEngineAvailability) -> some View {
@@ -2467,10 +2349,8 @@ public struct SettingsView: View {
 
     private func selectSpeechEngine(_ engine: SpeechEngineID) {
         selectedSpeechEngineRaw = engine.rawValue
-        UserDefaults.standard.set(engine.rawValue, forKey: SpeechEnginePreferences.selectedEngineKey)
         if let variant = engine.whisperVariant {
             selectedModel = variant
-            UserDefaults.standard.set(variant, forKey: SpeechEnginePreferences.selectedModelKey)
         }
     }
 
@@ -2499,7 +2379,6 @@ public struct SettingsView: View {
     private func applySelectedSpeechEngine() async {
         if let variant = selectedSpeechEngineID.whisperVariant {
             selectedModel = variant
-            UserDefaults.standard.set(variant, forKey: SpeechEnginePreferences.selectedModelKey)
         }
         await viewModel.loadSpeechEngine(selectedSpeechEngineID)
         await refreshSpeechEngineAvailability()
@@ -2535,5 +2414,40 @@ public struct SettingsView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    // MARK: - SpeechEngine 표시 헬퍼 (SpeechEngineDisplay.swift의 SpeechEngineDisplayable 사용)
+
+    private func engineIcon(for item: some SpeechEngineDisplayable) -> some View {
+        Image(systemName: item.iconName)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(item.tint)
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(item.tint.opacity(0.12))
+            )
+    }
+
+    private func choiceBadge(for item: some SpeechEngineDisplayable) -> some View {
+        Text(item.badgeLabel)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(item.tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(item.tint.opacity(0.12))
+            )
+    }
+
+    private func selectionBackground(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
+    }
+
+    private func selectionBorder(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(isSelected ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
     }
 }
