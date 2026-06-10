@@ -238,4 +238,19 @@ struct MeetingSearchIndexStoreDiskCacheTests {
 
         #expect(indexStore.load() == nil)
     }
+
+    @Test("save 실패 후 invalidate를 호출하면 load가 nil을 반환한다")
+    func invalidateAfterSaveFailureRemovesStaleIndex() throws {
+        let dir = try tempDir()
+        let indexStore = MeetingSearchIndexStore(directory: dir)
+        let record = sampleRecord()
+
+        // 정상 저장 → load 성공 확인
+        indexStore.save(MeetingSearchIndex(records: [record]))
+        #expect(indexStore.load() != nil)
+
+        // invalidate → load가 nil 반환 (재빌드 경로로 진입)
+        indexStore.invalidate()
+        #expect(indexStore.load() == nil)
+    }
 }
