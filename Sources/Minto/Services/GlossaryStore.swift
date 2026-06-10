@@ -96,6 +96,19 @@ public final class GlossaryStore: ObservableObject {
             }
     }
 
+    /// 회의 record의 keywords에서 후보를 추출해 pendingCandidates에 추가한다.
+    /// 재요약 성공 후 명시 호출 경로에서 사용한다 — id-diff 구독은 같은 id 업데이트를 감지하지 못한다.
+    public func ingestCandidates(from record: MeetingRecord) {
+        let newCandidates = Self.extractNewCandidates(
+            keywords: record.summary.keywords,
+            existingEntries: entries,
+            existingPending: pendingCandidates,
+            sourceMeetingID: record.id
+        )
+        guard !newCandidates.isEmpty else { return }
+        addCandidates(newCandidates)
+    }
+
     /// 후보를 pendingCandidates에 병합하고 상한 20개를 유지한다 (초과 시 오래된 것 교체).
     public func addCandidates(_ newCandidates: [GlossaryCandidate]) {
         var next = pendingCandidates + newCandidates
