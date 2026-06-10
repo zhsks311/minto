@@ -15,6 +15,22 @@ private struct MeetingSearchMatch {
     let text: String
 }
 
+/// AI 답변 CTA용 자가 배경 버튼 스타일.
+/// .borderedProminent는 비활성(non-key) 윈도우에서 배경이 사라지는 문제가 있어 직접 배경을 그린다.
+private struct SearchAnswerCTAButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(isEnabled ? Color.accentColor : Color.gray.opacity(0.45)))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(Capsule())
+    }
+}
+
 /// 회의 목록 + 검색 + 선택한 회의 미리보기.
 /// v2는 검색을 첫 화면의 중심 작업으로 두고, 상세 리포트 전체보다 빠른 회고/탐색에 집중한다.
 public struct MeetingLibraryView: View {
@@ -37,7 +53,9 @@ public struct MeetingLibraryView: View {
     @State private var showingExportOptions = false
     @State private var showingConfluenceExport = false
     @State private var exportRecord: MeetingRecord?
-    @State private var isSearchAnswerExpanded = false
+    // 오른쪽 디테일 영역에 AI 답변 전문을 표시할지 여부.
+    // 라이브 회의 디테일이 항상 우선하고, 회의 행/인용 클릭 시 꺼진다.
+    @State private var showingSearchAnswerDetail = false
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @State private var fileImportTask: Task<Void, Never>?
@@ -92,13 +110,13 @@ public struct MeetingLibraryView: View {
         }
         .onChange(of: store.meetings) { _, _ in
             searchAnswerController.reset()
-            isSearchAnswerExpanded = false
+            showingSearchAnswerDetail = false
             rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
         }
         .onChange(of: searchText) { _, _ in
             searchAnswerController.reset()
-            isSearchAnswerExpanded = false
+            showingSearchAnswerDetail = false
             if hasLiveMeeting {
                 showingLiveMeeting = true
                 selectedID = nil
@@ -132,12 +150,12 @@ public struct MeetingLibraryView: View {
         }
         .onChange(of: answerSettings.isEnabled) { _, _ in
             searchAnswerController.reset(clearReadiness: true)
-            isSearchAnswerExpanded = false
+            showingSearchAnswerDetail = false
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: answerSettings.selectedProvider) { _, _ in
             searchAnswerController.reset(clearReadiness: true)
-            isSearchAnswerExpanded = false
+            showingSearchAnswerDetail = false
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: fileImportUseCase.state) { _, state in
@@ -335,6 +353,8 @@ public struct MeetingLibraryView: View {
         Group {
             if showingLiveMeeting, hasLiveMeeting {
                 liveMeetingDetail
+            } else if isSearching, showingSearchAnswerDetail {
+                searchAnswerDetail
             } else if let record = selectedRecord {
                 meetingPreview(record)
             } else {
@@ -350,6 +370,139 @@ public struct MeetingLibraryView: View {
             }
         }
         .textSelection(.enabled)
+    }
+
+    // MARK: - Search answer detail
+
+    /// 오른쪽 디테일 영역에 표시하는 AI 답변 전문. meetingPreview와 같은 골격(ScrollView + padding 28)을 쓴다.
+    private var searchAnswerDetail: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("AI 답변", systemImage: "sparkles")
+                        .font(.system(size: 26, weight: .bold))
+                    Text("“\(trimmedSearch)” — 저장된 회의 근거로 답변합니다")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+
+                if searchAnswerController.isGenerating {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("검색 결과를 종합하는 중입니다…")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.top, 6)
+                } else if let searchAnswer = searchAnswerController.answer, searchAnswer.query == trimmedSearch {
+                    Text(searchAnswer.text)
+                        .font(.system(size: 13.5))
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+
+                    if !searchAnswer.citations.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            sectionTitle("근거", systemImage: "text.quote")
+                            searchAnswerDetailCitationList(searchAnswer.citations)
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            copySearchAnswer(searchAnswer)
+                        } label: {
+                            Label("답변과 근거 복사", systemImage: "doc.on.doc")
+                        }
+                        .buttonStyle(.bordered)
+                        Button {
+                            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                        } label: {
+                            Label("다시 만들기", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                    }
+                } else if let errorMessage = searchAnswerController.errorMessage {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(errorMessage)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                        } label: {
+                            Label("다시 시도", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                    }
+                } else {
+                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(LibraryPalette.background)
+    }
+
+    /// 현재 검색어에 대한 답변이 이미 만들어져 있는지. 회의 미리보기에서 "답변으로 돌아가기" 노출 조건.
+    private var hasSearchAnswerForCurrentQuery: Bool {
+        searchAnswerController.isGenerating || searchAnswerController.answer?.query == trimmedSearch
+    }
+
+    private var backToSearchAnswerButton: some View {
+        Button {
+            showingSearchAnswerDetail = true
+        } label: {
+            Label("AI 답변으로 돌아가기", systemImage: "sparkles")
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .buttonStyle(.bordered)
+    }
+
+    /// 디테일 영역용 근거 목록.
+    private func searchAnswerDetailCitationList(_ citations: [MeetingSearchAnswerCitation]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(citations) { citation in
+                Button {
+                    selectSearchAnswerCitation(citation)
+                } label: {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("[\(citation.number)]")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.accentColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(citation.meetingTitle)
+                                .font(.system(size: 12, weight: .semibold))
+                                .lineLimit(1)
+                            Text(searchAnswerCitationMeta(citation))
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                            if !citation.preview.isEmpty {
+                                Text(citation.preview)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(3)
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(LibraryPalette.elevated)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .help("근거 회의 열기")
+            }
+        }
     }
 
     // MARK: - Left column blocks
@@ -391,6 +544,8 @@ public struct MeetingLibraryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// 왼쪽 컬럼의 컴팩트 AI 답변 카드. 답변 전문·근거는 오른쪽 디테일 영역(searchAnswerDetail)이 담당하고,
+    /// 여기서는 진입점(CTA)과 현재 상태 요약만 보여준다.
     private var searchAnswerCard: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
@@ -404,13 +559,6 @@ public struct MeetingLibraryView: View {
                 } else if !answerSettings.isEnabled || !searchAnswerController.isProviderReady {
                     Button("AI 설정") { openSettingsWindow() }
                         .font(.system(size: 11, weight: .semibold))
-                } else {
-                    Button(searchAnswerController.answer == nil ? "답변 만들기" : "다시 만들기") {
-                        isSearchAnswerExpanded = false
-                        searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
                 }
             }
 
@@ -435,35 +583,33 @@ public struct MeetingLibraryView: View {
                     Text(searchAnswer.text)
                         .font(.system(size: 12))
                         .foregroundColor(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .lineLimit(isSearchAnswerExpanded ? nil : 5)
-                        .textSelection(.enabled)
-                    if !isSearchAnswerExpanded {
-                        Button("답변 펼치기") {
-                            isSearchAnswerExpanded = true
-                        }
-                        .font(.system(size: 11, weight: .semibold))
-                        .buttonStyle(.borderless)
-                    }
-                    searchAnswerCitationList(searchAnswer.citations)
+                        .lineLimit(2)
                     Button {
-                        copySearchAnswer(searchAnswer)
+                        showingSearchAnswerDetail = true
                     } label: {
-                        Label("답변과 근거 복사", systemImage: "doc.on.doc")
+                        Label("전체 답변 보기", systemImage: "arrow.right.circle.fill")
+                            .font(.system(size: 12, weight: .semibold))
                     }
-                    .font(.system(size: 11, weight: .semibold))
                     .buttonStyle(.borderless)
                 }
             } else if let errorMessage = searchAnswerController.errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 11))
-                    .foregroundColor(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorMessage)
+                        .font(.system(size: 11))
+                        .foregroundColor(.red)
+                        .lineLimit(2)
+                    generateAnswerButton(title: "다시 시도")
+                }
             } else {
-                Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if answerSettings.isEnabled && searchAnswerController.isProviderReady {
+                        generateAnswerButton(title: "AI 답변 만들기")
+                    }
+                }
             }
         }
         .padding(12)
@@ -473,38 +619,16 @@ public struct MeetingLibraryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    private func searchAnswerCitationList(_ citations: [MeetingSearchAnswerCitation]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(citations) { citation in
-                Button {
-                    selectSearchAnswerCitation(citation)
-                } label: {
-                    HStack(alignment: .top, spacing: 5) {
-                        Text("[\(citation.number)]")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.accentColor)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(citation.meetingTitle)
-                                .font(.system(size: 10, weight: .semibold))
-                                .lineLimit(1)
-                            Text(searchAnswerCitationMeta(citation))
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                            if !citation.preview.isEmpty {
-                                Text(citation.preview)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(2)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                .help("근거 회의 열기")
-            }
+    private func generateAnswerButton(title: String) -> some View {
+        Button {
+            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+            showingSearchAnswerDetail = true
+        } label: {
+            Label(title, systemImage: "sparkles")
+                .font(.system(size: 12, weight: .semibold))
         }
+        .buttonStyle(SearchAnswerCTAButtonStyle())
+        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
     }
 
     private func searchAnswerCitationMeta(_ citation: MeetingSearchAnswerCitation) -> String {
@@ -701,6 +825,7 @@ public struct MeetingLibraryView: View {
         return Button {
             selectedID = record.id
             showingLiveMeeting = false
+            showingSearchAnswerDetail = false
         } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline) {
@@ -881,6 +1006,10 @@ public struct MeetingLibraryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     previewHeader(record)
+
+                    if isSearching, hasSearchAnswerForCurrentQuery {
+                        backToSearchAnswerButton
+                    }
 
                     if isSearching {
                         whyThisResult(record)
@@ -1608,6 +1737,7 @@ public struct MeetingLibraryView: View {
     private func selectSearchAnswerCitation(_ citation: MeetingSearchAnswerCitation) {
         selectedID = citation.meetingID
         showingLiveMeeting = false
+        showingSearchAnswerDetail = false
         detailTab = citation.kind == .transcript ? .transcript : .summary
     }
 
