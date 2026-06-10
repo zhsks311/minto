@@ -10,7 +10,7 @@ public enum VoiceActivityDetectorFactory {
 
         guard let configuration = SileroVADProcessor.Configuration(environment: environment),
               configuration.hasLocalModelBundle else {
-            fputs("[VAD] Silero requested but local model bundle was not found; falling back to Energy VAD\n", stderr)
+            Log.vad.error("Silero requested but local model bundle was not found; falling back to Energy VAD")
             return VADProcessor()
         }
 
