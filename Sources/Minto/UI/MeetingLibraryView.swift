@@ -65,6 +65,8 @@ public struct MeetingLibraryView: View {
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @State private var fileImportTask: Task<Void, Never>?
+    /// 파일 선택 후 맥락 입력 시트를 띄울 URL. nil이면 시트 미표시.
+    @State private var fileImportSetupURL: URL?
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
     @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -211,6 +213,22 @@ public struct MeetingLibraryView: View {
                     record: exportRecord,
                     confluence: confluence,
                     openSettings: openSettingsWindow
+                )
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { fileImportSetupURL != nil },
+            set: { if !$0 { fileImportSetupURL = nil } }
+        )) {
+            if let url = fileImportSetupURL {
+                FileImportSetupSheet(
+                    fileURL: url,
+                    onImport: { topic, glossary in
+                        startFileImport(url: url, topic: topic, glossary: glossary)
+                    },
+                    onSkip: {
+                        startFileImport(url: url, topic: nil, glossary: "")
+                    }
                 )
             }
         }
@@ -2343,15 +2361,25 @@ public struct MeetingLibraryView: View {
         panel.allowedContentTypes = MeetingFileImportUseCase.supportedContentTypes
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            fileImportTask?.cancel()
-            fileImportTask = Task { @MainActor in
-                do {
-                    _ = try await fileImportUseCase.importFile(url)
-                } catch is CancellationError {
-                    // 취소 상태는 use-case가 이미 반영한다.
-                } catch {
-                    // 실패 상태는 use-case가 이미 반영한다.
-                }
+            // 파일 선택 후 주제·용어집 입력 시트를 띄운다.
+            fileImportSetupURL = url
+        }
+    }
+
+    private func startFileImport(url: URL, topic: String?, glossary: String) {
+        fileImportSetupURL = nil
+        fileImportTask?.cancel()
+        fileImportTask = Task { @MainActor in
+            do {
+                _ = try await fileImportUseCase.importFile(
+                    url,
+                    topic: topic.flatMap { $0.isEmpty ? nil : $0 },
+                    glossary: glossary
+                )
+            } catch is CancellationError {
+                // 취소 상태는 use-case가 이미 반영한다.
+            } catch {
+                // 실패 상태는 use-case가 이미 반영한다.
             }
         }
     }
