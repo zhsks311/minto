@@ -1,21 +1,5 @@
 import SwiftUI
 
-/// 비활성(non-key) 윈도우에서도 배경이 사라지지 않도록 직접 그리는 강조 버튼 스타일.
-/// MeetingLibraryView의 ProminentActionButtonStyle과 동일하나 파일 범위 접근 문제로 복제한다.
-private struct FileImportProminentButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(isEnabled ? Color.accentColor : Color.gray.opacity(0.45)))
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .contentShape(Capsule())
-    }
-}
-
 /// 파일 임포트 시 주제·용어집 맥락을 입력하는 경량 시트.
 /// MeetingSetupView의 glossaryContextEditor 패턴을 따르되,
 /// 오디오 입력/Confluence 연동 부분은 포함하지 않는다.
@@ -112,11 +96,14 @@ struct FileImportSetupSheet: View {
                             .font(.caption)
                             .buttonStyle(.borderless)
                         }
-                        VStack(spacing: 6) {
-                            ForEach(glossaryCandidates) { entry in
-                                glossaryCandidateRow(entry)
+                        ScrollView {
+                            VStack(spacing: 6) {
+                                ForEach(glossaryCandidates) { entry in
+                                    glossaryCandidateRow(entry)
+                                }
                             }
                         }
+                        .frame(maxHeight: 160)
                     } else {
                         Text(glossaryStore.entries.isEmpty
                              ? "설정에서 기본 용어를 추가하면 회의마다 다시 입력하지 않아도 됩니다."
@@ -129,9 +116,14 @@ struct FileImportSetupSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("선택된 용어")
                                 .font(.caption.weight(.semibold))
-                            ForEach(selectedGlossaryEntriesOutsideCandidates) { entry in
-                                glossaryCandidateRow(entry)
+                            ScrollView {
+                                VStack(spacing: 6) {
+                                    ForEach(selectedGlossaryEntriesOutsideCandidates) { entry in
+                                        glossaryCandidateRow(entry)
+                                    }
+                                }
                             }
+                            .frame(maxHeight: 160)
                         }
                     }
 
@@ -197,7 +189,7 @@ struct FileImportSetupSheet: View {
                 Label("임포트", systemImage: "tray.and.arrow.down")
                     .font(.system(size: 13, weight: .semibold))
             }
-            .buttonStyle(FileImportProminentButtonStyle())
+            .buttonStyle(ProminentActionButtonStyle())
         }
     }
 

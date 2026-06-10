@@ -10,25 +10,6 @@ private enum LibraryPalette {
     static let accentSoft = Color.accentColor.opacity(0.12)
 }
 
-/// 비활성(non-key) 윈도우에서 `.borderedProminent`가 강조 배경을 지우면서 흰 라벨만 남겨
-/// 버튼이 통째로 사라져 보이는 문제를 피하기 위해, 윈도우 키 상태와 무관하게
-/// 항상 같은 배경을 직접 그리는 강조 버튼 스타일.
-private struct ProminentActionButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    var horizontalPadding: CGFloat = 12
-    var verticalPadding: CGFloat = 6
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(.white)
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, verticalPadding)
-            .background(Capsule().fill(isEnabled ? Color.accentColor : Color.gray.opacity(0.45)))
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .contentShape(Capsule())
-    }
-}
-
 private struct MeetingSearchMatch {
     let badge: String
     let text: String
@@ -53,6 +34,9 @@ public struct MeetingLibraryView: View {
     // 인덱스는 회의 목록 변경 시에만, 결과는 디바운스된 쿼리 변경 시에만 갱신한다.
     @State private var searchIndex = MeetingSearchIndex(chunks: [])
     @State private var meetingSearchResults: [MeetingSearchResult] = []
+    /// 필터 미적용 전체 검색 결과. AI 답변 생성에는 필터된 결과 대신 이 값을 사용해
+    /// 요약/결정 등 근거가 누락되지 않게 한다.
+    @State private var allMeetingSearchResults: [MeetingSearchResult] = []
     @State private var showingLiveMeeting = false
     @State private var showingExportOptions = false
     @State private var showingConfluenceExport = false
@@ -446,13 +430,13 @@ public struct MeetingLibraryView: View {
                         }
                         .buttonStyle(.bordered)
                         Button {
-                            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                            searchAnswerController.generate(query: trimmedSearch, results: allMeetingSearchResults)
                             searchAnswerCitationAnchor = nil
                         } label: {
                             Label("다시 만들기", systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.bordered)
-                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
                     }
                 } else if let errorMessage = searchAnswerController.errorMessage {
                     VStack(alignment: .leading, spacing: 10) {
@@ -461,16 +445,16 @@ public struct MeetingLibraryView: View {
                             .foregroundColor(.red)
                             .fixedSize(horizontal: false, vertical: true)
                         Button {
-                            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                            searchAnswerController.generate(query: trimmedSearch, results: allMeetingSearchResults)
                             searchAnswerCitationAnchor = nil
                         } label: {
                             Label("다시 시도", systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.bordered)
-                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
                     }
                 } else {
-                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -691,7 +675,7 @@ public struct MeetingLibraryView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -710,7 +694,8 @@ public struct MeetingLibraryView: View {
 
     private func generateAnswerButton(title: String) -> some View {
         Button {
-            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+            // 필터와 무관하게 전체 검색 결과를 근거로 넘겨 요약·결정 등 컨텍스트가 누락되지 않게 한다.
+            searchAnswerController.generate(query: trimmedSearch, results: allMeetingSearchResults)
             // generate()가 가드(provider 미준비)로 조기 반환해도 디테일을 연다 —
             // 에러 메시지를 디테일 영역에서 크게 보여주는 것이 의도.
             showingSearchAnswerDetail = true
@@ -720,7 +705,7 @@ public struct MeetingLibraryView: View {
                 .font(.system(size: 12, weight: .semibold))
         }
         .buttonStyle(ProminentActionButtonStyle())
-        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
     }
 
     private func searchAnswerCitationMeta(_ citation: MeetingSearchAnswerCitation) -> String {
@@ -791,10 +776,27 @@ public struct MeetingLibraryView: View {
                 .foregroundColor(.secondary)
             Text("검색 결과가 없어요")
                 .font(.system(size: 13, weight: .semibold))
-            Text("다른 회의명, 안건, 결정사항으로 다시 검색해 보세요")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            if activeSearchFilter != .all {
+                VStack(spacing: 4) {
+                    Text("'\(activeSearchFilter.label)' 필터를 해제하면 더 많은 결과를 볼 수 있어요")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("필터 해제") {
+                        activeSearchFilter = .all
+                        refreshSearchResults()
+                        selectFirstAvailableIfNeeded(preferFirstResult: true)
+                    }
+                    .font(.system(size: 12))
+                    .buttonStyle(.borderless)
+                    .foregroundColor(.accentColor)
+                }
+            } else {
+                Text("다른 회의명, 안건, 결정사항으로 다시 검색해 보세요")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -921,15 +923,10 @@ public struct MeetingLibraryView: View {
     }
 
     private func meetingRow(_ record: MeetingRecord) -> some View {
-        // detailContent가 이 행의 회의를 미리보기로 표시하는 경우에만 강조한다.
-        // AI 답변 디테일이나 라이브 화면을 보여주는 동안에는 강조를 억제해
+        // 라이브 중에도 선택 행 강조를 유지한다.
+        // AI 답변 디테일이 열려 있는 동안만 강조를 억제해
         // 좌우가 서로 다른 대상을 가리키는 것처럼 보이지 않게 한다. 선택 자체는 보존.
-        let selected: Bool
-        if case .preview(let displayed) = detailContent {
-            selected = displayed.id == record.id
-        } else {
-            selected = false
-        }
+        let selected = selectedID == record.id && !(isSearching && showingSearchAnswerDetail)
         let match = primaryMatch(for: record)
 
         return Button {
@@ -1947,10 +1944,12 @@ public struct MeetingLibraryView: View {
     private func refreshSearchResults() {
         guard isSearching else {
             meetingSearchResults = []
+            allMeetingSearchResults = []
             activeSearchFilter = .all
             return
         }
         let all = searchIndex.search(trimmedSearch, limit: Int.max)
+        allMeetingSearchResults = all
         meetingSearchResults = activeSearchFilter == .all ? all : all.filter { activeSearchFilter.matches($0) }
     }
 
