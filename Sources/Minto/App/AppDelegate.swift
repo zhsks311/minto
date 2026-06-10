@@ -129,6 +129,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 await viewModel.loadSpeechEngine(fallback)
             }
         }
+        // 복원 전에 GlossaryStore를 초기화해 회의 변경 구독을 먼저 배선한다 —
+        // 늦으면 복원된 회의가 "기존 회의"로 취급돼 용어 후보 추출을 놓친다.
+        _ = GlossaryStore.shared
         // 이전 저장 실패 복구본이 있으면 자동 복원한다.
         // MeetingStore.shared는 @MainActor static let이라 이 첫 접근에서
         // sync 초기화(reload 포함)가 완료된 뒤 복원이 진행된다.

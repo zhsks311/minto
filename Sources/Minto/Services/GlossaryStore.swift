@@ -42,11 +42,11 @@ public final class GlossaryStore: ObservableObject {
 
         reload()
         // meetingsPublisher가 nil이면 구독 생략(테스트 격리).
-        // nil이 아니면 init 완료 후 이벤트 루프에서 배선 — MeetingStore.shared와의 순환 초기화 방지.
+        // 동기로 배선해야 한다 — 앱 시작 시 복구 복원(restorePendingRecords)이 동기로 실행되므로,
+        // 구독이 한 틱이라도 늦으면 복원된 회의를 "기존 회의"로 삼켜 후보 추출을 놓친다.
+        // (MeetingStore.init은 GlossaryStore를 참조하지 않으므로 순환 초기화 없음)
         if let publisher = meetingsPublisher {
-            Task { @MainActor [weak self] in
-                self?.startObservingMeetings(publisher: publisher)
-            }
+            startObservingMeetings(publisher: publisher)
         }
     }
 
@@ -71,7 +71,7 @@ public final class GlossaryStore: ObservableObject {
     }
 
     /// 신규 회의의 keywords에서 후보를 추출해 pendingCandidates에 추가한다.
-    /// init에서 비동기로 호출되며, 재호출 시에는 이미 구독 중이면 무시한다.
+    /// init에서 동기로 호출되며, 재호출 시에는 이미 구독 중이면 무시한다.
     private func startObservingMeetings(publisher: AnyPublisher<[MeetingRecord], Never>) {
         guard meetingObservationCancellable == nil else { return }
         var knownIDs = Set(MeetingStore.shared.meetings.map(\.id))
