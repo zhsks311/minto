@@ -266,7 +266,7 @@ public final class TranscriptionViewModel: ObservableObject {
                 previewTask = nil
                 do {
                     let result = try await transcribeFinalChunk(chunk)
-                    fputs("[VM] STT final result: '\(result.segment.text)'\n", stderr)
+                    fputs("[VM] STT final result: chars=\(result.segment.text.count)\n", stderr)
                     guard !result.segment.text.isEmpty else {
                         if pendingSegment != nil {
                             fputs("[VM] STT final empty; keeping pending preview until next update\n", stderr)

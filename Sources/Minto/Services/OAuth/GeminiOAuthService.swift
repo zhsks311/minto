@@ -242,8 +242,7 @@ public final class GeminiOAuthService: NSObject {
         let (data, urlResponse) = try await URLSession.shared.data(for: request)
         let status = (urlResponse as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
-            let bodyText = String(data: data.prefix(800), encoding: .utf8) ?? "<non-utf8>"
-            fputs("[Gemini] correct HTTP \(status): \(bodyText)\n", stderr)
+            fputs("[Gemini] correct HTTP \(status) bodyLen=\(data.count)\n", stderr)
             throw GeminiOAuthError.badResponse
         }
 
@@ -254,8 +253,7 @@ public final class GeminiOAuthService: NSObject {
               let parts = content["parts"] as? [[String: Any]],
               let result = parts.first?["text"] as? String
         else {
-            let bodyText = String(data: data.prefix(800), encoding: .utf8) ?? "<non-utf8>"
-            fputs("[Gemini] correct parse failed, body: \(bodyText)\n", stderr)
+            fputs("[Gemini] correct parse failed HTTP 200 bodyLen=\(data.count)\n", stderr)
             throw GeminiOAuthError.badResponse
         }
 

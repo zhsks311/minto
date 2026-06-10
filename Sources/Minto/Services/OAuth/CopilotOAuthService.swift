@@ -269,9 +269,8 @@ public final class CopilotOAuthService: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
-            // 성공 본문엔 토큰이 있어 로그하지 않지만, 실패 본문은 에러 메시지뿐이라 안전하게 남긴다.
-            let body = String(data: data.prefix(500), encoding: .utf8) ?? "<non-utf8>"
-            fputs("[Copilot] token-exchange HTTP \(status): \(body)\n", stderr)
+            // 성공 본문엔 토큰이 있어 로그하지 않고, 실패 시에도 body 길이만 남긴다.
+            fputs("[Copilot] token-exchange HTTP \(status) bodyLen=\(data.count)\n", stderr)
             // GitHub은 Copilot 구독이 없는 계정에 이 내부 엔드포인트를 404(또는 403)로 숨긴다.
             if status == 404 || status == 403 {
                 throw CopilotError.noSubscription

@@ -212,7 +212,7 @@ public final class CodexOAuthService: ObservableObject {
                 errData.append(byte)
                 if errData.count >= 800 { break }
             }
-            fputs("[Codex] correct HTTP \(status) (model=\(model)): \(String(data: errData, encoding: .utf8) ?? "")\n", stderr)
+            fputs("[Codex] correct HTTP \(status) (model=\(model)) bodyLen=\(errData.count)\n", stderr)
             // 무료 tier·미인가·모델 미허용은 4xx로 온다(상위 모델→mini 폴백 대상). 429는 rate limit(폴백 무의미).
             switch status {
             case 429:
@@ -314,8 +314,7 @@ public final class CodexOAuthService: ObservableObject {
         if status == 200 {
             fputs("[Codex] \(step) HTTP 200\n", stderr)
         } else {
-            let body = String(data: data.prefix(800), encoding: .utf8) ?? "<non-utf8>"
-            fputs("[Codex] \(step) HTTP \(status): \(body)\n", stderr)
+            fputs("[Codex] \(step) HTTP \(status) bodyLen=\(data.count)\n", stderr)
         }
     }
 

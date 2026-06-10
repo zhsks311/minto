@@ -92,7 +92,7 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
 
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         if dbLevel < -40, !trimmed.isEmpty, trimmed.count <= 10 {
-            fputs("[STT] skip (low-energy short phantom \(String(format:"%.1f", dbLevel))dB '\(trimmed)')\n", stderr)
+            fputs("[STT] skip (low-energy short phantom \(String(format:"%.1f", dbLevel))dB chars=\(trimmed.count))\n", stderr)
             let seg = Segment(text: "", timestamp: Date(), duration: Double(samples.count) / STTAudioUtilities.sampleRate)
             return TranscriptionResult(segment: seg, isFinal: true)
         }

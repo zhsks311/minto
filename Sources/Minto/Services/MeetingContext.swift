@@ -41,7 +41,7 @@ public final class MeetingContext: ObservableObject {
         self.runningSummary = ""
         self.finalSummary = nil
         let terms = glossary.split(whereSeparator: { $0.isNewline }).count
-        fputs("[Meeting] context set — topic: \"\(topic)\", glossary terms: \(terms), doc: \(document.count)자\n", stderr)
+        fputs("[Meeting] context set — topicLen=\(topic.count), glossary terms=\(terms), docLen=\(document.count)\n", stderr)
     }
 
     /// 맥락 초기화.
