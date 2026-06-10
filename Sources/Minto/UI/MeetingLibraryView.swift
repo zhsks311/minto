@@ -10,45 +10,11 @@ private enum LibraryPalette {
     static let accentSoft = Color.accentColor.opacity(0.12)
 }
 
-/// 비활성(non-key) 윈도우에서 `.borderedProminent`가 강조 배경을 지우면서 흰 라벨만 남겨
-/// 버튼이 통째로 사라져 보이는 문제를 피하기 위해, 윈도우 키 상태와 무관하게
-/// 항상 같은 배경을 직접 그리는 강조 버튼 스타일.
-private struct ProminentActionButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    var horizontalPadding: CGFloat = 12
-    var verticalPadding: CGFloat = 6
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(.white)
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, verticalPadding)
-            .background(Capsule().fill(isEnabled ? Color.accentColor : Color.gray.opacity(0.45)))
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .contentShape(Capsule())
-    }
-}
-
 private struct MeetingSearchMatch {
     let badge: String
     let text: String
 }
 
-/// AI 답변 CTA용 자가 배경 버튼 스타일.
-/// .borderedProminent는 비활성(non-key) 윈도우에서 배경이 사라지는 문제가 있어 직접 배경을 그린다.
-private struct SearchAnswerCTAButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(isEnabled ? Color.accentColor : Color.gray.opacity(0.45)))
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .contentShape(Capsule())
-    }
-}
 
 /// 회의 목록 + 검색 + 선택한 회의 미리보기.
 /// v2는 검색을 첫 화면의 중심 작업으로 두고, 상세 리포트 전체보다 빠른 회고/탐색에 집중한다.
@@ -68,6 +34,9 @@ public struct MeetingLibraryView: View {
     // 인덱스는 회의 목록 변경 시에만, 결과는 디바운스된 쿼리 변경 시에만 갱신한다.
     @State private var searchIndex = MeetingSearchIndex(chunks: [])
     @State private var meetingSearchResults: [MeetingSearchResult] = []
+    /// 필터 미적용 전체 검색 결과. AI 답변 생성에는 필터된 결과 대신 이 값을 사용해
+    /// 요약/결정 등 근거가 누락되지 않게 한다.
+    @State private var allMeetingSearchResults: [MeetingSearchResult] = []
     @State private var showingLiveMeeting = false
     @State private var showingExportOptions = false
     @State private var showingConfluenceExport = false
@@ -80,6 +49,10 @@ public struct MeetingLibraryView: View {
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @State private var fileImportTask: Task<Void, Never>?
+    /// 파일 선택 후 맥락 입력 시트를 띄울 URL. nil이면 시트 미표시.
+    @State private var fileImportSetupURL: URL?
+    /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
+    @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
@@ -131,15 +104,13 @@ public struct MeetingLibraryView: View {
         }
         .onChange(of: store.meetings) { _, _ in
             searchAnswerController.reset()
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
             rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
         }
         .onChange(of: searchText) { _, _ in
             searchAnswerController.reset()
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
             if hasLiveMeeting {
                 showingLiveMeeting = true
                 selectedID = nil
@@ -162,8 +133,7 @@ public struct MeetingLibraryView: View {
             if !showingLiveMeeting {
                 // 회의가 저장되지 않고 끝나면 store.meetings onChange가 안 불려
                 // 이전 검색의 답변 디테일이 남을 수 있어 여기서도 닫는다.
-                showingSearchAnswerDetail = false
-                searchAnswerCitationAnchor = nil
+                dismissSearchAnswerPresentation()
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
@@ -172,21 +142,18 @@ public struct MeetingLibraryView: View {
                 showingLiveMeeting = true
             } else if !viewModel.isRecording {
                 showingLiveMeeting = false
-                showingSearchAnswerDetail = false
-                searchAnswerCitationAnchor = nil
+                dismissSearchAnswerPresentation()
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
         .onChange(of: answerSettings.isEnabled) { _, _ in
             searchAnswerController.reset(clearReadiness: true)
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: answerSettings.selectedProvider) { _, _ in
             searchAnswerController.reset(clearReadiness: true)
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: fileImportUseCase.state) { _, state in
@@ -230,6 +197,22 @@ public struct MeetingLibraryView: View {
                     record: exportRecord,
                     confluence: confluence,
                     openSettings: openSettingsWindow
+                )
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { fileImportSetupURL != nil },
+            set: { if !$0 { fileImportSetupURL = nil } }
+        )) {
+            if let url = fileImportSetupURL {
+                FileImportSetupSheet(
+                    fileURL: url,
+                    onImport: { topic, glossary in
+                        startFileImport(url: url, topic: topic, glossary: glossary)
+                    },
+                    onSkip: {
+                        startFileImport(url: url, topic: nil, glossary: "")
+                    }
                 )
             }
         }
@@ -381,13 +364,14 @@ public struct MeetingLibraryView: View {
 
     private var detailColumn: some View {
         Group {
-            if showingLiveMeeting, hasLiveMeeting {
+            switch detailContent {
+            case .live:
                 liveMeetingDetail
-            } else if isSearching, showingSearchAnswerDetail {
+            case .searchAnswer:
                 searchAnswerDetail
-            } else if let record = selectedRecord {
+            case .preview(let record):
                 meetingPreview(record)
-            } else {
+            case .empty:
                 VStack(spacing: 10) {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 34))
@@ -446,13 +430,13 @@ public struct MeetingLibraryView: View {
                         }
                         .buttonStyle(.bordered)
                         Button {
-                            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                            searchAnswerController.generate(query: trimmedSearch, results: allMeetingSearchResults)
                             searchAnswerCitationAnchor = nil
                         } label: {
                             Label("다시 만들기", systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.bordered)
-                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
                     }
                 } else if let errorMessage = searchAnswerController.errorMessage {
                     VStack(alignment: .leading, spacing: 10) {
@@ -461,16 +445,16 @@ public struct MeetingLibraryView: View {
                             .foregroundColor(.red)
                             .fixedSize(horizontal: false, vertical: true)
                         Button {
-                            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+                            searchAnswerController.generate(query: trimmedSearch, results: allMeetingSearchResults)
                             searchAnswerCitationAnchor = nil
                         } label: {
                             Label("다시 시도", systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.bordered)
-                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
                     }
                 } else {
-                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -691,7 +675,7 @@ public struct MeetingLibraryView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: meetingSearchResults.count))
+                    Text(searchAnswerController.hintText(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -710,7 +694,8 @@ public struct MeetingLibraryView: View {
 
     private func generateAnswerButton(title: String) -> some View {
         Button {
-            searchAnswerController.generate(query: trimmedSearch, results: meetingSearchResults)
+            // 필터와 무관하게 전체 검색 결과를 근거로 넘겨 요약·결정 등 컨텍스트가 누락되지 않게 한다.
+            searchAnswerController.generate(query: trimmedSearch, results: allMeetingSearchResults)
             // generate()가 가드(provider 미준비)로 조기 반환해도 디테일을 연다 —
             // 에러 메시지를 디테일 영역에서 크게 보여주는 것이 의도.
             showingSearchAnswerDetail = true
@@ -719,8 +704,8 @@ public struct MeetingLibraryView: View {
             Label(title, systemImage: "sparkles")
                 .font(.system(size: 12, weight: .semibold))
         }
-        .buttonStyle(SearchAnswerCTAButtonStyle())
-        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
+        .buttonStyle(ProminentActionButtonStyle())
+        .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: allMeetingSearchResults.count))
     }
 
     private func searchAnswerCitationMeta(_ citation: MeetingSearchAnswerCitation) -> String {
@@ -741,14 +726,23 @@ public struct MeetingLibraryView: View {
                 .padding(.vertical, 5)
                 .background(LibraryPalette.elevated)
                 .clipShape(Capsule())
-            ForEach(["요약", "전사", "주제"], id: \.self) { label in
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(Color.secondary.opacity(0.10))
-                    .clipShape(Capsule())
+            // .all은 칩을 표시하지 않는다 — 전체 칩이 없어도 모두 선택 해제하면 .all로 돌아온다.
+            ForEach([SearchKindFilter.summary, .transcript, .topic], id: \.label) { filter in
+                let active = activeSearchFilter == filter
+                Button {
+                    activeSearchFilter = active ? .all : filter
+                    refreshSearchResults()
+                    selectFirstAvailableIfNeeded(preferFirstResult: true)
+                } label: {
+                    Text(filter.label)
+                        .font(.system(size: 11, weight: active ? .semibold : .medium))
+                        .foregroundColor(active ? .white : .secondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(active ? Color.accentColor : Color.secondary.opacity(0.10))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -782,10 +776,27 @@ public struct MeetingLibraryView: View {
                 .foregroundColor(.secondary)
             Text("검색 결과가 없어요")
                 .font(.system(size: 13, weight: .semibold))
-            Text("다른 회의명, 안건, 결정사항으로 다시 검색해 보세요")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            if activeSearchFilter != .all {
+                VStack(spacing: 4) {
+                    Text("'\(activeSearchFilter.label)' 필터를 해제하면 더 많은 결과를 볼 수 있어요")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("필터 해제") {
+                        activeSearchFilter = .all
+                        refreshSearchResults()
+                        selectFirstAvailableIfNeeded(preferFirstResult: true)
+                    }
+                    .font(.system(size: 12))
+                    .buttonStyle(.borderless)
+                    .foregroundColor(.accentColor)
+                }
+            } else {
+                Text("다른 회의명, 안건, 결정사항으로 다시 검색해 보세요")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -912,7 +923,8 @@ public struct MeetingLibraryView: View {
     }
 
     private func meetingRow(_ record: MeetingRecord) -> some View {
-        // 오른쪽이 AI 답변 디테일을 보여주는 동안에는 행 강조를 억제해
+        // 라이브 중에도 선택 행 강조를 유지한다.
+        // AI 답변 디테일이 열려 있는 동안만 강조를 억제해
         // 좌우가 서로 다른 대상을 가리키는 것처럼 보이지 않게 한다. 선택 자체는 보존.
         let selected = selectedID == record.id && !(isSearching && showingSearchAnswerDetail)
         let match = primaryMatch(for: record)
@@ -920,8 +932,7 @@ public struct MeetingLibraryView: View {
         return Button {
             selectedID = record.id
             showingLiveMeeting = false
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
         } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline) {
@@ -1775,6 +1786,75 @@ public struct MeetingLibraryView: View {
         }
     }
 
+    // MARK: - Search kind filter
+
+    /// 검색 결과를 chunk 종류로 좁히는 필터.
+    /// 칩 라벨 ↔ Kind 집합 매핑:
+    ///   요약  → summary, section, decision, actionItem, openQuestion
+    ///   전사  → transcript
+    ///   주제  → topic, title, keywords
+    private enum SearchKindFilter: CaseIterable {
+        case all
+        case summary
+        case transcript
+        case topic
+
+        var label: String {
+            switch self {
+            case .all: return "전체"
+            case .summary: return "요약"
+            case .transcript: return "전사"
+            case .topic: return "주제"
+            }
+        }
+
+        /// 이 필터가 허용하는 MeetingSearchChunk.Kind 집합. nil이면 전체 허용.
+        var allowedKinds: Set<MeetingSearchChunk.Kind>? {
+            switch self {
+            case .all: return nil
+            case .summary: return [.summary, .section, .decision, .actionItem, .openQuestion]
+            case .transcript: return [.transcript]
+            case .topic: return [.topic, .title, .keywords]
+            }
+        }
+
+        func matches(_ result: MeetingSearchResult) -> Bool {
+            guard let kinds = allowedKinds else { return true }
+            return kinds.contains(result.chunk.kind)
+        }
+    }
+
+    // MARK: - Detail content state
+
+    private enum DetailContent {
+        case live
+        case searchAnswer
+        case preview(MeetingRecord)
+        case empty
+    }
+
+    /// 오른쪽 디테일 영역에 무엇을 표시할지 결정하는 단일 분기점.
+    /// 우선순위: 라이브 회의 > AI 답변 > 회의 미리보기 > 빈 상태.
+    private var detailContent: DetailContent {
+        if showingLiveMeeting, hasLiveMeeting {
+            return .live
+        }
+        if isSearching, showingSearchAnswerDetail {
+            return .searchAnswer
+        }
+        if let record = selectedRecord {
+            return .preview(record)
+        }
+        return .empty
+    }
+
+    /// showingSearchAnswerDetail / searchAnswerCitationAnchor를 함께 닫는 헬퍼.
+    /// 흩어진 리셋을 한 곳에서 관리한다.
+    private func dismissSearchAnswerPresentation() {
+        showingSearchAnswerDetail = false
+        searchAnswerCitationAnchor = nil
+    }
+
     // MARK: - Search
 
     private var trimmedSearch: String {
@@ -1845,12 +1925,32 @@ public struct MeetingLibraryView: View {
     }
 
     private func rebuildSearchIndex() {
+        // 디스크 인덱스가 있고 현재 meetings와 ID 집합이 일치하면 재빌드를 생략한다.
+        // MeetingSearchIndexStore.load()는 schemaVersion·chunkingVersion 불일치 시 nil을 반환한다.
+        let indexStore = MeetingSearchIndexStore(directory: store.storageDirectory)
+        if let loaded = indexStore.load() {
+            let indexedIDs = Set(loaded.chunks.map(\.meetingID))
+            let currentIDs = Set(store.meetings.map(\.id))
+            if indexedIDs == currentIDs {
+                searchIndex = loaded
+                refreshSearchResults()
+                return
+            }
+        }
         searchIndex = MeetingSearchIndex(records: store.meetings)
         refreshSearchResults()
     }
 
     private func refreshSearchResults() {
-        meetingSearchResults = isSearching ? searchIndex.search(trimmedSearch, limit: Int.max) : []
+        guard isSearching else {
+            meetingSearchResults = []
+            allMeetingSearchResults = []
+            activeSearchFilter = .all
+            return
+        }
+        let all = searchIndex.search(trimmedSearch, limit: Int.max)
+        allMeetingSearchResults = all
+        meetingSearchResults = activeSearchFilter == .all ? all : all.filter { activeSearchFilter.matches($0) }
     }
 
     private func selectSearchAnswerCitation(_ citation: MeetingSearchAnswerCitation) {
@@ -2260,15 +2360,25 @@ public struct MeetingLibraryView: View {
         panel.allowedContentTypes = MeetingFileImportUseCase.supportedContentTypes
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            fileImportTask?.cancel()
-            fileImportTask = Task { @MainActor in
-                do {
-                    _ = try await fileImportUseCase.importFile(url)
-                } catch is CancellationError {
-                    // 취소 상태는 use-case가 이미 반영한다.
-                } catch {
-                    // 실패 상태는 use-case가 이미 반영한다.
-                }
+            // 파일 선택 후 주제·용어집 입력 시트를 띄운다.
+            fileImportSetupURL = url
+        }
+    }
+
+    private func startFileImport(url: URL, topic: String?, glossary: String) {
+        fileImportSetupURL = nil
+        fileImportTask?.cancel()
+        fileImportTask = Task { @MainActor in
+            do {
+                _ = try await fileImportUseCase.importFile(
+                    url,
+                    topic: topic.flatMap { $0.isEmpty ? nil : $0 },
+                    glossary: glossary
+                )
+            } catch is CancellationError {
+                // 취소 상태는 use-case가 이미 반영한다.
+            } catch {
+                // 실패 상태는 use-case가 이미 반영한다.
             }
         }
     }

@@ -43,6 +43,12 @@ public struct MeetingSearchIndexStore: Sendable {
         return index
     }
 
+    /// 디스크의 인덱스 파일을 삭제한다.
+    /// save() 실패 후 stale 캐시가 남지 않도록 호출한다.
+    public func invalidate() {
+        try? FileManager.default.removeItem(at: indexURL)
+    }
+
     public func load() -> MeetingSearchIndex? {
         guard let data = try? Data(contentsOf: indexURL) else { return nil }
         guard let snapshot = try? Self.decoder.decode(MeetingSearchIndexSnapshot.self, from: data) else {

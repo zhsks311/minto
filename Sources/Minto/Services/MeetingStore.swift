@@ -107,6 +107,9 @@ public final class MeetingStore: ObservableObject {
     public var searchIndexURL: URL { searchIndexStore.indexURL }
 
     private func rebuildSearchIndex() {
-        searchIndexStore.rebuild(from: meetings)
+        let index = MeetingSearchIndex(records: meetings)
+        if !searchIndexStore.save(index) {
+            searchIndexStore.invalidate()
+        }
     }
 }

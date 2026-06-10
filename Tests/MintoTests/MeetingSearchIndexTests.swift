@@ -167,3 +167,90 @@ struct MeetingSearchIndexTests {
         #expect(results.contains { $0.chunk.kind == .summary })
     }
 }
+
+@Suite("MeetingSearchIndexStore 디스크 캐시")
+struct MeetingSearchIndexStoreDiskCacheTests {
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MeetingSearchIndexStoreTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func sampleRecord(id: UUID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!) -> MeetingRecord {
+        MeetingRecord(
+            id: id,
+            title: "테스트 회의",
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            durationSeconds: 60,
+            summary: MeetingSummary(leadAnswer: "요약")
+        )
+    }
+
+    @Test("저장한 인덱스를 로드하면 동일한 chunk를 반환한다")
+    func loadReturnsSavedIndex() throws {
+        let dir = try tempDir()
+        let indexStore = MeetingSearchIndexStore(directory: dir)
+        let record = sampleRecord()
+        let built = MeetingSearchIndex(records: [record])
+
+        indexStore.save(built)
+        let loaded = indexStore.load()
+
+        #expect(loaded != nil)
+        #expect(loaded?.chunks.map(\.id).sorted() == built.chunks.map(\.id).sorted())
+    }
+
+    @Test("저장된 인덱스의 meetingID 집합이 현재 meetings와 일치하면 정합 판정")
+    func idSetMatchIndicatesCompatibility() throws {
+        let dir = try tempDir()
+        let indexStore = MeetingSearchIndexStore(directory: dir)
+        let record = sampleRecord()
+        indexStore.save(MeetingSearchIndex(records: [record]))
+
+        let loaded = indexStore.load()
+        let indexedIDs = Set(loaded?.chunks.map(\.meetingID) ?? [])
+        let currentIDs = Set([record.id])
+
+        #expect(indexedIDs == currentIDs)
+    }
+
+    @Test("회의 ID 집합이 달라지면 불일치 판정 — 재빌드 필요")
+    func idSetMismatchIndicatesRebuildNeeded() throws {
+        let dir = try tempDir()
+        let indexStore = MeetingSearchIndexStore(directory: dir)
+        let record = sampleRecord()
+        indexStore.save(MeetingSearchIndex(records: [record]))
+
+        let loaded = indexStore.load()
+        let indexedIDs = Set(loaded?.chunks.map(\.meetingID) ?? [])
+        // 회의가 한 건 추가된 상황
+        let newID = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let currentIDs: Set<UUID> = [record.id, newID]
+
+        #expect(indexedIDs != currentIDs)
+    }
+
+    @Test("인덱스 파일이 없으면 load는 nil을 반환한다")
+    func loadReturnsNilWhenNoFile() throws {
+        let dir = try tempDir()
+        let indexStore = MeetingSearchIndexStore(directory: dir)
+
+        #expect(indexStore.load() == nil)
+    }
+
+    @Test("save 실패 후 invalidate를 호출하면 load가 nil을 반환한다")
+    func invalidateAfterSaveFailureRemovesStaleIndex() throws {
+        let dir = try tempDir()
+        let indexStore = MeetingSearchIndexStore(directory: dir)
+        let record = sampleRecord()
+
+        // 정상 저장 → load 성공 확인
+        indexStore.save(MeetingSearchIndex(records: [record]))
+        #expect(indexStore.load() != nil)
+
+        // invalidate → load가 nil 반환 (재빌드 경로로 진입)
+        indexStore.invalidate()
+        #expect(indexStore.load() == nil)
+    }
+}
