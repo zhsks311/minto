@@ -159,6 +159,20 @@ public struct MeetingSummary: Codable, Sendable, Equatable {
         MeetingSummary(leadAnswer: text)
     }
 
+    /// `plain(_:)` 폴백 형태인지 — leadAnswer만 있고 구조화 필드(title/leadQuestion/sections/
+    /// decisions/actionItems/openQuestions/keywords)가 전부 비어 있는 상태.
+    /// 정상 요약이 우연히 이 형태일 가능성은 수용한다(재요약 버튼이 노출돼도 무해).
+    public var isPlainFallback: Bool {
+        !leadAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && leadQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && sections.isEmpty
+            && decisions.isEmpty
+            && actionItems.isEmpty
+            && openQuestions.isEmpty
+            && keywords.isEmpty
+    }
+
     /// 보고서(.md)용 마크다운 렌더.
     public func markdown() -> String {
         var lines: [String] = []
