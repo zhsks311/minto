@@ -15,7 +15,13 @@ public final class GlossaryStore: ObservableObject {
     private let decoder: JSONDecoder
     private var meetingObservationCancellable: AnyCancellable?
 
-    public init(fileURL: URL? = nil) {
+    /// - Parameters:
+    ///   - fileURL: 저장 경로. nil이면 ~/Library/Application Support/Minto/glossary.json.
+    ///   - meetingsPublisher: 회의 목록 publisher. nil이면 후보 추출 구독을 생략한다(테스트 격리용).
+    public init(
+        fileURL: URL? = nil,
+        meetingsPublisher: AnyPublisher<[MeetingRecord], Never>? = MeetingStore.shared.$meetings.eraseToAnyPublisher()
+    ) {
         if let fileURL {
             self.fileURL = fileURL
         } else {
@@ -35,9 +41,12 @@ public final class GlossaryStore: ObservableObject {
         decoder = dec
 
         reload()
-        // init 완료 후 이벤트 루프에서 배선 — MeetingStore.shared와의 순환 초기화 방지.
-        Task { @MainActor [weak self] in
-            self?.startObservingMeetings()
+        // meetingsPublisher가 nil이면 구독 생략(테스트 격리).
+        // nil이 아니면 init 완료 후 이벤트 루프에서 배선 — MeetingStore.shared와의 순환 초기화 방지.
+        if let publisher = meetingsPublisher {
+            Task { @MainActor [weak self] in
+                self?.startObservingMeetings(publisher: publisher)
+            }
         }
     }
 
@@ -62,10 +71,11 @@ public final class GlossaryStore: ObservableObject {
     }
 
     /// 신규 회의의 keywords에서 후보를 추출해 pendingCandidates에 추가한다.
-    /// GlossaryStore.init 완료 후 비동기로 호출되어 MeetingStore.shared와의 순환 초기화를 피한다.
-    public func startObservingMeetings() {
+    /// init에서 비동기로 호출되며, 재호출 시에는 이미 구독 중이면 무시한다.
+    private func startObservingMeetings(publisher: AnyPublisher<[MeetingRecord], Never>) {
+        guard meetingObservationCancellable == nil else { return }
         var knownIDs = Set(MeetingStore.shared.meetings.map(\.id))
-        meetingObservationCancellable = MeetingStore.shared.$meetings
+        meetingObservationCancellable = publisher
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] meetings in
@@ -126,18 +136,20 @@ public final class GlossaryStore: ObservableObject {
         existingPending: [GlossaryCandidate],
         sourceMeetingID: UUID
     ) -> [GlossaryCandidate] {
+        // en_US_POSIX: 순수 함수 테스트 재현성 확보 (locale 의존 없이 동일 결과 보장).
+        let foldLocale = Locale(identifier: "en_US_POSIX")
         let blockedByEntries = Set(
             existingEntries.flatMap { [$0.canonical] + $0.aliases }
-                .map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) }
+                .map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: foldLocale) }
         )
         let blockedByPending = Set(
-            existingPending.map { $0.term.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) }
+            existingPending.map { $0.term.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: foldLocale) }
         )
 
         return keywords
             .filter { $0.count >= 2 }
             .filter { keyword in
-                let key = keyword.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                let key = keyword.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: foldLocale)
                 return !blockedByEntries.contains(key) && !blockedByPending.contains(key)
             }
             .map { GlossaryCandidate(term: $0, sourceMeetingID: sourceMeetingID) }
@@ -168,8 +180,11 @@ public final class GlossaryStore: ObservableObject {
         }
         nextEntries.insert(entry, at: 0)
         nextEntries = Self.cleaned(nextEntries)
-        guard save(nextEntries) else { return false }
+        // 등록된 canonical과 일치하는 pending 후보를 함께 제거해 목록에 잔존하지 않게 한다.
+        let nextPending = candidatesExcluding(canonical: entry.normalizedCanonical)
+        guard save(nextEntries, pendingCandidates: nextPending) else { return false }
         entries = nextEntries
+        pendingCandidates = nextPending
         return true
     }
 
@@ -201,8 +216,11 @@ public final class GlossaryStore: ObservableObject {
         nextEntries[nextIndex].tags = Self.parseList(tagsText)
         nextEntries[nextIndex].updatedAt = Date()
         nextEntries = Self.cleaned(nextEntries)
-        guard save(nextEntries) else { return false }
+        // 등록된 canonical과 일치하는 pending 후보를 함께 제거해 목록에 잔존하지 않게 한다.
+        let nextPending = candidatesExcluding(canonical: trimmedCanonical)
+        guard save(nextEntries, pendingCandidates: nextPending) else { return false }
         entries = nextEntries
+        pendingCandidates = nextPending
         return true
     }
 
@@ -270,6 +288,18 @@ public final class GlossaryStore: ObservableObject {
         }
     }
 
+    /// 등록된 canonical과 folding-equal한 pending 후보를 제외한 목록을 반환한다.
+    private func candidatesExcluding(canonical: String) -> [GlossaryCandidate] {
+        let foldLocale = Locale(identifier: "en_US_POSIX")
+        let key = canonical.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: foldLocale)
+        return pendingCandidates.filter { candidate in
+            candidate.term.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: foldLocale) != key
+        }
+    }
+
+    /// - Parameters:
+    ///   - entriesToSave: nil이면 현재 메모리의 entries를 그대로 저장한다.
+    ///   - pendingToSave: nil이면 현재 메모리의 pendingCandidates를 그대로 저장한다.
     @discardableResult
     private func save(_ entriesToSave: [GlossaryEntry]? = nil, pendingCandidates pendingToSave: [GlossaryCandidate]? = nil) -> Bool {
         do {

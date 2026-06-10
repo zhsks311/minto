@@ -17,10 +17,10 @@ struct GlossaryStoreTests {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(store.add(canonical: "Liquibase", aliasesText: "리퀴베이스, liqui base", description: "DB 스키마 변경 관리") == true)
 
-        let reloaded = GlossaryStore(fileURL: url)
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(reloaded.entries.count == 1)
         #expect(reloaded.entries[0].canonical == "Liquibase")
         #expect(reloaded.entries[0].aliases == ["리퀴베이스", "liqui base"])
@@ -32,7 +32,7 @@ struct GlossaryStoreTests {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(store.add(canonical: "Liquibase") == true)
 
         let data = try Data(contentsOf: url)
@@ -56,7 +56,7 @@ struct GlossaryStoreTests {
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(legacyEntries).write(to: url, options: .atomic)
 
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(store.entries.map(\.canonical) == ["LegacyTerm"])
 
         let data = try Data(contentsOf: url)
@@ -71,7 +71,7 @@ struct GlossaryStoreTests {
     func rejectsEmptyAndDeduplicatesCanonical() {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
 
         #expect(store.add(canonical: "   ") == false)
         #expect(store.add(canonical: "Liquibase", description: "old") == true)
@@ -86,7 +86,7 @@ struct GlossaryStoreTests {
     func updatePreservesIdentityAndEnabled() {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
 
         #expect(store.add(canonical: "Liquibase", description: "old", category: "개발") == true)
         let entry = store.entries[0]
@@ -108,7 +108,7 @@ struct GlossaryStoreTests {
         #expect(updated.description == "DB 스키마 변경 관리")
         #expect(updated.category == "백엔드팀")
 
-        let reloaded = GlossaryStore(fileURL: url)
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(reloaded.entries[0].category == "백엔드팀")
     }
 
@@ -116,7 +116,7 @@ struct GlossaryStoreTests {
     func updateReplacesCollidingCanonical() {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
 
         #expect(store.add(canonical: "Flyway") == true)
         #expect(store.add(canonical: "Liquibase") == true)
@@ -133,7 +133,7 @@ struct GlossaryStoreTests {
     func updateRejectsEmptyCanonicalAndUnknownID() {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
 
         #expect(store.add(canonical: "Liquibase", description: "유지") == true)
         let id = store.entries[0].id
@@ -147,7 +147,7 @@ struct GlossaryStoreTests {
     func categoriesListsUsedCategories() {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
 
         #expect(store.add(canonical: "Liquibase", category: "개발") == true)
         #expect(store.add(canonical: "FBK", category: "나만의-백엔드팀") == true)
@@ -164,7 +164,7 @@ struct GlossaryStoreTests {
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directoryURL) }
 
-        let store = GlossaryStore(fileURL: directoryURL)
+        let store = GlossaryStore(fileURL: directoryURL, meetingsPublisher: nil)
         #expect(store.add(canonical: "Liquibase") == false)
         #expect(store.entries.isEmpty)
     }
@@ -173,7 +173,7 @@ struct GlossaryStoreTests {
     func ranksCandidatesByTopic() {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
 
         #expect(store.add(canonical: "Notion", tagsText: "문서") == true)
         #expect(store.add(canonical: "Liquibase", aliasesText: "리퀴베이스", description: "DB 스키마 변경 관리", tagsText: "db") == true)
@@ -189,7 +189,7 @@ struct GlossaryStoreTests {
     func excludesZeroScoreCandidates() {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
 
         #expect(store.add(canonical: "Notion", tagsText: "문서") == true)
 
@@ -268,7 +268,7 @@ struct GlossaryStoreTests {
         """
         try json.data(using: .utf8)!.write(to: url, options: .atomic)
 
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(store.pendingCandidates.isEmpty)
     }
 
@@ -278,7 +278,7 @@ struct GlossaryStoreTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         let meetingID = UUID()
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         let candidate = GlossaryCandidate(term: "Liquibase", sourceMeetingID: meetingID)
         store.addCandidates([candidate])
         #expect(store.pendingCandidates.count == 1)
@@ -286,7 +286,7 @@ struct GlossaryStoreTests {
         store.dismissCandidate(candidate.id)
         #expect(store.pendingCandidates.isEmpty)
 
-        let reloaded = GlossaryStore(fileURL: url)
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(reloaded.pendingCandidates.isEmpty)
     }
 
@@ -296,7 +296,7 @@ struct GlossaryStoreTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         let meetingID = UUID()
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         let candidate = GlossaryCandidate(term: "Flyway", sourceMeetingID: meetingID)
         store.addCandidates([candidate])
         #expect(store.pendingCandidates.count == 1)
@@ -304,7 +304,7 @@ struct GlossaryStoreTests {
         store.approveCandidate(candidate.id)
         #expect(store.pendingCandidates.isEmpty)
 
-        let reloaded = GlossaryStore(fileURL: url)
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(reloaded.pendingCandidates.isEmpty)
     }
 
@@ -314,14 +314,14 @@ struct GlossaryStoreTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         let meetingID = UUID()
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         store.addCandidates([
             GlossaryCandidate(term: "ArgoCD", sourceMeetingID: meetingID),
             GlossaryCandidate(term: "Terraform", sourceMeetingID: meetingID)
         ])
         #expect(store.pendingCandidates.count == 2)
 
-        let reloaded = GlossaryStore(fileURL: url)
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(reloaded.pendingCandidates.count == 2)
         #expect(reloaded.pendingCandidates.map(\.term).sorted() == ["ArgoCD", "Terraform"])
     }
@@ -381,7 +381,7 @@ struct GlossaryStoreTests {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let store = GlossaryStore(fileURL: url)
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         let meetingID = UUID()
 
         // 19개 먼저 추가 (suggestedAt 간격 1초)
@@ -408,5 +408,55 @@ struct GlossaryStoreTests {
         #expect(!store.pendingCandidates.map(\.term).contains("Term1"))
         #expect(!store.pendingCandidates.map(\.term).contains("Term2"))
         #expect(store.pendingCandidates.map(\.term).contains("Term3"))
+    }
+
+    // MARK: - pending 후보 자동 정리 테스트
+
+    @Test("add() 성공 후 같은 term의 pending 후보를 case-insensitive로 제거한다")
+    func addRemovesMatchingPendingCandidate() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let meetingID = UUID()
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+
+        // "liquibase"와 대소문자만 다른 pending 후보 추가
+        store.addCandidates([
+            GlossaryCandidate(term: "Liquibase", sourceMeetingID: meetingID),
+            GlossaryCandidate(term: "LIQUIBASE", sourceMeetingID: meetingID),
+            GlossaryCandidate(term: "Flyway", sourceMeetingID: meetingID)
+        ])
+        #expect(store.pendingCandidates.count == 3)
+
+        // "liquibase" canonical로 add → 일치하는 후보 2개 제거
+        #expect(store.add(canonical: "liquibase") == true)
+
+        #expect(store.pendingCandidates.count == 1)
+        #expect(store.pendingCandidates[0].term == "Flyway")
+    }
+
+    @Test("update() 성공 후 변경된 canonical과 일치하는 pending 후보를 제거한다")
+    func updateRemovesMatchingPendingCandidate() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let meetingID = UUID()
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+
+        #expect(store.add(canonical: "Flyway") == true)
+        let entryID = store.entries[0].id
+
+        // update 대상 canonical과 일치하는 pending 후보 추가
+        store.addCandidates([
+            GlossaryCandidate(term: "ArgoCD", sourceMeetingID: meetingID),
+            GlossaryCandidate(term: "flyway", sourceMeetingID: meetingID)
+        ])
+        #expect(store.pendingCandidates.count == 2)
+
+        // canonical을 "flyway"로 update → "flyway" 후보 제거
+        #expect(store.update(entryID, canonical: "flyway") == true)
+
+        #expect(store.pendingCandidates.count == 1)
+        #expect(store.pendingCandidates[0].term == "ArgoCD")
     }
 }

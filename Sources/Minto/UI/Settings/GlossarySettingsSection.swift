@@ -13,6 +13,10 @@ struct GlossarySettingsSection: View {
     /// nil이 아니면 폼이 해당 용어의 수정 모드로 동작한다.
     @State private var editingGlossaryEntryID: UUID? = nil
     @State private var collapsedGlossaryCategories: Set<String> = []
+    /// 후보 [추가]로 폼을 열었을 때의 출처 후보 id.
+    /// 저장 성공 시 approveCandidate를 호출해 목록에서 제거한다.
+    /// 폼 취소 시에는 nil만 초기화하고 후보는 유지한다.
+    @State private var pendingCandidateIDForForm: UUID? = nil
 
     private static let glossaryNewCategoryTag = "__new-glossary-category__"
 
@@ -116,6 +120,7 @@ struct GlossarySettingsSection: View {
     }
 
     /// [추가] 버튼 동작: 폼을 열고 canonical을 프리필한다. 자동 등록하지 않는다.
+    /// 후보 제거는 저장 성공 시에만 수행한다 — 취소 시 후보가 소실되지 않도록.
     private func prefillFormForCandidate(_ candidate: GlossaryCandidate) {
         editingGlossaryEntryID = nil
         glossaryCanonicalInput = candidate.term
@@ -126,8 +131,8 @@ struct GlossarySettingsSection: View {
         if glossaryCategoryInput == Self.glossaryNewCategoryTag {
             glossaryCategoryInput = glossaryCategoryOptions.first ?? "개발"
         }
+        pendingCandidateIDForForm = candidate.id
         showGlossaryAddForm = true
-        glossaryStore.approveCandidate(candidate.id)
     }
 
     /// 묶음 하나를 헤더 + 용어 행들로 묶은 카드. 헤더 클릭으로 접고 펼친다.
@@ -466,6 +471,11 @@ struct GlossarySettingsSection: View {
             )
         }
         if saved {
+            // 후보 [추가]로 열린 폼이면 저장 성공 후 후보를 제거한다.
+            // (취소 시에는 cancelGlossaryEditing에서 nil만 초기화 — 후보 유지)
+            if let candidateID = pendingCandidateIDForForm {
+                glossaryStore.approveCandidate(candidateID)
+            }
             // 새 묶음에 저장했으면 그 묶음이 펼쳐진 상태로 보이게 한다.
             collapsedGlossaryCategories.remove(effectiveGlossaryCategory)
             cancelGlossaryEditing()
@@ -487,6 +497,7 @@ struct GlossarySettingsSection: View {
     private func cancelGlossaryEditing() {
         editingGlossaryEntryID = nil
         showGlossaryAddForm = false
+        pendingCandidateIDForForm = nil  // 후보는 유지, id 참조만 해제
         glossaryCanonicalInput = ""
         glossaryAliasesInput = ""
         glossaryDescriptionInput = ""
