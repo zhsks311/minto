@@ -34,21 +34,6 @@ private struct MeetingSearchMatch {
     let text: String
 }
 
-/// AI 답변 CTA용 자가 배경 버튼 스타일.
-/// .borderedProminent는 비활성(non-key) 윈도우에서 배경이 사라지는 문제가 있어 직접 배경을 그린다.
-private struct SearchAnswerCTAButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(isEnabled ? Color.accentColor : Color.gray.opacity(0.45)))
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .contentShape(Capsule())
-    }
-}
 
 /// 회의 목록 + 검색 + 선택한 회의 미리보기.
 /// v2는 검색을 첫 화면의 중심 작업으로 두고, 상세 리포트 전체보다 빠른 회고/탐색에 집중한다.
@@ -719,7 +704,7 @@ public struct MeetingLibraryView: View {
             Label(title, systemImage: "sparkles")
                 .font(.system(size: 12, weight: .semibold))
         }
-        .buttonStyle(SearchAnswerCTAButtonStyle())
+        .buttonStyle(ProminentActionButtonStyle())
         .disabled(!searchAnswerController.canGenerate(query: trimmedSearch, resultCount: meetingSearchResults.count))
     }
 
