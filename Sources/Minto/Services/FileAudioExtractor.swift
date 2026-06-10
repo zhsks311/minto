@@ -43,15 +43,15 @@ public enum FileAudioExtractionError: LocalizedError, Sendable, Equatable {
     public var errorDescription: String? {
         switch self {
         case .unsupportedFile:
-            return "지원하지 않는 파일 형식입니다. 음성 또는 영상 파일을 선택하세요."
+            return "지원하지 않는 파일 형식이에요. 오디오 파일이나 mp4/mov 영상을 선택해 주세요."
         case .noAudioTrack:
-            return "파일에서 음성 트랙을 찾지 못했습니다."
+            return "이 파일에는 오디오 트랙이 없어요."
         case .readerFailed(let message):
-            return "파일 음성을 읽지 못했습니다: \(message)"
+            return "파일을 열 수 없어요. 손상되었거나 지원하지 않는 코덱일 수 있어요. (\(message))"
         case .invalidAudioFormat:
             return "파일 음성 포맷을 처리할 수 없습니다."
         case .noReadableAudio:
-            return "전사할 수 있는 음성 데이터가 없습니다."
+            return "오디오를 읽지 못했어요. 파일이 손상됐을 수 있어요."
         }
     }
 }

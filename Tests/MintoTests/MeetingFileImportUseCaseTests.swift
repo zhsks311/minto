@@ -429,3 +429,40 @@ private func appendLittleEndian<T: FixedWidthInteger>(_ value: T, to data: inout
         data.append(contentsOf: bytes)
     }
 }
+
+// MARK: - FileAudioExtractionError 사용자 메시지 매핑 테스트
+
+@Suite("FileAudioExtractionError 사용자 메시지")
+struct FileAudioExtractionErrorMessageTests {
+    @Test("unsupportedFile → 형식 안내 메시지")
+    func unsupportedFileMessage() {
+        let error = FileAudioExtractionError.unsupportedFile
+        #expect(error.errorDescription == "지원하지 않는 파일 형식이에요. 오디오 파일이나 mp4/mov 영상을 선택해 주세요.")
+    }
+
+    @Test("noAudioTrack → 오디오 트랙 없음 메시지")
+    func noAudioTrackMessage() {
+        let error = FileAudioExtractionError.noAudioTrack
+        #expect(error.errorDescription == "이 파일에는 오디오 트랙이 없어요.")
+    }
+
+    @Test("noReadableAudio → 손상 가능성 메시지")
+    func noReadableAudioMessage() {
+        let error = FileAudioExtractionError.noReadableAudio
+        #expect(error.errorDescription == "오디오를 읽지 못했어요. 파일이 손상됐을 수 있어요.")
+    }
+
+    @Test("readerFailed → 시스템 원인 병기 메시지")
+    func readerFailedMessage() {
+        let error = FileAudioExtractionError.readerFailed("Cannot Open")
+        let description = error.errorDescription ?? ""
+        #expect(description.hasPrefix("파일을 열 수 없어요. 손상되었거나 지원하지 않는 코덱일 수 있어요."))
+        #expect(description.contains("Cannot Open"))
+    }
+
+    @Test("readerFailed localizedDescription은 errorDescription과 일치한다")
+    func readerFailedLocalized() {
+        let error = FileAudioExtractionError.readerFailed("Cannot Open")
+        #expect(error.localizedDescription == error.errorDescription)
+    }
+}

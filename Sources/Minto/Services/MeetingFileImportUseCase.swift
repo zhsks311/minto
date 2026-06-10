@@ -265,7 +265,8 @@ public final class MeetingFileImportUseCase: ObservableObject {
             throw CancellationError()
         } catch {
             let errorCase = String(describing: error).components(separatedBy: "(").first ?? String(describing: error)
-            Log.importer.error("import failed file=\(fileName, privacy: .public) error=\(errorCase, privacy: .public)")
+            let nsError = error as NSError
+            Log.importer.error("import failed file=\(fileName, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)")
             state = MeetingFileImportState(
                 stage: .failed,
                 progress: state.progress,
