@@ -1,6 +1,16 @@
 import Foundation
 import Combine
 
+/// `MeetingStore.save(_:)` 결과.
+/// - `.skippedEmpty`: 전사·요약이 모두 없는 빈 회의 → 저장 생략(정상, 데이터 보호 불필요).
+/// - `.success`: 디스크 저장 성공.
+/// - `.failed`: 내용은 있지만 인코딩 또는 디스크 I/O 실패 → 복구 조치 필요.
+public enum MeetingSaveResult {
+    case skippedEmpty
+    case success
+    case failed
+}
+
 /// 회의 기록을 JSON으로 영속화하고 목록을 제공한다.
 /// 저장 위치: ~/Library/Application Support/Minto/meetings/{id}.json
 /// 손상된 파일은 조용히 건너뛴다(fail-soft). 목록은 시작 시각 내림차순.
@@ -57,29 +67,30 @@ public final class MeetingStore: ObservableObject {
         rebuildSearchIndex()
     }
 
-    /// 회의를 저장한다. 빈 회의(전사·요약 없음)는 저장하지 않는다. 성공 시 true.
+    /// 회의를 저장한다. 빈 회의(전사·요약 없음)는 저장하지 않는다.
+    /// 반환값: `.skippedEmpty`(빈 회의), `.success`(저장 성공), `.failed`(인코딩/디스크 실패).
     @discardableResult
-    public func save(_ record: MeetingRecord) -> Bool {
+    public func save(_ record: MeetingRecord) -> MeetingSaveResult {
         guard !record.isEmpty else {
             fputs("[MeetingStore] 빈 회의 — 저장 생략\n", stderr)
-            return false
+            return .skippedEmpty
         }
         guard let data = try? encoder.encode(record) else {
             fputs("[MeetingStore] 인코딩 실패\n", stderr)
-            return false
+            return .failed
         }
         let url = dir.appendingPathComponent("\(record.id.uuidString).json")
         do {
             try data.write(to: url, options: .atomic)
         } catch {
             fputs("[MeetingStore] 저장 실패: \(error.localizedDescription)\n", stderr)
-            return false
+            return .failed
         }
         meetings.removeAll { $0.id == record.id }
         meetings.append(record)
         meetings.sort { $0.startedAt > $1.startedAt }
         rebuildSearchIndex()
-        return true
+        return .success
     }
 
     /// 회의를 삭제한다.

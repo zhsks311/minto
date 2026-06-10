@@ -125,7 +125,7 @@ extension SummaryService: MeetingFileImportSummaryGenerating {}
 @MainActor
 protocol MeetingFileImportStoring: AnyObject {
     @discardableResult
-    func save(_ record: MeetingRecord) -> Bool
+    func save(_ record: MeetingRecord) -> MeetingSaveResult
 }
 
 extension MeetingStore: MeetingFileImportStoring {}
@@ -237,7 +237,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 duration: extractionDuration,
                 startedAt: startedAt
             )
-            guard store.save(record) else { throw MeetingFileImportError.saveFailed }
+            guard store.save(record) == .success else { throw MeetingFileImportError.saveFailed }
 
             state = MeetingFileImportState(
                 stage: .completed,

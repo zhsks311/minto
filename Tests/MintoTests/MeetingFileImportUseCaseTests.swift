@@ -348,10 +348,10 @@ private final class StubFileImportStore: MeetingFileImportStoring {
     var savedRecords: [MeetingRecord] = []
     var shouldSave = true
 
-    func save(_ record: MeetingRecord) -> Bool {
-        guard shouldSave else { return false }
+    func save(_ record: MeetingRecord) -> MeetingSaveResult {
+        guard shouldSave else { return .failed }
         savedRecords.append(record)
-        return true
+        return .success
     }
 }
 

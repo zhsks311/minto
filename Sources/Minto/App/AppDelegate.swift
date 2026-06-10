@@ -72,13 +72,23 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             self.reportService.appendSummarySection(summary?.markdown() ?? "")
             self.reportService.finalizeReport()
 
-            let saved = MeetingStore.shared.save(record)
+            let saveResult = MeetingStore.shared.save(record)
 
-            if record.isEmpty || !saved {
+            switch saveResult {
+            case .skippedEmpty:
+                // (a) 빈 회의: 데이터가 없으므로 맥락 초기화는 정상 진행.
                 self.viewModel.errorMessage = "저장할 회의 내용이 없습니다."
+                MeetingContext.shared.clear()
+            case .success:
+                // 정상 저장: 맥락 초기화.
+                MeetingContext.shared.clear()
+            case .failed:
+                // (b) 내용은 있지만 디스크/인코딩 실패: 복구 파일을 남기고 맥락을 초기화하지 않는다.
+                let msg = MeetingSaveRecovery.writeRecoveryFile(for: record)
+                self.viewModel.errorMessage = msg
+                // MeetingContext는 clear하지 않는다 — 사용자가 재시도하거나 수동 내보내기할 수 있도록.
             }
             self.mainWindowManager.show()
-            MeetingContext.shared.clear()
         }
     }
 

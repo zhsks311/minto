@@ -36,7 +36,7 @@ struct MeetingStoreTests {
         let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
         let store = MeetingStore(directory: dir)
         let rec = sampleRecord()
-        #expect(store.save(rec) == true)
+        #expect(store.save(rec) == .success)
         #expect(store.meetings.contains { $0.id == rec.id })
 
         let store2 = MeetingStore(directory: dir)
@@ -55,7 +55,7 @@ struct MeetingStoreTests {
         let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
         let store = MeetingStore(directory: dir)
         let empty = MeetingRecord(title: "x", startedAt: Date(), durationSeconds: 0)
-        #expect(store.save(empty) == false)
+        #expect(store.save(empty) == .skippedEmpty)
         #expect(store.meetings.isEmpty)
     }
 
