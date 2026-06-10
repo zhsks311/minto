@@ -33,6 +33,9 @@ public struct MeetingLibraryView: View {
     // 검색 인덱스·결과 캐시. 키 입력마다 전체 회의를 다시 청크하지 않도록
     // 인덱스는 회의 목록 변경 시에만, 결과는 디바운스된 쿼리 변경 시에만 갱신한다.
     @State private var searchIndex = MeetingSearchIndex(chunks: [])
+    /// LocalHash 임베딩 인덱스. rebuildSearchIndex() 후 백그라운드에서 빌드되며,
+    /// 준비되면 refreshSearchResults()에서 재랭킹에 사용된다. 디스크 영속 없음.
+    @State private var embeddingIndex: MeetingSearchEmbeddingIndex? = nil
     @State private var meetingSearchResults: [MeetingSearchResult] = []
     /// 필터 미적용 전체 검색 결과. AI 답변 생성에는 필터된 결과 대신 이 값을 사용해
     /// 요약/결정 등 근거가 누락되지 않게 한다.
@@ -1934,11 +1937,25 @@ public struct MeetingLibraryView: View {
             if indexedIDs == currentIDs {
                 searchIndex = loaded
                 refreshSearchResults()
+                rebuildEmbeddingIndex(from: loaded)
                 return
             }
         }
         searchIndex = MeetingSearchIndex(records: store.meetings)
         refreshSearchResults()
+        rebuildEmbeddingIndex(from: searchIndex)
+    }
+
+    private func rebuildEmbeddingIndex(from index: MeetingSearchIndex) {
+        embeddingIndex = nil
+        Task.detached(priority: .background) {
+            let built = try? await MeetingSearchEmbeddingBuilder(
+                provider: LocalHashEmbeddingProvider()
+            ).build(from: index)
+            await MainActor.run {
+                self.embeddingIndex = built
+            }
+        }
     }
 
     private func refreshSearchResults() {
@@ -1951,7 +1968,18 @@ public struct MeetingLibraryView: View {
         let queryTokens = MeetingSearchIndex.queryTerms(trimmedSearch)
         let usableEntries = GlossaryStore.shared.entries.filter(\.isUsable)
         let expandedTokens = GlossaryQueryExpander.expand(queryTokens: queryTokens, entries: usableEntries)
-        let all = searchIndex.search(trimmedSearch, limit: Int.max, expandedTokens: expandedTokens)
+        let tokenResults = searchIndex.search(trimmedSearch, limit: Int.max, expandedTokens: expandedTokens)
+        let all: [MeetingSearchResult]
+        if let embIdx = embeddingIndex {
+            let queryVector = LocalHashEmbeddingProvider.vector(for: trimmedSearch)
+            all = MeetingSearchEmbeddingIndex.rerank(
+                results: tokenResults,
+                queryVector: queryVector,
+                embeddings: embIdx
+            )
+        } else {
+            all = tokenResults
+        }
         allMeetingSearchResults = all
         meetingSearchResults = activeSearchFilter == .all ? all : all.filter { activeSearchFilter.matches($0) }
     }
