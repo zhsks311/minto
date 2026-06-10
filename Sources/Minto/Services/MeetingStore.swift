@@ -1,3 +1,4 @@
+import os
 import Foundation
 import Combine
 
@@ -58,7 +59,7 @@ public final class MeetingStore: ObservableObject {
         for url in urls where url.pathExtension == "json" {
             guard let data = try? Data(contentsOf: url),
                   let record = try? decoder.decode(MeetingRecord.self, from: data) else {
-                fputs("[MeetingStore] 손상/디코드 실패 skip: \(url.lastPathComponent)\n", stderr)
+                Log.store.error("손상/디코드 실패 skip: \(url.lastPathComponent, privacy: .public)")
                 continue
             }
             loaded.append(record)
@@ -72,18 +73,18 @@ public final class MeetingStore: ObservableObject {
     @discardableResult
     public func save(_ record: MeetingRecord) -> MeetingSaveResult {
         guard !record.isEmpty else {
-            fputs("[MeetingStore] 빈 회의 — 저장 생략\n", stderr)
+            Log.store.info("빈 회의 — 저장 생략")
             return .skippedEmpty
         }
         guard let data = try? encoder.encode(record) else {
-            fputs("[MeetingStore] 인코딩 실패\n", stderr)
+            Log.store.error("인코딩 실패")
             return .failed
         }
         let url = dir.appendingPathComponent("\(record.id.uuidString).json")
         do {
             try data.write(to: url, options: .atomic)
         } catch {
-            fputs("[MeetingStore] 저장 실패: \(error.localizedDescription)\n", stderr)
+            Log.store.error("저장 실패: \(error.localizedDescription, privacy: .public)")
             return .failed
         }
         meetings.removeAll { $0.id == record.id }

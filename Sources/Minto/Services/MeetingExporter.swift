@@ -1,3 +1,4 @@
+import os
 import Foundation
 import AppKit
 import UniformTypeIdentifiers
@@ -53,7 +54,7 @@ public enum MeetingExporter {
             try Data(markdown(for: result).utf8).write(to: url, options: .atomic)
             return url
         } catch {
-            fputs("[Export] 저장 실패: \(error.localizedDescription)\n", stderr)
+            Log.store.error("export 저장 실패: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

@@ -1,3 +1,4 @@
+import os
 import Foundation
 import AppKit
 
@@ -91,7 +92,7 @@ public final class CodexOAuthService: ObservableObject {
                 credentials = tokens
                 onComplete(.success(()))
             } catch {
-                fputs("[Codex] login failed: \(error)\n", stderr)
+                Log.oauth.error("Codex login failed: \(error.localizedDescription, privacy: .public)")
                 deviceCode = ""
                 isPolling = false
                 onComplete(.failure(error))
@@ -127,7 +128,7 @@ public final class CodexOAuthService: ObservableObject {
                 return try await performCorrection(model: model, instructions: instructions, userContent: userContent, creds: creds)
             } catch let error as CodexError where index < modelChain.count - 1 && error.isModelFallbackable {
                 let fallback = modelChain[index + 1]
-                fputs("[Codex] model '\(model)' 실패(plan=\(plan ?? "?"), \(error)) → '\(fallback)'로 폴백\n", stderr)
+                Log.oauth.info("Codex model '\(model, privacy: .public)' 실패(plan=\(plan ?? "?", privacy: .public)) → '\(fallback, privacy: .public)'로 폴백")
                 continue
             }
         }
@@ -212,7 +213,7 @@ public final class CodexOAuthService: ObservableObject {
                 errData.append(byte)
                 if errData.count >= 800 { break }
             }
-            fputs("[Codex] correct HTTP \(status) (model=\(model)) bodyLen=\(errData.count)\n", stderr)
+            Log.oauth.error("Codex correct HTTP \(status, privacy: .public) model=\(model, privacy: .public) bodyLen=\(errData.count, privacy: .public)")
             // 무료 tier·미인가·모델 미허용은 4xx로 온다(상위 모델→mini 폴백 대상). 429는 rate limit(폴백 무의미).
             switch status {
             case 429:
@@ -312,9 +313,9 @@ public final class CodexOAuthService: ObservableObject {
         // 200 본문에는 토큰·authorization_code 등 자격증명이 들어있어 본문을 남기지 않는다.
         // 에러(비-200)일 때만 본문을 기록해 원인 진단에 쓴다.
         if status == 200 {
-            fputs("[Codex] \(step) HTTP 200\n", stderr)
+            Log.oauth.info("Codex \(step, privacy: .public) HTTP 200")
         } else {
-            fputs("[Codex] \(step) HTTP \(status) bodyLen=\(data.count)\n", stderr)
+            Log.oauth.error("Codex \(step, privacy: .public) HTTP \(status, privacy: .public) bodyLen=\(data.count, privacy: .public)")
         }
     }
 

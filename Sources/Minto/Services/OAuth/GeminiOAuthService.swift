@@ -1,3 +1,4 @@
+import os
 import Foundation
 import CryptoKit
 import AppKit
@@ -194,7 +195,7 @@ public final class GeminiOAuthService: NSObject {
                 return try await performCorrection(model: model, prompt: prompt, token: token, credentials: creds)
             } catch let error as GeminiOAuthError where index < modelChain.count - 1 {
                 let fallback = modelChain[index + 1]
-                fputs("[Gemini] model '\(model)' 실패(\(error)) → '\(fallback)'로 폴백\n", stderr)
+                Log.oauth.info("Gemini model '\(model, privacy: .public)' 실패(\(error, privacy: .public)) → '\(fallback, privacy: .public)'로 폴백")
                 continue
             }
         }
@@ -242,7 +243,7 @@ public final class GeminiOAuthService: NSObject {
         let (data, urlResponse) = try await URLSession.shared.data(for: request)
         let status = (urlResponse as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
-            fputs("[Gemini] correct HTTP \(status) bodyLen=\(data.count)\n", stderr)
+            Log.oauth.error("Gemini correct HTTP \(status, privacy: .public) bodyLen=\(data.count, privacy: .public)")
             throw GeminiOAuthError.badResponse
         }
 
@@ -253,7 +254,7 @@ public final class GeminiOAuthService: NSObject {
               let parts = content["parts"] as? [[String: Any]],
               let result = parts.first?["text"] as? String
         else {
-            fputs("[Gemini] correct parse failed HTTP 200 bodyLen=\(data.count)\n", stderr)
+            Log.oauth.error("Gemini correct parse failed HTTP 200 bodyLen=\(data.count, privacy: .public)")
             throw GeminiOAuthError.badResponse
         }
 

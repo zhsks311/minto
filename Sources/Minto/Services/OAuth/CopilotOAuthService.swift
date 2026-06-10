@@ -1,3 +1,4 @@
+import os
 import Foundation
 import AppKit
 
@@ -270,7 +271,7 @@ public final class CopilotOAuthService: ObservableObject {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
             // 성공 본문엔 토큰이 있어 로그하지 않고, 실패 시에도 body 길이만 남긴다.
-            fputs("[Copilot] token-exchange HTTP \(status) bodyLen=\(data.count)\n", stderr)
+            Log.oauth.error("Copilot token-exchange HTTP \(status, privacy: .public) bodyLen=\(data.count, privacy: .public)")
             // GitHub은 Copilot 구독이 없는 계정에 이 내부 엔드포인트를 404(또는 403)로 숨긴다.
             if status == 404 || status == 403 {
                 throw CopilotError.noSubscription

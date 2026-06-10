@@ -1,3 +1,4 @@
+import os
 import Foundation
 
 public final class VADProcessor: @unchecked Sendable {
@@ -101,9 +102,10 @@ public final class VADProcessor: @unchecked Sendable {
             }
             if calibrationEnergies.count >= VADProcessor.calibrationFrameCount {
                 let noiseFloor = calibrationEnergies.reduce(0, +) / Float(calibrationEnergies.count)
-                adaptiveThresholdDB = noiseFloor + noiseOffsetDB
+                let threshold = noiseFloor + noiseOffsetDB
+                adaptiveThresholdDB = threshold
                 isCalibrating = false
-                fputs("[VAD] calibrated: noiseFloor=\(noiseFloor)dB threshold=\(adaptiveThresholdDB)dB\n", stderr)
+                Log.vad.info("calibrated: noiseFloor=\(noiseFloor, privacy: .public)dB threshold=\(threshold, privacy: .public)dB")
             }
             return
         }
@@ -154,7 +156,7 @@ public final class VADProcessor: @unchecked Sendable {
     }
 
     private func flushChunk(trailingSilence: TimeInterval, forced: Bool) {
-        fputs("[VAD] flushChunk samples=\(buffer.count) minRequired=\(VADProcessor.minSpeechSamples)\n", stderr)
+        Log.vad.debug("flushChunk samples=\(self.buffer.count, privacy: .public) minRequired=\(VADProcessor.minSpeechSamples, privacy: .public)")
         guard let chunk = drainBufferedChunk(trailingSilence: trailingSilence, forced: forced) else { return }
 
         DispatchQueue.main.async { [weak self] in

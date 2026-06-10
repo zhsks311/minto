@@ -1,3 +1,4 @@
+import os
 import Foundation
 
 /// 디스크 저장 실패 시 전사·요약 데이터를 복구 파일로 보존한다.
@@ -18,7 +19,7 @@ public enum MeetingSaveRecovery {
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         } catch {
-            fputs("[MeetingSaveRecovery] 복구 디렉터리 생성 실패: \(error.localizedDescription)\n", stderr)
+            Log.store.error("복구 디렉터리 생성 실패: \(error.localizedDescription, privacy: .public)")
             return
         }
 
@@ -32,9 +33,9 @@ public enum MeetingSaveRecovery {
         let content = buildMarkdown(for: record)
         do {
             try Data(content.utf8).write(to: fileURL, options: .atomic)
-            fputs("[MeetingSaveRecovery] 복구 파일 저장됨: \(fileURL.path)\n", stderr)
+            Log.store.info("복구 파일 저장됨: \(fileURL.lastPathComponent, privacy: .public)")
         } catch {
-            fputs("[MeetingSaveRecovery] 복구 파일 쓰기 실패: \(error.localizedDescription)\n", stderr)
+            Log.store.error("복구 파일 쓰기 실패: \(error.localizedDescription, privacy: .public)")
         }
     }
 

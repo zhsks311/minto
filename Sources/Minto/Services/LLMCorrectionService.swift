@@ -1,3 +1,4 @@
+import os
 import Foundation
 import SwiftUI
 
@@ -76,7 +77,7 @@ public final class LLMCorrectionService: ObservableObject {
 
         guard let provider = selectedTextProvider() else { return nil }
 
-        fputs("[LLM] correcting via \(provider.descriptor.id.rawValue) (inputChars=\(text.count), contextChars=\(context.previousText.count))\n", stderr)
+        Log.correction.info("correcting via \(provider.descriptor.id.rawValue, privacy: .public) inputChars=\(text.count, privacy: .public) contextChars=\(context.previousText.count, privacy: .public)")
         do {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: .correction,
@@ -84,10 +85,10 @@ public final class LLMCorrectionService: ObservableObject {
                 userContent: userContent
             ))
             let corrected = CorrectionOutputPostprocessor.clean(response.text)
-            fputs("[LLM] correction completed via \(provider.descriptor.id.rawValue) (outputChars=\(corrected.count))\n", stderr)
+            Log.correction.info("correction completed via \(provider.descriptor.id.rawValue, privacy: .public) outputChars=\(corrected.count, privacy: .public)")
             return corrected
         } catch {
-            fputs("[LLM] correction failed via \(provider.descriptor.id.rawValue): \(error.localizedDescription)\n", stderr)
+            Log.correction.error("correction failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

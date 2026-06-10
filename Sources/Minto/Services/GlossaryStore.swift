@@ -1,3 +1,4 @@
+import os
 import Foundation
 import Combine
 
@@ -185,7 +186,7 @@ public final class GlossaryStore: ObservableObject {
             try data.write(to: fileURL, options: .atomic)
             return true
         } catch {
-            fputs("[GlossaryStore] 저장 실패: \(error.localizedDescription)\n", stderr)
+            Log.store.error("GlossaryStore 저장 실패: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

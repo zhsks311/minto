@@ -1,3 +1,4 @@
+import os
 import Foundation
 
 public struct MeetingSearchIndexSnapshot: Codable, Sendable, Equatable {
@@ -52,11 +53,11 @@ public struct MeetingSearchIndexStore: Sendable {
     public func load() -> MeetingSearchIndex? {
         guard let data = try? Data(contentsOf: indexURL) else { return nil }
         guard let snapshot = try? Self.decoder.decode(MeetingSearchIndexSnapshot.self, from: data) else {
-            fputs("[MeetingSearchIndexStore] 인덱스 디코딩 실패 — 재생성이 필요합니다.\n", stderr)
+            Log.search.error("인덱스 디코딩 실패 — 재생성이 필요합니다.")
             return nil
         }
         guard snapshot.isCompatible else {
-            fputs("[MeetingSearchIndexStore] 인덱스 버전 불일치 — 재생성이 필요합니다.\n", stderr)
+            Log.search.error("인덱스 버전 불일치 — 재생성이 필요합니다.")
             return nil
         }
         return snapshot.index
@@ -66,7 +67,7 @@ public struct MeetingSearchIndexStore: Sendable {
     public func save(_ index: MeetingSearchIndex) -> Bool {
         let snapshot = MeetingSearchIndexSnapshot(chunks: index.chunks)
         guard let data = try? Self.encoder.encode(snapshot) else {
-            fputs("[MeetingSearchIndexStore] 인덱스 인코딩 실패\n", stderr)
+            Log.search.error("인덱스 인코딩 실패")
             return false
         }
         do {
@@ -75,7 +76,7 @@ public struct MeetingSearchIndexStore: Sendable {
             try data.write(to: indexURL, options: .atomic)
             return true
         } catch {
-            fputs("[MeetingSearchIndexStore] 인덱스 저장 실패: \(error.localizedDescription)\n", stderr)
+            Log.search.error("인덱스 저장 실패: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

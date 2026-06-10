@@ -1,3 +1,4 @@
+import os
 import Foundation
 @preconcurrency import WhisperKit
 
@@ -18,10 +19,10 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
         let folder: URL
         if let localFolder = Self.localModelFolderOverride() {
             folder = localFolder
-            fputs("[STT] initializing WhisperKit from local folder: \(folder.path)\n", stderr)
+            Log.stt.info("initializing WhisperKit from local folder: \(folder.path, privacy: .public)")
             updateState(.loading)
         } else {
-            fputs("[STT] downloading \(modelVariant)...\n", stderr)
+            Log.stt.info("downloading \(self.modelVariant, privacy: .public)")
             updateState(.downloading(0))
             folder = try await WhisperKit.download(
                 variant: modelVariant,
@@ -33,14 +34,14 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
             )
         }
 
-        fputs("[STT] initializing WhisperKit...\n", stderr)
+        Log.stt.info("initializing WhisperKit")
         updateState(.loading)
         pipe = try await WhisperKit(WhisperKitConfig(
             model: modelVariant,
             modelFolder: folder.path(percentEncoded: false)
         ))
         updateState(.loaded)
-        fputs("[STT] WhisperKit ready: \(modelVariant)\n", stderr)
+        Log.stt.info("WhisperKit ready: \(self.modelVariant, privacy: .public)")
     }
 
     func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult {
@@ -49,7 +50,7 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
         let samples = STTAudioUtilities.paddedSamples(pcmSamples)
         let dbLevel = STTAudioUtilities.dbLevel(samples)
         if dbLevel < -50 {
-            fputs("[STT] skip (energy=\(String(format: "%.1f", dbLevel))dB)\n", stderr)
+            Log.stt.debug("skip energy=\(String(format: "%.1f", dbLevel), privacy: .public)dB")
             let seg = Segment(text: "", timestamp: Date(), duration: Double(samples.count) / STTAudioUtilities.sampleRate)
             return TranscriptionResult(segment: seg, isFinal: true)
         }
@@ -75,11 +76,11 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
         for result in wkResults {
             for seg in result.segments {
                 guard seg.avgLogprob > -1.0 else {
-                    fputs("[STT] skip: avgLogprob=\(String(format:"%.2f", seg.avgLogprob))\n", stderr)
+                    Log.stt.debug("skip avgLogprob=\(String(format:"%.2f", seg.avgLogprob), privacy: .public)")
                     continue
                 }
                 guard seg.compressionRatio < 2.4 else {
-                    fputs("[STT] skip: compressionRatio=\(String(format:"%.2f", seg.compressionRatio))\n", stderr)
+                    Log.stt.debug("skip compressionRatio=\(String(format:"%.2f", seg.compressionRatio), privacy: .public)")
                     continue
                 }
                 let text = Self.stripWhisperTokens(seg.text).trimmingCharacters(in: .whitespaces)
@@ -92,7 +93,7 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
 
         let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
         if dbLevel < -40, !trimmed.isEmpty, trimmed.count <= 10 {
-            fputs("[STT] skip (low-energy short phantom \(String(format:"%.1f", dbLevel))dB chars=\(trimmed.count))\n", stderr)
+            Log.stt.debug("skip low-energy short phantom \(String(format:"%.1f", dbLevel), privacy: .public)dB chars=\(trimmed.count, privacy: .public)")
             let seg = Segment(text: "", timestamp: Date(), duration: Double(samples.count) / STTAudioUtilities.sampleRate)
             return TranscriptionResult(segment: seg, isFinal: true)
         }

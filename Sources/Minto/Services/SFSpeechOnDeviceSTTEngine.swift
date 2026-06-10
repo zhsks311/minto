@@ -1,3 +1,4 @@
+import os
 import Foundation
 @preconcurrency import Speech
 
@@ -16,7 +17,7 @@ final class SFSpeechOnDeviceSTTEngine: SpeechTranscriptionEngine {
             throw STTError.engineUnavailable(availability.detailText ?? "SFSpeechRecognizer를 사용할 수 없습니다.")
         }
         updateState(.loaded)
-        fputs("[STT] Apple speech engine ready: \(engineID.rawValue)\n", stderr)
+        Log.stt.info("Apple speech engine ready: \(self.engineID.rawValue, privacy: .public)")
     }
 
     func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult {

@@ -1,3 +1,4 @@
+import os
 import Foundation
 import SwiftUI
 
@@ -130,7 +131,7 @@ public final class SummaryService: ObservableObject {
             let trimmed = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
         } catch {
-            fputs("[Summary] generation failed via \(provider.descriptor.id.rawValue): \(error.localizedDescription)\n", stderr)
+            Log.summary.error("generation failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

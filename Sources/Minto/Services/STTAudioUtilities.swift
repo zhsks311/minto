@@ -1,3 +1,4 @@
+import os
 import Foundation
 @preconcurrency import AVFoundation
 
@@ -15,7 +16,7 @@ enum STTAudioUtilities {
     static func silentResultIfNeeded(_ samples: [Float]) -> TranscriptionResult? {
         let dbLevel = Self.dbLevel(samples)
         guard dbLevel < -50 else { return nil }
-        fputs("[STT] skip (energy=\(String(format: "%.1f", dbLevel))dB)\n", stderr)
+        Log.stt.debug("skip energy=\(String(format: "%.1f", dbLevel), privacy: .public)dB")
         return transcriptionResult(text: "", sampleCount: samples.count)
     }
 

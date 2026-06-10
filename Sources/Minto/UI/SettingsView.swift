@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 private enum LocalLLMContextWindowPreset: String, CaseIterable, Identifiable {
@@ -927,7 +928,7 @@ public struct SettingsView: View {
                     } catch {
                         let message = (error as? LocalizedError)?.errorDescription
                             ?? error.localizedDescription
-                        FileHandle.standardError.write(Data("[NotionMCP] 연결 실패(type=\(String(describing: type(of: error))), message=\(message))\n".utf8))
+                        Log.oauth.error("NotionMCP 연결 실패 type=\(String(describing: type(of: error)), privacy: .public) message=\(message, privacy: .public)")
                         notionConnectError = "연결에 실패했습니다. 다시 시도해 주세요."
                     }
                     notionConnectLoading = false

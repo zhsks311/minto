@@ -1,3 +1,4 @@
+import os
 import Foundation
 import FluidAudio
 
@@ -216,7 +217,7 @@ private actor SileroVADCore {
             streamState = result.state
             return handle(result: result)
         } catch {
-            fputs("[VAD] Silero processing failed: \(error.localizedDescription)\n", stderr)
+            Log.vad.error("Silero processing failed: \(error.localizedDescription, privacy: .public)")
             return SileroVADEmission()
         }
     }

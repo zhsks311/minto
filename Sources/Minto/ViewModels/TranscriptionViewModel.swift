@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import os
 
 @MainActor
 protocol TranscriptionSTTServicing: AnyObject {
@@ -261,15 +262,15 @@ public final class TranscriptionViewModel: ObservableObject {
             guard let self else { return }
             for await chunk in stream {
                 // 스트림에는 최종 청크만 들어옴 (preview는 별도 previewTask로 처리)
-                fputs("[VM] final chunk arrived samples=\(chunk.samples.count)\n", stderr)
+                Log.stt.debug("final chunk arrived samples=\(chunk.samples.count, privacy: .public)")
                 previewTask?.cancel()
                 previewTask = nil
                 do {
                     let result = try await transcribeFinalChunk(chunk)
-                    fputs("[VM] STT final result: chars=\(result.segment.text.count)\n", stderr)
+                    Log.stt.debug("STT final result chars=\(result.segment.text.count, privacy: .public)")
                     guard !result.segment.text.isEmpty else {
                         if pendingSegment != nil {
-                            fputs("[VM] STT final empty; keeping pending preview until next update\n", stderr)
+                            Log.stt.debug("STT final empty; keeping pending preview until next update")
                         }
                         continue
                     }
@@ -292,7 +293,7 @@ public final class TranscriptionViewModel: ObservableObject {
                         }
                     }
                 } catch {
-                    fputs("[VM] transcription error: \(error)\n", stderr)
+                    Log.stt.error("transcription error: \(error.localizedDescription, privacy: .public)")
                     errorMessage = "전사 오류: \(error.localizedDescription)"
                 }
             }
@@ -419,7 +420,7 @@ public final class TranscriptionViewModel: ObservableObject {
             return positionedResult(result, for: chunk)
         }
 
-        fputs("[VM] STT empty final repaired samples=\(repairSamples.count)\n", stderr)
+        Log.stt.debug("STT empty final repaired samples=\(repairSamples.count, privacy: .public)")
         return positionedResult(repaired, for: chunk)
     }
 

@@ -1,3 +1,4 @@
+import os
 import Foundation
 
 /// Speech engine facade used by the app and benchmark tests.
@@ -106,7 +107,7 @@ public final class STTService {
             }
 
             updateState(.failed(error.localizedDescription))
-            fputs("[STT] load error: \(error)\n", stderr)
+            Log.stt.error("load error: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -130,7 +131,7 @@ public final class STTService {
         } catch {
             let message = "모델 캐시 정리에 실패했습니다: \(error.localizedDescription)"
             updateState(.failed(message))
-            fputs("[STT] recovery error: \(error)\n", stderr)
+            Log.stt.error("recovery error: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -180,16 +181,16 @@ public final class STTService {
         } catch {
             let message = "모델 캐시 정리에 실패했습니다: \(error.localizedDescription)"
             updateState(.failed(message))
-            fputs("[STT] metadata recovery error: \(error)\n", stderr)
+            Log.stt.error("metadata recovery error: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     private func removeCachedModelFilesAndLog(for variant: String, reason: String) async throws {
         let removed = try await Self.removeCachedModelFiles(for: variant)
         if removed.isEmpty {
-            fputs("[STT] recovery(\(reason)): no cached model files found for \(variant)\n", stderr)
+            Log.stt.info("recovery(\(reason, privacy: .public)): no cached model files found for \(variant, privacy: .public)")
         } else {
-            fputs("[STT] recovery(\(reason)): removed \(removed.count) cached path(s) for \(variant)\n", stderr)
+            Log.stt.info("recovery(\(reason, privacy: .public)): removed \(removed.count, privacy: .public) cached path(s) for \(variant, privacy: .public)")
         }
     }
 
