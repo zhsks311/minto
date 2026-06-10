@@ -116,15 +116,13 @@ public struct MeetingLibraryView: View {
         }
         .onChange(of: store.meetings) { _, _ in
             searchAnswerController.reset()
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
             rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
         }
         .onChange(of: searchText) { _, _ in
             searchAnswerController.reset()
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
             if hasLiveMeeting {
                 showingLiveMeeting = true
                 selectedID = nil
@@ -147,8 +145,7 @@ public struct MeetingLibraryView: View {
             if !showingLiveMeeting {
                 // 회의가 저장되지 않고 끝나면 store.meetings onChange가 안 불려
                 // 이전 검색의 답변 디테일이 남을 수 있어 여기서도 닫는다.
-                showingSearchAnswerDetail = false
-                searchAnswerCitationAnchor = nil
+                dismissSearchAnswerPresentation()
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
@@ -157,21 +154,18 @@ public struct MeetingLibraryView: View {
                 showingLiveMeeting = true
             } else if !viewModel.isRecording {
                 showingLiveMeeting = false
-                showingSearchAnswerDetail = false
-                searchAnswerCitationAnchor = nil
+                dismissSearchAnswerPresentation()
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
         .onChange(of: answerSettings.isEnabled) { _, _ in
             searchAnswerController.reset(clearReadiness: true)
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: answerSettings.selectedProvider) { _, _ in
             searchAnswerController.reset(clearReadiness: true)
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: fileImportUseCase.state) { _, state in
@@ -366,13 +360,14 @@ public struct MeetingLibraryView: View {
 
     private var detailColumn: some View {
         Group {
-            if showingLiveMeeting, hasLiveMeeting {
+            switch detailContent {
+            case .live:
                 liveMeetingDetail
-            } else if isSearching, showingSearchAnswerDetail {
+            case .searchAnswer:
                 searchAnswerDetail
-            } else if let record = selectedRecord {
+            case .preview(let record):
                 meetingPreview(record)
-            } else {
+            case .empty:
                 VStack(spacing: 10) {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 34))
@@ -897,16 +892,21 @@ public struct MeetingLibraryView: View {
     }
 
     private func meetingRow(_ record: MeetingRecord) -> some View {
-        // 오른쪽이 AI 답변 디테일을 보여주는 동안에는 행 강조를 억제해
+        // detailContent가 이 행의 회의를 미리보기로 표시하는 경우에만 강조한다.
+        // AI 답변 디테일이나 라이브 화면을 보여주는 동안에는 강조를 억제해
         // 좌우가 서로 다른 대상을 가리키는 것처럼 보이지 않게 한다. 선택 자체는 보존.
-        let selected = selectedID == record.id && !(isSearching && showingSearchAnswerDetail)
+        let selected: Bool
+        if case .preview(let displayed) = detailContent {
+            selected = displayed.id == record.id
+        } else {
+            selected = false
+        }
         let match = primaryMatch(for: record)
 
         return Button {
             selectedID = record.id
             showingLiveMeeting = false
-            showingSearchAnswerDetail = false
-            searchAnswerCitationAnchor = nil
+            dismissSearchAnswerPresentation()
         } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline) {
@@ -1758,6 +1758,37 @@ public struct MeetingLibraryView: View {
             Text(title)
                 .font(.system(size: detailHeadingFontSize, weight: .bold))
         }
+    }
+
+    // MARK: - Detail content state
+
+    private enum DetailContent {
+        case live
+        case searchAnswer
+        case preview(MeetingRecord)
+        case empty
+    }
+
+    /// 오른쪽 디테일 영역에 무엇을 표시할지 결정하는 단일 분기점.
+    /// 우선순위: 라이브 회의 > AI 답변 > 회의 미리보기 > 빈 상태.
+    private var detailContent: DetailContent {
+        if showingLiveMeeting, hasLiveMeeting {
+            return .live
+        }
+        if isSearching, showingSearchAnswerDetail {
+            return .searchAnswer
+        }
+        if let record = selectedRecord {
+            return .preview(record)
+        }
+        return .empty
+    }
+
+    /// showingSearchAnswerDetail / searchAnswerCitationAnchor를 함께 닫는 헬퍼.
+    /// 흩어진 리셋을 한 곳에서 관리한다.
+    private func dismissSearchAnswerPresentation() {
+        showingSearchAnswerDetail = false
+        searchAnswerCitationAnchor = nil
     }
 
     // MARK: - Search
