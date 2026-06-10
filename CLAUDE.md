@@ -79,6 +79,7 @@ Minto2는 macOS 회의 기록 앱이다.
 - 설정은 단계적으로 펼친다.
 - Toss식 원칙을 적용한다: 좋은 기본값, 명확한 상태, 쉬운 다음 행동.
 - 복잡한 화면은 Pencil로 설계하고 `Resources/designs/`에 저장한다.
+- `.buttonStyle(.borderedProminent)` 금지: 비활성(non-key) 윈도우에서 강조 배경이 사라져 흰 라벨만 남는다(macOS 기본 동작이지만 이 앱은 다른 창과 나란히 쓰는 대시보드형이라 부적합). 강조 버튼은 MeetingLibraryView의 `ProminentActionButtonStyle`처럼 배경을 직접 그리는 스타일을 쓴다.
 
 ## 문서 산출물
 
