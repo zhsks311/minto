@@ -153,7 +153,7 @@ public struct SettingsView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(isExportingLogs)
-                    Text("앱 실행 중 기록된 로그를 내보냅니다.")
+                    Text("이번 실행 동안 기록된 로그를 내보냅니다. 내보낸 파일에는 앱 동작 기록(이벤트·에러·파일명)이 포함됩니다. 회의 내용(전사·요약·주제)은 포함되지 않습니다.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     if let error = logExportError {
@@ -2441,30 +2441,48 @@ public struct SettingsView: View {
         Task { @MainActor in
             defer { isExportingLogs = false }
             do {
+                // scope: .currentProcessIdentifier — 현재 프로세스 세션 로그만 수집
                 let store = try OSLogStore(scope: .currentProcessIdentifier)
                 let subsystem = Bundle.main.bundleIdentifier ?? "com.minto.app"
                 let predicate = NSPredicate(format: "subsystem == %@", subsystem)
+                // position(date:) 대신 프로세스 첫 항목부터 수집 (현재 실행 분만 해당)
                 let entries = try store.getEntries(
                     with: [],
-                    at: store.position(timeIntervalSinceLatestBoot: -7 * 24 * 3600),
+                    at: store.position(timeIntervalSinceLatestBoot: 0),
                     matching: predicate
                 )
                 var lines: [String] = []
                 for entry in entries {
                     if let logEntry = entry as? OSLogEntryLog {
+                        // composedMessage: privacy: .public 으로 마킹된 값만 평문,
+                        // 나머지는 <private> 로 표시됨 — 민감 정보 노출 없음
                         lines.append("[\(logEntry.date)] [\(logEntry.category)] \(logEntry.composedMessage)")
                     }
                 }
+
+                guard !lines.isEmpty else {
+                    logExportError = "내보낼 로그가 없습니다."
+                    Log.app.info("log export: no entries found")
+                    return
+                }
+
                 let content = lines.joined(separator: "\n")
                 guard let data = content.data(using: .utf8) else { return }
 
+                // beginSheetModal(for:) 대신 begin { } — keyWindow nil 시 무음 실패 방지
                 let panel = NSSavePanel()
                 panel.nameFieldStringValue = "minto-diagnostic-logs.txt"
                 panel.allowedContentTypes = [.plainText]
-                let result = await panel.beginSheetModal(for: NSApp.keyWindow ?? NSWindow())
+                let result = await withCheckedContinuation { continuation in
+                    panel.begin { response in
+                        continuation.resume(returning: response)
+                    }
+                }
                 guard result == .OK, let url = panel.url else { return }
                 try data.write(to: url, options: .atomic)
+                Log.app.info("log export success lines=\(lines.count, privacy: .public)")
             } catch {
+                Log.app.error("log export failed: \(error.localizedDescription, privacy: .public)")
                 logExportError = "로그 내보내기 실패: \(error.localizedDescription)"
             }
         }

@@ -19,7 +19,7 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
         let folder: URL
         if let localFolder = Self.localModelFolderOverride() {
             folder = localFolder
-            Log.stt.info("initializing WhisperKit from local folder: \(folder.path, privacy: .public)")
+            Log.stt.info("initializing WhisperKit from local folder: \(folder.lastPathComponent, privacy: .public)")
             updateState(.loading)
         } else {
             Log.stt.info("downloading \(self.modelVariant, privacy: .public)")
