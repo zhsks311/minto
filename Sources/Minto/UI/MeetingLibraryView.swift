@@ -29,6 +29,10 @@ public struct MeetingLibraryView: View {
     @StateObject private var fileImportUseCase = MeetingFileImportUseCase()
     @State private var selectedID: UUID?
     @State private var searchText = ""
+    // 검색 인덱스·결과 캐시. 키 입력마다 전체 회의를 다시 청크하지 않도록
+    // 인덱스는 회의 목록 변경 시에만, 결과는 디바운스된 쿼리 변경 시에만 갱신한다.
+    @State private var searchIndex = MeetingSearchIndex(chunks: [])
+    @State private var meetingSearchResults: [MeetingSearchResult] = []
     @State private var showingLiveMeeting = false
     @State private var showingExportOptions = false
     @State private var showingConfluenceExport = false
@@ -82,12 +86,14 @@ public struct MeetingLibraryView: View {
             if hasLiveMeeting {
                 showingLiveMeeting = true
             }
+            rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: store.meetings) { _, _ in
             searchAnswerController.reset()
             isSearchAnswerExpanded = false
+            rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
         }
         .onChange(of: searchText) { _, _ in
@@ -96,7 +102,17 @@ public struct MeetingLibraryView: View {
             if hasLiveMeeting {
                 showingLiveMeeting = true
                 selectedID = nil
-            } else {
+            }
+        }
+        .task(id: searchText) {
+            // 한글 IME는 자모 단위로 searchText를 갱신하므로 짧게 디바운스해
+            // 조합 중 매 키 입력마다 전체 검색이 실행되는 것을 막는다.
+            if isSearching {
+                try? await Task.sleep(for: .milliseconds(200))
+                if Task.isCancelled { return }
+            }
+            refreshSearchResults()
+            if !hasLiveMeeting {
                 selectFirstAvailableIfNeeded(preferFirstResult: true)
             }
         }
@@ -1580,9 +1596,13 @@ public struct MeetingLibraryView: View {
         return displayedMeetings.first
     }
 
-    private var meetingSearchResults: [MeetingSearchResult] {
-        guard isSearching else { return [] }
-        return MeetingSearchIndex(records: store.meetings).search(trimmedSearch, limit: Int.max)
+    private func rebuildSearchIndex() {
+        searchIndex = MeetingSearchIndex(records: store.meetings)
+        refreshSearchResults()
+    }
+
+    private func refreshSearchResults() {
+        meetingSearchResults = isSearching ? searchIndex.search(trimmedSearch, limit: Int.max) : []
     }
 
     private func selectSearchAnswerCitation(_ citation: MeetingSearchAnswerCitation) {
