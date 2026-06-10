@@ -12,6 +12,7 @@ protocol SpeechEngineDisplayable {
 }
 
 // MARK: - SpeechEngineID conformance
+// UI 표현(extension)을 Model 파일이 아닌 UI 레이어 파일에 격리한다. 모듈 분리 시 이 extension은 UI 모듈에 남아야 한다.
 
 extension SpeechEngineID: SpeechEngineDisplayable {
     var iconName: String {
@@ -38,6 +39,7 @@ extension SpeechEngineID: SpeechEngineDisplayable {
 }
 
 // MARK: - SpeechEngineFamily conformance
+// UI 표현(extension)을 Model 파일이 아닌 UI 레이어 파일에 격리한다. 모듈 분리 시 이 extension은 UI 모듈에 남아야 한다.
 
 extension SpeechEngineFamily: SpeechEngineDisplayable {
     var iconName: String {
@@ -59,40 +61,3 @@ extension SpeechEngineFamily: SpeechEngineDisplayable {
     var badgeLabel: String { choiceBadge }
 }
 
-// MARK: - Shared view helpers (SettingsView 전용)
-
-extension SettingsView {
-
-    func engineIcon(for item: some SpeechEngineDisplayable) -> some View {
-        Image(systemName: item.iconName)
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(item.tint)
-            .frame(width: 28, height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(item.tint.opacity(0.12))
-            )
-    }
-
-    func choiceBadge(for item: some SpeechEngineDisplayable) -> some View {
-        Text(item.badgeLabel)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundColor(item.tint)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(item.tint.opacity(0.12))
-            )
-    }
-
-    func selectionBackground(isSelected: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
-    }
-
-    func selectionBorder(isSelected: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 8)
-            .stroke(isSelected ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
-    }
-}

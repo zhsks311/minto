@@ -2415,4 +2415,39 @@ public struct SettingsView: View {
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
+
+    // MARK: - SpeechEngine 표시 헬퍼 (SpeechEngineDisplay.swift의 SpeechEngineDisplayable 사용)
+
+    private func engineIcon(for item: some SpeechEngineDisplayable) -> some View {
+        Image(systemName: item.iconName)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(item.tint)
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(item.tint.opacity(0.12))
+            )
+    }
+
+    private func choiceBadge(for item: some SpeechEngineDisplayable) -> some View {
+        Text(item.badgeLabel)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(item.tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(item.tint.opacity(0.12))
+            )
+    }
+
+    private func selectionBackground(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
+    }
+
+    private func selectionBorder(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(isSelected ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
+    }
 }
