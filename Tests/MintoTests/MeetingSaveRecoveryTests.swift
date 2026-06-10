@@ -172,6 +172,7 @@ struct MeetingSaveRecoveryTests {
         #expect(count == 1)
         let remaining = try FileManager.default.contentsOfDirectory(at: recoveryDir, includingPropertiesForKeys: nil)
         #expect(remaining.isEmpty)
+        #expect(store.meetings.contains { $0.id == record.id })
     }
 
     @Test("restorePendingRecords: store 재저장 실패 시 파일이 유지된다")
@@ -191,6 +192,9 @@ struct MeetingSaveRecoveryTests {
         let remaining = try FileManager.default.contentsOfDirectory(at: recoveryDir, includingPropertiesForKeys: nil)
         let jsonFiles = remaining.filter { $0.pathExtension == "json" }
         #expect(jsonFiles.count == 1)
+        // 복원 실패 시 .md도 유지되어야 한다(사용자가 수동 회수 가능).
+        let mdFiles = remaining.filter { $0.pathExtension == "md" }
+        #expect(mdFiles.count == 1)
     }
 
     @Test("restorePendingRecords: 손상 JSON은 skip하고 정상 파일은 계속 처리한다")

@@ -80,11 +80,13 @@ public enum MeetingSaveRecovery {
 
         let decoder = makeDecoder()
         var successCount = 0
+        var failCount = 0
 
         for jsonURL in jsonURLs {
             guard let data = try? Data(contentsOf: jsonURL),
                   let record = try? decoder.decode(MeetingRecord.self, from: data) else {
                 Log.store.error("복구 파일 디코드 실패: \(jsonURL.lastPathComponent, privacy: .public)")
+                failCount += 1
                 continue
             }
 
@@ -97,9 +99,15 @@ public enum MeetingSaveRecovery {
                 successCount += 1
             case .failed:
                 Log.store.error("복구 재저장 실패 — 파일 유지: \(jsonURL.lastPathComponent, privacy: .public)")
+                failCount += 1
             case .skippedEmpty:
                 Log.store.error("복구 파일이 빈 회의 — 파일 유지: \(jsonURL.lastPathComponent, privacy: .public)")
+                failCount += 1
             }
+        }
+
+        if failCount > 0 {
+            Log.store.error("복원 실패 \(failCount, privacy: .public)건, 파일 유지")
         }
 
         return successCount
@@ -115,7 +123,7 @@ public enum MeetingSaveRecovery {
         return base.appendingPathComponent("Minto/recovery", isDirectory: true)
     }
 
-    // MeetingStore와 동일한 설정으로 독립 인스턴스를 생성한다.
+    // SYNC: MeetingStore/MeetingSaveRecovery encoder 설정과 반드시 일치
     static func makeEncoder() -> JSONEncoder {
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
@@ -123,6 +131,7 @@ public enum MeetingSaveRecovery {
         return enc
     }
 
+    // SYNC: MeetingStore/MeetingSaveRecovery encoder 설정과 반드시 일치
     static func makeDecoder() -> JSONDecoder {
         let dec = JSONDecoder()
         dec.dateDecodingStrategy = .iso8601
