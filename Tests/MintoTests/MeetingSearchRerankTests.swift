@@ -123,8 +123,9 @@ struct MeetingSearchRerankTests {
         )
 
         // similarity가 nil이므로 normalizedTokenScore를 코사인 대신 사용 →
-        // b(점수 20)가 여전히 1위
+        // b(점수 20)가 여전히 1위, a(점수 5)가 2위
         #expect(reranked.first?.id == "b")
+        #expect(reranked.last?.id == "a")
     }
 
     // MARK: - 빈 결과 처리

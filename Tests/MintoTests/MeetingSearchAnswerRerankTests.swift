@@ -121,6 +121,39 @@ struct MeetingSearchAnswerRerankTests {
         #expect(!answer.text.isEmpty)
     }
 
+    // MARK: - 임베딩 타임아웃 → fail-soft
+
+    @Test("임베딩이 타임아웃을 초과하면 원 results로 즉시 답변 생성을 진행한다")
+    func embeddingTimeoutFallsBackImmediately() async throws {
+        // 60초 대기하는 느린 transport — semanticRerankTimeoutSeconds=0.1 로 빠르게 타임아웃 발생
+        let transport = SlowEmbeddingTransport(delaySeconds: 60)
+        let localProvider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(
+                baseURL: URL(string: "http://127.0.0.1:11434")!,
+                modelID: "test-model",
+                compatibility: .ollamaGenerate
+            ),
+            transport: transport
+        )
+        let textProvider = StubTextProvider(responseText: "타임아웃 후 fallback 답변. [1]")
+        // 집합 타임아웃을 0.1초로 주입 — 테스트가 오래 걸리지 않는다
+        let useCase = MeetingSearchAnswerUseCase(maxChunks: 3, semanticRerankTimeoutSeconds: 0.1)
+
+        let start = Date()
+        let answer = try await useCase.answer(
+            query: "liquibase",
+            index: MeetingSearchIndex(records: [sampleRecord()]),
+            provider: textProvider,
+            embeddingProvider: localProvider
+        )
+        let elapsed = Date().timeIntervalSince(start)
+
+        // 타임아웃 후 원 results로 즉시 진행하므로 답변이 생성되어야 한다
+        #expect(!answer.text.isEmpty)
+        // 60초 대기가 아니라 타임아웃(0.1초) + 여유분(2초) 이내에 완료되어야 한다
+        #expect(elapsed < 2.0, "타임아웃 초과 시 즉시 fallback이 되어야 함 (elapsed: \(elapsed)s)")
+    }
+
     // MARK: - embeddingProvider nil이면 LocalHash 사용
 
     @Test("embeddingProvider가 nil이면 LocalHash로 재랭킹하고 답변을 생성한다")
@@ -199,6 +232,16 @@ private final class RecordingTransport: LLMAPITransport, @unchecked Sendable {
             headerFields: nil
         )!
         return (responseData, response)
+    }
+}
+
+/// 지정한 시간 동안 응답을 지연하는 transport — 타임아웃 테스트용
+private struct SlowEmbeddingTransport: LLMAPITransport {
+    let delaySeconds: TimeInterval
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        try await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+        throw LLMProviderError.network("SlowEmbeddingTransport: 타임아웃 이전에 완료되면 안 됨")
     }
 }
 

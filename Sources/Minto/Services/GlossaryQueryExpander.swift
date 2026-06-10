@@ -14,7 +14,7 @@ public struct GlossaryQueryExpander: Sendable {
     ///
     /// - Parameters:
     ///   - queryTokens: `MeetingSearchIndex.queryTerms(_:)` 로 얻은 토큰 목록
-    ///   - entries: 용어집 항목. 호출측에서 `isUsable` 필터 적용 후 전달
+    ///   - entries: 용어집 항목. `isUsable` 필터 적용 후 전달할 것(MUST) — 미필터 시 비활성 용어도 확장됨
     /// - Returns: 확장 토큰과 가중치 쌍. 원 queryTokens와 중복되지 않는 항목만 포함
     public static func expand(
         queryTokens: [String],
@@ -22,8 +22,9 @@ public struct GlossaryQueryExpander: Sendable {
     ) -> [(token: String, weight: Double)] {
         guard !queryTokens.isEmpty, !entries.isEmpty else { return [] }
 
-        let foldingOptions: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]
-        let foldedQueryTokens = queryTokens.map { $0.folding(options: foldingOptions, locale: .current) }
+        // MeetingSearchIndex.tokenize 와 동일한 folding을 사용하기 위해 해당 함수를 직접 호출한다.
+        // queryTokens는 이미 MeetingSearchIndex.queryTerms() 를 거쳤으므로 재folding은 그대로 통과.
+        let foldedQueryTokens = queryTokens
         let queryTokenSet = Set(foldedQueryTokens)
 
         var expandedTokens: [(token: String, weight: Double)] = []
@@ -36,7 +37,7 @@ public struct GlossaryQueryExpander: Sendable {
 
             // 쿼리 토큰 중 이 entry의 표기 중 하나라도 일치하는 것이 있는지 확인
             let entryMatches = allSurfaces.contains { surface in
-                let surfaceTokens = tokenize(surface)
+                let surfaceTokens = MeetingSearchIndex.tokenize(surface)
                 return surfaceTokens.contains { surfaceToken in
                     foldedQueryTokens.contains { queryToken in
                         queryToken == surfaceToken
@@ -47,7 +48,7 @@ public struct GlossaryQueryExpander: Sendable {
 
             // 일치한 entry의 나머지 표기에서 확장 토큰을 수집
             for surface in allSurfaces {
-                for token in tokenize(surface) {
+                for token in MeetingSearchIndex.tokenize(surface) {
                     guard !seenTokens.contains(token) else { continue }
                     seenTokens.insert(token)
                     expandedTokens.append((token: token, weight: Self.expansionWeight))
@@ -56,22 +57,5 @@ public struct GlossaryQueryExpander: Sendable {
         }
 
         return expandedTokens
-    }
-
-    /// MeetingSearchIndex.tokenize 와 동일한 로직.
-    /// 두 곳에서 독립적으로 유지해 MeetingSearchIndex 내부에 의존하지 않는다.
-    private static func tokenize(_ text: String) -> [String] {
-        let folded = text.folding(
-            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
-            locale: Locale(identifier: "en_US_POSIX")
-        )
-        var scalars = String.UnicodeScalarView()
-        for scalar in folded.lowercased().unicodeScalars {
-            scalars.append(CharacterSet.alphanumerics.contains(scalar) ? scalar : " ")
-        }
-        return String(scalars)
-            .split(separator: " ")
-            .map(String.init)
-            .filter { !$0.isEmpty }
     }
 }

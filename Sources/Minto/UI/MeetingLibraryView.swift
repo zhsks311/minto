@@ -52,6 +52,8 @@ public struct MeetingLibraryView: View {
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @State private var fileImportTask: Task<Void, Never>?
+    /// 임베딩 인덱스 빌드 Task 핸들. 연속 호출 시 이전 Task를 취소해 stale 인덱스 설치를 막는다.
+    @State private var embeddingBuildTask: Task<Void, Never>?
     /// 파일 선택 후 맥락 입력 시트를 띄울 URL. nil이면 시트 미표시.
     @State private var fileImportSetupURL: URL?
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
@@ -165,6 +167,10 @@ public struct MeetingLibraryView: View {
                 showingLiveMeeting = false
                 detailTab = .summary
             }
+        }
+        .onReceive(GlossaryStore.shared.$entries) { _ in
+            // 용어집 변경 시 검색 결과를 즉시 재계산해 추가/삭제된 용어를 반영한다.
+            if isSearching { refreshSearchResults() }
         }
         .confirmationDialog(
             "회의록 내보내기",
@@ -1947,11 +1953,13 @@ public struct MeetingLibraryView: View {
     }
 
     private func rebuildEmbeddingIndex(from index: MeetingSearchIndex) {
+        embeddingBuildTask?.cancel()
         embeddingIndex = nil
-        Task.detached(priority: .background) {
+        embeddingBuildTask = Task.detached(priority: .background) {
             let built = try? await MeetingSearchEmbeddingBuilder(
                 provider: LocalHashEmbeddingProvider()
             ).build(from: index)
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.embeddingIndex = built
             }

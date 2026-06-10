@@ -203,7 +203,9 @@ public struct MeetingSearchIndex: Sendable, Equatable {
         tokenize(text).joined(separator: " ")
     }
 
-    private static func tokenize(_ text: String) -> [String] {
+    /// 텍스트를 검색 토큰으로 분해한다.
+    /// 같은 모듈 내 다른 타입(GlossaryQueryExpander 등)에서 공유해 folding 동작을 일치시킨다.
+    static func tokenize(_ text: String) -> [String] {
         let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
         var scalars = String.UnicodeScalarView()
         for scalar in folded.lowercased().unicodeScalars {
