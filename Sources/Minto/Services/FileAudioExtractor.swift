@@ -88,11 +88,25 @@ public struct FileAudioExtractor: MeetingFileAudioExtracting {
 
         let extractionTask = Task.detached(priority: .userInitiated) {
             let asset = AVURLAsset(url: url)
-            let tracks = try await asset.loadTracks(withMediaType: .audio)
+            let tracks: [AVAssetTrack]
+            do {
+                tracks = try await asset.loadTracks(withMediaType: .audio)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw FileAudioExtractionError.readerFailed(error.localizedDescription)
+            }
             guard let track = tracks.first else {
                 throw FileAudioExtractionError.noAudioTrack
             }
-            let duration = try await asset.load(.duration)
+            let duration: CMTime
+            do {
+                duration = try await asset.load(.duration)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw FileAudioExtractionError.readerFailed(error.localizedDescription)
+            }
             let assetDuration = CMTimeGetSeconds(duration)
             let fallbackDuration = assetDuration.isFinite && assetDuration > 0 ? assetDuration : 0
             let chunkSize = max(1, Int((max(1, chunkSeconds) * STTAudioUtilities.sampleRate).rounded()))

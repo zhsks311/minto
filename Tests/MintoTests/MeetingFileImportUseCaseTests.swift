@@ -465,4 +465,28 @@ struct FileAudioExtractionErrorMessageTests {
         let error = FileAudioExtractionError.readerFailed("Cannot Open")
         #expect(error.localizedDescription == error.errorDescription)
     }
+
+    @Test("텍스트 내용의 가짜 mp4 파일은 readerFailed를 throw하고 한글 안내로 시작한다")
+    func fakeMP4ThrowsReaderFailedWithKoreanMessage() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("minto-fake-mp4-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("fake.mp4")
+        try Data("not a real mp4 file".utf8).write(to: url)
+
+        do {
+            _ = try await FileAudioExtractor().extractChunks(from: url, chunkSeconds: 1, onChunk: { _ in })
+            Issue.record("예외가 발생하지 않았습니다.")
+        } catch let error as FileAudioExtractionError {
+            if case .readerFailed(let message) = error {
+                let description = error.errorDescription ?? ""
+                #expect(description.hasPrefix("파일을 열 수 없어요."))
+                #expect(!message.isEmpty)
+            } else {
+                Issue.record("readerFailed가 아닌 에러: \(error)")
+            }
+        } catch {
+            Issue.record("FileAudioExtractionError가 아닌 에러: \(error)")
+        }
+    }
 }
