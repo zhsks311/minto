@@ -30,4 +30,5 @@
 ## 진행
 
 - 완료: 작업 1 provider follow Combine 구독, `./scripts/dev.sh build`, `./scripts/dev.sh test`, 커밋 `4281f00`
-- 진행 중: 작업 2 MeetingRecord encoder/decoder 공유 팩토리
+- 완료: 작업 2 MeetingRecord encoder/decoder 공유 팩토리, `./scripts/dev.sh build`, `./scripts/dev.sh test`, 커밋 `8b7d93f`
+- 완료: 작업 3 LLMCorrectionService 단위 테스트 보강, `./scripts/dev.sh build`, `./scripts/dev.sh test`

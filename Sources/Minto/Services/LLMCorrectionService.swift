@@ -27,6 +27,7 @@ public struct LLMCorrectionContext: Sendable, Equatable {
 public final class LLMCorrectionService: ObservableObject {
 
     public typealias Provider = LLMProviderSelection
+    public typealias TextProviderResolver = @MainActor (LLMProviderID) -> (any LLMTextGenerationProvider)?
 
     public static let shared = LLMCorrectionService()
     public static let selectedProviderKey = "llmProvider"
@@ -52,9 +53,14 @@ public final class LLMCorrectionService: ObservableObject {
     // 교정 진행 중 카운터 (ViewModel에서 UI 인디케이터에 사용)
     @Published public var activeCorrections: Int = 0
 
-    func selectedTextProvider() -> (any LLMTextGenerationProvider)? {
+    func selectedTextProvider(
+        providerResolver: TextProviderResolver? = nil
+    ) -> (any LLMTextGenerationProvider)? {
         guard let providerID = selectedProvider.providerID else { return nil }
-        return LLMProviderRegistry.shared.textGenerationProvider(for: providerID)
+        let provider = providerResolver?(providerID)
+            ?? LLMProviderRegistry.shared.textGenerationProvider(for: providerID)
+        guard provider?.descriptor.supportedCapabilities.contains(.correction) == true else { return nil }
+        return provider
     }
 
     // MARK: - Correct
@@ -76,6 +82,15 @@ public final class LLMCorrectionService: ObservableObject {
 
     /// 명시적 context로 교정한다. 파일 import처럼 live `MeetingContext`를 섞으면 안 되는 경로에서 사용한다.
     public func correct(text: String, context: LLMCorrectionContext) async -> String? {
+        await correct(text: text, context: context, providerResolver: nil)
+    }
+
+    /// 명시적 context와 provider resolver로 교정한다. 테스트에서 registry 전역 상태를 우회할 때 사용한다.
+    public func correct(
+        text: String,
+        context: LLMCorrectionContext,
+        providerResolver: TextProviderResolver? = nil
+    ) async -> String? {
         guard selectedProvider != .none, !text.isEmpty else { return nil }
 
         activeCorrections += 1
@@ -90,7 +105,7 @@ public final class LLMCorrectionService: ObservableObject {
             document: context.document
         )
 
-        guard let provider = selectedTextProvider() else { return nil }
+        guard let provider = selectedTextProvider(providerResolver: providerResolver) else { return nil }
 
         Log.correction.info("correcting via \(provider.descriptor.id.rawValue, privacy: .public) inputChars=\(text.count, privacy: .public) contextChars=\(context.previousText.count, privacy: .public)")
         do {
