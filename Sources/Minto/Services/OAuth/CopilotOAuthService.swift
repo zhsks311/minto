@@ -192,15 +192,31 @@ public final class CopilotOAuthService: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
-            let bodyText = String(decoding: data.prefix(800), as: UTF8.self)
-            Log.oauth.error("Copilot correct HTTP \(status, privacy: .public) body=\(String(bodyText.prefix(200)), privacy: .public)")
+            let bodyText = String(String(decoding: data, as: UTF8.self).prefix(200))
+            Log.oauth.error("Copilot correct HTTP \(status, privacy: .public) body=\(bodyText, privacy: .public)")
             throw CopilotError.badResponse
         }
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String
-        else { throw CopilotError.badResponse }
+
+        func logParseFailure(reason: String) {
+            Log.oauth.error("Copilot correct parse failed HTTP 200 bodyLen=\(data.count, privacy: .public) reason=\(reason, privacy: .public)")
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            logParseFailure(reason: "root_not_object")
+            throw CopilotError.badResponse
+        }
+        guard let choices = json["choices"] as? [[String: Any]] else {
+            logParseFailure(reason: "missing=choices")
+            throw CopilotError.badResponse
+        }
+        guard let message = choices.first?["message"] as? [String: Any] else {
+            logParseFailure(reason: "missing=choices[0].message")
+            throw CopilotError.badResponse
+        }
+        guard let content = message["content"] as? String else {
+            logParseFailure(reason: "missing=choices[0].message.content")
+            throw CopilotError.badResponse
+        }
 
         let output = content.trimmingCharacters(in: .whitespacesAndNewlines)
         Log.oauth.info("Copilot correct OK model=\(model, privacy: .public) outputChars=\(output.count, privacy: .public)")

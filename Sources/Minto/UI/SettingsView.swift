@@ -210,6 +210,7 @@ public struct SettingsView: View {
             apiKeyInputs = [:]
             loginError = nil
         }
+        // 사용자 조작 외 내부 자동 동기화로 인한 전환도 함께 기록된다(모든 유효 provider 전환을 남기는 것이 의도).
         .onChange(of: lastLLMProviderRaw) { oldValue, newValue in
             logSettingChange(key: "lastLLMProvider", oldValue: oldValue, newValue: newValue)
         }

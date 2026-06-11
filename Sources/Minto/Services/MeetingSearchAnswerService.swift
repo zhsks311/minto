@@ -92,7 +92,11 @@ public struct MeetingSearchAnswerUseCase: Sendable {
         embeddingProvider: (any LLMEmbeddingProvider)? = nil
     ) async throws -> MeetingSearchAnswer {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw MeetingSearchAnswerError.emptyQuery }
+        guard !trimmed.isEmpty else {
+            let error = MeetingSearchAnswerError.emptyQuery
+            Log.search.error("answer failed: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
         return try await answer(
             query: trimmed,
             results: retrieve(query: trimmed, index: index),
@@ -108,15 +112,29 @@ public struct MeetingSearchAnswerUseCase: Sendable {
         embeddingProvider: (any LLMEmbeddingProvider)? = nil
     ) async throws -> MeetingSearchAnswer {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw MeetingSearchAnswerError.emptyQuery }
+        guard !trimmed.isEmpty else {
+            let error = MeetingSearchAnswerError.emptyQuery
+            Log.search.error("answer failed: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
         // 답변 생성 직전에 의미 재랭킹 — 실패 시 원 results 그대로 진행(fail-soft)
         let rerankedResults = await semanticRerank(query: trimmed, results: results, embeddingProvider: embeddingProvider)
         let context = contextBlock(from: rerankedResults)
-        guard !context.citations.isEmpty else { throw MeetingSearchAnswerError.noResults }
-        guard provider.descriptor.supportedCapabilities.contains(.answer) else {
-            throw MeetingSearchAnswerError.providerUnsupported
+        guard !context.citations.isEmpty else {
+            let error = MeetingSearchAnswerError.noResults
+            Log.search.error("answer failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
         }
-        guard await provider.isConfigured() else { throw MeetingSearchAnswerError.providerNotConfigured }
+        guard provider.descriptor.supportedCapabilities.contains(.answer) else {
+            let error = MeetingSearchAnswerError.providerUnsupported
+            Log.search.error("answer failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+        guard await provider.isConfigured() else {
+            let error = MeetingSearchAnswerError.providerNotConfigured
+            Log.search.error("answer failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
         let prompt = AnswerPrompt.build(query: trimmed, context: context.text)
 
         do {

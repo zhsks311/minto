@@ -13,6 +13,7 @@ OAuth 계정 교정, 검색 답변, 설정 변경 경로의 진단 로그를 정
 - 별칭 프리필 실패 로그를 `.debug`에서 `.error`로 올렸다.
 - 검색 답변 생성 성공/실패 로그를 `Log.search`에 추가했다.
 - Settings의 provider/model AppStorage 변경을 `Log.app.info`로 기록한다.
+- 코드 리뷰 후 검색 답변 guard 실패 로그, `lastLLMProvider` 동기화 주석, OAuth body prefix 정리, Copilot 200 파싱 실패 reason 로그를 보완했다.
 
 ## 민감정보 기준
 

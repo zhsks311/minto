@@ -359,8 +359,8 @@ public final class CodexOAuthService: ObservableObject {
         if status == 200 {
             Log.oauth.info("Codex \(step, privacy: .public) HTTP 200")
         } else {
-            let bodyText = String(decoding: data.prefix(800), as: UTF8.self)
-            Log.oauth.error("Codex \(step, privacy: .public) HTTP \(status, privacy: .public) body=\(String(bodyText.prefix(200)), privacy: .public)")
+            let bodyText = String(String(decoding: data, as: UTF8.self).prefix(200))
+            Log.oauth.error("Codex \(step, privacy: .public) HTTP \(status, privacy: .public) body=\(bodyText, privacy: .public)")
         }
     }
 

@@ -252,8 +252,8 @@ public final class GeminiOAuthService: NSObject {
         let (data, urlResponse) = try await URLSession.shared.data(for: request)
         let status = (urlResponse as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
-            let bodyText = String(decoding: data.prefix(800), as: UTF8.self)
-            Log.oauth.error("Gemini correct HTTP \(status, privacy: .public) body=\(String(bodyText.prefix(200)), privacy: .public)")
+            let bodyText = String(String(decoding: data, as: UTF8.self).prefix(200))
+            Log.oauth.error("Gemini correct HTTP \(status, privacy: .public) body=\(bodyText, privacy: .public)")
             throw GeminiOAuthError.badResponse
         }
 
