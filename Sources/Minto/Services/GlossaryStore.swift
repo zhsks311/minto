@@ -9,6 +9,7 @@ public final class GlossaryStore: ObservableObject {
 
     @Published public private(set) var entries: [GlossaryEntry] = []
     @Published public private(set) var pendingCandidates: [GlossaryCandidate] = []
+    @Published public private(set) var pendingAliases: [GlossaryAliasSuggestion] = []
 
     private let fileURL: URL
     private let encoder: JSONEncoder
@@ -54,19 +55,23 @@ public final class GlossaryStore: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL) else {
             entries = []
             pendingCandidates = []
+            pendingAliases = []
             return
         }
         if let snapshot = try? decoder.decode(GlossarySnapshot.self, from: data),
            snapshot.schemaVersion == Self.schemaVersion {
             entries = Self.cleaned(snapshot.entries)
             pendingCandidates = snapshot.pendingCandidates
+            pendingAliases = snapshot.pendingAliases
         } else if let legacy = try? decoder.decode([GlossaryEntry].self, from: data) {
             entries = Self.cleaned(legacy)
             pendingCandidates = []
+            pendingAliases = []
             _ = save()
         } else {
             entries = []
             pendingCandidates = []
+            pendingAliases = []
         }
     }
 
@@ -122,6 +127,22 @@ public final class GlossaryStore: ObservableObject {
         Log.store.info("glossary candidates added count=\(count, privacy: .public)")
     }
 
+    /// 교정 전후 diff에서 얻은 별칭 후보를 축적한다. 자동 등록은 하지 않는다.
+    public func ingestCorrectionAliases(_ pairs: [(canonical: String, alias: String)]) {
+        guard !pairs.isEmpty else { return }
+
+        let merge = Self.mergeCorrectionAliases(
+            pairs,
+            entries: entries,
+            pendingCandidates: pendingCandidates,
+            pendingAliases: pendingAliases
+        )
+        guard merge.changed else { return }
+        guard save(entries, pendingCandidates: merge.pendingCandidates, pendingAliases: merge.pendingAliases) else { return }
+        pendingCandidates = merge.pendingCandidates
+        pendingAliases = merge.pendingAliases
+    }
+
     /// 후보를 승인 처리(폼 프리필용) — 실제 등록은 UI 폼에서 사용자가 직접 한다. 후보 목록에서만 제거.
     public func approveCandidate(_ id: UUID) {
         let next = pendingCandidates.filter { $0.id != id }
@@ -134,6 +155,38 @@ public final class GlossaryStore: ObservableObject {
         let next = pendingCandidates.filter { $0.id != id }
         guard save(entries, pendingCandidates: next) else { return }
         pendingCandidates = next
+    }
+
+    /// 기존 용어에 대한 별칭 제안을 승인한다. 사용자 클릭 경로에서만 호출한다.
+    public func approveAliasSuggestion(_ id: UUID) {
+        guard let suggestion = pendingAliases.first(where: { $0.id == id }) else { return }
+
+        var nextEntries = entries
+        let nextAliases = pendingAliases.filter { $0.id != id }
+        guard let entryIndex = nextEntries.firstIndex(where: { $0.id == suggestion.entryID }) else {
+            guard save(entries, pendingCandidates: pendingCandidates, pendingAliases: nextAliases) else { return }
+            pendingAliases = nextAliases
+            return
+        }
+
+        let existingKeys = Set(([nextEntries[entryIndex].canonical] + nextEntries[entryIndex].aliases).map(Self.foldedKey))
+        let aliasKey = Self.foldedKey(suggestion.alias)
+        if !existingKeys.contains(aliasKey) {
+            nextEntries[entryIndex].aliases = Self.uniqueLines(nextEntries[entryIndex].aliases + [suggestion.alias])
+            nextEntries[entryIndex].updatedAt = Date()
+            nextEntries = Self.cleaned(nextEntries)
+        }
+
+        guard save(nextEntries, pendingCandidates: pendingCandidates, pendingAliases: nextAliases) else { return }
+        entries = nextEntries
+        pendingAliases = nextAliases
+    }
+
+    /// 기존 용어에 대한 별칭 제안을 무시한다.
+    public func dismissAliasSuggestion(_ id: UUID) {
+        let nextAliases = pendingAliases.filter { $0.id != id }
+        guard save(entries, pendingCandidates: pendingCandidates, pendingAliases: nextAliases) else { return }
+        pendingAliases = nextAliases
     }
 
     /// 새 회의의 keywords에서 추가할 후보를 추출하는 순수 함수.
@@ -166,6 +219,62 @@ public final class GlossaryStore: ObservableObject {
                 return !blockedByEntries.contains(key) && !blockedByPending.contains(key)
             }
             .map { GlossaryCandidate(term: $0, sourceMeetingID: sourceMeetingID) }
+    }
+
+    private struct AliasMergeResult {
+        let pendingCandidates: [GlossaryCandidate]
+        let pendingAliases: [GlossaryAliasSuggestion]
+        let changed: Bool
+    }
+
+    nonisolated private static func mergeCorrectionAliases(
+        _ pairs: [(canonical: String, alias: String)],
+        entries: [GlossaryEntry],
+        pendingCandidates: [GlossaryCandidate],
+        pendingAliases: [GlossaryAliasSuggestion]
+    ) -> AliasMergeResult {
+        var nextCandidates = pendingCandidates
+        var nextAliases = pendingAliases
+        var changed = false
+
+        for pair in pairs {
+            let canonical = pair.canonical.trimmingCharacters(in: .whitespacesAndNewlines)
+            let alias = pair.alias.trimmingCharacters(in: .whitespacesAndNewlines)
+            let canonicalKey = foldedKey(canonical)
+            let aliasKey = foldedKey(alias)
+            guard !canonicalKey.isEmpty, !aliasKey.isEmpty, canonicalKey != aliasKey else { continue }
+
+            if let entry = matchingEntry(for: canonical, in: entries) {
+                let existingKeys = Set(([entry.canonical] + entry.aliases).map(foldedKey))
+                guard !existingKeys.contains(aliasKey) else { continue }
+                guard !nextAliases.contains(where: { $0.entryID == entry.id && foldedKey($0.alias) == aliasKey }) else { continue }
+                nextAliases.append(GlossaryAliasSuggestion(entryID: entry.id, alias: alias))
+                changed = true
+            } else if let candidateIndex = nextCandidates.firstIndex(where: { foldedKey($0.term) == canonicalKey }) {
+                let existingKeys = Set(([nextCandidates[candidateIndex].term] + nextCandidates[candidateIndex].suggestedAliases).map(foldedKey))
+                guard !existingKeys.contains(aliasKey) else { continue }
+                nextCandidates[candidateIndex].suggestedAliases = uniqueLines(nextCandidates[candidateIndex].suggestedAliases + [alias])
+                changed = true
+            } else {
+                nextCandidates.append(GlossaryCandidate(term: canonical, suggestedAliases: uniqueLines([alias])))
+                changed = true
+            }
+        }
+
+        if nextAliases.count > 30 {
+            nextAliases.sort { $0.suggestedAt < $1.suggestedAt }
+            nextAliases = Array(nextAliases.suffix(30))
+        }
+        if nextCandidates.count > 20 {
+            nextCandidates.sort { $0.suggestedAt < $1.suggestedAt }
+            nextCandidates = Array(nextCandidates.suffix(20))
+        }
+
+        return AliasMergeResult(
+            pendingCandidates: nextCandidates,
+            pendingAliases: nextAliases,
+            changed: changed
+        )
     }
 
     @discardableResult
@@ -264,8 +373,10 @@ public final class GlossaryStore: ObservableObject {
 
     public func delete(_ id: UUID) {
         let nextEntries = entries.filter { $0.id != id }
-        guard save(nextEntries) else { return }
+        let nextAliases = pendingAliases.filter { $0.entryID != id }
+        guard save(nextEntries, pendingAliases: nextAliases) else { return }
         entries = nextEntries
+        pendingAliases = nextAliases
     }
 
     public func candidates(for topic: String, limit: Int = 8) -> [GlossaryEntry] {
@@ -314,13 +425,18 @@ public final class GlossaryStore: ObservableObject {
     ///   - entriesToSave: nil이면 현재 메모리의 entries를 그대로 저장한다.
     ///   - pendingToSave: nil이면 현재 메모리의 pendingCandidates를 그대로 저장한다.
     @discardableResult
-    private func save(_ entriesToSave: [GlossaryEntry]? = nil, pendingCandidates pendingToSave: [GlossaryCandidate]? = nil) -> Bool {
+    private func save(
+        _ entriesToSave: [GlossaryEntry]? = nil,
+        pendingCandidates pendingToSave: [GlossaryCandidate]? = nil,
+        pendingAliases aliasesToSave: [GlossaryAliasSuggestion]? = nil
+    ) -> Bool {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let snapshot = GlossarySnapshot(
                 schemaVersion: Self.schemaVersion,
                 entries: entriesToSave ?? entries,
-                pendingCandidates: pendingToSave ?? pendingCandidates
+                pendingCandidates: pendingToSave ?? pendingCandidates,
+                pendingAliases: aliasesToSave ?? pendingAliases
             )
             let data = try encoder.encode(snapshot)
             try data.write(to: fileURL, options: .atomic)
@@ -372,6 +488,18 @@ public final class GlossaryStore: ObservableObject {
         return result
     }
 
+    nonisolated private static func matchingEntry(for canonical: String, in entries: [GlossaryEntry]) -> GlossaryEntry? {
+        let key = foldedKey(canonical)
+        return entries.first { entry in
+            foldedKey(entry.canonical) == key || entry.aliases.contains { foldedKey($0) == key }
+        }
+    }
+
+    nonisolated private static func foldedKey(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+    }
+
     nonisolated private static func relevanceScore(_ entry: GlossaryEntry, query: String) -> Int {
         let foldedQuery = query.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
         guard !foldedQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return 0 }
@@ -387,23 +515,31 @@ public struct GlossarySnapshot: Codable, Sendable, Equatable {
     public let schemaVersion: Int
     public let entries: [GlossaryEntry]
     public let pendingCandidates: [GlossaryCandidate]
+    public let pendingAliases: [GlossaryAliasSuggestion]
 
-    public init(schemaVersion: Int, entries: [GlossaryEntry], pendingCandidates: [GlossaryCandidate] = []) {
+    public init(
+        schemaVersion: Int,
+        entries: [GlossaryEntry],
+        pendingCandidates: [GlossaryCandidate] = [],
+        pendingAliases: [GlossaryAliasSuggestion] = []
+    ) {
         self.schemaVersion = schemaVersion
         self.entries = entries
         self.pendingCandidates = pendingCandidates
+        self.pendingAliases = pendingAliases
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, entries, pendingCandidates
+        case schemaVersion, entries, pendingCandidates, pendingAliases
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
         entries = try c.decode([GlossaryEntry].self, forKey: .entries)
-        // 기존 schemaVersion 1 파일에는 pendingCandidates가 없으므로 tolerant 디코딩.
+        // 기존 schemaVersion 1 파일에는 새 pending 필드가 없으므로 tolerant 디코딩.
         pendingCandidates = (try? c.decode([GlossaryCandidate].self, forKey: .pendingCandidates)) ?? []
+        pendingAliases = (try? c.decode([GlossaryAliasSuggestion].self, forKey: .pendingAliases)) ?? []
     }
 }
 

@@ -116,7 +116,8 @@ struct GlossarySettingsSection: View {
 
     /// 후보의 출처 회의 제목 (회의가 없으면 nil).
     private func sourceMeetingTitle(for candidate: GlossaryCandidate) -> String? {
-        MeetingStore.shared.meetings.first { $0.id == candidate.sourceMeetingID }?.title
+        guard let sourceMeetingID = candidate.sourceMeetingID else { return nil }
+        return MeetingStore.shared.meetings.first { $0.id == sourceMeetingID }?.title
     }
 
     /// [추가] 버튼 동작: 폼을 열고 canonical을 프리필한다. 자동 등록하지 않는다.
