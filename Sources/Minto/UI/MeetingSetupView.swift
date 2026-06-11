@@ -332,10 +332,11 @@ public struct MeetingSetupView: View {
     }
 
     private var glossaryBadgeText: String {
-        let selectedCount = validSelectedGlossaryCategories.count
-        if selectedCount > 0 { return "분류 \(selectedCount)개 선택" }
-        if hasManualGlossary { return "직접 입력" }
-        return "선택"
+        GlossarySetSelectionPersistence.badgeText(
+            selectedCategories: selectedGlossaryCategories,
+            manualGlossary: glossary,
+            availableCategoryNames: glossarySelectionCategoryNames
+        )
     }
 
     private var selectedGlossaryEntries: [GlossaryEntry] {
@@ -346,39 +347,33 @@ public struct MeetingSetupView: View {
         GlossaryContextResolver().resolve(manualGlossary: glossary, selectedEntries: selectedGlossaryEntries)
     }
 
-    private var availableGlossaryCategories: Set<String> {
-        Set(glossaryStore.categorySelectionNames)
-    }
-
-    private var validSelectedGlossaryCategories: Set<String> {
-        selectedGlossaryCategories.intersection(availableGlossaryCategories)
-    }
-
-    private var hasManualGlossary: Bool {
-        glossary
-            .split(whereSeparator: { $0.isNewline })
-            .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var glossarySelectionCategoryNames: [String] {
+        glossaryStore.categorySelectionNames
     }
 
     private func restoreGlossarySelection() {
-        selectedGlossaryCategories = GlossarySetSelectionPersistence.load(
+        selectedGlossaryCategories = GlossarySetSelectionPersistence.restore(
             from: glossarySelectionDefaults,
-            availableCategories: availableGlossaryCategories
+            availableCategoryNames: glossarySelectionCategoryNames
         )
     }
 
     private func saveGlossarySelection() {
-        GlossarySetSelectionPersistence.save(
-            validSelectedGlossaryCategories,
+        GlossarySetSelectionPersistence.saveSelection(
+            selectedGlossaryCategories,
+            availableCategoryNames: glossarySelectionCategoryNames,
             to: glossarySelectionDefaults
         )
     }
 
     private func pruneGlossarySelection() {
-        let valid = validSelectedGlossaryCategories
-        guard valid != selectedGlossaryCategories else { return }
-        selectedGlossaryCategories = valid
-        GlossarySetSelectionPersistence.save(valid, to: glossarySelectionDefaults)
+        let pruned = GlossarySetSelectionPersistence.prunedSelection(
+            selectedGlossaryCategories,
+            availableCategoryNames: glossarySelectionCategoryNames,
+            defaults: glossarySelectionDefaults
+        )
+        guard pruned != selectedGlossaryCategories else { return }
+        selectedGlossaryCategories = pruned
     }
 
     private var confluenceQuery: String {

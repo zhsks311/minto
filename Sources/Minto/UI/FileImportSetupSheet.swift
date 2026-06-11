@@ -14,7 +14,19 @@ struct FileImportSetupSheet: View {
     @State private var selectedGlossaryCategories: Set<String> = []
     @State private var showGlossary = false
     @Environment(\.dismiss) private var dismiss
-    private let glossarySelectionDefaults: UserDefaults = .standard
+    private let glossarySelectionDefaults: UserDefaults
+
+    init(
+        fileURL: URL,
+        onImport: @escaping (String, String) -> Void,
+        onSkip: @escaping () -> Void,
+        glossarySelectionDefaults: UserDefaults = .standard
+    ) {
+        self.fileURL = fileURL
+        self.onImport = onImport
+        self.onSkip = onSkip
+        self.glossarySelectionDefaults = glossarySelectionDefaults
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -133,44 +145,39 @@ struct FileImportSetupSheet: View {
     }
 
     private var glossaryBadgeText: String {
-        let selectedCount = validSelectedGlossaryCategories.count
-        if selectedCount > 0 { return "분류 \(selectedCount)개 선택" }
-        if hasManualGlossary { return "직접 입력" }
-        return "선택"
+        GlossarySetSelectionPersistence.badgeText(
+            selectedCategories: selectedGlossaryCategories,
+            manualGlossary: manualGlossary,
+            availableCategoryNames: glossarySelectionCategoryNames
+        )
     }
 
-    private var availableGlossaryCategories: Set<String> {
-        Set(glossaryStore.categorySelectionNames)
-    }
-
-    private var validSelectedGlossaryCategories: Set<String> {
-        selectedGlossaryCategories.intersection(availableGlossaryCategories)
-    }
-
-    private var hasManualGlossary: Bool {
-        manualGlossary
-            .split(whereSeparator: { $0.isNewline })
-            .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var glossarySelectionCategoryNames: [String] {
+        glossaryStore.categorySelectionNames
     }
 
     private func restoreGlossarySelection() {
-        selectedGlossaryCategories = GlossarySetSelectionPersistence.load(
+        selectedGlossaryCategories = GlossarySetSelectionPersistence.restore(
             from: glossarySelectionDefaults,
-            availableCategories: availableGlossaryCategories
+            availableCategoryNames: glossarySelectionCategoryNames
         )
     }
 
     private func saveGlossarySelection() {
-        GlossarySetSelectionPersistence.save(
-            validSelectedGlossaryCategories,
+        GlossarySetSelectionPersistence.saveSelection(
+            selectedGlossaryCategories,
+            availableCategoryNames: glossarySelectionCategoryNames,
             to: glossarySelectionDefaults
         )
     }
 
     private func pruneGlossarySelection() {
-        let valid = validSelectedGlossaryCategories
-        guard valid != selectedGlossaryCategories else { return }
-        selectedGlossaryCategories = valid
-        GlossarySetSelectionPersistence.save(valid, to: glossarySelectionDefaults)
+        let pruned = GlossarySetSelectionPersistence.prunedSelection(
+            selectedGlossaryCategories,
+            availableCategoryNames: glossarySelectionCategoryNames,
+            defaults: glossarySelectionDefaults
+        )
+        guard pruned != selectedGlossaryCategories else { return }
+        selectedGlossaryCategories = pruned
     }
 }

@@ -174,6 +174,26 @@ struct GlossaryStoreTests {
         #expect(entries.map(\.canonical) == ["Liquibase"])
     }
 
+    @Test("선택용 그룹핑은 disabled-only 분류를 제외하고 관리용 그룹핑은 유지한다")
+    func usableGroupedEntriesExcludeDisabledOnlyCategories() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+
+        #expect(store.add(canonical: "Liquibase", category: "개발") == true)
+        #expect(store.add(canonical: "Kafka", category: "인프라") == true)
+        let disabledID = store.entries.first { $0.canonical == "Kafka" }!.id
+        store.setEnabled(disabledID, enabled: false)
+
+        let usableCategories = Set(store.usableGroupedEntriesByCategory.map(\.category))
+        let allCategories = Set(store.groupedEntriesByCategory.map(\.category))
+
+        #expect(usableCategories == Set(["개발"]))
+        #expect(Set(store.categorySelectionNames) == Set(["개발"]))
+        #expect(allCategories == Set(["개발", "인프라"]))
+        #expect(store.groupedEntriesByCategory.first { $0.category == "인프라" }?.entries.map(\.canonical) == ["Kafka"])
+    }
+
     @Test("entries(inCategories:)는 빈 분류를 기타로 해석한다")
     func entriesInCategoriesMapsEmptyCategoryToUncategorized() {
         let url = tempFile()

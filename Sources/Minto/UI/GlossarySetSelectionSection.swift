@@ -49,7 +49,7 @@ struct GlossarySetSelectionSection: View {
                             ForEach(categoryGroups, id: \.category) { group in
                                 categoryRow(
                                     category: group.category,
-                                    usableCount: group.entries.filter(\.isUsable).count
+                                    usableCount: group.entries.count
                                 )
                             }
                         }
@@ -71,7 +71,7 @@ struct GlossarySetSelectionSection: View {
     }
 
     private var categoryGroups: [(category: String, entries: [GlossaryEntry])] {
-        glossaryStore.groupedEntriesByCategory
+        glossaryStore.usableGroupedEntriesByCategory
     }
 
     private var selectedEntries: [GlossaryEntry] {

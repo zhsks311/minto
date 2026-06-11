@@ -383,13 +383,18 @@ public final class GlossaryStore: ObservableObject {
         return result.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
-    /// 설정 화면과 회의 시작 시트가 공유하는 분류별 묶음 목록.
+    /// 설정 화면의 관리용 분류별 묶음 목록. 비활성 용어도 포함한다.
     public var groupedEntriesByCategory: [(category: String, entries: [GlossaryEntry])] {
         Self.groupedEntriesByCategory(entries)
     }
 
+    /// 회의 시작/파일 임포트 선택 UI에서 쓸 usable 전용 분류별 묶음 목록.
+    public var usableGroupedEntriesByCategory: [(category: String, entries: [GlossaryEntry])] {
+        Self.groupedEntriesByCategory(entries.filter(\.isUsable))
+    }
+
     public var categorySelectionNames: [String] {
-        groupedEntriesByCategory.map(\.category)
+        usableGroupedEntriesByCategory.map(\.category)
     }
 
     /// 선택된 분류에 포함되는 usable 용어만 반환한다. "기타"는 빈 분류 항목을 뜻한다.
