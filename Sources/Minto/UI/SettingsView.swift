@@ -210,6 +210,33 @@ public struct SettingsView: View {
             apiKeyInputs = [:]
             loginError = nil
         }
+        .onChange(of: lastLLMProviderRaw) { oldValue, newValue in
+            logSettingChange(key: "lastLLMProvider", oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: codexModel) { oldValue, newValue in
+            logSettingChange(key: "codexModel", oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: geminiModel) { oldValue, newValue in
+            logSettingChange(key: "geminiModel", oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: copilotModel) { oldValue, newValue in
+            logSettingChange(key: "copilotModel", oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: gptAPIModel) { oldValue, newValue in
+            logSettingChange(key: "gptAPIModel", oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: geminiAPIModel) { oldValue, newValue in
+            logSettingChange(key: "geminiAPIModel", oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: claudeAPIModel) { oldValue, newValue in
+            logSettingChange(key: "claudeAPIModel", oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: openRouterAPIModel) { oldValue, newValue in
+            logSettingChange(key: "openRouterAPIModel", oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: localLLMModelID) { oldValue, newValue in
+            logSettingChange(key: LocalLLMProviderConfiguration.modelIDKey, oldValue: oldValue, newValue: newValue)
+        }
     }
 
     // MARK: - AI Section Rows
@@ -362,6 +389,11 @@ public struct SettingsView: View {
         } else if answerSettings.effectiveProvider != .none {
             lastLLMProviderRaw = answerSettings.effectiveProvider.rawValue
         }
+    }
+
+    private func logSettingChange(key: String, oldValue: String, newValue: String) {
+        guard oldValue != newValue else { return }
+        Log.app.info("\(key, privacy: .public) changed: \(oldValue, privacy: .public) → \(newValue, privacy: .public)")
     }
 
     private func normalizeAccountModelSelectionIfNeeded() {

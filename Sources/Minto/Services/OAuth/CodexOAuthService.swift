@@ -127,12 +127,14 @@ public final class CodexOAuthService: ObservableObject {
         let modelChain = correctionModelFallbackChain(for: primaryModel)
         for (index, model) in modelChain.enumerated() {
             do {
-                return try await performCorrection(
+                let output = try await performCorrection(
                     model: model,
                     instructions: instructions,
                     userContent: userContent,
                     creds: creds
                 )
+                Log.oauth.info("Codex correct OK model=\(model, privacy: .public) plan=\(plan ?? "unknown", privacy: .public) outputChars=\(output.count, privacy: .public)")
+                return output
             } catch let error as CodexError where index < modelChain.count - 1 && error.isModelFallbackable {
                 let fallback = modelChain[index + 1]
                 Log.oauth.info("Codex model '\(model, privacy: .public)' 실패(plan=\(plan ?? "?", privacy: .public)) → '\(fallback, privacy: .public)'로 폴백")
@@ -357,7 +359,8 @@ public final class CodexOAuthService: ObservableObject {
         if status == 200 {
             Log.oauth.info("Codex \(step, privacy: .public) HTTP 200")
         } else {
-            Log.oauth.error("Codex \(step, privacy: .public) HTTP \(status, privacy: .public) bodyLen=\(data.count, privacy: .public)")
+            let bodyText = String(decoding: data.prefix(800), as: UTF8.self)
+            Log.oauth.error("Codex \(step, privacy: .public) HTTP \(status, privacy: .public) body=\(String(bodyText.prefix(200)), privacy: .public)")
         }
     }
 

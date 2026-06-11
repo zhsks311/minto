@@ -127,6 +127,7 @@ public struct MeetingSearchAnswerUseCase: Sendable {
             ))
             let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { throw MeetingSearchAnswerError.emptyAnswer }
+            Log.search.info("answer generated via \(provider.descriptor.id.rawValue, privacy: .public) outputChars=\(text.count, privacy: .public)")
             return MeetingSearchAnswer(
                 query: trimmed,
                 text: text,
@@ -136,12 +137,15 @@ public struct MeetingSearchAnswerUseCase: Sendable {
                 warnings: response.warnings
             )
         } catch let error as MeetingSearchAnswerError {
+            Log.search.error("answer failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw error
         } catch let error as CancellationError {
             throw error
         } catch let error as LLMProviderError {
+            Log.search.error("answer failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw MeetingSearchAnswerError.generationFailed(error.userMessage)
         } catch {
+            Log.search.error("answer failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw MeetingSearchAnswerError.generationFailed(error.localizedDescription)
         }
     }

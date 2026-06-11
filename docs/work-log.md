@@ -26,6 +26,7 @@
 | 15 | 2026-06-12 | [Confluence 연결 설정 UX 개선](work-log/2026-06-12-15-confluence-connection-validation-ux.md) | 연결 확인 성공 후 연동 저장, 검색 실패 사유 분리, 입력창 클릭 영역 확대 |
 | 16 | 2026-06-12 | [회의 시작 용어집 묶음 선택](work-log/2026-06-12-16-glossary-set-selection.md) | 회의 시작/파일 임포트 용어집을 분류 선택 + 직접 입력 방식으로 개편 |
 | 17 | 2026-06-12 | [용어집 묶음 선택 리뷰 반영](work-log/2026-06-12-17-glossary-set-selection-review-fixes.md) | 선택 UI disabled-only 분류 제외, defaults 주입, 선택 영속 helper 공유 |
+| 18 | 2026-06-12 | [진단 로그 정비](work-log/2026-06-12-18-diagnostic-log-cleanup.md) | OAuth 실패 body prefix, 모델/provider 변경, 검색 답변 생성 결과를 민감 원문 없이 기록 |
 
 ## 남은 과제
 

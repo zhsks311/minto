@@ -192,13 +192,15 @@ public final class GeminiOAuthService: NSObject {
         let modelChain = Self.modelFallbackChain(for: Self.selectedModel)
         for (index, model) in modelChain.enumerated() {
             do {
-                return try await performCorrection(
+                let output = try await performCorrection(
                     model: model,
                     prompt: prompt,
                     maxOutputTokens: maxOutputTokens,
                     token: token,
                     credentials: creds
                 )
+                Log.oauth.info("Gemini correct OK model=\(model, privacy: .public) outputChars=\(output.count, privacy: .public)")
+                return output
             } catch let error as GeminiOAuthError where index < modelChain.count - 1 {
                 let fallback = modelChain[index + 1]
                 Log.oauth.info("Gemini model '\(model, privacy: .public)' 실패(\(error, privacy: .public)) → '\(fallback, privacy: .public)'로 폴백")
@@ -250,18 +252,37 @@ public final class GeminiOAuthService: NSObject {
         let (data, urlResponse) = try await URLSession.shared.data(for: request)
         let status = (urlResponse as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
-            Log.oauth.error("Gemini correct HTTP \(status, privacy: .public) bodyLen=\(data.count, privacy: .public)")
+            let bodyText = String(decoding: data.prefix(800), as: UTF8.self)
+            Log.oauth.error("Gemini correct HTTP \(status, privacy: .public) body=\(String(bodyText.prefix(200)), privacy: .public)")
             throw GeminiOAuthError.badResponse
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let response = json["response"] as? [String: Any],
-              let candidates = response["candidates"] as? [[String: Any]],
-              let content = candidates.first?["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let result = parts.first?["text"] as? String
-        else {
-            Log.oauth.error("Gemini correct parse failed HTTP 200 bodyLen=\(data.count, privacy: .public)")
+        func logParseFailure(_ reason: String) {
+            Log.oauth.error("Gemini correct parse failed HTTP 200 bodyLen=\(data.count, privacy: .public) reason=\(reason, privacy: .public)")
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            logParseFailure("root_not_object")
+            throw GeminiOAuthError.badResponse
+        }
+        guard let response = json["response"] as? [String: Any] else {
+            logParseFailure("missing=response")
+            throw GeminiOAuthError.badResponse
+        }
+        guard let candidates = response["candidates"] as? [[String: Any]] else {
+            logParseFailure("missing=response.candidates")
+            throw GeminiOAuthError.badResponse
+        }
+        guard let content = candidates.first?["content"] as? [String: Any] else {
+            logParseFailure("missing=response.candidates[0].content")
+            throw GeminiOAuthError.badResponse
+        }
+        guard let parts = content["parts"] as? [[String: Any]] else {
+            logParseFailure("missing=response.candidates[0].content.parts")
+            throw GeminiOAuthError.badResponse
+        }
+        guard let result = parts.first?["text"] as? String else {
+            logParseFailure("missing=response.candidates[0].content.parts[0].text")
             throw GeminiOAuthError.badResponse
         }
 
