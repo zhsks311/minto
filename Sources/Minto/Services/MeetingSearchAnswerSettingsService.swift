@@ -105,11 +105,11 @@ public final class MeetingSearchAnswerSettingsService: ObservableObject {
             return
         }
         let active = activeProvider()
-        if current == active || active == .none {
-            // 저장값이 활성 provider와 같거나 활성이 없으면 follow로 전환
+        if active != .none, current == active {
+            // 저장값이 활성 provider와 같으면 follow로 전환
             providerOverride = nil
         }
-        // 다른 값이면 override 유지
+        // active가 .none이거나 저장값이 다르면 override 유지
         refreshEffective()
     }
 
