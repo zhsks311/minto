@@ -166,7 +166,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
             return .rateLimited
         case .timeout:
             return .network(codexError.localizedDescription)
-        case .badResponse:
+        case .badResponse, .badRequest:
             return .badResponse(codexError.localizedDescription)
         }
     }

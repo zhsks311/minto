@@ -111,6 +111,8 @@ public final class CodexOAuthService: ObservableObject {
 
     // MARK: - Correction API
 
+    /// - Note: maxOutputTokens는 provider 공통 시그니처 유지용으로만 받고 무시한다 —
+    ///   Codex 백엔드는 max_output_tokens 미지원(`correctionRequestBody` 주석 참조).
     public func correct(instructions: String, userContent: String, maxOutputTokens: Int? = nil) async throws -> String {
         guard var creds = credentials else { throw CodexError.notLoggedIn }
         if creds.isExpired {
@@ -129,7 +131,6 @@ public final class CodexOAuthService: ObservableObject {
                     model: model,
                     instructions: instructions,
                     userContent: userContent,
-                    maxOutputTokens: maxOutputTokens,
                     creds: creds
                 )
             } catch let error as CodexError where index < modelChain.count - 1 && error.isModelFallbackable {
@@ -188,11 +189,48 @@ public final class CodexOAuthService: ObservableObject {
         }
     }
 
+    /// Codex 백엔드용 요청 body. 다른 provider(Copilot/Gemini/API key)와 달리 이 백엔드는
+    /// max_output_tokens를 지원하지 않아(전 모델 공통 400 "Unsupported parameter") 절대 넣지 않는다 —
+    /// 호출부가 요청해도 어댑터에서 버리고, 출력 길이는 instructions로만 유도한다.
+    nonisolated static func correctionRequestBody(
+        model: String,
+        instructions: String,
+        userContent: String
+    ) -> [String: Any] {
+        [
+            "model": model,
+            "stream": true,   // Codex 백엔드는 SSE 스트리밍을 강제
+            "store": false,   // 서버측 대화 저장 비활성화를 강제
+            "instructions": instructions,  // Codex Responses API는 instructions 필수
+            "input": [["role": "user", "content": userContent]]
+        ]
+    }
+
+    /// 교정 호출 실패 분류. Codex 백엔드는 "모델 미지원"과 "파라미터 미지원"을 모두 400으로 주므로
+    /// status code만으로는 폴백 가치를 판정할 수 없고 본문 detail로 구분한다:
+    /// 모델 문제 → .notEntitled(하위 모델 폴백이 정답), 그 외 400 → .badRequest(폴백해도
+    /// 같은 이유로 실패하므로 즉시 실패). 429는 mini도 같이 막힐 가능성이 커 폴백하지 않는다.
+    nonisolated static func classifyCorrectionError(status: Int, body: String) -> CodexError {
+        switch status {
+        case 429:
+            return .rateLimited
+        case 401, 403, 404:
+            return .notEntitled
+        case 400:
+            let lowered = body.lowercased()
+            if lowered.contains("model is not supported") || lowered.contains("unsupported model") {
+                return .notEntitled
+            }
+            return .badRequest
+        default:
+            return .badResponse
+        }
+    }
+
     private func performCorrection(
         model: String,
         instructions: String,
         userContent: String,
-        maxOutputTokens: Int?,
         creds: CodexCredentials
     ) async throws -> String {
         // base_url(.../codex) + "/responses" — codex-rs CLI와 동일 경로 (/v1 없음)
@@ -208,17 +246,11 @@ public final class CodexOAuthService: ObservableObject {
             request.setValue(accountId, forHTTPHeaderField: "ChatGPT-Account-ID")
         }
 
-        var body: [String: Any] = [
-            "model": model,
-            "stream": true,   // Codex 백엔드는 SSE 스트리밍을 강제
-            "store": false,   // 서버측 대화 저장 비활성화를 강제
-            "instructions": instructions,  // Codex Responses API는 instructions 필수
-            "input": [["role": "user", "content": userContent]]
-        ]
-        if let maxOutputTokens {
-            body["max_output_tokens"] = max(1, maxOutputTokens)
-        }
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.httpBody = try JSONSerialization.data(withJSONObject: Self.correctionRequestBody(
+            model: model,
+            instructions: instructions,
+            userContent: userContent
+        ))
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -228,16 +260,11 @@ public final class CodexOAuthService: ObservableObject {
                 errData.append(byte)
                 if errData.count >= 800 { break }
             }
-            Log.oauth.error("Codex correct HTTP \(status, privacy: .public) model=\(model, privacy: .public) bodyLen=\(errData.count, privacy: .public)")
-            // 무료 tier·미인가·모델 미허용은 4xx로 온다(상위 모델→mini 폴백 대상). 429는 rate limit(폴백 무의미).
-            switch status {
-            case 429:
-                throw CodexError.rateLimited
-            case 400, 401, 403, 404:
-                throw CodexError.notEntitled
-            default:
-                throw CodexError.badResponse
-            }
+            // 서버 에러 본문(detail 메시지)은 토큰·회의 내용이 섞이지 않는 텍스트라 로그에 남긴다.
+            // bodyLen만 남기면 "모델 미지원 vs 파라미터 미지원"을 구분 못 해 진단이 늦어진다.
+            let bodyText = String(decoding: errData, as: UTF8.self)
+            Log.oauth.error("Codex correct HTTP \(status, privacy: .public) model=\(model, privacy: .public) body=\(String(bodyText.prefix(200)), privacy: .public)")
+            throw Self.classifyCorrectionError(status: status, body: bodyText)
         }
 
         // SSE 스트림에서 response.output_text.delta 이벤트의 delta를 누적한다 (reasoning delta는 제외)
@@ -441,7 +468,7 @@ public final class CodexOAuthService: ObservableObject {
 }
 
 enum CodexError: Error, LocalizedError {
-    case notLoggedIn, badResponse, timeout, notEntitled, rateLimited
+    case notLoggedIn, badResponse, timeout, notEntitled, rateLimited, badRequest
 
     var errorDescription: String? {
         switch self {
@@ -450,15 +477,17 @@ enum CodexError: Error, LocalizedError {
         case .timeout: return "인증 시간 초과 — 다시 시도하세요"
         case .notEntitled: return "현재 OpenAI 플랜에서 이 모델을 쓸 수 없어요"
         case .rateLimited: return "OpenAI 호출 한도 초과 — 잠시 후 다시 시도하세요"
+        case .badRequest: return "Codex API가 요청 형식을 거부했어요"
         }
     }
 
     /// 상위 모델 호출 실패 시 기본(mini) 모델로 폴백해도 되는 오류인지.
     /// rate limit(429)은 mini도 동일하게 막힐 가능성이 커 폴백 대상이 아니다.
+    /// badRequest(모델 무관 요청 거부)는 어떤 모델로 바꿔도 같은 이유로 실패하므로 폴백하지 않는다.
     var isModelFallbackable: Bool {
         switch self {
         case .notEntitled, .badResponse: return true
-        case .rateLimited, .notLoggedIn, .timeout: return false
+        case .rateLimited, .notLoggedIn, .timeout, .badRequest: return false
         }
     }
 }
