@@ -129,7 +129,9 @@ public final class SummaryService: ObservableObject {
                 userContent: prompt.userContent
             ))
             let trimmed = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
+            if trimmed.isEmpty { return nil }
+            Log.summary.info("generation succeeded via \(provider.descriptor.id.rawValue, privacy: .public) useCase=\(useCase.rawValue, privacy: .public) outputChars=\(trimmed.count, privacy: .public)")
+            return trimmed
         } catch {
             Log.summary.error("generation failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil

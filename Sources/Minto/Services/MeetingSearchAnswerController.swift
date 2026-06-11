@@ -150,9 +150,10 @@ public final class MeetingSearchAnswerController: ObservableObject {
                     embeddingProvider: embeddingProvider
                 )
                 let citationCount = generated.citations.count
+                let providerID = generated.providerID.rawValue
                 await MainActor.run {
                     guard generationToken == token else { return }
-                    Log.search.info("search answer success citations=\(citationCount, privacy: .public)")
+                    Log.search.info("search answer success via \(providerID, privacy: .public) citations=\(citationCount, privacy: .public)")
                     answer = generated
                     errorMessage = nil
                     isGenerating = false
