@@ -133,7 +133,9 @@ struct GlossarySettingsSection: View {
     private func prefillFormForCandidate(_ candidate: GlossaryCandidate) {
         editingGlossaryEntryID = nil
         glossaryCanonicalInput = candidate.term
-        glossaryAliasesInput = candidate.suggestedAliases.joined(separator: ", ")
+        if glossaryAliasesInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            glossaryAliasesInput = candidate.suggestedAliases.joined(separator: ", ")
+        }
         glossaryDescriptionInput = ""
         glossaryTagsInput = ""
         glossaryNewCategoryInput = ""
@@ -300,6 +302,7 @@ struct GlossarySettingsSection: View {
                     Spacer()
                     Button("추가") {
                         glossaryStore.approveAliasSuggestion(suggestion.id)
+                        // approve가 제안을 동기 제거한 뒤 비었는지 확인해야 접힘 상태가 정확하다.
                         collapseAliasSuggestionsIfEmpty(entryID)
                     }
                     .buttonStyle(.bordered)

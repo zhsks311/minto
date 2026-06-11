@@ -139,14 +139,12 @@ public enum CorrectionAliasExtractor {
 
     private static func isAllowedPair(alias: String, canonical: String, aliasTokenCount: Int, canonicalTokenCount: Int) -> Bool {
         let aliasHasHangul = containsHangul(alias)
+        let aliasIsPureHangulPhrase = isPureHangulPhrase(alias)
         let canonicalHasHangul = containsHangul(canonical)
         let aliasHasLatinOrDigit = containsLatinOrDigit(alias)
         let canonicalHasLatinOrDigit = containsLatinOrDigit(canonical)
 
-        if aliasHasHangul, !canonicalHasHangul, canonicalHasLatinOrDigit {
-            return true
-        }
-        if canonicalHasHangul, !aliasHasHangul, aliasHasLatinOrDigit {
+        if aliasIsPureHangulPhrase, !canonicalHasHangul, canonicalHasLatinOrDigit {
             return true
         }
 
@@ -195,9 +193,7 @@ public enum CorrectionAliasExtractor {
 
     private static func containsHangul(_ text: String) -> Bool {
         text.unicodeScalars.contains { scalar in
-            (0xAC00...0xD7A3).contains(scalar.value)
-                || (0x1100...0x11FF).contains(scalar.value)
-                || (0x3130...0x318F).contains(scalar.value)
+            isHangul(scalar)
         }
     }
 
@@ -207,5 +203,27 @@ public enum CorrectionAliasExtractor {
                 || (0x41...0x5A).contains(scalar.value)
                 || (0x61...0x7A).contains(scalar.value)
         }
+    }
+
+    private static func isPureHangulPhrase(_ text: String) -> Bool {
+        let scalars = text.unicodeScalars.filter { scalar in
+            !CharacterSet.punctuationCharacters.contains(scalar)
+                && !CharacterSet.symbols.contains(scalar)
+        }
+        var hasHangul = false
+        for scalar in scalars {
+            if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+                continue
+            }
+            guard isHangul(scalar) else { return false }
+            hasHangul = true
+        }
+        return hasHangul
+    }
+
+    private static func isHangul(_ scalar: UnicodeScalar) -> Bool {
+        (0xAC00...0xD7A3).contains(scalar.value)
+            || (0x1100...0x11FF).contains(scalar.value)
+            || (0x3130...0x318F).contains(scalar.value)
     }
 }

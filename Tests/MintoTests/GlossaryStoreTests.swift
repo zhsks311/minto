@@ -424,6 +424,7 @@ struct GlossaryStoreTests {
 
         let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(store.pendingAliases.isEmpty)
+        #expect(store.dismissedAliasKeys.isEmpty)
         #expect(store.pendingCandidates.count == 1)
         #expect(store.pendingCandidates[0].suggestedAliases.isEmpty)
         #expect(store.pendingCandidates[0].sourceMeetingID == meetingID)
@@ -467,6 +468,53 @@ struct GlossaryStoreTests {
         let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
         #expect(reloaded.pendingAliases.isEmpty)
         #expect(reloaded.entries[0].aliases.isEmpty)
+    }
+
+    @Test("dismissAliasSuggestion은 같은 alias 제안 재유입을 영속 차단한다")
+    func dismissAliasSuggestionBlocksReinsertionAndPersists() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+        store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        let suggestion = try #require(store.pendingAliases.first)
+        store.dismissAliasSuggestion(suggestion.id)
+        store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        #expect(store.pendingAliases.isEmpty)
+
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        reloaded.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        #expect(reloaded.pendingAliases.isEmpty)
+        #expect(reloaded.entries[0].aliases.isEmpty)
+    }
+
+    @Test("dismissedAliasKeys는 200개 상한을 유지한다")
+    func dismissAliasSuggestionCapsDismissedKeys() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+
+        for index in 1...205 {
+            store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "alias-\(index)")])
+            let suggestion = try #require(store.pendingAliases.first)
+            store.dismissAliasSuggestion(suggestion.id)
+        }
+
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let snapshot = try decoder.decode(GlossarySnapshot.self, from: data)
+
+        #expect(snapshot.dismissedAliasKeys.count == 200)
+        #expect(!snapshot.dismissedAliasKeys.contains(where: { $0.hasSuffix("|alias-1") }))
+        #expect(snapshot.dismissedAliasKeys.contains(where: { $0.hasSuffix("|alias-6") }))
+        #expect(snapshot.dismissedAliasKeys.contains(where: { $0.hasSuffix("|alias-205") }))
     }
 
     @Test("alias 제안 저장 실패 시 메모리 상태를 먼저 바꾸지 않는다")

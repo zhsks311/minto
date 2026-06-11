@@ -177,7 +177,7 @@ public final class GeminiOAuthService: NSObject {
 
     // MARK: - Correction API
 
-    public func correct(instructions: String, userContent: String) async throws -> String {
+    public func correct(instructions: String, userContent: String, maxOutputTokens: Int? = nil) async throws -> String {
         let token = try await validAccessToken()
         guard var creds = credentials else { throw GeminiOAuthError.notLoggedIn }
 
@@ -192,7 +192,13 @@ public final class GeminiOAuthService: NSObject {
         let modelChain = Self.modelFallbackChain(for: Self.selectedModel)
         for (index, model) in modelChain.enumerated() {
             do {
-                return try await performCorrection(model: model, prompt: prompt, token: token, credentials: creds)
+                return try await performCorrection(
+                    model: model,
+                    prompt: prompt,
+                    maxOutputTokens: maxOutputTokens,
+                    token: token,
+                    credentials: creds
+                )
             } catch let error as GeminiOAuthError where index < modelChain.count - 1 {
                 let fallback = modelChain[index + 1]
                 Log.oauth.info("Gemini model '\(model, privacy: .public)' 실패(\(error, privacy: .public)) → '\(fallback, privacy: .public)'로 폴백")
@@ -213,6 +219,7 @@ public final class GeminiOAuthService: NSObject {
     private func performCorrection(
         model: String,
         prompt: String,
+        maxOutputTokens: Int?,
         token: String,
         credentials creds: GeminiCredentials
     ) async throws -> String {
@@ -232,7 +239,7 @@ public final class GeminiOAuthService: NSObject {
                 // Thinking 계열 모델은 사고에 출력 토큰을 소비한다. 교정은 추론이 거의 불필요하므로
                 // thinking을 끄고(=0) 출력 한도를 넉넉히 둔다.
                 "generationConfig": [
-                    "maxOutputTokens": kGeminiMaxOutputTokens,
+                    "maxOutputTokens": max(1, maxOutputTokens ?? kGeminiMaxOutputTokens),
                     "temperature": 0.1,
                     "thinkingConfig": ["thinkingBudget": 0]
                 ]

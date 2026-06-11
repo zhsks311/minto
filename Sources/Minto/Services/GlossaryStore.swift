@@ -10,6 +10,7 @@ public final class GlossaryStore: ObservableObject {
     @Published public private(set) var entries: [GlossaryEntry] = []
     @Published public private(set) var pendingCandidates: [GlossaryCandidate] = []
     @Published public private(set) var pendingAliases: [GlossaryAliasSuggestion] = []
+    public private(set) var dismissedAliasKeys: [String] = []
 
     private let fileURL: URL
     private let encoder: JSONEncoder
@@ -56,6 +57,7 @@ public final class GlossaryStore: ObservableObject {
             entries = []
             pendingCandidates = []
             pendingAliases = []
+            dismissedAliasKeys = []
             return
         }
         if let snapshot = try? decoder.decode(GlossarySnapshot.self, from: data),
@@ -63,15 +65,18 @@ public final class GlossaryStore: ObservableObject {
             entries = Self.cleaned(snapshot.entries)
             pendingCandidates = snapshot.pendingCandidates
             pendingAliases = snapshot.pendingAliases
+            dismissedAliasKeys = Self.cappedDismissedAliasKeys(snapshot.dismissedAliasKeys)
         } else if let legacy = try? decoder.decode([GlossaryEntry].self, from: data) {
             entries = Self.cleaned(legacy)
             pendingCandidates = []
             pendingAliases = []
+            dismissedAliasKeys = []
             _ = save()
         } else {
             entries = []
             pendingCandidates = []
             pendingAliases = []
+            dismissedAliasKeys = []
         }
     }
 
@@ -135,7 +140,8 @@ public final class GlossaryStore: ObservableObject {
             pairs,
             entries: entries,
             pendingCandidates: pendingCandidates,
-            pendingAliases: pendingAliases
+            pendingAliases: pendingAliases,
+            dismissedAliasKeys: dismissedAliasKeys
         )
         guard merge.changed else { return }
         guard save(entries, pendingCandidates: merge.pendingCandidates, pendingAliases: merge.pendingAliases) else { return }
@@ -184,9 +190,20 @@ public final class GlossaryStore: ObservableObject {
 
     /// 기존 용어에 대한 별칭 제안을 무시한다.
     public func dismissAliasSuggestion(_ id: UUID) {
+        guard let suggestion = pendingAliases.first(where: { $0.id == id }) else { return }
         let nextAliases = pendingAliases.filter { $0.id != id }
-        guard save(entries, pendingCandidates: pendingCandidates, pendingAliases: nextAliases) else { return }
+        let nextDismissedKeys = Self.appendingDismissedAliasKey(
+            Self.aliasDismissKey(entryID: suggestion.entryID, alias: suggestion.alias),
+            to: dismissedAliasKeys
+        )
+        guard save(
+            entries,
+            pendingCandidates: pendingCandidates,
+            pendingAliases: nextAliases,
+            dismissedAliasKeys: nextDismissedKeys
+        ) else { return }
         pendingAliases = nextAliases
+        dismissedAliasKeys = nextDismissedKeys
     }
 
     /// 새 회의의 keywords에서 추가할 후보를 추출하는 순수 함수.
@@ -231,10 +248,12 @@ public final class GlossaryStore: ObservableObject {
         _ pairs: [(canonical: String, alias: String)],
         entries: [GlossaryEntry],
         pendingCandidates: [GlossaryCandidate],
-        pendingAliases: [GlossaryAliasSuggestion]
+        pendingAliases: [GlossaryAliasSuggestion],
+        dismissedAliasKeys: [String]
     ) -> AliasMergeResult {
         var nextCandidates = pendingCandidates
         var nextAliases = pendingAliases
+        let dismissedAliasKeySet = Set(dismissedAliasKeys)
         var changed = false
 
         for pair in pairs {
@@ -247,6 +266,7 @@ public final class GlossaryStore: ObservableObject {
             if let entry = matchingEntry(for: canonical, in: entries) {
                 let existingKeys = Set(([entry.canonical] + entry.aliases).map(foldedKey))
                 guard !existingKeys.contains(aliasKey) else { continue }
+                guard !dismissedAliasKeySet.contains(aliasDismissKey(entryID: entry.id, aliasKey: aliasKey)) else { continue }
                 guard !nextAliases.contains(where: { $0.entryID == entry.id && foldedKey($0.alias) == aliasKey }) else { continue }
                 nextAliases.append(GlossaryAliasSuggestion(entryID: entry.id, alias: alias))
                 changed = true
@@ -428,7 +448,8 @@ public final class GlossaryStore: ObservableObject {
     private func save(
         _ entriesToSave: [GlossaryEntry]? = nil,
         pendingCandidates pendingToSave: [GlossaryCandidate]? = nil,
-        pendingAliases aliasesToSave: [GlossaryAliasSuggestion]? = nil
+        pendingAliases aliasesToSave: [GlossaryAliasSuggestion]? = nil,
+        dismissedAliasKeys dismissedKeysToSave: [String]? = nil
     ) -> Bool {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -436,7 +457,8 @@ public final class GlossaryStore: ObservableObject {
                 schemaVersion: Self.schemaVersion,
                 entries: entriesToSave ?? entries,
                 pendingCandidates: pendingToSave ?? pendingCandidates,
-                pendingAliases: aliasesToSave ?? pendingAliases
+                pendingAliases: aliasesToSave ?? pendingAliases,
+                dismissedAliasKeys: dismissedKeysToSave ?? dismissedAliasKeys
             )
             let data = try encoder.encode(snapshot)
             try data.write(to: fileURL, options: .atomic)
@@ -495,6 +517,30 @@ public final class GlossaryStore: ObservableObject {
         }
     }
 
+    nonisolated private static func aliasDismissKey(entryID: UUID, alias: String) -> String {
+        aliasDismissKey(entryID: entryID, aliasKey: foldedKey(alias))
+    }
+
+    nonisolated private static func aliasDismissKey(entryID: UUID, aliasKey: String) -> String {
+        "\(entryID.uuidString)|\(aliasKey)"
+    }
+
+    nonisolated private static func appendingDismissedAliasKey(_ key: String, to keys: [String]) -> [String] {
+        guard !key.isEmpty else { return cappedDismissedAliasKeys(keys) }
+        var next = keys.filter { $0 != key }
+        next.append(key)
+        return cappedDismissedAliasKeys(next)
+    }
+
+    nonisolated private static func cappedDismissedAliasKeys(_ keys: [String]) -> [String] {
+        let unique = keys.reduce(into: [String]()) { result, key in
+            guard !key.isEmpty, !result.contains(key) else { return }
+            result.append(key)
+        }
+        guard unique.count > 200 else { return unique }
+        return Array(unique.suffix(200))
+    }
+
     nonisolated private static func foldedKey(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
@@ -516,21 +562,24 @@ public struct GlossarySnapshot: Codable, Sendable, Equatable {
     public let entries: [GlossaryEntry]
     public let pendingCandidates: [GlossaryCandidate]
     public let pendingAliases: [GlossaryAliasSuggestion]
+    public let dismissedAliasKeys: [String]
 
     public init(
         schemaVersion: Int,
         entries: [GlossaryEntry],
         pendingCandidates: [GlossaryCandidate] = [],
-        pendingAliases: [GlossaryAliasSuggestion] = []
+        pendingAliases: [GlossaryAliasSuggestion] = [],
+        dismissedAliasKeys: [String] = []
     ) {
         self.schemaVersion = schemaVersion
         self.entries = entries
         self.pendingCandidates = pendingCandidates
         self.pendingAliases = pendingAliases
+        self.dismissedAliasKeys = dismissedAliasKeys
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, entries, pendingCandidates, pendingAliases
+        case schemaVersion, entries, pendingCandidates, pendingAliases, dismissedAliasKeys
     }
 
     public init(from decoder: Decoder) throws {
@@ -540,6 +589,7 @@ public struct GlossarySnapshot: Codable, Sendable, Equatable {
         // 기존 schemaVersion 1 파일에는 새 pending 필드가 없으므로 tolerant 디코딩.
         pendingCandidates = (try? c.decode([GlossaryCandidate].self, forKey: .pendingCandidates)) ?? []
         pendingAliases = (try? c.decode([GlossaryAliasSuggestion].self, forKey: .pendingAliases)) ?? []
+        dismissedAliasKeys = (try? c.decode([String].self, forKey: .dismissedAliasKeys)) ?? []
     }
 }
 

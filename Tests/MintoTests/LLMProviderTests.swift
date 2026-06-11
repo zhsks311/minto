@@ -424,7 +424,8 @@ struct LLMProviderTests {
             useCase: .correction,
             instructions: "규칙",
             userContent: "원문",
-            modelID: "gpt-test"
+            modelID: "gpt-test",
+            maxOutputTokens: 64
         ))
 
         let request = try #require(transport.requests.first)
@@ -439,6 +440,7 @@ struct LLMProviderTests {
         #expect(body["instructions"] as? String == "규칙")
         #expect(body["input"] as? String == "원문")
         #expect(body["store"] as? Bool == false)
+        #expect(body["max_output_tokens"] as? Int == 64)
     }
 
     @Test("API key provider HTTP 상태는 공통 오류로 매핑된다")
@@ -592,6 +594,31 @@ struct LLMProviderTests {
             #expect(options["num_predict"] as? Int == expected.3)
             #expect(options["num_ctx"] as? Int == 4_096)
         }
+    }
+
+    @Test("로컬 LLM provider는 요청별 출력 토큰 override를 payload에 반영한다")
+    func localLLMProviderUsesRequestMaxOutputTokensOverride() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"model":"local-smoke","response":"ok","done":true}"#.utf8))
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(
+                baseURL: URL(string: "http://127.0.0.1:11434")!,
+                modelID: "local-smoke",
+                compatibility: .ollamaGenerate
+            ),
+            transport: transport
+        )
+
+        _ = try await provider.generateText(LLMTextRequest(
+            useCase: .correction,
+            instructions: "짧게 답하세요.",
+            userContent: "용어",
+            maxOutputTokens: 64
+        ))
+
+        let request = try #require(transport.requests.first)
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        let options = try #require(body["options"] as? [String: Any])
+        #expect(options["num_predict"] as? Int == 64)
     }
 
     @Test("로컬 LLM provider는 OpenAI 호환 chat completions endpoint를 지원한다")

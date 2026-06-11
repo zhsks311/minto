@@ -53,6 +53,16 @@ struct CorrectionAliasExtractorTests {
         #expect(unrelatedEnglish.isEmpty)
     }
 
+    @Test("한영 혼재 alias는 추출하지 않는다")
+    func ignoresMixedHangulLatinAlias() {
+        let pairs = CorrectionAliasExtractor.extract(
+            raw: "오늘 AWS 람다 설정을 봅니다",
+            corrected: "오늘 Lambda 설정을 봅니다"
+        )
+
+        #expect(pairs.isEmpty)
+    }
+
     @Test("동일 텍스트는 추출하지 않는다")
     func identicalTextExtractsNothing() {
         let pairs = CorrectionAliasExtractor.extract(

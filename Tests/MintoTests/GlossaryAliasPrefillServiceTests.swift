@@ -23,6 +23,7 @@ struct GlossaryAliasPrefillServiceTests {
         #expect(aliases == ["리퀴베이스", "리퀴 베이스", "리퀴바이스"])
         let request = try #require(provider.lastRequest)
         #expect(request.useCase == .correction)
+        #expect(request.maxOutputTokens == 64)
         #expect(request.userContent == "용어: Liquibase")
         #expect(!request.userContent.contains("회의"))
     }
@@ -52,6 +53,16 @@ struct GlossaryAliasPrefillServiceTests {
         )
 
         #expect(parsed == ["리퀴베이스", "리퀴 베이스", "리퀴바이스"])
+    }
+
+    @Test("parseAliases는 괄호와 라틴 혼재 응답에서 한글 표기만 추출한다")
+    func parseAliasesExtractsHangulFromMixedResponse() {
+        let parsed = GlossaryAliasPrefillService.parseAliases(
+            "리퀴베이스(Liquibase), 리퀴 베이스 / Liquibase, AWS 람다",
+            excluding: "Liquibase"
+        )
+
+        #expect(parsed == ["리퀴베이스", "리퀴 베이스", "람다"])
     }
 }
 

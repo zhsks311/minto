@@ -7,6 +7,7 @@ public struct GlossaryAliasPrefillService {
     private let providerResolver: @MainActor () -> (any LLMTextGenerationProvider)?
 
     public init(providerResolver: @escaping @MainActor () -> (any LLMTextGenerationProvider)? = {
+        // 요약 provider 설정이 "기본 AI 연결을 따름"의 effective text provider를 소유한다.
         LLMSummarySettingsService.shared.selectedTextProvider()
     }) {
         self.providerResolver = providerResolver
@@ -20,7 +21,8 @@ public struct GlossaryAliasPrefillService {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: .correction,
                 instructions: Self.instructions,
-                userContent: "용어: \(trimmedTerm)"
+                userContent: "용어: \(trimmedTerm)",
+                maxOutputTokens: 64
             ))
             let aliases = Self.parseAliases(response.text, excluding: trimmedTerm)
             Log.correction.debug("glossary alias prefill completed count=\(aliases.count, privacy: .public) outputChars=\(response.text.count, privacy: .public)")
@@ -38,10 +40,10 @@ public struct GlossaryAliasPrefillService {
         var aliases: [String] = []
 
         for component in text.components(separatedBy: separators) {
-            let alias = cleanedAlias(component)
+            let alias = hangulAlias(from: cleanedAlias(component))
             let key = foldedKey(alias)
             guard !key.isEmpty, key != termKey else { continue }
-            guard alias.count >= 2, containsHangul(alias) else { continue }
+            guard alias.count >= 2 else { continue }
             guard !seen.contains(key) else { continue }
             seen.insert(key)
             aliases.append(alias)
@@ -84,6 +86,25 @@ public struct GlossaryAliasPrefillService {
         return remaining
     }
 
+    private static func hangulAlias(from text: String) -> String {
+        var tokens: [String] = []
+        var current = ""
+
+        for scalar in text.unicodeScalars {
+            if isHangul(scalar) {
+                current.unicodeScalars.append(scalar)
+            } else if !current.isEmpty {
+                tokens.append(current)
+                current = ""
+            }
+        }
+
+        if !current.isEmpty {
+            tokens.append(current)
+        }
+        return tokens.joined(separator: " ")
+    }
+
     private static let trimSet = CharacterSet.whitespacesAndNewlines
         .union(.punctuationCharacters)
         .union(.symbols)
@@ -93,11 +114,9 @@ public struct GlossaryAliasPrefillService {
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
     }
 
-    private static func containsHangul(_ text: String) -> Bool {
-        text.unicodeScalars.contains { scalar in
-            (0xAC00...0xD7A3).contains(scalar.value)
-                || (0x1100...0x11FF).contains(scalar.value)
-                || (0x3130...0x318F).contains(scalar.value)
-        }
+    private static func isHangul(_ scalar: UnicodeScalar) -> Bool {
+        (0xAC00...0xD7A3).contains(scalar.value)
+            || (0x1100...0x11FF).contains(scalar.value)
+            || (0x3130...0x318F).contains(scalar.value)
     }
 }

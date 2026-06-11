@@ -111,7 +111,7 @@ public final class CodexOAuthService: ObservableObject {
 
     // MARK: - Correction API
 
-    public func correct(instructions: String, userContent: String) async throws -> String {
+    public func correct(instructions: String, userContent: String, maxOutputTokens: Int? = nil) async throws -> String {
         guard var creds = credentials else { throw CodexError.notLoggedIn }
         if creds.isExpired {
             creds = try await refreshToken(creds: creds)
@@ -125,7 +125,13 @@ public final class CodexOAuthService: ObservableObject {
         let modelChain = correctionModelFallbackChain(for: primaryModel)
         for (index, model) in modelChain.enumerated() {
             do {
-                return try await performCorrection(model: model, instructions: instructions, userContent: userContent, creds: creds)
+                return try await performCorrection(
+                    model: model,
+                    instructions: instructions,
+                    userContent: userContent,
+                    maxOutputTokens: maxOutputTokens,
+                    creds: creds
+                )
             } catch let error as CodexError where index < modelChain.count - 1 && error.isModelFallbackable {
                 let fallback = modelChain[index + 1]
                 Log.oauth.info("Codex model '\(model, privacy: .public)' 실패(plan=\(plan ?? "?", privacy: .public)) → '\(fallback, privacy: .public)'로 폴백")
@@ -182,7 +188,13 @@ public final class CodexOAuthService: ObservableObject {
         }
     }
 
-    private func performCorrection(model: String, instructions: String, userContent: String, creds: CodexCredentials) async throws -> String {
+    private func performCorrection(
+        model: String,
+        instructions: String,
+        userContent: String,
+        maxOutputTokens: Int?,
+        creds: CodexCredentials
+    ) async throws -> String {
         // base_url(.../codex) + "/responses" — codex-rs CLI와 동일 경로 (/v1 없음)
         let url = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
         var request = URLRequest(url: url)
@@ -196,13 +208,16 @@ public final class CodexOAuthService: ObservableObject {
             request.setValue(accountId, forHTTPHeaderField: "ChatGPT-Account-ID")
         }
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model,
             "stream": true,   // Codex 백엔드는 SSE 스트리밍을 강제
             "store": false,   // 서버측 대화 저장 비활성화를 강제
             "instructions": instructions,  // Codex Responses API는 instructions 필수
             "input": [["role": "user", "content": userContent]]
         ]
+        if let maxOutputTokens {
+            body["max_output_tokens"] = max(1, maxOutputTokens)
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)

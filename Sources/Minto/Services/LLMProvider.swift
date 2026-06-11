@@ -148,12 +148,20 @@ public struct LLMTextRequest: Sendable {
     public let instructions: String
     public let userContent: String
     public let modelID: String?
+    public let maxOutputTokens: Int?
 
-    public init(useCase: LLMUseCase, instructions: String, userContent: String, modelID: String? = nil) {
+    public init(
+        useCase: LLMUseCase,
+        instructions: String,
+        userContent: String,
+        modelID: String? = nil,
+        maxOutputTokens: Int? = nil
+    ) {
         self.useCase = useCase
         self.instructions = instructions
         self.userContent = userContent
         self.modelID = modelID
+        self.maxOutputTokens = maxOutputTokens
     }
 }
 

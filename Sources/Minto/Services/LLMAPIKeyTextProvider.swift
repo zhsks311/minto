@@ -279,7 +279,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             "instructions": request.instructions,
             "input": request.userContent,
             "store": false,
-            "max_output_tokens": maxOutputTokens(for: request.useCase)
+            "max_output_tokens": maxOutputTokens(for: request)
         ])
 
         let json = try await sendJSON(urlRequest)
@@ -305,7 +305,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             "contents": [["role": "user", "parts": [["text": request.userContent]]]],
             "generationConfig": [
                 "temperature": 0.1,
-                "maxOutputTokens": maxOutputTokens(for: request.useCase)
+                "maxOutputTokens": maxOutputTokens(for: request)
             ]
         ])
 
@@ -325,7 +325,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": modelID,
             "system": request.instructions,
-            "max_tokens": maxOutputTokens(for: request.useCase),
+            "max_tokens": maxOutputTokens(for: request),
             "temperature": 0.1,
             "messages": [["role": "user", "content": request.userContent]]
         ])
@@ -350,7 +350,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
         urlRequest.setValue("Minto", forHTTPHeaderField: "X-Title")
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": modelID,
-            "max_tokens": maxOutputTokens(for: request.useCase),
+            "max_tokens": maxOutputTokens(for: request),
             "temperature": 0.1,
             "messages": [
                 ["role": "system", "content": request.instructions],
@@ -488,6 +488,13 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             throw LLMProviderError.badResponse("JSON 객체가 아닙니다.")
         }
         return json
+    }
+
+    private func maxOutputTokens(for request: LLMTextRequest) -> Int {
+        if let maxOutputTokens = request.maxOutputTokens {
+            return max(1, maxOutputTokens)
+        }
+        return maxOutputTokens(for: request.useCase)
     }
 
     private func maxOutputTokens(for useCase: LLMUseCase) -> Int {

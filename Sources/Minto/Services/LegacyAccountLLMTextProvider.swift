@@ -46,7 +46,8 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
             rawText = try await mapErrors {
                 try await service.correct(
                     instructions: request.instructions,
-                    userContent: request.userContent
+                    userContent: request.userContent,
+                    maxOutputTokens: request.maxOutputTokens
                 )
             }
         case .geminiAccount:
@@ -54,7 +55,8 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
             rawText = try await mapErrors {
                 try await service.correct(
                     instructions: request.instructions,
-                    userContent: request.userContent
+                    userContent: request.userContent,
+                    maxOutputTokens: request.maxOutputTokens
                 )
             }
         case .copilot:
@@ -62,7 +64,8 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
             rawText = try await mapErrors {
                 try await service.correct(
                     instructions: request.instructions,
-                    userContent: request.userContent
+                    userContent: request.userContent,
+                    maxOutputTokens: request.maxOutputTokens
                 )
             }
         case .local, .gpt, .gemini, .claude, .openRouter:
