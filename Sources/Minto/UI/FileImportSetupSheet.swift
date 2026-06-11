@@ -11,9 +11,22 @@ struct FileImportSetupSheet: View {
     @ObservedObject private var glossaryStore = GlossaryStore.shared
     @State private var topic: String = ""
     @State private var manualGlossary: String = ""
-    @State private var selectedGlossaryEntryIDs: Set<UUID> = []
+    @State private var selectedGlossaryCategories: Set<String> = []
     @State private var showGlossary = false
     @Environment(\.dismiss) private var dismiss
+    private let glossarySelectionDefaults: UserDefaults
+
+    init(
+        fileURL: URL,
+        onImport: @escaping (String, String) -> Void,
+        onSkip: @escaping () -> Void,
+        glossarySelectionDefaults: UserDefaults = .standard
+    ) {
+        self.fileURL = fileURL
+        self.onImport = onImport
+        self.onSkip = onSkip
+        self.glossarySelectionDefaults = glossarySelectionDefaults
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -25,6 +38,15 @@ struct FileImportSetupSheet: View {
         }
         .padding(22)
         .frame(width: 460)
+        .onAppear {
+            restoreGlossarySelection()
+        }
+        .onChange(of: selectedGlossaryCategories) { _, _ in
+            saveGlossarySelection()
+        }
+        .onChange(of: glossaryStore.categorySelectionNames) { _, _ in
+            pruneGlossarySelection()
+        }
     }
 
     // MARK: - Header
@@ -79,97 +101,16 @@ struct FileImportSetupSheet: View {
             .buttonStyle(.plain)
 
             if showGlossary {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("AI에는 선택한 용어와 직접 입력한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달돼요. 현재 \(combinedGlossary.count) / \(GlossaryContextResolver.defaultMaxCharacters)자")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if !glossaryCandidates.isEmpty {
-                        HStack(spacing: 8) {
-                            Text("주제와 관련된 용어")
-                                .font(.caption.weight(.semibold))
-                            Spacer()
-                            Button("추천 선택") {
-                                selectedGlossaryEntryIDs.formUnion(glossaryCandidates.map(\.id))
-                            }
-                            .font(.caption)
-                            .buttonStyle(.borderless)
-                        }
-                        ScrollView {
-                            VStack(spacing: 6) {
-                                ForEach(glossaryCandidates) { entry in
-                                    glossaryCandidateRow(entry)
-                                }
-                            }
-                        }
-                        .frame(maxHeight: 160)
-                    } else {
-                        Text(glossaryStore.entries.isEmpty
-                             ? "설정에서 기본 용어를 추가하면 회의마다 다시 입력하지 않아도 돼요."
-                             : "회의 주제를 입력하면 관련 기본 용어를 추천해요.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-
-                    if !selectedGlossaryEntriesOutsideCandidates.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("선택된 용어")
-                                .font(.caption.weight(.semibold))
-                            ScrollView {
-                                VStack(spacing: 6) {
-                                    ForEach(selectedGlossaryEntriesOutsideCandidates) { entry in
-                                        glossaryCandidateRow(entry)
-                                    }
-                                }
-                            }
-                            .frame(maxHeight: 160)
-                        }
-                    }
-
-                    Text("이번 파일 용어")
-                        .font(.caption.weight(.semibold))
-                    TextEditor(text: $manualGlossary)
-                        .font(.body)
-                        .frame(height: 72)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                        )
-                }
+                GlossarySetSelectionSection(
+                    glossaryStore: glossaryStore,
+                    selectedCategories: $selectedGlossaryCategories,
+                    manualGlossary: $manualGlossary,
+                    manualTitle: "이번 파일 용어",
+                    manualEditorHeight: 72
+                )
                 .padding(.leading, 18)
             }
         }
-    }
-
-    private func glossaryCandidateRow(_ entry: GlossaryEntry) -> some View {
-        Toggle(isOn: Binding(
-            get: { selectedGlossaryEntryIDs.contains(entry.id) },
-            set: { selected in
-                if selected {
-                    selectedGlossaryEntryIDs.insert(entry.id)
-                } else {
-                    selectedGlossaryEntryIDs.remove(entry.id)
-                }
-            }
-        )) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.normalizedCanonical)
-                    .font(.caption.weight(.semibold))
-                if !entry.category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(entry.category)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(entry.description)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .toggleStyle(.checkbox)
     }
 
     // MARK: - Actions
@@ -195,18 +136,8 @@ struct FileImportSetupSheet: View {
 
     // MARK: - Computed helpers
 
-    private var glossaryCandidates: [GlossaryEntry] {
-        glossaryStore.candidates(for: topic, limit: 24)
-    }
-
     private var selectedGlossaryEntries: [GlossaryEntry] {
-        let ids = selectedGlossaryEntryIDs
-        return glossaryStore.entries.filter { ids.contains($0.id) && $0.isUsable }
-    }
-
-    private var selectedGlossaryEntriesOutsideCandidates: [GlossaryEntry] {
-        let candidateIDs = Set(glossaryCandidates.map(\.id))
-        return selectedGlossaryEntries.filter { !candidateIDs.contains($0.id) }
+        glossaryStore.entries(inCategories: selectedGlossaryCategories)
     }
 
     private var combinedGlossary: String {
@@ -214,9 +145,39 @@ struct FileImportSetupSheet: View {
     }
 
     private var glossaryBadgeText: String {
-        let count = selectedGlossaryEntries.count
-            + manualGlossary.split(whereSeparator: { $0.isNewline })
-                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
-        return count > 0 ? "\(count)개 선택" : "선택"
+        GlossarySetSelectionPersistence.badgeText(
+            selectedCategories: selectedGlossaryCategories,
+            manualGlossary: manualGlossary,
+            availableCategoryNames: glossarySelectionCategoryNames
+        )
+    }
+
+    private var glossarySelectionCategoryNames: [String] {
+        glossaryStore.categorySelectionNames
+    }
+
+    private func restoreGlossarySelection() {
+        selectedGlossaryCategories = GlossarySetSelectionPersistence.restore(
+            from: glossarySelectionDefaults,
+            availableCategoryNames: glossarySelectionCategoryNames
+        )
+    }
+
+    private func saveGlossarySelection() {
+        GlossarySetSelectionPersistence.saveSelection(
+            selectedGlossaryCategories,
+            availableCategoryNames: glossarySelectionCategoryNames,
+            to: glossarySelectionDefaults
+        )
+    }
+
+    private func pruneGlossarySelection() {
+        let pruned = GlossarySetSelectionPersistence.prunedSelection(
+            selectedGlossaryCategories,
+            availableCategoryNames: glossarySelectionCategoryNames,
+            defaults: glossarySelectionDefaults
+        )
+        guard pruned != selectedGlossaryCategories else { return }
+        selectedGlossaryCategories = pruned
     }
 }

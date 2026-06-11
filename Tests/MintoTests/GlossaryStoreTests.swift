@@ -157,6 +157,68 @@ struct GlossaryStoreTests {
         #expect(store.categories == ["개발", "나만의-백엔드팀"])
     }
 
+    @Test("entries(inCategories:)는 선택 분류의 usable 용어만 반환한다")
+    func entriesInCategoriesReturnsUsableEntriesForSelectedCategories() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+
+        #expect(store.add(canonical: "Liquibase", category: "개발") == true)
+        #expect(store.add(canonical: "Flyway", category: "개발") == true)
+        #expect(store.add(canonical: "Jira", category: "제품") == true)
+        let disabledID = store.entries.first { $0.canonical == "Flyway" }!.id
+        store.setEnabled(disabledID, enabled: false)
+
+        let entries = store.entries(inCategories: ["개발"])
+
+        #expect(entries.map(\.canonical) == ["Liquibase"])
+    }
+
+    @Test("선택용 그룹핑은 disabled-only 분류를 제외하고 관리용 그룹핑은 유지한다")
+    func usableGroupedEntriesExcludeDisabledOnlyCategories() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+
+        #expect(store.add(canonical: "Liquibase", category: "개발") == true)
+        #expect(store.add(canonical: "Kafka", category: "인프라") == true)
+        let disabledID = store.entries.first { $0.canonical == "Kafka" }!.id
+        store.setEnabled(disabledID, enabled: false)
+
+        let usableCategories = Set(store.usableGroupedEntriesByCategory.map(\.category))
+        let allCategories = Set(store.groupedEntriesByCategory.map(\.category))
+
+        #expect(usableCategories == Set(["개발"]))
+        #expect(Set(store.categorySelectionNames) == Set(["개발"]))
+        #expect(allCategories == Set(["개발", "인프라"]))
+        #expect(store.groupedEntriesByCategory.first { $0.category == "인프라" }?.entries.map(\.canonical) == ["Kafka"])
+    }
+
+    @Test("entries(inCategories:)는 빈 분류를 기타로 해석한다")
+    func entriesInCategoriesMapsEmptyCategoryToUncategorized() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+
+        #expect(store.add(canonical: "회의록", category: "  ") == true)
+        #expect(store.add(canonical: "Jira", category: "제품") == true)
+
+        let entries = store.entries(inCategories: ["기타"])
+
+        #expect(entries.map(\.canonical) == ["회의록"])
+    }
+
+    @Test("entries(inCategories:)는 없는 분류를 무시한다")
+    func entriesInCategoriesIgnoresMissingCategories() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+
+        #expect(store.add(canonical: "Liquibase", category: "개발") == true)
+
+        #expect(store.entries(inCategories: ["영업"]).isEmpty)
+    }
+
     @Test("저장 실패 시 메모리 상태를 먼저 바꾸지 않는다")
     func doesNotPublishUnsavedChanges() throws {
         let directoryURL = FileManager.default.temporaryDirectory
@@ -250,6 +312,28 @@ struct GlossaryStoreTests {
 
         #expect(merged.count <= 40)
         #expect(merged.contains("Term1"))
+    }
+
+    @Test("선택 분류 entries를 resolver에 넘겨도 문자 예산을 지킨다")
+    func resolverCapsPromptSizeForSelectedCategories() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+
+        for index in 1...5 {
+            #expect(store.add(
+                canonical: "Term\(index)",
+                description: String(repeating: "가", count: 120),
+                category: "개발"
+            ) == true)
+        }
+
+        let merged = GlossaryContextResolver(maxCharacters: 40).resolve(
+            manualGlossary: "ManualTerm",
+            selectedEntries: store.entries(inCategories: ["개발"])
+        )
+
+        #expect(merged.count <= 40)
     }
 
     // MARK: - GlossaryCandidate 테스트
