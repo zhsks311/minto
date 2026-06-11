@@ -28,7 +28,7 @@ public struct GlossaryAliasPrefillService {
             Log.correction.debug("glossary alias prefill completed count=\(aliases.count, privacy: .public) outputChars=\(response.text.count, privacy: .public)")
             return aliases
         } catch {
-            Log.correction.debug("glossary alias prefill failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            Log.correction.error("glossary alias prefill failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return []
         }
     }
