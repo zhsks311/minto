@@ -238,7 +238,7 @@ public struct TranscriptionOverlayView: View {
                     ProgressView(value: p)
                         .progressViewStyle(.linear)
                         .frame(maxWidth: 280)
-                    Text("\(Int(p * 100))%  ·  처음 한 번만 다운로드됩니다")
+                    Text("\(Int(p * 100))%  ·  처음 한 번만 다운로드돼요")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -268,7 +268,7 @@ public struct TranscriptionOverlayView: View {
             Image(systemName: "mic.slash.fill")
                 .font(.system(size: 44))
                 .foregroundColor(.secondary)
-            Text("마이크 권한이 필요합니다")
+            Text("마이크 권한이 필요해요")
                 .font(.headline)
             Text("시스템 설정 > 개인 정보 보호 및 보안 > 마이크에서\nMinto를 허용해 주세요.")
                 .font(.caption)
@@ -324,7 +324,7 @@ public struct TranscriptionOverlayView: View {
     private var emptyStateView: some View {
         VStack {
             Spacer()
-            Text(viewModel.isRecording ? "말씀하세요..." : "녹음을 시작하면 여기에 전사됩니다")
+            Text(viewModel.isRecording ? "말씀하세요..." : "녹음을 시작하면 여기에 전사돼요")
                 .font(.callout)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity)

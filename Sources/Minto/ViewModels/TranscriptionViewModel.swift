@@ -526,14 +526,14 @@ public final class TranscriptionViewModel: ObservableObject {
         case .screenCapturePermissionDenied:
             isPermissionDenied = true
             isRecording = false
-            errorMessage = "시스템 사운드 입력을 사용하려면 화면 기록 권한이 필요합니다."
+            errorMessage = "시스템 사운드 입력을 사용하려면 화면 기록 권한이 필요해요."
         case .systemAudioUnavailable(let reason):
-            errorMessage = "시스템 사운드 입력을 사용할 수 없습니다: \(reason)"
+            errorMessage = "시스템 사운드 입력을 사용할 수 없어요: \(reason)"
             isRecording = false
         case .configChangeFailed(let underlying):
             errorMessage = "오디오 설정 변경 실패: \(underlying.localizedDescription)"
         case .deviceNotFound(let device):
-            errorMessage = "오디오 장치를 찾을 수 없습니다: \(device.name)"
+            errorMessage = "오디오 장치를 찾을 수 없어요: \(device.name)"
             isRecording = false
         case .engineStartFailed(let underlying):
             errorMessage = "오디오 엔진 시작 실패: \(underlying.localizedDescription)"

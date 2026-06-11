@@ -71,13 +71,13 @@ public final class MeetingSearchAnswerController: ObservableObject {
 
     public func hintText(query: String, resultCount: Int) -> String {
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "검색어를 입력하면 저장된 회의 근거로 답변할 수 있습니다."
+            return "검색어를 입력하면 저장된 회의 근거로 답변할 수 있어요."
         }
         if resultCount == 0 {
-            return "검색 결과가 있으면 AI가 회의 근거만 사용해 답변할 수 있습니다."
+            return "검색 결과가 있으면 AI가 회의 근거만 사용해 답변할 수 있어요."
         }
         if !settings.isEnabled {
-            return "설정에서 검색 답변을 켜면 상위 회의 근거를 AI가 종합합니다."
+            return "설정에서 검색 답변을 켜면 상위 회의 근거를 AI가 종합해요."
         }
         guard let providerID = settings.effectiveProvider.providerID,
               let descriptor = LLMProviderRegistry.shared.descriptor(for: providerID)
@@ -85,14 +85,14 @@ public final class MeetingSearchAnswerController: ObservableObject {
             return "검색 답변에 사용할 AI 서비스를 선택하세요."
         }
         guard descriptor.supportedCapabilities.contains(.answer) else {
-            return "현재 선택한 AI 서비스는 검색 답변을 지원하지 않습니다. AI 연결에서 다른 서비스를 선택하세요."
+            return "현재 선택한 AI 서비스는 검색 답변을 지원하지 않아요. AI 연결에서 다른 서비스를 선택하세요."
         }
         guard isProviderReady else {
-            return "검색 답변 AI 설정을 완료하세요. 로컬 런타임, 로그인, API 키 중 선택한 연결 방식이 준비되어야 합니다."
+            return "검색 답변 AI 설정을 완료하세요. 로컬 런타임, 로그인, API 키 중 선택한 연결 방식이 준비되어야 해요."
         }
         return descriptor.id.isCloudProvider
-            ? "상위 검색 근거가 선택한 AI 서비스로 전송됩니다."
-            : "검색 결과 \(resultCount)개를 근거로 답변을 만들 수 있습니다."
+            ? "상위 검색 근거가 선택한 AI 서비스로 전송돼요."
+            : "검색 결과 \(resultCount)개를 근거로 답변을 만들 수 있어요."
     }
 
     public func refreshReadiness() {
@@ -124,7 +124,7 @@ public final class MeetingSearchAnswerController: ObservableObject {
             return
         }
         guard isProviderReady else {
-            errorMessage = "검색 답변 AI 설정을 완료하세요. 로컬 런타임, 로그인, API 키 중 선택한 연결 방식이 준비되어야 합니다."
+            errorMessage = "검색 답변 AI 설정을 완료하세요. 로컬 런타임, 로그인, API 키 중 선택한 연결 방식이 준비되어야 해요."
             return
         }
 

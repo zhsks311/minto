@@ -97,25 +97,25 @@ public final class ConfluenceService: ObservableObject {
         public var errorDescription: String? {
             switch self {
             case .notConfigured:
-                return "Confluence 연결 정보가 필요합니다."
+                return "Confluence 연결 정보가 필요해요."
             case .invalidDestination:
                 return "내보낼 공간 키를 확인하세요."
             case .spaceNotFound(let spaceKey):
-                return "Confluence 공간을 찾지 못했습니다: \(spaceKey)"
+                return "Confluence 공간을 찾지 못했어요: \(spaceKey)"
             case .badResponse:
-                return "Confluence 응답을 이해하지 못했습니다."
+                return "Confluence 응답을 이해하지 못했어요."
             case .httpStatus(let status):
-                return "Confluence 내보내기가 실패했습니다. HTTP \(status)"
+                return "Confluence 내보내기가 실패했어요. HTTP \(status)"
             case .unauthorized:
                 return "Confluence 토큰이나 이메일을 다시 확인하세요."
             case .forbidden:
-                return "이 공간에 페이지를 만들 권한이 없습니다."
+                return "이 공간에 페이지를 만들 권한이 없어요."
             case .contentTooLarge:
-                return "회의록이 너무 커서 Confluence에 보낼 수 없습니다."
+                return "회의록이 너무 커서 Confluence에 보낼 수 없어요."
             case .rateLimited:
-                return "Confluence 요청이 잠시 제한되었습니다. 잠시 후 다시 시도하세요."
+                return "Confluence 요청이 잠시 제한됐어요. 잠시 후 다시 시도하세요."
             case .network:
-                return "Confluence에 연결하지 못했습니다."
+                return "Confluence에 연결하지 못했어요."
             }
         }
     }

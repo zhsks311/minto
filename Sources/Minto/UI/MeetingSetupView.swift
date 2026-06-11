@@ -40,7 +40,7 @@ public struct MeetingSetupView: View {
                     .foregroundColor(.accentColor)
                 Text("바로 녹음할 수 있어요")
                     .font(.title3.weight(.bold))
-                Text("주제만 적어도 충분합니다. 필요한 정보는 선택해서 더하세요.")
+                Text("주제만 적어도 충분해요. 필요한 정보는 선택해서 더하세요.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -194,7 +194,7 @@ public struct MeetingSetupView: View {
 
             if showGlossary {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("AI에는 선택한 용어와 직접 입력한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달됩니다. 현재 \(combinedGlossary.count) / \(GlossaryContextResolver.defaultMaxCharacters)자")
+                    Text("AI에는 선택한 용어와 직접 입력한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달돼요. 현재 \(combinedGlossary.count) / \(GlossaryContextResolver.defaultMaxCharacters)자")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -218,8 +218,8 @@ public struct MeetingSetupView: View {
                         }
                     } else {
                         Text(glossaryStore.entries.isEmpty
-                             ? "설정에서 기본 용어를 추가하면 회의마다 다시 입력하지 않아도 됩니다."
-                             : "회의 주제를 입력하면 관련 기본 용어를 추천합니다.")
+                             ? "설정에서 기본 용어를 추가하면 회의마다 다시 입력하지 않아도 돼요."
+                             : "회의 주제를 입력하면 관련 기본 용어를 추천해요.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -228,7 +228,7 @@ public struct MeetingSetupView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("선택된 용어")
                                 .font(.caption.weight(.semibold))
-                            Text("현재 추천 목록에는 없지만 이번 회의 문맥에 포함됩니다.")
+                            Text("현재 추천 목록에는 없지만 이번 회의 문맥에 포함돼요.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                             ForEach(selectedGlossaryEntriesOutsideCandidates) { entry in
@@ -314,13 +314,13 @@ public struct MeetingSetupView: View {
                             .font(.caption)
                             .foregroundColor(confluence.isConfigured ? .green : .secondary)
                         Text(confluence.isConfigured
-                             ? "설정 > 검색 소스의 Confluence 연결을 사용합니다."
-                             : "설정 > 검색 소스에서 Confluence를 연결하면 사용할 수 있습니다.")
+                             ? "설정 > 검색 소스의 Confluence 연결을 사용해요."
+                             : "설정 > 검색 소스에서 Confluence를 연결하면 사용할 수 있어요.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
 
-                    Text("회의 주제나 안건으로 Confluence를 조회해 전사 교정과 요약에 참고합니다.")
+                    Text("회의 주제나 안건으로 Confluence를 조회해 전사 교정과 요약에 참고해요.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
@@ -456,8 +456,8 @@ public struct MeetingSetupView: View {
         let documents = await confluence.searchContext(query, limit: 3)
         confluenceDocuments = documents
         confluenceStatus = documents.isEmpty
-            ? "관련 Confluence 문서를 찾지 못했습니다."
-            : "Confluence 문서 \(documents.count)개를 참고자료로 사용합니다."
+            ? "관련 Confluence 문서를 찾지 못했어요."
+            : "Confluence 문서 \(documents.count)개를 참고자료로 사용해요."
     }
 
     @MainActor

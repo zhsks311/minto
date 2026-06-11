@@ -608,7 +608,7 @@ struct IntegrationReconnectStateTests {
         await relatedInfo.search(query: "회의 안건")
 
         #expect(relatedInfo.results.isEmpty)
-        #expect(relatedInfo.statusMessage == "Confluence 다시 연결이 필요합니다. 설정에서 연결 정보를 갱신하세요.")
+        #expect(relatedInfo.statusMessage == "Confluence 다시 연결이 필요해요. 설정에서 연결 정보를 갱신하세요.")
         #expect(confluence.connectionState == .needsReconnect)
         #expect(httpClient.requests.count == 1)
     }
@@ -629,7 +629,7 @@ struct IntegrationReconnectStateTests {
         await relatedInfo.search(query: "회의 안건")
 
         #expect(relatedInfo.results.isEmpty)
-        #expect(relatedInfo.statusMessage == "Notion 다시 연결이 필요합니다. 설정에서 연결 정보를 갱신하세요.")
+        #expect(relatedInfo.statusMessage == "Notion 다시 연결이 필요해요. 설정에서 연결 정보를 갱신하세요.")
     }
 
     private func makeConfiguredConfluenceService(

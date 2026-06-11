@@ -102,7 +102,7 @@ public struct MeetingSummaryView: View {
     private var failedView: some View {
         VStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle").foregroundColor(RC.meta)
-            Text("요약을 생성하지 못했습니다.").font(.system(size: 14, weight: .semibold)).foregroundColor(RC.body)
+            Text("요약을 생성하지 못했어요.").font(.system(size: 14, weight: .semibold)).foregroundColor(RC.body)
             Text("교정/요약 provider가 선택·로그인되어 있는지 확인하세요.")
                 .font(.system(size: 11)).foregroundColor(RC.meta).multilineTextAlignment(.center)
             Button("닫기") { onClose() }.padding(.top, 8)
@@ -271,7 +271,7 @@ public struct MeetingSummaryView: View {
     @ViewBuilder
     private func transcriptList(_ lines: [MeetingResult.TranscriptLine]) -> some View {
         if lines.isEmpty {
-            Text("전사 내용이 없습니다.").font(.system(size: 13)).foregroundColor(RC.meta)
+            Text("전사 내용이 없어요.").font(.system(size: 13)).foregroundColor(RC.meta)
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(lines) { line in

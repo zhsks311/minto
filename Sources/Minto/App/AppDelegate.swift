@@ -78,7 +78,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             switch saveResult {
             case .skippedEmpty:
                 // (a) 빈 회의: 데이터가 없으므로 맥락 초기화는 정상 진행.
-                self.viewModel.errorMessage = "저장할 회의 내용이 없습니다."
+                self.viewModel.errorMessage = "저장할 회의 내용이 없어요."
                 MeetingContext.shared.clear()
             case .success:
                 // 정상 저장: 맥락 초기화.
@@ -86,7 +86,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             case .failed:
                 // (b) 내용은 있지만 디스크/인코딩 실패: 복구 파일을 남기고 맥락을 초기화하지 않는다.
                 MeetingSaveRecovery.writeRecoveryFile(for: record)
-                self.viewModel.errorMessage = "회의 저장에 실패했어요. 전사 복구 사본을 보관해 두었습니다."
+                self.viewModel.errorMessage = "회의 저장에 실패했어요. 전사 복구 사본을 보관해 두었어요."
                 // MeetingContext는 clear하지 않는다 — 다음 녹음 시작 시 덮어써질 때까지 데이터를 유지해 소실을 막는다.
             }
             self.mainWindowManager.show()

@@ -67,7 +67,7 @@ struct AudioInputModeTests {
         let checker = AudioInputReadinessChecker(
             hasScreenCapturePermission: { true },
             requestScreenCapturePermission: { true },
-            systemAudioAvailability: { .unavailable("캡처 가능한 디스플레이가 없습니다.") }
+            systemAudioAvailability: { .unavailable("캡처 가능한 디스플레이가 없어요.") }
         )
 
         let readiness = await checker.readiness(for: .systemAudio)

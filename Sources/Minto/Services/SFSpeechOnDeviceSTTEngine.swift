@@ -14,7 +14,7 @@ final class SFSpeechOnDeviceSTTEngine: SpeechTranscriptionEngine {
             if case .requiresPermission(let reason) = availability {
                 throw STTError.speechAuthorizationRequired(reason)
             }
-            throw STTError.engineUnavailable(availability.detailText ?? "SFSpeechRecognizer를 사용할 수 없습니다.")
+            throw STTError.engineUnavailable(availability.detailText ?? "SFSpeechRecognizer를 사용할 수 없어요.")
         }
         updateState(.loaded)
         Log.stt.info("Apple speech engine ready: \(self.engineID.rawValue, privacy: .public)")
@@ -26,11 +26,11 @@ final class SFSpeechOnDeviceSTTEngine: SpeechTranscriptionEngine {
             if case .requiresPermission(let reason) = availability {
                 throw STTError.speechAuthorizationRequired(reason)
             }
-            throw STTError.engineUnavailable(availability.detailText ?? "SFSpeechRecognizer를 사용할 수 없습니다.")
+            throw STTError.engineUnavailable(availability.detailText ?? "SFSpeechRecognizer를 사용할 수 없어요.")
         }
 
         guard let recognizer = SFSpeechRecognizer(locale: STTAudioUtilities.koreanLocale) else {
-            throw STTError.engineUnavailable("한국어 SFSpeechRecognizer를 만들 수 없습니다.")
+            throw STTError.engineUnavailable("한국어 SFSpeechRecognizer를 만들 수 없어요.")
         }
 
         let samples = STTAudioUtilities.paddedSamples(pcmSamples)
@@ -68,27 +68,27 @@ final class SFSpeechOnDeviceSTTEngine: SpeechTranscriptionEngine {
     nonisolated static func availability() -> SpeechEngineAvailability {
         switch SFSpeechRecognizer.authorizationStatus() {
         case .notDetermined:
-            return .requiresPermission("Apple 음성 인식 권한을 허용해야 사용할 수 있습니다.")
+            return .requiresPermission("Apple 음성 인식 권한을 허용해야 사용할 수 있어요.")
         case .denied:
-            return .unavailable("시스템 설정에서 Apple 음성 인식 권한이 거부되어 있습니다.")
+            return .unavailable("시스템 설정에서 Apple 음성 인식 권한이 거부되어 있어요.")
         case .restricted:
-            return .unavailable("이 기기 정책상 Apple 음성 인식을 사용할 수 없습니다.")
+            return .unavailable("이 기기 정책상 Apple 음성 인식을 사용할 수 없어요.")
         case .authorized:
             break
         @unknown default:
-            return .unavailable("Apple 음성 인식 권한 상태를 확인할 수 없습니다.")
+            return .unavailable("Apple 음성 인식 권한 상태를 확인할 수 없어요.")
         }
 
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ko-KR")) else {
-            return .unavailable("한국어 SFSpeechRecognizer를 만들 수 없습니다.")
+            return .unavailable("한국어 SFSpeechRecognizer를 만들 수 없어요.")
         }
 
         guard recognizer.supportsOnDeviceRecognition else {
-            return .unavailable("한국어 온디바이스 음성 인식 asset이 없습니다.")
+            return .unavailable("한국어 온디바이스 음성 인식 asset이 없어요.")
         }
 
         guard recognizer.isAvailable else {
-            return .unavailable("현재 Apple 음성 인식 서비스를 사용할 수 없습니다.")
+            return .unavailable("현재 Apple 음성 인식 서비스를 사용할 수 없어요.")
         }
 
         return .available

@@ -54,7 +54,7 @@ public final class STTService {
         guard availability.isSelectable else {
             currentEngine = nil
             speechEngineID = engineID
-            updateState(.failed(availability.detailText ?? "\(engineID.title)을 사용할 수 없습니다."))
+            updateState(.failed(availability.detailText ?? "\(engineID.title)을 사용할 수 없어요."))
             return
         }
 
@@ -129,7 +129,7 @@ public final class STTService {
             try await removeCachedModelFilesAndLog(for: variant, reason: "manual recovery")
             await loadWhisperModel(variant: variant, didAttemptMetadataRecovery: true)
         } catch {
-            let message = "모델 캐시 정리에 실패했습니다: \(error.localizedDescription)"
+            let message = "모델 캐시 정리에 실패했어요: \(error.localizedDescription)"
             updateState(.failed(message))
             Log.stt.error("recovery error: \(error.localizedDescription, privacy: .public)")
         }
@@ -179,7 +179,7 @@ public final class STTService {
             try await removeCachedModelFilesAndLog(for: variant, reason: "invalid metadata")
             await loadWhisperModel(variant: variant, didAttemptMetadataRecovery: true)
         } catch {
-            let message = "모델 캐시 정리에 실패했습니다: \(error.localizedDescription)"
+            let message = "모델 캐시 정리에 실패했어요: \(error.localizedDescription)"
             updateState(.failed(message))
             Log.stt.error("metadata recovery error: \(error.localizedDescription, privacy: .public)")
         }

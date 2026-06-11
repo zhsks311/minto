@@ -237,19 +237,19 @@ public enum LLMProviderError: Error, Equatable, Sendable {
     public var userMessage: String {
         switch self {
         case .notConfigured:
-            return "공급자 설정이 필요합니다."
+            return "공급자 설정이 필요해요."
         case .unauthorized:
-            return "인증이 만료되었거나 권한이 없습니다."
+            return "인증이 만료되었거나 권한이 없어요."
         case .modelUnavailable(let model):
-            return "선택한 모델을 사용할 수 없습니다: \(model)"
+            return "선택한 모델을 사용할 수 없어요: \(model)"
         case .rateLimited:
-            return "요청 한도에 도달했습니다. 잠시 후 다시 시도하세요."
+            return "요청 한도에 도달했어요. 잠시 후 다시 시도하세요."
         case .network:
             return "네트워크 연결을 확인하세요."
         case .badResponse:
-            return "공급자 응답을 이해하지 못했습니다."
+            return "공급자 응답을 이해하지 못했어요."
         case .httpStatus(let statusCode, _):
-            return "공급자 요청이 실패했습니다. HTTP \(statusCode)"
+            return "공급자 요청이 실패했어요. HTTP \(statusCode)"
         }
     }
 

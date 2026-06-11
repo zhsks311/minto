@@ -55,7 +55,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             return Self.bundledModelCatalog(
                 for: descriptor.id,
                 source: .bundledFallback,
-                warning: "API 키를 저장하면 사용 가능한 모델 목록을 자동으로 확인합니다."
+                warning: "API 키를 저장하면 사용 가능한 모델 목록을 자동으로 확인해요."
             )
         }
 
@@ -65,7 +65,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
                 return Self.bundledModelCatalog(
                     for: descriptor.id,
                     source: .bundledFallback,
-                    warning: "모델 목록이 비어 있어 기본 추천 모델을 표시합니다."
+                    warning: "모델 목록이 비어 있어 기본 추천 모델을 표시해요."
                 )
             }
             return LLMModelCatalog(
@@ -518,21 +518,21 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
 
     private static func modelCatalogWarning(for error: any Error) -> String {
         guard let providerError = error as? LLMProviderError else {
-            return "모델 목록을 확인하지 못했습니다. 네트워크 상태를 확인하거나 모델 ID를 직접 입력하세요."
+            return "모델 목록을 확인하지 못했어요. 네트워크 상태를 확인하거나 모델 ID를 직접 입력하세요."
         }
         switch providerError {
         case .unauthorized:
-            return "API 키가 유효하지 않거나 권한이 없습니다. API 키를 확인하세요."
+            return "API 키가 유효하지 않거나 권한이 없어요. API 키를 확인하세요."
         case .rateLimited:
-            return "모델 목록 요청 한도에 도달했습니다. 잠시 후 다시 시도하거나 모델 ID를 직접 입력하세요."
+            return "모델 목록 요청 한도에 도달했어요. 잠시 후 다시 시도하거나 모델 ID를 직접 입력하세요."
         case .network:
-            return "모델 목록을 확인하지 못했습니다. 네트워크 상태를 확인하거나 모델 ID를 직접 입력하세요."
+            return "모델 목록을 확인하지 못했어요. 네트워크 상태를 확인하거나 모델 ID를 직접 입력하세요."
         case .modelUnavailable:
-            return "모델 목록을 확인하지 못했습니다. 모델 확인 링크에서 ID를 확인해 직접 입력하세요."
+            return "모델 목록을 확인하지 못했어요. 모델 확인 링크에서 ID를 확인해 직접 입력하세요."
         case .notConfigured:
-            return "API 키를 저장하면 사용 가능한 모델 목록을 확인합니다."
+            return "API 키를 저장하면 사용 가능한 모델 목록을 확인해요."
         case .badResponse, .httpStatus:
-            return "공급자 응답을 이해하지 못해 기본 추천 모델을 표시합니다. 모델 ID를 직접 입력할 수 있습니다."
+            return "공급자 응답을 이해하지 못해 기본 추천 모델을 표시해요. 모델 ID를 직접 입력할 수 있어요."
         }
     }
 

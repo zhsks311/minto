@@ -556,6 +556,12 @@ struct FileAudioExtractionErrorMessageTests {
         #expect(error.errorDescription == "오디오를 읽지 못했어요. 파일이 손상됐을 수 있어요.")
     }
 
+    @Test("invalidAudioFormat → 처리 불가 메시지")
+    func invalidAudioFormatMessage() {
+        let error = FileAudioExtractionError.invalidAudioFormat
+        #expect(error.errorDescription == "파일 음성 포맷을 처리할 수 없어요.")
+    }
+
     @Test("readerFailed → 시스템 원인 병기 메시지")
     func readerFailedMessage() {
         let error = FileAudioExtractionError.readerFailed("Cannot Open")

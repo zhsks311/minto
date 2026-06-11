@@ -107,15 +107,15 @@ public enum SpeechEngineID: String, CaseIterable, Identifiable, Sendable {
     public var caution: String {
         switch self {
         case .whisperAccurate:
-            return "가장 무겁지만 기본 선택으로 가장 안전합니다."
+            return "가장 무겁지만 기본 선택으로 가장 안전해요."
         case .whisperBalanced:
-            return "전문용어가 많은 회의는 정확도 우선이 낫습니다."
+            return "전문용어가 많은 회의는 정확도 우선이 나아요."
         case .whisperFast:
-            return "회의록 최종본은 교정 확인이 필요합니다."
+            return "회의록 최종본은 교정 확인이 필요해요."
         case .speechAnalyzer:
-            return "OS와 한국어 언어 파일 상태에 따라 비활성화될 수 있습니다."
+            return "OS와 한국어 언어 파일 상태에 따라 비활성화될 수 있어요."
         case .sfSpeechOnDevice:
-            return "권한, 받아쓰기 설정, 한국어 언어 파일 상태에 영향을 받습니다."
+            return "권한, 받아쓰기 설정, 한국어 언어 파일 상태에 영향을 받아요."
         }
     }
 
@@ -241,11 +241,11 @@ public enum SpeechEngineFamily: String, CaseIterable, Identifiable, Sendable {
     public var caution: String {
         switch self {
         case .localAI:
-            return "아래에서 회의 성격에 맞는 모델을 고를 수 있습니다."
+            return "아래에서 회의 성격에 맞는 모델을 고를 수 있어요."
         case .speechAnalyzer:
-            return "OS와 한국어 언어 파일 상태에 따라 비활성화될 수 있습니다."
+            return "OS와 한국어 언어 파일 상태에 따라 비활성화될 수 있어요."
         case .sfSpeechOnDevice:
-            return "권한, 받아쓰기 설정, 한국어 언어 파일 상태에 영향을 받습니다."
+            return "권한, 받아쓰기 설정, 한국어 언어 파일 상태에 영향을 받아요."
         }
     }
 

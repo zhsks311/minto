@@ -47,14 +47,14 @@ enum STTAudioUtilities {
             channels: 1,
             interleaved: false
         ) else {
-            throw STTError.transcriptionFailed("임시 오디오 포맷을 만들 수 없습니다.")
+            throw STTError.transcriptionFailed("임시 오디오 포맷을 만들 수 없어요.")
         }
 
         guard let buffer = AVAudioPCMBuffer(
             pcmFormat: format,
             frameCapacity: AVAudioFrameCount(samples.count)
         ) else {
-            throw STTError.transcriptionFailed("임시 오디오 버퍼를 만들 수 없습니다.")
+            throw STTError.transcriptionFailed("임시 오디오 버퍼를 만들 수 없어요.")
         }
 
         buffer.frameLength = AVAudioFrameCount(samples.count)

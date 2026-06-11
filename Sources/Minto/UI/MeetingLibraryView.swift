@@ -224,8 +224,8 @@ public struct MeetingLibraryView: View {
             Button("취소", role: .cancel) {}
         } message: {
             Text(confluence.isConfigured
-                 ? "파일로 저장하거나 연결된 Confluence 공간에 새 페이지로 만들 수 있습니다."
-                 : "Confluence 내보내기는 설정의 검색 소스에서 Confluence를 연결한 뒤 사용할 수 있습니다.")
+                 ? "파일로 저장하거나 연결된 Confluence 공간에 새 페이지로 만들 수 있어요."
+                 : "Confluence 내보내기는 설정의 검색 소스에서 Confluence를 연결한 뒤 사용할 수 있어요.")
         }
         .sheet(isPresented: $showingConfluenceExport) {
             if let exportRecord {
@@ -307,7 +307,7 @@ public struct MeetingLibraryView: View {
         .controlSize(.large)
         .fixedSize()
         .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
-        .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있습니다." : "음성 또는 영상 파일로 회의록을 만듭니다.")
+        .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있어요." : "음성 또는 영상 파일로 회의록을 만들어요.")
     }
 
     private var newMeetingButton: some View {
@@ -432,7 +432,7 @@ public struct MeetingLibraryView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("AI 답변", systemImage: "sparkles")
                         .font(.system(size: 26, weight: .bold))
-                    Text("“\(trimmedSearch)” — 저장된 회의 근거로 답변합니다")
+                    Text("“\(trimmedSearch)” — 저장된 회의 근거로 답변해요")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -441,7 +441,7 @@ public struct MeetingLibraryView: View {
                     HStack(spacing: 10) {
                         ProgressView()
                             .controlSize(.small)
-                        Text("검색 결과를 종합하는 중입니다…")
+                        Text("검색 결과를 종합하는 중이에요…")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -625,7 +625,7 @@ public struct MeetingLibraryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("검색 준비됨")
                     .font(.system(size: 12, weight: .semibold))
-                Text("저장된 회의 \(store.meetings.count)개에서 바로 찾습니다")
+                Text("저장된 회의 \(store.meetings.count)개에서 바로 찾아요")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -1125,11 +1125,11 @@ public struct MeetingLibraryView: View {
                     liveSummarySection
                     liveTranscriptSnippet
                 } else if detailTab == .transcript {
-                    transcriptBlock(liveSegments, emptyText: "아직 전사된 내용이 없습니다.")
+                    transcriptBlock(liveSegments, emptyText: "아직 전사된 내용이 없어요.")
                 } else {
                     relatedDocsSection(
                         query: liveRelatedSearchQuery,
-                        emptyText: "전사가 쌓이면 현재 회의 주제로 관련 문서를 찾을 수 있습니다."
+                        emptyText: "전사가 쌓이면 현재 회의 주제로 관련 문서를 찾을 수 있어요."
                     )
                 }
             }
@@ -1143,7 +1143,7 @@ public struct MeetingLibraryView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("현재까지 요약", systemImage: "list.bullet.rectangle")
             if liveRunningSummary.isEmpty {
-                Text("요약은 전사가 충분히 쌓이면 자동으로 갱신됩니다.")
+                Text("요약은 전사가 충분히 쌓이면 자동으로 갱신돼요.")
                     .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
@@ -1164,7 +1164,7 @@ public struct MeetingLibraryView: View {
             sectionTitle("최근 전사", systemImage: "text.quote")
             let recent = liveSegments.suffix(6)
             if recent.isEmpty {
-                Text("녹음이 시작되면 여기에 전사가 쌓입니다.")
+                Text("녹음이 시작되면 여기에 전사가 쌓여요.")
                     .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
@@ -1205,11 +1205,11 @@ public struct MeetingLibraryView: View {
                         meetingNotes(record.summary.sections)
                         meetingOutcomes(record.summary)
                     } else if detailTab == .transcript {
-                        transcriptBlock(record.transcript, emptyText: "전사 내용이 없습니다.", record: record)
+                        transcriptBlock(record.transcript, emptyText: "전사 내용이 없어요.", record: record)
                     } else {
                         relatedDocsSection(
                             query: relatedSearchQuery(for: record),
-                            emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있습니다."
+                            emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있어요."
                         )
                     }
                 }
@@ -1387,7 +1387,7 @@ public struct MeetingLibraryView: View {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.orange)
-                Text("구조화 요약을 만들지 못해 임시 요약만 저장됐어요. 목차·키워드 없이 표시됩니다.")
+                Text("구조화 요약을 만들지 못해 임시 요약만 저장됐어요. 목차·키워드 없이 표시돼요.")
                     .font(.system(size: 13))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1431,7 +1431,7 @@ public struct MeetingLibraryView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("요약", systemImage: "list.bullet.rectangle")
             if summary.isEmpty {
-                Text("요약이 없습니다. 전사 내용을 먼저 확인하세요.")
+                Text("요약이 없어요. 전사 내용을 먼저 확인하세요.")
                     .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
@@ -1823,7 +1823,7 @@ public struct MeetingLibraryView: View {
                 }
                 .buttonStyle(ProminentActionButtonStyle())
                 .disabled(query.isEmpty || !relatedInfo.isAnyConfigured || relatedInfo.isSearching)
-                .help(relatedInfo.isAnyConfigured ? "현재 회의 요약과 전사로 Notion·Confluence를 검색합니다." : "설정에서 Notion 또는 Confluence를 먼저 연결하세요.")
+                .help(relatedInfo.isAnyConfigured ? "현재 회의 요약과 전사로 Notion·Confluence를 검색해요." : "설정에서 Notion 또는 Confluence를 먼저 연결하세요.")
             }
 
             HStack(spacing: 8) {
@@ -1847,12 +1847,12 @@ public struct MeetingLibraryView: View {
             if relatedInfo.isSearching, isCurrentQuery {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("관련 문서를 찾고 있습니다.")
+                    Text("관련 문서를 찾고 있어요.")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
             } else if !relatedInfo.isAnyConfigured {
-                Text("설정에서 검색 소스를 연결하면 회의 내용으로 관련 문서를 찾을 수 있습니다.")
+                Text("설정에서 검색 소스를 연결하면 회의 내용으로 관련 문서를 찾을 수 있어요.")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             } else if isCurrentQuery, !relatedInfo.results.isEmpty {
@@ -1866,7 +1866,7 @@ public struct MeetingLibraryView: View {
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             } else {
-                Text("조회 버튼을 누르면 현재 회의 기준으로 검색합니다.")
+                Text("조회 버튼을 누르면 현재 회의 기준으로 검색해요.")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
@@ -2054,7 +2054,7 @@ public struct MeetingLibraryView: View {
     private var livePrimaryText: String {
         if !liveRunningSummary.isEmpty { return liveRunningSummary }
         if let text = liveSegments.last?.text, !text.isEmpty { return text }
-        return "전사를 기다리는 중입니다"
+        return "전사를 기다리는 중이에요"
     }
 
     private var liveRelatedSearchQuery: String {

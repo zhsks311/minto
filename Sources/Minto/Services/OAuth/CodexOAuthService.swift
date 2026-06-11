@@ -433,7 +433,7 @@ enum CodexError: Error, LocalizedError {
         case .notLoggedIn: return "OpenAI Codex 로그인 필요"
         case .badResponse: return "Codex API 응답 파싱 실패"
         case .timeout: return "인증 시간 초과 — 다시 시도하세요"
-        case .notEntitled: return "현재 OpenAI 플랜에서 이 모델을 쓸 수 없습니다"
+        case .notEntitled: return "현재 OpenAI 플랜에서 이 모델을 쓸 수 없어요"
         case .rateLimited: return "OpenAI 호출 한도 초과 — 잠시 후 다시 시도하세요"
         }
     }

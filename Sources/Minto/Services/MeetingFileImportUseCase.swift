@@ -90,11 +90,11 @@ public enum MeetingFileImportError: LocalizedError, Sendable, Equatable {
     public var errorDescription: String? {
         switch self {
         case .sttNotReady(let message):
-            return "음성 인식 엔진을 준비하지 못했습니다: \(message)"
+            return "음성 인식 엔진을 준비하지 못했어요: \(message)"
         case .emptyTranscript:
-            return "전사된 내용이 없습니다. 다른 파일을 선택하거나 음성이 포함되어 있는지 확인하세요."
+            return "전사된 내용이 없어요. 다른 파일을 선택하거나 음성이 포함되어 있는지 확인하세요."
         case .saveFailed:
-            return "회의록을 저장하지 못했습니다."
+            return "회의록을 저장하지 못했어요."
         }
     }
 }
@@ -215,11 +215,11 @@ public final class MeetingFileImportUseCase: ObservableObject {
 
         Log.importer.info("import start file=\(fileName, privacy: .public) engine=\(engineID.rawValue, privacy: .public)")
         do {
-            update(.analyzing, progress: 0.05, fileName: fileName, detail: "음성 인식 엔진을 준비하고 있습니다.")
+            update(.analyzing, progress: 0.05, fileName: fileName, detail: "음성 인식 엔진을 준비하고 있어요.")
             try await ensureSTTLoaded(engineID)
             try Task.checkCancellation()
 
-            update(.analyzing, progress: 0.12, fileName: fileName, detail: "음성 트랙을 확인하고 있습니다.")
+            update(.analyzing, progress: 0.12, fileName: fileName, detail: "음성 트랙을 확인하고 있어요.")
             Log.importer.info("import extract start file=\(fileName, privacy: .public)")
             let extraction = try await extractor.extractChunks(
                 from: url,
@@ -245,7 +245,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
 
             guard !segments.isEmpty else { throw MeetingFileImportError.emptyTranscript }
 
-            update(.summarizing, progress: 0.86, fileName: fileName, detail: "회의 내용을 정리하고 있습니다.")
+            update(.summarizing, progress: 0.86, fileName: fileName, detail: "회의 내용을 정리하고 있어요.")
             Log.importer.info("import summarize start file=\(fileName, privacy: .public)")
             let summary = await summaryService.generateFinal(
                 transcript: Self.transcriptText(from: segments, startedAt: startedAt),
@@ -253,7 +253,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             ) ?? MeetingSummary()
             try Task.checkCancellation()
 
-            update(.saving, progress: 0.96, fileName: fileName, detail: "회의 목록에 저장하고 있습니다.")
+            update(.saving, progress: 0.96, fileName: fileName, detail: "회의 목록에 저장하고 있어요.")
             Log.importer.info("import save start file=\(fileName, privacy: .public)")
             let record = MeetingRecordFactory.makeRecord(
                 summary: summary,
@@ -281,7 +281,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 stage: .cancelled,
                 progress: state.progress,
                 fileName: fileName,
-                detailText: "파일 가져오기를 취소했습니다."
+                detailText: "파일 가져오기를 취소했어요."
             ))
             throw CancellationError()
         } catch {
@@ -292,7 +292,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 stage: .failed,
                 progress: state.progress,
                 fileName: fileName,
-                detailText: "파일을 회의록으로 만들지 못했습니다.",
+                detailText: "파일을 회의록으로 만들지 못했어요.",
                 errorMessage: error.localizedDescription
             ))
             throw error

@@ -299,7 +299,7 @@ enum CopilotError: Error, LocalizedError {
         case .notLoggedIn: return "GitHub Copilot 로그인 필요"
         case .badResponse: return "Copilot API 응답 파싱 실패"
         case .tokenExpired: return "Device code 만료 — 다시 시도하세요"
-        case .noSubscription: return "이 GitHub 계정에 활성 Copilot 구독이 없습니다. Copilot 구독이 있는 계정으로 로그인하세요."
+        case .noSubscription: return "이 GitHub 계정에 활성 Copilot 구독이 없어요. Copilot 구독이 있는 계정으로 로그인하세요."
         }
     }
 }
