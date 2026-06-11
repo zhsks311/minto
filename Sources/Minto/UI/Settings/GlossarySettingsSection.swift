@@ -511,7 +511,7 @@ struct GlossarySettingsSection: View {
     private var glossaryCategoryOptions: [String] {
         var seen = Set<String>()
         var options: [String] = []
-        for category in glossaryStore.categories + glossaryCategoryPresets {
+        for category in glossaryStore.categories + GlossaryStore.defaultCategoryPresets {
             let key = category.lowercased()
             guard !seen.contains(key) else { continue }
             seen.insert(key)
@@ -625,25 +625,8 @@ struct GlossarySettingsSection: View {
         }
     }
 
-    private var glossaryCategoryPresets: [String] {
-        ["개발", "인프라", "제품", "조직", "기타"]
-    }
-
     private var glossaryGroupedEntries: [(category: String, entries: [GlossaryEntry])] {
-        let grouped = Dictionary(grouping: glossaryStore.entries) { entry in
-            let category = entry.category.trimmingCharacters(in: .whitespacesAndNewlines)
-            return category.isEmpty ? "기타" : category
-        }
-        return grouped.keys.sorted { lhs, rhs in
-            let lhsIndex = glossaryCategoryPresets.firstIndex(of: lhs) ?? Int.max
-            let rhsIndex = glossaryCategoryPresets.firstIndex(of: rhs) ?? Int.max
-            if lhsIndex != rhsIndex { return lhsIndex < rhsIndex }
-            return lhs.localizedStandardCompare(rhs) == .orderedAscending
-        }
-        .map { category in
-            let entries = grouped[category] ?? []
-            return (category: category, entries: entries)
-        }
+        glossaryStore.groupedEntriesByCategory
     }
 
     private var glossaryPromptPreviewCount: Int {
