@@ -141,7 +141,7 @@ public struct AudioInputReadiness: Sendable, Equatable {
         AudioInputReadiness(
             state: .checking,
             title: "\(mode.title) 입력 확인 중",
-            detail: "녹음 시작 전에 입력 권한과 가용성을 확인하고 있습니다."
+            detail: "녹음 시작 전에 입력 권한과 가용성을 확인하고 있어요."
         )
     }
 
@@ -172,7 +172,7 @@ public enum STTError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .modelNotLoaded:
-            return "음성 인식 엔진이 아직 준비되지 않았습니다."
+            return "음성 인식 엔진이 아직 준비되지 않았어요."
         case .transcriptionFailed(let message):
             return message
         case .engineUnavailable(let reason):

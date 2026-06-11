@@ -44,7 +44,7 @@ enum NemotronSidecarClientError: Error, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidHTTPResponse:
-            return "Nemotron sidecar가 HTTP 응답을 반환하지 않았습니다."
+            return "Nemotron sidecar가 HTTP 응답을 반환하지 않았어요."
         case .httpStatus(let statusCode, let body):
             return "Nemotron sidecar HTTP \(statusCode): \(body)"
         }

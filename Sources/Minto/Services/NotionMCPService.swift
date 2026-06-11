@@ -324,9 +324,9 @@ enum NotionMCPError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .searchToolUnavailable:
-            return "이 Notion 연결에서 검색 도구를 사용할 수 없습니다."
+            return "이 Notion 연결에서 검색 도구를 사용할 수 없어요."
         case .fetchToolUnavailable:
-            return "이 Notion 연결에서 문서 가져오기 도구를 사용할 수 없습니다."
+            return "이 Notion 연결에서 문서 가져오기 도구를 사용할 수 없어요."
         }
     }
 }

@@ -34,11 +34,11 @@ private enum LocalLLMContextWindowPreset: String, CaseIterable, Identifiable {
     var helpText: String {
         switch self {
         case .small:
-            return "짧은 회의와 작은 모델에 적합합니다."
+            return "짧은 회의와 작은 모델에 적합해요."
         case .medium:
-            return "권장값입니다. 대부분의 로컬 모델에서 안정적입니다."
+            return "권장값이에요. 대부분의 로컬 모델에서 안정적이에요."
         case .large:
-            return "긴 회의에 유리하지만 느리거나 메모리를 더 쓸 수 있습니다."
+            return "긴 회의에 유리하지만 느리거나 메모리를 더 쓸 수 있어요."
         }
     }
 
@@ -122,7 +122,7 @@ public struct SettingsView: View {
             speechEngineSection
 
             Section("오버레이") {
-                Text("투명도는 메뉴바에서 실시간으로 조절할 수 있습니다.")
+                Text("투명도는 메뉴바에서 실시간으로 조절할 수 있어요.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -142,7 +142,7 @@ public struct SettingsView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(isExportingLogs)
-                    Text("이번 실행 동안 기록된 로그를 내보냅니다. 내보낸 파일에는 앱 동작 기록(이벤트·에러·파일명)이 포함됩니다. 회의 내용(전사·요약·주제)은 포함되지 않습니다.")
+                    Text("이번 실행 동안 기록된 로그를 내보내요. 내보낸 파일에는 앱 동작 기록(이벤트·에러·파일명)이 포함돼요. 회의 내용(전사·요약·주제)은 포함되지 않아요.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     if let error = logExportError {
@@ -204,12 +204,12 @@ public struct SettingsView: View {
                             .background(Color.green.opacity(0.12))
                             .clipShape(Capsule())
                     }
-                    Text("회의 용어와 문맥으로 띄어쓰기, 오인식, 전문용어 표기를 다듬습니다.")
+                    Text("회의 용어와 문맥으로 띄어쓰기, 오인식, 전문용어 표기를 다듬어요.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
-            .help("음성 인식 결과를 회의 맥락에 맞게 자연스럽게 다듬습니다. 회의록 품질을 위해 켜두는 것을 권장합니다.")
+            .help("음성 인식 결과를 회의 맥락에 맞게 자연스럽게 다듬어요. 회의록 품질을 위해 켜두는 것을 권장해요.")
 
             Toggle(isOn: meetingSummaryEnabledBinding) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -220,18 +220,18 @@ public struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .help("회의 종료 후 구조화된 회의록을 생성합니다. 전사 다듬기를 꺼도 사용할 수 있습니다.")
+            .help("회의 종료 후 구조화된 회의록을 생성해요. 전사 다듬기를 꺼도 사용할 수 있어요.")
 
             Toggle(isOn: searchAnswerEnabledBinding) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("검색 답변")
                         .font(.callout.weight(.semibold))
-                    Text("저장된 회의 검색 결과를 근거로 질문에 답합니다.")
+                    Text("저장된 회의 검색 결과를 근거로 질문에 답해요.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
-            .help("검색 결과 상위 근거를 선택한 AI 서비스로 보내 종합 답변을 생성합니다.")
+            .help("검색 결과 상위 근거를 선택한 AI 서비스로 보내 종합 답변을 생성해요.")
 
             if answerSettings.isEnabled {
                 searchAnswerDetailRows
@@ -307,21 +307,21 @@ public struct SettingsView: View {
     private var aiProcessingStateMessage: String {
         switch (llmService.selectedProvider != .none, summarySettings.isEnabled, answerSettings.isEnabled) {
         case (true, true, true):
-            return "전사를 다듬고, 회의록을 정리하며, 검색 결과를 AI로 종합합니다."
+            return "전사를 다듬고, 회의록을 정리하며, 검색 결과를 AI로 종합해요."
         case (true, true, false):
-            return "전사를 다듬고, 회의록도 자동으로 정리합니다."
+            return "전사를 다듬고, 회의록도 자동으로 정리해요."
         case (true, false, true):
-            return "전사를 다듬고, 검색 결과를 AI로 종합합니다."
+            return "전사를 다듬고, 검색 결과를 AI로 종합해요."
         case (true, false, false):
-            return "전사는 다듬지만, 요약과 구조화는 생성하지 않습니다."
+            return "전사는 다듬지만, 요약과 구조화는 생성하지 않아요."
         case (false, true, true):
-            return "전사는 원문 그대로 저장하고, 회의록 정리와 검색 답변만 AI로 사용합니다."
+            return "전사는 원문 그대로 저장하고, 회의록 정리와 검색 답변만 AI로 사용해요."
         case (false, true, false):
-            return "전사는 원문 그대로 저장하고, 회의록 정리만 AI로 생성합니다."
+            return "전사는 원문 그대로 저장하고, 회의록 정리만 AI로 생성해요."
         case (false, false, true):
-            return "저장된 회의 검색 결과만 AI로 종합합니다."
+            return "저장된 회의 검색 결과만 AI로 종합해요."
         case (false, false, false):
-            return "전사만 저장됩니다. 요약과 구조화는 생성되지 않습니다."
+            return "전사만 저장돼요. 요약과 구조화는 생성되지 않아요."
         }
     }
 
@@ -393,16 +393,16 @@ public struct SettingsView: View {
     private var searchReadinessMessage: String {
         switch connectedSearchSourceCount {
         case 0:
-            return "저장된 회의는 바로 검색됩니다. Notion이나 Confluence를 연결하면 관련 문서까지 함께 찾습니다."
+            return "저장된 회의는 바로 검색돼요. Notion이나 Confluence를 연결하면 관련 문서까지 함께 찾아요."
         case 1:
-            return "저장된 회의와 연결된 외부 문서 1개를 함께 검색할 수 있습니다."
+            return "저장된 회의와 연결된 외부 문서 1개를 함께 검색할 수 있어요."
         default:
-            return "Notion과 Confluence가 모두 연결되어 회의 내용으로 문서를 찾을 수 있습니다."
+            return "Notion과 Confluence가 모두 연결되어 회의 내용으로 문서를 찾을 수 있어요."
         }
     }
 
     private var nextSearchSetupAction: String {
-        if connectedSearchSourceCount == 2 { return "추가 설정 없이 사용할 수 있습니다" }
+        if connectedSearchSourceCount == 2 { return "추가 설정 없이 사용할 수 있어요" }
         if notionIntegrationState == .needsReconnect { return "다음 단계: Notion 다시 연결" }
         if confluenceIntegrationState == .needsReconnect { return "다음 단계: Confluence 다시 연결" }
         if !notionMCP.isConnected { return "다음 단계: Notion 연결" }
@@ -457,7 +457,7 @@ public struct SettingsView: View {
             }
         } else {
             if notionIntegrationState == .needsReconnect {
-                Text("저장된 Notion 토큰을 사용할 수 없습니다. 다시 연결해 주세요.")
+                Text("저장된 Notion 토큰을 사용할 수 없어요. 다시 연결해 주세요.")
                     .font(.caption)
                     .foregroundColor(.orange)
                 Button("연결 정보 지우기") {
@@ -478,7 +478,7 @@ public struct SettingsView: View {
                         let message = (error as? LocalizedError)?.errorDescription
                             ?? error.localizedDescription
                         Log.oauth.error("NotionMCP 연결 실패 type=\(String(describing: type(of: error)), privacy: .public) message=\(message, privacy: .public)")
-                        notionConnectError = "연결에 실패했습니다. 다시 시도해 주세요."
+                        notionConnectError = "연결에 실패했어요. 다시 시도해 주세요."
                     }
                     notionConnectLoading = false
                 }
@@ -487,7 +487,7 @@ public struct SettingsView: View {
         if let err = notionConnectError {
             Text(err).font(.caption).foregroundColor(.red)
         }
-        Text("Notion을 연결하면 회의 목록의 관련 문서 탭에서 문서를 찾을 수 있습니다.")
+        Text("Notion을 연결하면 회의 목록의 관련 문서 탭에서 문서를 찾을 수 있어요.")
             .font(.caption)
             .foregroundColor(.secondary)
     }
@@ -506,7 +506,7 @@ public struct SettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("연결 준비", systemImage: "key.fill")
                     .font(.caption.weight(.semibold))
-                Text("Atlassian 계정에서 API token을 만든 뒤 사이트 URL, 이메일, token을 입력하세요. Confluence에 내보내려면 페이지 작성 권한이 필요합니다.")
+                Text("Atlassian 계정에서 API token을 만든 뒤 사이트 URL, 이메일, token을 입력하세요. Confluence에 내보내려면 페이지 작성 권한이 필요해요.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -540,7 +540,7 @@ public struct SettingsView: View {
                     .foregroundColor(.red)
                 }
             }
-            Text("토큰은 이 Mac의 비밀 저장소에만 저장됩니다. 기본 저장소는 Keychain입니다. 사이트 URL과 이메일은 연결 상태 표시와 API 호출에만 사용됩니다.")
+            Text("토큰은 이 Mac의 비밀 저장소에만 저장돼요. 기본 저장소는 Keychain이에요. 사이트 URL과 이메일은 연결 상태 표시와 API 호출에만 사용돼요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -566,11 +566,11 @@ public struct SettingsView: View {
     private var confluenceStatusMessage: String {
         switch confluenceIntegrationState {
         case .connected:
-            return "관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기에 사용됩니다."
+            return "관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기에 사용돼요."
         case .needsReconnect:
-            return "저장된 Confluence token을 사용할 수 없습니다. API token을 다시 저장해 주세요."
+            return "저장된 Confluence token을 사용할 수 없어요. API token을 다시 저장해 주세요."
         case .disconnected:
-            return "연결하면 관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기를 사용할 수 있습니다."
+            return "연결하면 관련 문서 검색, 회의 시작 문맥 조회, Confluence 내보내기를 사용할 수 있어요."
         }
     }
 
@@ -617,7 +617,7 @@ public struct SettingsView: View {
                 Text(provider.label).tag(provider)
             }
         }
-        .help("AI 처리에 사용할 서비스를 선택합니다.")
+        .help("AI 처리에 사용할 서비스를 선택해요.")
     }
 
     private var searchAnswerProviderRow: some View {
@@ -626,23 +626,23 @@ public struct SettingsView: View {
                 Text(provider.label).tag(provider)
             }
         }
-        .help("저장된 회의 검색 근거를 종합할 AI 서비스를 별도로 선택합니다.")
+        .help("저장된 회의 검색 근거를 종합할 AI 서비스를 별도로 선택해요.")
     }
 
     @ViewBuilder
     private var searchAnswerDetailRows: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("검색 답변도 AI 연결의 \(activeAIProvider.label)을 함께 사용합니다.")
+            Text("검색 답변도 AI 연결의 \(activeAIProvider.label)을 함께 사용해요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("검색 답변은 상위 회의 근거를 선택한 AI 서비스로 전송합니다. 민감한 회의는 선택한 AI 연결을 확인하세요.")
+            Text("검색 답변은 상위 회의 근거를 선택한 AI 서비스로 전송해요. 민감한 회의는 선택한 AI 연결을 확인하세요.")
                 .font(.caption)
                 .foregroundColor(.orange)
                 .fixedSize(horizontal: false, vertical: true)
 
             if activeAIProviderAuthKind == .accountLogin {
-                Text("공식 API 키 방식이 아니며 검색 근거가 해당 계정 서비스로 전송됩니다. 데이터 사용과 학습 여부는 각 앱의 프라이버시 설정에서 제어하세요.")
+                Text("공식 API 키 방식이 아니며 검색 근거가 해당 계정 서비스로 전송돼요. 데이터 사용과 학습 여부는 각 앱의 프라이버시 설정에서 제어하세요.")
                     .font(.caption)
                     .foregroundColor(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -672,21 +672,21 @@ public struct SettingsView: View {
             Picker(title, selection: $codexModel) {
                 ForEach(CodexOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
-            Text("보통은 자동을 그대로 두면 됩니다. 계정 플랜에서 최신 모델을 쓸 수 없으면 안정 모델로 다시 시도합니다.")
+            Text("보통은 자동을 그대로 두면 돼요. 계정 플랜에서 최신 모델을 쓸 수 없으면 안정 모델로 다시 시도해요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .gemini:
             Picker(title, selection: $geminiModel) {
                 ForEach(GeminiOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
-            Text("Gemini 계정과 Code Assist 권한에 따라 일부 모델은 막힐 수 있습니다. 실패하면 이전 호환 모델로 다시 시도합니다.")
+            Text("Gemini 계정과 Code Assist 권한에 따라 일부 모델은 막힐 수 있어요. 실패하면 이전 호환 모델로 다시 시도해요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .copilot:
             Picker(title, selection: $copilotModel) {
                 ForEach(CopilotOAuthService.availableModels, id: \.id) { Text($0.label).tag($0.id) }
             }
-            Text("Copilot 계정과 조직 정책에서 허용된 모델만 실제 호출됩니다. 막히면 다른 모델을 선택하세요.")
+            Text("Copilot 계정과 조직 정책에서 허용된 모델만 실제 호출돼요. 막히면 다른 모델을 선택하세요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .none:
@@ -797,7 +797,7 @@ public struct SettingsView: View {
                 localLLMAdvancedSettingsRows
             }
 
-            Text("API 키는 필요하지 않습니다. 다만 endpoint가 외부 주소이면 회의 원문이 그 서버로 전송됩니다.")
+            Text("API 키는 필요하지 않아요. 다만 endpoint가 외부 주소이면 회의 원문이 그 서버로 전송돼요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -817,7 +817,7 @@ public struct SettingsView: View {
                     Text(model.displayName).tag(model.id)
                 }
             }
-            Text("Ollama에서 설치된 모델을 확인했습니다. 모델명은 직접 입력하지 않아도 됩니다.")
+            Text("Ollama에서 설치된 모델을 확인했어요. 모델명은 직접 입력하지 않아도 돼요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
             localLLMModelCatalogActionRows
@@ -881,7 +881,7 @@ public struct SettingsView: View {
             .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
-        .help("Endpoint URL과 로컬 런타임 형식을 설정합니다.")
+        .help("Endpoint URL과 로컬 런타임 형식을 설정해요.")
     }
 
     private var localLLMAdvancedSettingsRows: some View {
@@ -913,7 +913,7 @@ public struct SettingsView: View {
                     .font(.caption)
                     .foregroundColor(localLLMConfigurationIsValid ? .secondary : .orange)
             }
-            Text("OpenAI 호환 서버는 LM Studio, llama.cpp server, vLLM처럼 /v1/chat/completions 형식을 제공하는 로컬 또는 사설 서버입니다.")
+            Text("OpenAI 호환 서버는 LM Studio, llama.cpp server, vLLM처럼 /v1/chat/completions 형식을 제공하는 로컬 또는 사설 서버예요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1007,12 +1007,12 @@ public struct SettingsView: View {
     private func modelCatalogStatusText(_ catalog: LLMModelCatalog, providerID: LLMProviderID) -> String {
         switch catalog.source {
         case .live:
-            return "API 키로 확인한 모델 목록입니다."
+            return "API 키로 확인한 모델 목록이에요."
         case .bundledFallback:
             if LLMAPIKeyStore.shared.hasAPIKey(for: providerID) {
-                return "모델 목록을 확인하지 못해 기본 추천 모델을 표시합니다."
+                return "모델 목록을 확인하지 못해 기본 추천 모델을 표시해요."
             }
-            return "API 키를 저장하면 모델 목록을 확인합니다. 지금은 기본 추천 모델을 표시합니다."
+            return "API 키를 저장하면 모델 목록을 확인해요. 지금은 기본 추천 모델을 표시해요."
         case .manualOnly:
             return "모델 ID를 직접 입력하세요."
         }
@@ -1021,9 +1021,9 @@ public struct SettingsView: View {
     private func apiModelSelectionHelpText(_ catalog: LLMModelCatalog, providerID: LLMProviderID) -> String {
         switch catalog.source {
         case .live:
-            return "목록에서 사용할 모델을 선택하면 됩니다. 특별한 이유가 없으면 추천 모델을 유지하세요."
+            return "목록에서 사용할 모델을 선택하면 돼요. 특별한 이유가 없으면 추천 모델을 유지하세요."
         case .bundledFallback:
-            return "\(providerID.displayName)의 기본 추천 모델입니다. API 키를 저장하거나 새로고침하면 실제 사용 가능 모델을 확인합니다."
+            return "\(providerID.displayName)의 기본 추천 모델이에요. API 키를 저장하거나 새로고침하면 실제 사용 가능 모델을 확인해요."
         case .manualOnly:
             return apiManualModelHelpText(providerID)
         }
@@ -1102,7 +1102,7 @@ public struct SettingsView: View {
         localLLMModelCatalog = LLMModelCatalog(
             models: [],
             source: .manualOnly,
-            warning: "Endpoint에서 Ollama 또는 OpenAI 호환 서버를 확인하지 못했습니다."
+            warning: "Endpoint에서 Ollama 또는 OpenAI 호환 서버를 확인하지 못했어요."
         )
         localLLMModelCatalogKey = localLLMModelCatalogRefreshKey
     }
@@ -1188,7 +1188,7 @@ public struct SettingsView: View {
                         loginError = nil
                         Task { await refreshAPIModelCatalog(for: providerID, force: true) }
                     } else {
-                        loginError = "API 키를 비밀 저장소에 저장하지 못했습니다. macOS 권한 상태를 확인하세요."
+                        loginError = "API 키를 비밀 저장소에 저장하지 못했어요. macOS 권한 상태를 확인하세요."
                     }
                 }
                 .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -1201,13 +1201,13 @@ public struct SettingsView: View {
                             apiModelCatalogs[providerID] = nil
                             loginError = nil
                         } else {
-                            loginError = "API 키를 비밀 저장소에서 삭제하지 못했습니다. macOS 권한 상태를 확인하세요."
+                            loginError = "API 키를 비밀 저장소에서 삭제하지 못했어요. macOS 권한 상태를 확인하세요."
                         }
                     }
                     .foregroundColor(.red)
                 }
             }
-            Text("API 키는 이 Mac의 비밀 저장소에만 저장됩니다. 기본 저장소는 Keychain입니다. 회의 원문은 선택한 공급자의 API로 전송됩니다.")
+            Text("API 키는 이 Mac의 비밀 저장소에만 저장돼요. 기본 저장소는 Keychain이에요. 회의 원문은 선택한 공급자의 API로 전송돼요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -1333,33 +1333,33 @@ public struct SettingsView: View {
         if localLLMCompatibilityValue == .ollamaGenerate {
             return localLLMModelCatalogStatusText
         }
-        return "OpenAI 호환 런타임은 표준 모델 목록 조회가 없어 입력한 모델 ID를 그대로 사용합니다."
+        return "OpenAI 호환 런타임은 표준 모델 목록 조회가 없어 입력한 모델 ID를 그대로 사용해요."
     }
 
     private var localLLMManualModelHelpText: String {
         switch localLLMCompatibilityValue {
         case .ollamaGenerate:
-            return "설치 모델을 조회할 수 없을 때만 직접 입력하세요. Ollama에서는 `ollama list`의 NAME 값을 사용합니다. 예: llama3.1:8b"
+            return "설치 모델을 조회할 수 없을 때만 직접 입력하세요. Ollama에서는 `ollama list`의 NAME 값을 사용해요. 예: llama3.1:8b"
         case .openAIChatCompletions:
-            return "LM Studio, llama.cpp server, vLLM 같은 서버가 요구하는 모델 ID를 입력하세요. 서버의 모델 목록이나 실행 로그에 표시된 이름을 그대로 쓰면 됩니다."
+            return "LM Studio, llama.cpp server, vLLM 같은 서버가 요구하는 모델 ID를 입력하세요. 서버의 모델 목록이나 실행 로그에 표시된 이름을 그대로 쓰면 돼요."
         }
     }
 
     private var localLLMModelCatalogStatusText: String {
         if localLLMBaseURLValue == nil {
-            return "Endpoint URL을 입력하면 설치 모델을 조회할 수 있습니다."
+            return "Endpoint URL을 입력하면 설치 모델을 조회할 수 있어요."
         }
         if isLoadingLocalLLMModels {
-            return "Ollama 설치 모델을 확인하는 중입니다."
+            return "Ollama 설치 모델을 확인하는 중이에요."
         }
         guard let catalog = localLLMModelCatalog else {
             return "설치 모델 조회로 실제 모델 존재 여부를 확인하세요."
         }
         if catalog.source != .live {
-            return "Ollama 모델 목록을 확인하지 못했습니다."
+            return "Ollama 모델 목록을 확인하지 못했어요."
         }
         if catalog.models.isEmpty {
-            return "Ollama에 설치된 모델이 없습니다."
+            return "Ollama에 설치된 모델이 없어요."
         }
         if localLLMModelIDValue.isEmpty {
             return "설치된 모델 \(catalog.models.count)개 중 하나를 선택하세요."
@@ -1367,7 +1367,7 @@ public struct SettingsView: View {
         if catalog.models.contains(where: { $0.id == localLLMModelIDValue }) {
             return "설치된 모델 확인됨: \(localLLMModelIDValue)"
         }
-        return "입력한 모델이 설치 목록에 없습니다."
+        return "입력한 모델이 설치 목록에 없어요."
     }
 
     private var localLLMModelCatalogWarningText: String? {
@@ -1561,7 +1561,7 @@ public struct SettingsView: View {
                 }
             }
 
-            Text("사용할 수 없는 엔진은 현재 기기, macOS 버전, 권한, 한국어 언어 파일 상태를 기준으로 비활성화됩니다.")
+            Text("사용할 수 없는 엔진은 현재 기기, macOS 버전, 권한, 한국어 언어 파일 상태를 기준으로 비활성화돼요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
@@ -1571,14 +1571,14 @@ public struct SettingsView: View {
             .disabled(isModelBusy || !selectedSpeechEngineAvailability.isSelectable)
 
             if selectedSpeechEngineID == .sfSpeechOnDevice {
-                Label("Apple 기본 받아쓰기는 온디바이스 전용 요청으로 실행합니다.", systemImage: "shield.checkered")
+                Label("Apple 기본 받아쓰기는 온디바이스 전용 요청으로 실행해요.", systemImage: "shield.checkered")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
 
             if selectedSpeechEngineID.supportsCacheRecovery, isModelFailed {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("모델 파일이 손상되었거나 권한 문제로 열리지 않습니다.")
+                    Text("모델 파일이 손상되었거나 권한 문제로 열리지 않아요.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Button("캐시 정리 후 모델 다시 받기") {
@@ -1597,10 +1597,10 @@ public struct SettingsView: View {
 
     private var speechEngineGuide: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("대부분은 로컬 AI 엔진을 선택하고, 모델은 정확도 우선을 쓰면 됩니다.", systemImage: "checkmark.seal.fill")
+            Label("대부분은 로컬 AI 엔진을 선택하고, 모델은 정확도 우선을 쓰면 돼요.", systemImage: "checkmark.seal.fill")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.primary)
-            Text("Apple 기본 받아쓰기는 온디바이스 전용 요청으로 실행합니다.")
+            Text("Apple 기본 받아쓰기는 온디바이스 전용 요청으로 실행해요.")
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1623,7 +1623,7 @@ public struct SettingsView: View {
             }
             LabeledContent("작동 상태", value: modelStateDescription)
                 .font(.system(size: 13))
-            Text("전환 버튼을 누른 뒤 현재 실행 중 값이 원하는 엔진으로 바뀌고 작동 상태가 로드됨이면 실제로 적용된 상태입니다.")
+            Text("전환 버튼을 누른 뒤 현재 실행 중 값이 원하는 엔진으로 바뀌고 작동 상태가 로드됨이면 실제로 적용된 상태예요.")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
         }
@@ -1715,7 +1715,7 @@ public struct SettingsView: View {
                     Text("로컬 AI 안에서 모델 선택")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.primary)
-                    Text("위 로컬 AI 엔진을 선택했을 때 사용할 실제 전사 모델입니다.")
+                    Text("위 로컬 AI 엔진을 선택했을 때 사용할 실제 전사 모델이에요.")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
@@ -1878,7 +1878,7 @@ public struct SettingsView: View {
         if let availability = speechEngineAvailability[engine] {
             return availability
         }
-        return engine.whisperVariant == nil ? .checking("가용성을 확인하고 있습니다.") : .available
+        return engine.whisperVariant == nil ? .checking("가용성을 확인하고 있어요.") : .available
     }
 
     private func selectSpeechEngineFamily(_ family: SpeechEngineFamily) {
@@ -1993,7 +1993,7 @@ public struct SettingsView: View {
                 }
 
                 guard !lines.isEmpty else {
-                    logExportError = "내보낼 로그가 없습니다."
+                    logExportError = "내보낼 로그가 없어요."
                     Log.app.info("log export: no entries found")
                     return
                 }

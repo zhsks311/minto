@@ -42,7 +42,7 @@ struct ConfluenceExportSheet: View {
                     TextField("비우면 공간 최상위에 생성", text: $savedParentID)
                 }
 
-                Text("공간 키는 Confluence URL의 `/spaces/ENG`에서 `ENG`에 해당합니다. 부모 페이지 ID는 내보낼 위치를 지정할 때만 입력하세요.")
+                Text("공간 키는 Confluence URL의 `/spaces/ENG`에서 `ENG`에 해당해요. 부모 페이지 ID는 내보낼 위치를 지정할 때만 입력하세요.")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -50,7 +50,7 @@ struct ConfluenceExportSheet: View {
 
             if let publishedPage {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("내보내기가 완료되었습니다.", systemImage: "checkmark.circle.fill")
+                    Label("내보내기가 완료됐어요.", systemImage: "checkmark.circle.fill")
                         .foregroundColor(.green)
                         .font(.system(size: 13, weight: .semibold))
                     Button {
@@ -158,7 +158,7 @@ struct ConfluenceExportSheet: View {
                 )
             } catch {
                 errorMessage = (error as? LocalizedError)?.errorDescription
-                    ?? "Confluence 내보내기에 실패했습니다."
+                    ?? "Confluence 내보내기에 실패했어요."
             }
             isPublishing = false
         }
@@ -166,7 +166,7 @@ struct ConfluenceExportSheet: View {
 }
 
 enum ConfluenceExportSheetPresentation {
-    static let settingsHandoffTitle = "Confluence 다시 연결이 필요합니다."
+    static let settingsHandoffTitle = "Confluence 다시 연결이 필요해요."
     static let settingsHandoffMessage = "설정에서 API token을 다시 저장한 뒤 내보내기를 다시 시도하세요."
     static let settingsHandoffButtonTitle = "Confluence 설정 열기"
 

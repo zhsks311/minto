@@ -32,7 +32,7 @@ struct LLMProviderTests {
         let modelUnavailable = LLMProviderError.modelUnavailable("gpt-x")
         let rateLimited = LLMProviderError.rateLimited
 
-        #expect(notConfigured.userMessage == "공급자 설정이 필요합니다.")
+        #expect(notConfigured.userMessage == "공급자 설정이 필요해요.")
         #expect(notConfigured.localizedDescription == notConfigured.userMessage)
         #expect(modelUnavailable.userMessage.contains("gpt-x"))
         #expect(rateLimited.userMessage.contains("요청 한도"))

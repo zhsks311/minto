@@ -19,7 +19,7 @@ final class NemotronSidecarTranscriber {
         guard health.isReady else {
             let detail = health.detail ?? "status=\(health.status)"
             updateState(.failed(detail))
-            throw STTError.engineUnavailable("Nemotron sidecar가 준비되지 않았습니다: \(detail)")
+            throw STTError.engineUnavailable("Nemotron sidecar가 준비되지 않았어요: \(detail)")
         }
         updateState(.loaded)
     }

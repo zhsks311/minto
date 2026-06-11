@@ -27,7 +27,7 @@ public struct MeetingLibraryView: View {
     @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
     @StateObject private var searchAnswerController = MeetingSearchAnswerController()
-    @StateObject private var fileImportUseCase = MeetingFileImportUseCase()
+    @StateObject private var fileImportUseCase: MeetingFileImportUseCase
     @State private var selectedID: UUID?
     @State private var searchText = ""
     // 검색 인덱스·결과 캐시. 키 입력마다 전체 회의를 다시 청크하지 않도록
@@ -56,6 +56,9 @@ public struct MeetingLibraryView: View {
     @State private var embeddingBuildTask: Task<Void, Never>?
     /// 파일 선택 후 맥락 입력 시트를 띄울 URL. nil이면 시트 미표시.
     @State private var fileImportSetupURL: URL?
+    /// 이전 실행에서 완료되지 못한 파일 가져오기 마커.
+    @State private var unfinishedImportFileName: String?
+    @State private var didReportUnfinishedImport = false
     /// 재요약 진행 중인 회의 ID. nil이면 재요약 없음.
     /// record.id에 바인딩해 다른 회의 선택 시 상태 오염을 방지한다.
     @State private var retryingRecordID: UUID?
@@ -67,6 +70,7 @@ public struct MeetingLibraryView: View {
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
     private let onStopRecording: () -> Void
+    private let fileImportDefaults: UserDefaults
 
     private enum DetailTab {
         case summary
@@ -87,13 +91,16 @@ public struct MeetingLibraryView: View {
         viewModel: TranscriptionViewModel,
         onNewMeeting: @escaping () -> Void,
         onShowOverlay: @escaping () -> Void,
-        onStopRecording: @escaping () -> Void
+        onStopRecording: @escaping () -> Void,
+        fileImportDefaults: UserDefaults = .standard
     ) {
         self.store = store
         self.viewModel = viewModel
         self.onNewMeeting = onNewMeeting
         self.onShowOverlay = onShowOverlay
         self.onStopRecording = onStopRecording
+        self.fileImportDefaults = fileImportDefaults
+        _fileImportUseCase = StateObject(wrappedValue: MeetingFileImportUseCase(defaults: fileImportDefaults))
     }
 
     public var body: some View {
@@ -111,6 +118,7 @@ public struct MeetingLibraryView: View {
             rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
             searchAnswerController.refreshReadiness()
+            detectUnfinishedFileImportIfNeeded()
         }
         .onChange(of: store.meetings) { _, _ in
             searchAnswerController.reset()
@@ -167,6 +175,9 @@ public struct MeetingLibraryView: View {
             searchAnswerController.refreshReadiness()
         }
         .onChange(of: fileImportUseCase.state) { _, state in
+            if state.stage != .idle {
+                unfinishedImportFileName = nil
+            }
             if let record = state.record {
                 selectedID = record.id
                 showingLiveMeeting = false
@@ -202,8 +213,8 @@ public struct MeetingLibraryView: View {
             Button("취소", role: .cancel) {}
         } message: {
             Text(confluence.isConfigured
-                 ? "파일로 저장하거나 연결된 Confluence 공간에 새 페이지로 만들 수 있습니다."
-                 : "Confluence 내보내기는 설정의 검색 소스에서 Confluence를 연결한 뒤 사용할 수 있습니다.")
+                 ? "파일로 저장하거나 연결된 Confluence 공간에 새 페이지로 만들 수 있어요."
+                 : "Confluence 내보내기는 설정의 검색 소스에서 Confluence를 연결한 뒤 사용할 수 있어요.")
         }
         .sheet(isPresented: $showingConfluenceExport) {
             if let exportRecord {
@@ -285,7 +296,7 @@ public struct MeetingLibraryView: View {
         .controlSize(.large)
         .fixedSize()
         .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
-        .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있습니다." : "음성 또는 영상 파일로 회의록을 만듭니다.")
+        .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있어요." : "음성 또는 영상 파일로 회의록을 만들어요.")
     }
 
     private var newMeetingButton: some View {
@@ -335,6 +346,7 @@ public struct MeetingLibraryView: View {
     private var resultsColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             searchReadiness
+            unfinishedFileImportCard
             fileImportStatusCard
 
             if isSearching {
@@ -409,7 +421,7 @@ public struct MeetingLibraryView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("AI 답변", systemImage: "sparkles")
                         .font(.system(size: 26, weight: .bold))
-                    Text("“\(trimmedSearch)” — 저장된 회의 근거로 답변합니다")
+                    Text("“\(trimmedSearch)” — 저장된 회의 근거로 답변해요")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -418,7 +430,7 @@ public struct MeetingLibraryView: View {
                     HStack(spacing: 10) {
                         ProgressView()
                             .controlSize(.small)
-                        Text("검색 결과를 종합하는 중입니다…")
+                        Text("검색 결과를 종합하는 중이에요…")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -602,7 +614,7 @@ public struct MeetingLibraryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("검색 준비됨")
                     .font(.system(size: 12, weight: .semibold))
-                Text("저장된 회의 \(store.meetings.count)개에서 바로 찾습니다")
+                Text("저장된 회의 \(store.meetings.count)개에서 바로 찾아요")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -814,6 +826,48 @@ public struct MeetingLibraryView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var unfinishedFileImportCard: some View {
+        if let fileName = unfinishedImportFileName {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.orange)
+                        .frame(width: 20, height: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("지난 가져오기가 완료되지 못했어요")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("파일을 다시 가져와 주세요.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(fileName)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer()
+                    Button {
+                        dismissUnfinishedFileImport()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .help("안내 닫기")
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.07))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     @ViewBuilder
@@ -1065,11 +1119,11 @@ public struct MeetingLibraryView: View {
                     liveSummarySection
                     liveTranscriptSnippet
                 } else if detailTab == .transcript {
-                    transcriptBlock(liveSegments, emptyText: "아직 전사된 내용이 없습니다.")
+                    transcriptBlock(liveSegments, emptyText: "아직 전사된 내용이 없어요.")
                 } else {
                     relatedDocsSection(
                         query: liveRelatedSearchQuery,
-                        emptyText: "전사가 쌓이면 현재 회의 주제로 관련 문서를 찾을 수 있습니다."
+                        emptyText: "전사가 쌓이면 현재 회의 주제로 관련 문서를 찾을 수 있어요."
                     )
                 }
             }
@@ -1083,7 +1137,7 @@ public struct MeetingLibraryView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("현재까지 요약", systemImage: "list.bullet.rectangle")
             if liveRunningSummary.isEmpty {
-                Text("요약은 전사가 충분히 쌓이면 자동으로 갱신됩니다.")
+                Text("요약은 전사가 충분히 쌓이면 자동으로 갱신돼요.")
                     .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
@@ -1104,7 +1158,7 @@ public struct MeetingLibraryView: View {
             sectionTitle("최근 전사", systemImage: "text.quote")
             let recent = liveSegments.suffix(6)
             if recent.isEmpty {
-                Text("녹음이 시작되면 여기에 전사가 쌓입니다.")
+                Text("녹음이 시작되면 여기에 전사가 쌓여요.")
                     .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
@@ -1145,11 +1199,11 @@ public struct MeetingLibraryView: View {
                         meetingNotes(record.summary.sections)
                         meetingOutcomes(record.summary)
                     } else if detailTab == .transcript {
-                        transcriptBlock(record.transcript, emptyText: "전사 내용이 없습니다.", record: record)
+                        transcriptBlock(record.transcript, emptyText: "전사 내용이 없어요.", record: record)
                     } else {
                         relatedDocsSection(
                             query: relatedSearchQuery(for: record),
-                            emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있습니다."
+                            emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있어요."
                         )
                     }
                 }
@@ -1185,6 +1239,7 @@ public struct MeetingLibraryView: View {
                 }
                 Spacer()
                 readingModeButton
+                summaryRetryHeaderButton(record)
 
                 Button {
                     exportRecord = record
@@ -1205,6 +1260,13 @@ public struct MeetingLibraryView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(record.transcript.isEmpty)
+            }
+            if !record.summary.isPlainFallback,
+               let retryMessage = retryError?.id == record.id ? retryError?.message : nil {
+                Text(retryMessage)
+                    .font(.system(size: 12))
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             detailTabs
         }
@@ -1256,6 +1318,29 @@ public struct MeetingLibraryView: View {
         .accessibilityLabel(useReadableDetailText ? "표준 글자 크기로 보기" : "큰 글자 크기로 보기")
     }
 
+    @ViewBuilder
+    private func summaryRetryHeaderButton(_ record: MeetingRecord) -> some View {
+        if !record.summary.isPlainFallback {
+            let isThisRetrying = retryingRecordID == record.id
+            Button {
+                retrySummary(for: record)
+            } label: {
+                HStack(spacing: 6) {
+                    if isThisRetrying {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Text("다시 요약")
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(hasLiveMeeting || retryingRecordID != nil)
+            .help("현재 회의 전사로 요약을 다시 만들어요")
+        }
+    }
+
     private func whyThisResult(_ record: MeetingRecord) -> some View {
         let match = primaryMatch(for: record)
         return VStack(alignment: .leading, spacing: 8) {
@@ -1296,7 +1381,7 @@ public struct MeetingLibraryView: View {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.orange)
-                Text("구조화 요약을 만들지 못해 임시 요약만 저장됐어요. 목차·키워드 없이 표시됩니다.")
+                Text("구조화 요약을 만들지 못해 임시 요약만 저장됐어요. 목차·키워드 없이 표시돼요.")
                     .font(.system(size: 13))
                     .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1313,26 +1398,10 @@ public struct MeetingLibraryView: View {
             } else {
                 HStack(spacing: 8) {
                     Button("다시 요약") {
-                        retryError = nil
-                        retryingRecordID = record.id
-                        Task {
-                            let useCase = MeetingSummaryRetryUseCase()
-                            // record: 버튼 누른 시점의 복사본을 캡처 — 다른 회의 선택 후에도 올바른 record로 재시도
-                            let result = await useCase.retry(record: record)
-                            retryingRecordID = nil
-                            if case .failure(let reason) = result {
-                                let message: String
-                                if case .saveFailed = reason {
-                                    message = "다시 요약 결과 저장에 실패했어요. 다시 시도해 보세요."
-                                } else {
-                                    message = "요약을 다시 만들지 못했어요. 다시 시도해 보세요."
-                                }
-                                retryError = (id: record.id, message: message)
-                            }
-                        }
+                        retrySummary(for: record)
                     }
                     .buttonStyle(.bordered)
-                    .disabled(hasLiveMeeting)
+                    .disabled(hasLiveMeeting || retryingRecordID != nil)
 
                     if let errorMessage = thisError {
                         Text(errorMessage)
@@ -1356,7 +1425,7 @@ public struct MeetingLibraryView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("요약", systemImage: "list.bullet.rectangle")
             if summary.isEmpty {
-                Text("요약이 없습니다. 전사 내용을 먼저 확인하세요.")
+                Text("요약이 없어요. 전사 내용을 먼저 확인하세요.")
                     .font(.system(size: detailBodyFontSize))
                     .foregroundColor(.secondary)
             } else {
@@ -1748,7 +1817,7 @@ public struct MeetingLibraryView: View {
                 }
                 .buttonStyle(ProminentActionButtonStyle())
                 .disabled(query.isEmpty || !relatedInfo.isAnyConfigured || relatedInfo.isSearching)
-                .help(relatedInfo.isAnyConfigured ? "현재 회의 요약과 전사로 Notion·Confluence를 검색합니다." : "설정에서 Notion 또는 Confluence를 먼저 연결하세요.")
+                .help(relatedInfo.isAnyConfigured ? "현재 회의 요약과 전사로 Notion·Confluence를 검색해요." : "설정에서 Notion 또는 Confluence를 먼저 연결하세요.")
             }
 
             HStack(spacing: 8) {
@@ -1772,12 +1841,12 @@ public struct MeetingLibraryView: View {
             if relatedInfo.isSearching, isCurrentQuery {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("관련 문서를 찾고 있습니다.")
+                    Text("관련 문서를 찾고 있어요.")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
             } else if !relatedInfo.isAnyConfigured {
-                Text("설정에서 검색 소스를 연결하면 회의 내용으로 관련 문서를 찾을 수 있습니다.")
+                Text("설정에서 검색 소스를 연결하면 회의 내용으로 관련 문서를 찾을 수 있어요.")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             } else if isCurrentQuery, !relatedInfo.results.isEmpty {
@@ -1791,7 +1860,7 @@ public struct MeetingLibraryView: View {
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             } else {
-                Text("조회 버튼을 누르면 현재 회의 기준으로 검색합니다.")
+                Text("조회 버튼을 누르면 현재 회의 기준으로 검색해요.")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
@@ -1979,7 +2048,7 @@ public struct MeetingLibraryView: View {
     private var livePrimaryText: String {
         if !liveRunningSummary.isEmpty { return liveRunningSummary }
         if let text = liveSegments.last?.text, !text.isEmpty { return text }
-        return "전사를 기다리는 중입니다"
+        return "전사를 기다리는 중이에요"
     }
 
     private var liveRelatedSearchQuery: String {
@@ -2429,6 +2498,30 @@ public struct MeetingLibraryView: View {
         NSPasteboard.general.setString(record.transcript.map(\.text).joined(separator: "\n"), forType: .string)
     }
 
+    private func retrySummary(for record: MeetingRecord) {
+        guard !hasLiveMeeting, retryingRecordID == nil else { return }
+
+        retryError = nil
+        retryingRecordID = record.id
+        Task { @MainActor in
+            let useCase = MeetingSummaryRetryUseCase()
+            let result = await useCase.retry(record: record)
+            if retryingRecordID == record.id {
+                retryingRecordID = nil
+            }
+            if case .failure(let reason) = result {
+                retryError = (id: record.id, message: retryFailureMessage(for: reason))
+            }
+        }
+    }
+
+    private func retryFailureMessage(for reason: SummaryRetryFailureReason) -> String {
+        if case .saveFailed = reason {
+            return "다시 요약 결과 저장에 실패했어요. 다시 시도해 보세요."
+        }
+        return "요약을 다시 만들지 못했어요. 다시 시도해 보세요."
+    }
+
     private func copyMarkdown(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
@@ -2458,6 +2551,20 @@ public struct MeetingLibraryView: View {
     private func openSettingsWindow() {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
+    private func detectUnfinishedFileImportIfNeeded() {
+        guard !didReportUnfinishedImport else { return }
+        guard let fileName = MeetingFileImportUseCase.pendingImportFileName(in: fileImportDefaults) else { return }
+
+        unfinishedImportFileName = fileName
+        didReportUnfinishedImport = true
+        Log.importer.error("pending import marker found file=\(fileName, privacy: .public)")
+    }
+
+    private func dismissUnfinishedFileImport() {
+        MeetingFileImportUseCase.clearPendingImportMarker(in: fileImportDefaults)
+        unfinishedImportFileName = nil
     }
 
     private func selectFileForImport() {

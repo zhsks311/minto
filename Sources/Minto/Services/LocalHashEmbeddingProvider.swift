@@ -10,7 +10,7 @@ public struct LocalHashEmbeddingProvider: LLMEmbeddingProvider {
     public init(registry: LLMProviderRegistry = .shared, dimensions: Int = Self.dimensions) {
         self.descriptor = registry.descriptor(for: .local) ?? LLMProviderDescriptor(
             id: .local,
-            description: "외부 로컬 런타임으로 교정, 요약, 검색 답변과 기기 내 검색을 실행합니다.",
+            description: "외부 로컬 런타임으로 교정, 요약, 검색 답변과 기기 내 검색을 실행해요.",
             authKind: .local,
             supportedCapabilities: [.textGeneration, .correction, .summary, .answer, .embedding]
         )
@@ -27,7 +27,7 @@ public struct LocalHashEmbeddingProvider: LLMEmbeddingProvider {
                 LLMModelInfo(
                     id: Self.modelID,
                     displayName: "기기 내 빠른 검색",
-                    description: "의미 유사도 모델이 아닌 로컬 후보 검색용 벡터입니다.",
+                    description: "의미 유사도 모델이 아닌 로컬 후보 검색용 벡터예요.",
                     capabilities: [.embedding],
                     isRecommended: true,
                     ramRequirement: "매우 낮음",

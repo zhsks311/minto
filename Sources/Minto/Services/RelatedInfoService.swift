@@ -33,7 +33,7 @@ public final class RelatedInfoService: ObservableObject {
             return
         }
         guard !trimmed.isEmpty else {
-            statusMessage = "조회할 키워드가 없습니다."
+            statusMessage = "조회할 키워드가 없어요."
             return
         }
         if let reconnectStatusMessage {
@@ -52,7 +52,7 @@ public final class RelatedInfoService: ObservableObject {
 
         results = combined
         statusMessage = reconnectStatusMessage
-            ?? (combined.isEmpty ? "관련 문서를 찾지 못했습니다." : nil)
+            ?? (combined.isEmpty ? "관련 문서를 찾지 못했어요." : nil)
     }
 
     public func clear() {
@@ -67,6 +67,6 @@ public final class RelatedInfoService: ObservableObject {
             confluence.connectionState == .needsReconnect ? "Confluence" : nil
         ].compactMap { $0 }
         guard !sourceNames.isEmpty else { return nil }
-        return "\(sourceNames.joined(separator: "과 ")) 다시 연결이 필요합니다. 설정에서 연결 정보를 갱신하세요."
+        return "\(sourceNames.joined(separator: "과 ")) 다시 연결이 필요해요. 설정에서 연결 정보를 갱신하세요."
     }
 }

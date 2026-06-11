@@ -28,7 +28,7 @@ public enum MeetingFileImportStage: String, Sendable, Equatable {
         case .saving:
             return "저장 중"
         case .completed:
-            return "회의록 생성 완료"
+            return "가져오기 완료"
         case .failed:
             return "파일 가져오기 실패"
         case .cancelled:
@@ -90,11 +90,11 @@ public enum MeetingFileImportError: LocalizedError, Sendable, Equatable {
     public var errorDescription: String? {
         switch self {
         case .sttNotReady(let message):
-            return "음성 인식 엔진을 준비하지 못했습니다: \(message)"
+            return "음성 인식 엔진을 준비하지 못했어요: \(message)"
         case .emptyTranscript:
-            return "전사된 내용이 없습니다. 다른 파일을 선택하거나 음성이 포함되어 있는지 확인하세요."
+            return "전사된 내용이 없어요. 다른 파일을 선택하거나 음성이 포함되어 있는지 확인하세요."
         case .saveFailed:
-            return "회의록을 저장하지 못했습니다."
+            return "회의록을 저장하지 못했어요."
         }
     }
 }
@@ -134,6 +134,33 @@ extension MeetingStore: MeetingFileImportStoring {}
 @MainActor
 public final class MeetingFileImportUseCase: ObservableObject {
     public static let supportedContentTypes: [UTType] = FileAudioExtractor.supportedContentTypes
+    public static let pendingImportFileNameKey = "pendingImportFileName"
+    private static var activeImportCount = 0
+
+    public static var isAnyImportRunning: Bool {
+        activeImportCount > 0
+    }
+
+    internal static func resetImportStateForTesting(in defaults: UserDefaults = .standard) {
+        activeImportCount = 0
+        clearPendingImportMarker(in: defaults)
+    }
+
+    public static func pendingImportFileName(in defaults: UserDefaults = .standard) -> String? {
+        normalizedImportMarkerFileName(defaults.string(forKey: pendingImportFileNameKey))
+    }
+
+    public static func clearPendingImportMarker(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: pendingImportFileNameKey)
+    }
+
+    private static func normalizedImportMarkerFileName(_ fileName: String?) -> String? {
+        let trimmedFileName = fileName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmedFileName.isEmpty else { return nil }
+        let lastPathComponent = (trimmedFileName as NSString).lastPathComponent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return lastPathComponent.isEmpty ? nil : lastPathComponent
+    }
 
     @Published public private(set) var state: MeetingFileImportState = .idle
 
@@ -144,6 +171,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
     private let store: any MeetingFileImportStoring
     private let chunkSeconds: TimeInterval
     private let now: () -> Date
+    private let defaults: UserDefaults
 
     init(
         extractor: any MeetingFileAudioExtracting = FileAudioExtractor(),
@@ -152,7 +180,8 @@ public final class MeetingFileImportUseCase: ObservableObject {
         summaryService: any MeetingFileImportSummaryGenerating = SummaryService.shared,
         store: any MeetingFileImportStoring = MeetingStore.shared,
         chunkSeconds: TimeInterval = 30,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        defaults: UserDefaults = .standard
     ) {
         self.extractor = extractor
         self.sttService = sttService
@@ -161,11 +190,12 @@ public final class MeetingFileImportUseCase: ObservableObject {
         self.store = store
         self.chunkSeconds = max(1, chunkSeconds)
         self.now = now
+        self.defaults = defaults
     }
 
     public func reset() {
         guard !state.isRunning else { return }
-        state = .idle
+        setState(.idle)
     }
 
     @discardableResult
@@ -194,11 +224,11 @@ public final class MeetingFileImportUseCase: ObservableObject {
 
         Log.importer.info("import start file=\(fileName, privacy: .public) engine=\(engineID.rawValue, privacy: .public)")
         do {
-            update(.analyzing, progress: 0.05, fileName: fileName, detail: "음성 인식 엔진을 준비하고 있습니다.")
+            update(.analyzing, progress: 0.05, fileName: fileName, detail: "음성 인식 엔진을 준비하고 있어요.")
             try await ensureSTTLoaded(engineID)
             try Task.checkCancellation()
 
-            update(.analyzing, progress: 0.12, fileName: fileName, detail: "음성 트랙을 확인하고 있습니다.")
+            update(.analyzing, progress: 0.12, fileName: fileName, detail: "음성 트랙을 확인하고 있어요.")
             Log.importer.info("import extract start file=\(fileName, privacy: .public)")
             let extraction = try await extractor.extractChunks(
                 from: url,
@@ -224,7 +254,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
 
             guard !segments.isEmpty else { throw MeetingFileImportError.emptyTranscript }
 
-            update(.summarizing, progress: 0.86, fileName: fileName, detail: "회의 내용을 정리하고 있습니다.")
+            update(.summarizing, progress: 0.86, fileName: fileName, detail: "회의 내용을 정리하고 있어요.")
             Log.importer.info("import summarize start file=\(fileName, privacy: .public)")
             let summary = await summaryService.generateFinal(
                 transcript: Self.transcriptText(from: segments, startedAt: startedAt),
@@ -232,7 +262,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             ) ?? MeetingSummary()
             try Task.checkCancellation()
 
-            update(.saving, progress: 0.96, fileName: fileName, detail: "회의 목록에 저장하고 있습니다.")
+            update(.saving, progress: 0.96, fileName: fileName, detail: "회의 목록에 저장하고 있어요.")
             Log.importer.info("import save start file=\(fileName, privacy: .public)")
             let record = MeetingRecordFactory.makeRecord(
                 summary: summary,
@@ -246,34 +276,34 @@ public final class MeetingFileImportUseCase: ObservableObject {
             guard store.save(record) == .success else { throw MeetingFileImportError.saveFailed }
 
             Log.importer.info("import success file=\(fileName, privacy: .public)")
-            state = MeetingFileImportState(
+            setState(MeetingFileImportState(
                 stage: .completed,
                 progress: 1,
                 fileName: fileName,
-                detailText: "\(record.title) 회의록을 만들었습니다.",
+                detailText: "'\(record.title)'이 목록에 추가됐어요.",
                 record: record
-            )
+            ))
             return record
         } catch is CancellationError {
             Log.importer.info("import cancelled file=\(fileName, privacy: .public)")
-            state = MeetingFileImportState(
+            setState(MeetingFileImportState(
                 stage: .cancelled,
                 progress: state.progress,
                 fileName: fileName,
-                detailText: "파일 가져오기를 취소했습니다."
-            )
+                detailText: "파일 가져오기를 취소했어요."
+            ))
             throw CancellationError()
         } catch {
             let errorCase = String(describing: error).components(separatedBy: "(").first ?? String(describing: error)
             let nsError = error as NSError
             Log.importer.error("import failed file=\(fileName, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)")
-            state = MeetingFileImportState(
+            setState(MeetingFileImportState(
                 stage: .failed,
                 progress: state.progress,
                 fileName: fileName,
-                detailText: "파일을 회의록으로 만들지 못했습니다.",
+                detailText: "파일을 회의록으로 만들지 못했어요.",
                 errorMessage: error.localizedDescription
-            )
+            ))
             throw error
         }
     }
@@ -357,12 +387,40 @@ public final class MeetingFileImportUseCase: ObservableObject {
         fileName: String,
         detail: String
     ) {
-        state = MeetingFileImportState(
+        setState(MeetingFileImportState(
             stage: stage,
             progress: progress,
             fileName: fileName,
             detailText: detail
-        )
+        ))
+    }
+
+    private func setState(_ nextState: MeetingFileImportState) {
+        let wasRunning = state.isRunning
+        state = nextState
+        Self.updateActiveImportCount(wasRunning: wasRunning, isRunning: nextState.isRunning)
+        updatePendingImportMarker(for: nextState)
+    }
+
+    private static func updateActiveImportCount(wasRunning: Bool, isRunning: Bool) {
+        switch (wasRunning, isRunning) {
+        case (false, true):
+            activeImportCount += 1
+        case (true, false):
+            activeImportCount = max(0, activeImportCount - 1)
+        case (false, false), (true, true):
+            break
+        }
+    }
+
+    internal func updatePendingImportMarker(for nextState: MeetingFileImportState) {
+        if nextState.isRunning {
+            if let fileName = Self.normalizedImportMarkerFileName(nextState.fileName) {
+                defaults.set(fileName, forKey: Self.pendingImportFileNameKey)
+            }
+        } else if !nextState.isRunning {
+            Self.clearPendingImportMarker(in: defaults)
+        }
     }
 
     private func resolvedTitle(url: URL, preferredTitle: String?) -> String {

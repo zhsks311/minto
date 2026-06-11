@@ -38,13 +38,13 @@ extension MeetingSearchAnswerError: LocalizedError {
         case .emptyQuery:
             return "검색어를 먼저 입력하세요."
         case .noResults:
-            return "답변에 사용할 회의 근거를 찾지 못했습니다."
+            return "답변에 사용할 회의 근거를 찾지 못했어요."
         case .providerNotConfigured:
-            return "AI 연결 설정이 필요합니다."
+            return "AI 연결 설정이 필요해요."
         case .providerUnsupported:
-            return "현재 AI 서비스는 검색 답변을 지원하지 않습니다."
+            return "현재 AI 서비스는 검색 답변을 지원하지 않아요."
         case .emptyAnswer:
-            return "AI가 빈 답변을 반환했습니다."
+            return "AI가 빈 답변을 반환했어요."
         case .generationFailed(let message):
             return message
         }

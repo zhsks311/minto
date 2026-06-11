@@ -49,7 +49,7 @@ public enum FileAudioExtractionError: LocalizedError, Sendable, Equatable {
         case .readerFailed(let message):
             return "파일을 열 수 없어요. 손상되었거나 지원하지 않는 코덱일 수 있어요. (\(message))"
         case .invalidAudioFormat:
-            return "파일 음성 포맷을 처리할 수 없습니다."
+            return "파일 음성 포맷을 처리할 수 없어요."
         case .noReadableAudio:
             return "오디오를 읽지 못했어요. 파일이 손상됐을 수 있어요."
         }

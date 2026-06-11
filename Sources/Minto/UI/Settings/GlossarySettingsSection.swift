@@ -26,7 +26,7 @@ struct GlossarySettingsSection: View {
         Section("용어집") {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("묶음별 용어집에서 회의 주제에 맞는 용어만 추천합니다.")
+                    Text("묶음별 용어집에서 회의 주제에 맞는 용어만 추천해요.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text("활성 용어 \(glossaryStore.entries.filter(\.enabled).count)개 · AI 전달량 \(glossaryPromptPreviewCount) / \(GlossaryContextResolver.defaultMaxCharacters)자")
@@ -52,7 +52,7 @@ struct GlossarySettingsSection: View {
             }
 
             if glossaryStore.entries.isEmpty {
-                Text("개발, 인프라, 제품, 조직처럼 묶음별 용어를 추가하면 새 회의 시작 때 관련 용어만 선택할 수 있습니다. 묶음 이름은 직접 만들 수도 있습니다.")
+                Text("개발, 인프라, 제품, 조직처럼 묶음별 용어를 추가하면 새 회의 시작 때 관련 용어만 선택할 수 있어요. 묶음 이름은 직접 만들 수도 있어요.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
@@ -61,7 +61,7 @@ struct GlossarySettingsSection: View {
                 }
             }
 
-            Text("저장 개수에는 제한이 없습니다. AI에는 회의 주제와 선택한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달됩니다.")
+            Text("저장 개수에는 제한이 없어요. AI에는 회의 주제와 선택한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달돼요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -75,7 +75,7 @@ struct GlossarySettingsSection: View {
             Text("제안된 용어")
                 .font(.caption.weight(.bold))
                 .foregroundColor(.accentColor)
-            Text("회의에서 발견한 용어입니다. 추가하면 등록 폼이 열립니다.")
+            Text("회의에서 발견한 용어예요. 추가하면 등록 폼이 열려요.")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             ForEach(glossaryStore.pendingCandidates) { candidate in
@@ -380,7 +380,7 @@ struct GlossarySettingsSection: View {
                     glossaryInputField(
                         title: "새 묶음 이름",
                         placeholder: "예: 백엔드팀, 프로젝트-X",
-                        help: "팀이나 프로젝트 이름으로 나만의 용어집을 만들 수 있습니다.",
+                        help: "팀이나 프로젝트 이름으로 나만의 용어집을 만들 수 있어요.",
                         text: $glossaryNewCategoryInput
                     )
                 }
@@ -389,7 +389,7 @@ struct GlossarySettingsSection: View {
             glossaryInputField(
                 title: "정확한 표기",
                 placeholder: "Liquibase",
-                help: "회의록에 남기고 싶은 최종 표기입니다.",
+                help: "회의록에 남기고 싶은 최종 표기예요.",
                 text: $glossaryCanonicalInput
             )
             glossaryInputField(
@@ -413,7 +413,7 @@ struct GlossarySettingsSection: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                 HStack {
-                    Text("회의 주제와 맞는 용어만 추천할 때 사용합니다.")
+                    Text("회의 주제와 맞는 용어만 추천할 때 사용해요.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                     Spacer()
@@ -426,7 +426,7 @@ struct GlossarySettingsSection: View {
             glossaryInputField(
                 title: "태그",
                 placeholder: "db, 마이그레이션",
-                help: "검색과 추천 힌트입니다. 쉼표로 구분하세요.",
+                help: "검색과 추천 힌트예요. 쉼표로 구분하세요.",
                 text: $glossaryTagsInput
             )
 
@@ -438,7 +438,7 @@ struct GlossarySettingsSection: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
-                    Text("이 용어는 전달 예산 \(GlossaryContextResolver.defaultMaxCharacters)자 중 약 \(promptLine.count)자를 차지합니다.")
+                    Text("이 용어는 전달 예산 \(GlossaryContextResolver.defaultMaxCharacters)자 중 약 \(promptLine.count)자를 차지해요.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }

@@ -80,13 +80,13 @@ public struct AudioInputReadinessChecker: Sendable {
             return AudioInputReadiness(
                 state: .ready,
                 title: "마이크+시스템 입력 가능",
-                detail: "마이크와 시스템 사운드를 함께 입력합니다. Echo cancellation은 적용하지 않습니다."
+                detail: "마이크와 시스템 사운드를 함께 입력해요. Echo cancellation은 적용하지 않아요."
             )
         case .systemAudio:
             return AudioInputReadiness(
                 state: .ready,
                 title: "시스템 입력 가능",
-                detail: "화상회의 상대방 소리를 입력으로 받을 준비가 됐습니다."
+                detail: "화상회의 상대방 소리를 입력으로 받을 준비가 됐어요."
             )
         case .microphone:
             return .ready(for: .microphone)
@@ -106,7 +106,7 @@ public struct AudioInputReadinessChecker: Sendable {
         do {
             let content = try await SCShareableContent.current
             guard !content.displays.isEmpty else {
-                return .unavailable("캡처 가능한 디스플레이가 없습니다.")
+                return .unavailable("캡처 가능한 디스플레이가 없어요.")
             }
             return .available
         } catch {
@@ -133,7 +133,7 @@ public struct AudioInputReadinessChecker: Sendable {
             case SCStreamError.userDeclined.rawValue:
                 return .screenCapturePermissionDenied
             case SCStreamError.missingEntitlements.rawValue:
-                return .systemAudioUnavailable("ScreenCaptureKit 권한 설정이 필요합니다.")
+                return .systemAudioUnavailable("ScreenCaptureKit 권한 설정이 필요해요.")
             default:
                 break
             }

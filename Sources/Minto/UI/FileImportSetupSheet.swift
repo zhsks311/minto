@@ -80,7 +80,7 @@ struct FileImportSetupSheet: View {
 
             if showGlossary {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("AI에는 선택한 용어와 직접 입력한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달됩니다. 현재 \(combinedGlossary.count) / \(GlossaryContextResolver.defaultMaxCharacters)자")
+                    Text("AI에는 선택한 용어와 직접 입력한 용어만 최대 \(GlossaryContextResolver.defaultMaxCharacters)자까지 전달돼요. 현재 \(combinedGlossary.count) / \(GlossaryContextResolver.defaultMaxCharacters)자")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -106,8 +106,8 @@ struct FileImportSetupSheet: View {
                         .frame(maxHeight: 160)
                     } else {
                         Text(glossaryStore.entries.isEmpty
-                             ? "설정에서 기본 용어를 추가하면 회의마다 다시 입력하지 않아도 됩니다."
-                             : "회의 주제를 입력하면 관련 기본 용어를 추천합니다.")
+                             ? "설정에서 기본 용어를 추가하면 회의마다 다시 입력하지 않아도 돼요."
+                             : "회의 주제를 입력하면 관련 기본 용어를 추천해요.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }

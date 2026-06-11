@@ -12,7 +12,7 @@ final class SpeechAnalyzerSTTEngine: SpeechTranscriptionEngine {
     func load(updateState: @escaping STTStateUpdater) async throws {
         let availability = await Self.availability()
         guard availability.isSelectable else {
-            throw STTError.engineUnavailable(availability.detailText ?? "SpeechAnalyzer를 사용할 수 없습니다.")
+            throw STTError.engineUnavailable(availability.detailText ?? "SpeechAnalyzer를 사용할 수 없어요.")
         }
         updateState(.loaded)
         Log.stt.info("Apple speech engine ready: \(self.engineID.rawValue, privacy: .public)")
@@ -20,12 +20,12 @@ final class SpeechAnalyzerSTTEngine: SpeechTranscriptionEngine {
 
     func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult {
         guard #available(macOS 26.0, *) else {
-            throw STTError.engineUnavailable("SpeechAnalyzer는 macOS 26 이상에서 사용할 수 있습니다.")
+            throw STTError.engineUnavailable("SpeechAnalyzer는 macOS 26 이상에서 사용할 수 있어요.")
         }
 
         let availability = await Self.availability()
         guard availability.isSelectable else {
-            throw STTError.engineUnavailable(availability.detailText ?? "SpeechAnalyzer를 사용할 수 없습니다.")
+            throw STTError.engineUnavailable(availability.detailText ?? "SpeechAnalyzer를 사용할 수 없어요.")
         }
 
         let samples = STTAudioUtilities.paddedSamples(pcmSamples)
@@ -78,20 +78,20 @@ final class SpeechAnalyzerSTTEngine: SpeechTranscriptionEngine {
 
     static func availability() async -> SpeechEngineAvailability {
         guard #available(macOS 26.0, *) else {
-            return .unavailable("macOS 26 이상에서 사용할 수 있습니다.")
+            return .unavailable("macOS 26 이상에서 사용할 수 있어요.")
         }
 
         guard SpeechTranscriber.isAvailable else {
-            return .unavailable("현재 기기에서 SpeechAnalyzer를 사용할 수 없습니다.")
+            return .unavailable("현재 기기에서 SpeechAnalyzer를 사용할 수 없어요.")
         }
 
         guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: STTAudioUtilities.koreanLocale) else {
-            return .unavailable("한국어 SpeechAnalyzer 지원을 찾을 수 없습니다.")
+            return .unavailable("한국어 SpeechAnalyzer 지원을 찾을 수 없어요.")
         }
 
         let installedLocales = await SpeechTranscriber.installedLocales
         guard installedLocales.contains(where: { $0.identifier == locale.identifier }) else {
-            return .unavailable("한국어 SpeechAnalyzer asset이 설치되어 있지 않습니다.")
+            return .unavailable("한국어 SpeechAnalyzer asset이 설치되어 있지 않아요.")
         }
 
         return .available

@@ -57,7 +57,7 @@ public final class SystemAudioSource: NSObject, AudioSourceProtocol, SCStreamOut
         let content = try await SCShareableContent.current
         try Task.checkCancellation()
         guard let display = content.displays.first else {
-            throw AudioSourceError.systemAudioUnavailable("캡처 가능한 디스플레이가 없습니다.")
+            throw AudioSourceError.systemAudioUnavailable("캡처 가능한 디스플레이가 없어요.")
         }
 
         let configuration = SCStreamConfiguration()
@@ -141,7 +141,7 @@ public final class SystemAudioSource: NSObject, AudioSourceProtocol, SCStreamOut
             case SCStreamError.userDeclined.rawValue:
                 return .screenCapturePermissionDenied
             case SCStreamError.missingEntitlements.rawValue:
-                return .systemAudioUnavailable("ScreenCaptureKit 권한 설정이 필요합니다.")
+                return .systemAudioUnavailable("ScreenCaptureKit 권한 설정이 필요해요.")
             default:
                 break
             }

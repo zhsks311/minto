@@ -136,7 +136,7 @@ enum OAuthBrowserError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingCallbackURL: return "OAuth 콜백 URL이 없습니다."
+        case .missingCallbackURL: return "OAuth 콜백 URL이 없어요."
         }
     }
 }

@@ -8,11 +8,11 @@ enum TranscriptionCoordinatorError: Error, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .streamingRouteRequired:
-            return "true streaming route가 아닌 plan에서는 streaming session을 시작할 수 없습니다."
+            return "true streaming route가 아닌 plan에서는 streaming session을 시작할 수 없어요."
         case .streamingSessionAlreadyStarted:
-            return "streaming session이 이미 시작되어 있습니다."
+            return "streaming session이 이미 시작되어 있어요."
         case .streamingSessionNotStarted:
-            return "시작된 streaming session이 없습니다."
+            return "시작된 streaming session이 없어요."
         }
     }
 }

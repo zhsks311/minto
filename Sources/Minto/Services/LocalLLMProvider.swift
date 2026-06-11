@@ -142,7 +142,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
     ) {
         self.descriptor = registry.descriptor(for: .local) ?? LLMProviderDescriptor(
             id: .local,
-            description: "외부 로컬 런타임으로 교정, 요약, 검색 답변과 기기 내 검색을 실행합니다.",
+            description: "외부 로컬 런타임으로 교정, 요약, 검색 답변과 기기 내 검색을 실행해요.",
             authKind: .local,
             supportedCapabilities: [.textGeneration, .correction, .summary, .answer, .embedding]
         )
@@ -177,7 +177,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
                 return manualModelCatalog(warning: "Ollama 설치 모델 조회 실패: HTTP \(response.statusCode)")
             }
             guard let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                return manualModelCatalog(warning: "Ollama 모델 목록 응답을 이해하지 못했습니다.")
+                return manualModelCatalog(warning: "Ollama 모델 목록 응답을 이해하지 못했어요.")
             }
 
             let installedModels = ollamaModels(from: payload)
@@ -188,9 +188,9 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
                 warning: warning
             )
         } catch is CancellationError {
-            return manualModelCatalog(warning: "Ollama 설치 모델 조회가 취소되었습니다.")
+            return manualModelCatalog(warning: "Ollama 설치 모델 조회가 취소됐어요.")
         } catch {
-            return manualModelCatalog(warning: "Ollama 설치 모델을 확인하지 못했습니다. endpoint와 Ollama 실행 상태를 확인하세요.")
+            return manualModelCatalog(warning: "Ollama 설치 모델을 확인하지 못했어요. endpoint와 Ollama 실행 상태를 확인하세요.")
         }
     }
 
@@ -204,7 +204,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
                 LLMModelInfo(
                     id: configuration.modelID,
                     displayName: configuration.modelID,
-                    description: "외부 로컬 런타임에서 제공하는 수동 설정 모델입니다.",
+                    description: "외부 로컬 런타임에서 제공하는 수동 설정 모델이에요.",
                     capabilities: textCapabilities,
                     isRecommended: false
                 )
@@ -213,7 +213,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
         return LLMModelCatalog(
             models: models,
             source: .manualOnly,
-            warning: warning ?? (configuration.modelID.isEmpty ? "로컬 LLM endpoint와 모델 ID를 설정해야 합니다." : nil)
+            warning: warning ?? (configuration.modelID.isEmpty ? "로컬 LLM endpoint와 모델 ID를 설정해야 해요." : nil)
         )
     }
 
@@ -253,14 +253,14 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
 
     private func ollamaCatalogWarning(for installedModels: [LLMModelInfo]) -> String? {
         if installedModels.isEmpty {
-            return "Ollama에 설치된 모델이 없습니다. 터미널에서 ollama pull <model>을 실행하세요."
+            return "Ollama에 설치된 모델이 없어요. 터미널에서 ollama pull <model>을 실행하세요."
         }
         guard !configuration.modelID.isEmpty else {
             return "설치된 모델을 선택하거나 모델 ID를 입력하세요."
         }
         let installedModelIDs = Set(installedModels.map(\.id))
         if !installedModelIDs.contains(configuration.modelID) {
-            return "입력한 모델 ID가 Ollama 설치 목록에 없습니다: \(configuration.modelID)"
+            return "입력한 모델 ID가 Ollama 설치 목록에 없어요: \(configuration.modelID)"
         }
         return nil
     }
@@ -269,7 +269,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
         if configuration.modelID.isEmpty {
             return "OpenAI 호환 런타임에서 사용할 모델 ID를 입력하세요."
         }
-        return "OpenAI 호환 런타임은 표준 설치 모델 목록 API가 없어 모델 ID를 직접 입력합니다."
+        return "OpenAI 호환 런타임은 표준 설치 모델 목록 API가 없어 모델 ID를 직접 입력해요."
     }
 
     private static func formattedByteCount(_ value: Int64) -> String {
@@ -474,7 +474,7 @@ extension LocalLLMProvider: LLMEmbeddingProvider {
 
         let json = try await sendJSON(urlRequest, modelID: modelID)
         guard let rawVector = json["embedding"] as? [Double], !rawVector.isEmpty else {
-            throw LLMProviderError.badResponse("ollama 임베딩 응답에 embedding 배열이 없습니다.")
+            throw LLMProviderError.badResponse("ollama 임베딩 응답에 embedding 배열이 없어요.")
         }
 
         return LLMEmbeddingResponse(

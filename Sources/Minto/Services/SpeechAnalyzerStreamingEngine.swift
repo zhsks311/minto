@@ -15,17 +15,17 @@ final class SpeechAnalyzerStreamingEngine: StreamingTranscriptionEngine {
     ) async throws -> any StreamingTranscriptionSession {
         #if compiler(>=6.3) && canImport(Speech)
         guard #available(macOS 26.0, *) else {
-            throw STTError.engineUnavailable("SpeechAnalyzer streaming은 macOS 26 이상에서 사용할 수 있습니다.")
+            throw STTError.engineUnavailable("SpeechAnalyzer streaming은 macOS 26 이상에서 사용할 수 있어요.")
         }
 
         let availability = await SpeechAnalyzerSTTEngine.availability()
         guard availability.isSelectable else {
-            throw STTError.engineUnavailable(availability.detailText ?? "SpeechAnalyzer streaming을 사용할 수 없습니다.")
+            throw STTError.engineUnavailable(availability.detailText ?? "SpeechAnalyzer streaming을 사용할 수 없어요.")
         }
 
         return try await SpeechAnalyzerStreamingSession(configuration: configuration)
         #else
-        throw STTError.engineUnavailable("현재 SDK에서 SpeechAnalyzer streaming API를 사용할 수 없습니다.")
+        throw STTError.engineUnavailable("현재 SDK에서 SpeechAnalyzer streaming API를 사용할 수 없어요.")
         #endif
     }
 }
@@ -53,7 +53,7 @@ private final class SpeechAnalyzerStreamingSession: StreamingTranscriptionSessio
             channels: 1,
             interleaved: false
         ) else {
-            throw STTError.transcriptionFailed("SpeechAnalyzer streaming 오디오 포맷을 만들 수 없습니다.")
+            throw STTError.transcriptionFailed("SpeechAnalyzer streaming 오디오 포맷을 만들 수 없어요.")
         }
 
         self.configuration = configuration
@@ -84,11 +84,11 @@ private final class SpeechAnalyzerStreamingSession: StreamingTranscriptionSessio
 
     func accept(pcmSamples: [Float]) async throws {
         guard !isFinished else {
-            throw STTError.transcriptionFailed("이미 종료된 SpeechAnalyzer streaming session입니다.")
+            throw STTError.transcriptionFailed("이미 종료된 SpeechAnalyzer streaming session이에요.")
         }
         guard !pcmSamples.isEmpty else { return }
         guard let inputContinuation else {
-            throw STTError.transcriptionFailed("SpeechAnalyzer streaming 입력 스트림이 준비되지 않았습니다.")
+            throw STTError.transcriptionFailed("SpeechAnalyzer streaming 입력 스트림이 준비되지 않았어요.")
         }
 
         let bufferStartTime = CMTime(
@@ -137,7 +137,7 @@ private final class SpeechAnalyzerStreamingSession: StreamingTranscriptionSessio
             pcmFormat: audioFormat,
             frameCapacity: AVAudioFrameCount(samples.count)
         ) else {
-            throw STTError.transcriptionFailed("SpeechAnalyzer streaming 오디오 버퍼를 만들 수 없습니다.")
+            throw STTError.transcriptionFailed("SpeechAnalyzer streaming 오디오 버퍼를 만들 수 없어요.")
         }
         buffer.frameLength = AVAudioFrameCount(samples.count)
         if let channel = buffer.floatChannelData?.pointee {
