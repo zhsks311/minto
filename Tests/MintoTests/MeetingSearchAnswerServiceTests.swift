@@ -208,7 +208,7 @@ struct MeetingSearchAnswerServiceTests {
 
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
-        settings.selectedProvider = .gptAPI
+        settings.setOverride(.gptAPI)
 
         #expect(defaults.bool(forKey: MeetingSearchAnswerSettingsService.enabledKey))
         #expect(defaults.string(forKey: MeetingSearchAnswerSettingsService.providerKey) == LLMProviderSelection.gptAPI.rawValue)
@@ -222,7 +222,7 @@ struct MeetingSearchAnswerServiceTests {
         let defaults = InMemoryUserDefaults()
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
-        settings.selectedProvider = .gptAPI
+        settings.setOverride(.gptAPI)
 
         let unconfigured = MeetingSearchAnswerController(
             settings: settings,
@@ -250,7 +250,7 @@ struct MeetingSearchAnswerServiceTests {
         let center = NotificationCenter()
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
-        settings.selectedProvider = .gptAPI
+        settings.setOverride(.gptAPI)
         let readiness = ProviderReadinessBox(configured: false)
         let controller = MeetingSearchAnswerController(
             settings: settings,
@@ -274,7 +274,7 @@ struct MeetingSearchAnswerServiceTests {
         let defaults = InMemoryUserDefaults()
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
-        settings.selectedProvider = .gptAPI
+        settings.setOverride(.gptAPI)
         let controller = MeetingSearchAnswerController(
             settings: settings,
             providerResolver: { StubAnswerProvider(configured: true) }
@@ -297,7 +297,7 @@ struct MeetingSearchAnswerServiceTests {
         let defaults = InMemoryUserDefaults()
         let settings = MeetingSearchAnswerSettingsService(defaults: defaults)
         settings.isEnabled = true
-        settings.selectedProvider = .gptAPI
+        settings.setOverride(.gptAPI)
         let provider = SequencedAnswerProvider()
         let controller = MeetingSearchAnswerController(
             settings: settings,

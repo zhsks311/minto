@@ -230,9 +230,12 @@ struct LLMProviderTests {
         let savedDefaults = Dictionary(uniqueKeysWithValues: localKeys.map { ($0, defaults.object(forKey: $0)) })
         let savedCorrectionProvider = LLMCorrectionService.shared.selectedProvider
         let savedSummaryEnabled = LLMSummarySettingsService.shared.isEnabled
-        let savedSummaryProvider = LLMSummarySettingsService.shared.selectedProvider
+        // override만 보존한다 — effective를 복원하면 follow 상태가 override로 오염된다.
+        let savedSummaryOverride: LLMProviderSelection? =
+            LLMSummarySettingsService.shared.hasOverride ? LLMSummarySettingsService.shared.effectiveProvider : nil
         let savedAnswerEnabled = MeetingSearchAnswerSettingsService.shared.isEnabled
-        let savedAnswerProvider = MeetingSearchAnswerSettingsService.shared.selectedProvider
+        let savedAnswerOverride: LLMProviderSelection? =
+            MeetingSearchAnswerSettingsService.shared.hasOverride ? MeetingSearchAnswerSettingsService.shared.effectiveProvider : nil
         defer {
             for key in localKeys {
                 switch savedDefaults[key] {
@@ -244,9 +247,17 @@ struct LLMProviderTests {
             }
             LLMCorrectionService.shared.selectedProvider = savedCorrectionProvider
             LLMSummarySettingsService.shared.isEnabled = savedSummaryEnabled
-            LLMSummarySettingsService.shared.selectedProvider = savedSummaryProvider
+            if let provider = savedSummaryOverride {
+                LLMSummarySettingsService.shared.setOverride(provider)
+            } else {
+                LLMSummarySettingsService.shared.clearOverride()
+            }
             MeetingSearchAnswerSettingsService.shared.isEnabled = savedAnswerEnabled
-            MeetingSearchAnswerSettingsService.shared.selectedProvider = savedAnswerProvider
+            if let provider = savedAnswerOverride {
+                MeetingSearchAnswerSettingsService.shared.setOverride(provider)
+            } else {
+                MeetingSearchAnswerSettingsService.shared.clearOverride()
+            }
         }
 
         defaults.set("http://127.0.0.1:11434", forKey: LocalLLMProviderConfiguration.baseURLKey)
@@ -256,9 +267,9 @@ struct LLMProviderTests {
         defaults.set(4_096, forKey: LocalLLMProviderConfiguration.contextWindowKey)
         LLMCorrectionService.shared.selectedProvider = .local
         LLMSummarySettingsService.shared.isEnabled = true
-        LLMSummarySettingsService.shared.selectedProvider = .local
+        LLMSummarySettingsService.shared.setOverride(.local)
         MeetingSearchAnswerSettingsService.shared.isEnabled = true
-        MeetingSearchAnswerSettingsService.shared.selectedProvider = .local
+        MeetingSearchAnswerSettingsService.shared.setOverride(.local)
 
         #expect(LLMCorrectionService.shared.isLoggedIn)
         let correctionProvider = try #require(LLMCorrectionService.shared.selectedTextProvider())

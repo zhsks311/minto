@@ -14,7 +14,7 @@ struct SummaryServiceTests {
         let summarySnapshot = SummarySettingsSnapshot.capture()
         LLMCorrectionService.shared.selectedProvider = .none
         LLMSummarySettingsService.shared.isEnabled = false
-        LLMSummarySettingsService.shared.selectedProvider = .none
+        LLMSummarySettingsService.shared.setOverride(.none)
         defer {
             LLMCorrectionService.shared.selectedProvider = saved
             summarySnapshot.restore()
@@ -34,7 +34,7 @@ struct SummaryServiceTests {
         // provider가 있어도 요약할 내용이 없으면 LLM을 부르지 않고 nil(가드). 네트워크 미발생.
         LLMCorrectionService.shared.selectedProvider = .codex
         LLMSummarySettingsService.shared.isEnabled = true
-        LLMSummarySettingsService.shared.selectedProvider = .codex
+        LLMSummarySettingsService.shared.setOverride(.codex)
         defer {
             LLMCorrectionService.shared.selectedProvider = saved
             summarySnapshot.restore()
@@ -52,7 +52,7 @@ struct SummaryServiceTests {
         let summarySnapshot = SummarySettingsSnapshot.capture()
         LLMCorrectionService.shared.selectedProvider = .none
         LLMSummarySettingsService.shared.isEnabled = false
-        LLMSummarySettingsService.shared.selectedProvider = .none
+        LLMSummarySettingsService.shared.setOverride(.none)
         defer {
             LLMCorrectionService.shared.selectedProvider = saved
             summarySnapshot.restore()
@@ -84,11 +84,11 @@ struct SummaryServiceTests {
 
         #expect(settings.hasMigratedFromCorrectionProvider)
         #expect(settings.isEnabled)
-        #expect(settings.selectedProvider == .gptAPI)
+        #expect(settings.effectiveProvider == .gptAPI)
 
         settings.isEnabled = false
         // .none setter는 override를 제거(follow 전환)한다.
-        settings.selectedProvider = .none
+        settings.setOverride(.none)
         #expect(!settings.hasOverride)
         settings.migrateIfNeeded(from: .claudeAPI)
 
@@ -108,7 +108,7 @@ struct SummaryServiceTests {
 
         LLMCorrectionService.shared.selectedProvider = .none
         LLMSummarySettingsService.shared.isEnabled = true
-        LLMSummarySettingsService.shared.selectedProvider = .codex
+        LLMSummarySettingsService.shared.setOverride(.codex)
 
         #expect(LLMCorrectionService.shared.selectedTextProvider() == nil)
         #expect(LLMSummarySettingsService.shared.selectedTextProvider()?.descriptor.id == .chatGPTAccount)
@@ -208,20 +208,27 @@ struct SummaryServiceTests {
 @MainActor
 private struct SummarySettingsSnapshot {
     let isEnabled: Bool
-    let selectedProvider: LLMProviderSelection
+    /// override만 보존한다 — effective를 복원하면 follow 상태가 override로 오염된다.
+    let overrideProvider: LLMProviderSelection?
     let hasMigrated: Bool
 
     static func capture() -> SummarySettingsSnapshot {
-        SummarySettingsSnapshot(
-            isEnabled: LLMSummarySettingsService.shared.isEnabled,
-            selectedProvider: LLMSummarySettingsService.shared.selectedProvider,
-            hasMigrated: LLMSummarySettingsService.shared.hasMigratedFromCorrectionProvider
+        let settings = LLMSummarySettingsService.shared
+        return SummarySettingsSnapshot(
+            isEnabled: settings.isEnabled,
+            overrideProvider: settings.hasOverride ? settings.effectiveProvider : nil,
+            hasMigrated: settings.hasMigratedFromCorrectionProvider
         )
     }
 
     func restore() {
-        LLMSummarySettingsService.shared.isEnabled = isEnabled
-        LLMSummarySettingsService.shared.selectedProvider = selectedProvider
-        LLMSummarySettingsService.shared.hasMigratedFromCorrectionProvider = hasMigrated
+        let settings = LLMSummarySettingsService.shared
+        settings.isEnabled = isEnabled
+        if let provider = overrideProvider {
+            settings.setOverride(provider)
+        } else {
+            settings.clearOverride()
+        }
+        settings.hasMigratedFromCorrectionProvider = hasMigrated
     }
 }

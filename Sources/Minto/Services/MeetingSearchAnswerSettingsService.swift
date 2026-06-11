@@ -34,13 +34,6 @@ public final class MeetingSearchAnswerSettingsService: ObservableObject {
     /// 실제 사용할 provider. override가 있으면 그것을, 없으면 활성 provider를 따른다.
     @Published public private(set) var effectiveProvider: LLMProviderSelection
 
-    /// 기존 코드와의 호환을 위한 별칭. effectiveProvider와 동일하다.
-    /// 기존 코드와의 호환을 위한 별칭. effectiveProvider와 동일하다.
-    @available(*, deprecated, renamed: "effectiveProvider")
-    public var selectedProvider: LLMProviderSelection {
-        get { effectiveProvider }
-        set { setOverride(newValue) }
-    }
 
     public init(
         defaults: UserDefaults = .standard,
