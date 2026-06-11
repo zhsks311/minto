@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+private enum ConfluenceContextStatusTone {
+    case neutral
+    case success
+    case warning
+    case error
+}
+
 /// "녹음 시작" 시 뜨는 회의 시작 시트.
 /// 주제·용어집을 입력받아 그 회의 세션의 교정 맥락으로 쓴다. 비우고 시작해도 된다.
 public struct MeetingSetupView: View {
@@ -16,6 +23,7 @@ public struct MeetingSetupView: View {
     @State private var selectedGlossaryEntryIDs: Set<UUID> = []
     @State private var confluenceDocuments: [ConfluenceService.ContextDocument] = []
     @State private var confluenceStatus: String?
+    @State private var confluenceStatusTone: ConfluenceContextStatusTone = .neutral
     @State private var isSearchingConfluence = false
 
     private let onStart: (String, String, String, AudioInputMode) -> Void
@@ -358,7 +366,7 @@ public struct MeetingSetupView: View {
                     if let confluenceStatus {
                         Text(confluenceStatus)
                             .font(.caption2)
-                            .foregroundColor(confluenceDocuments.isEmpty ? .secondary : .accentColor)
+                            .foregroundColor(confluenceStatusColor)
                     }
 
                     if !confluenceDocuments.isEmpty {
@@ -395,6 +403,19 @@ public struct MeetingSetupView: View {
     private var confluenceBadgeText: String {
         if !confluenceDocuments.isEmpty { return "\(confluenceDocuments.count)개 선택" }
         return confluence.isConfigured ? "연결됨" : "설정 필요"
+    }
+
+    private var confluenceStatusColor: Color {
+        switch confluenceStatusTone {
+        case .neutral:
+            return .secondary
+        case .success:
+            return .accentColor
+        case .warning:
+            return .orange
+        case .error:
+            return .red
+        }
     }
 
     private var glossaryBadgeText: String {
@@ -442,22 +463,35 @@ public struct MeetingSetupView: View {
         let query = confluenceQuery
         guard !query.isEmpty else {
             confluenceStatus = "조회할 회의 주제나 안건을 먼저 입력하세요."
+            confluenceStatusTone = .neutral
             return
         }
         guard confluence.isConfigured else {
             confluenceStatus = "설정에서 Confluence를 먼저 연결하세요."
+            confluenceStatusTone = .neutral
             return
         }
 
         isSearchingConfluence = true
         confluenceStatus = nil
+        confluenceStatusTone = .neutral
         defer { isSearchingConfluence = false }
 
-        let documents = await confluence.searchContext(query, limit: 3)
-        confluenceDocuments = documents
-        confluenceStatus = documents.isEmpty
-            ? "관련 Confluence 문서를 찾지 못했어요."
-            : "Confluence 문서 \(documents.count)개를 참고자료로 사용해요."
+        let result = await confluence.searchContext(query, limit: 3)
+        confluenceDocuments = result.documents
+        switch result.failure {
+        case .unauthorized, .forbidden:
+            confluenceStatus = "Confluence 연결이 거부됐어요. 설정 > 검색 소스에서 [연결 확인]을 해주세요."
+            confluenceStatusTone = .warning
+        case .network:
+            confluenceStatus = "Confluence에 연결하지 못했어요. 네트워크를 확인해 주세요."
+            confluenceStatusTone = .error
+        case nil:
+            confluenceStatus = result.documents.isEmpty
+                ? "관련 Confluence 문서를 찾지 못했어요."
+                : "Confluence 문서 \(result.documents.count)개를 참고자료로 사용해요."
+            confluenceStatusTone = result.documents.isEmpty ? .neutral : .success
+        }
     }
 
     @MainActor

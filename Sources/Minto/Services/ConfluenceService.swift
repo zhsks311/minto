@@ -76,6 +76,45 @@ public final class ConfluenceService: ObservableObject {
         }
     }
 
+    public struct ContextSearchResult: Sendable, Equatable {
+        public let documents: [ContextDocument]
+        public let failure: SearchFailure?
+
+        public init(documents: [ContextDocument], failure: SearchFailure?) {
+            self.documents = documents
+            self.failure = failure
+        }
+    }
+
+    public enum SearchFailure: Equatable, Sendable {
+        case unauthorized
+        case forbidden
+        case network
+    }
+
+    public enum CredentialValidationOutcome: Equatable, Sendable {
+        case success
+        case unauthorized
+        case forbidden
+        case invalidURL
+        case network
+
+        public var message: String {
+            switch self {
+            case .success:
+                return "Confluence 연결을 확인했어요."
+            case .unauthorized:
+                return "이메일이나 API token이 올바르지 않아요."
+            case .forbidden:
+                return "계정 권한이나 조직 정책으로 거부됐어요."
+            case .invalidURL:
+                return "Confluence Cloud 사이트 URL을 확인하세요."
+            case .network:
+                return "Confluence에 연결하지 못했어요. 네트워크를 확인해 주세요."
+            }
+        }
+    }
+
     public struct PublishedPage: Sendable, Equatable {
         public let id: String
         public let title: String
@@ -185,16 +224,8 @@ public final class ConfluenceService: ObservableObject {
 
     /// 입력 URL을 `https://site.atlassian.net` 형태로 정규화(`/wiki` 이하 경로·끝의 `/` 제거).
     public var baseURL: String? {
-        guard var value = defaults.string(forKey: Self.baseURLKey)?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
-            return nil
-        }
-        // `/wiki`, `/wiki/`, `/wiki/spaces/...` 등 컨텍스트 경로를 모두 잘라낸다.
-        if let range = value.range(of: "/wiki") {
-            value = String(value[..<range.lowerBound])
-        }
-        while value.hasSuffix("/") { value.removeLast() }
-        return value.isEmpty ? nil : value
+        guard let value = defaults.string(forKey: Self.baseURLKey) else { return nil }
+        return Self.normalizedBaseURL(from: value)
     }
 
     /// hasToken은 캐시(Keychain 비접근), email·baseURL은 UserDefaults(인메모리)라 렌더 경로에서 가볍다.
@@ -209,6 +240,10 @@ public final class ConfluenceService: ObservableObject {
 
     public var canDisconnect: Bool {
         hasToken || needsReconnect
+    }
+
+    public var hasStoredAPIToken: Bool {
+        hasToken
     }
 
     public func setAPIToken(_ raw: String) {
@@ -249,23 +284,78 @@ public final class ConfluenceService: ObservableObject {
         needsReconnect = true
     }
 
+    public func validateCredentials(
+        baseURL rawBaseURL: String,
+        email rawEmail: String,
+        token rawToken: String
+    ) async -> CredentialValidationOutcome {
+        guard let baseURL = Self.normalizedBaseURL(from: rawBaseURL),
+              Self.isAllowedCloudBaseURL(baseURL),
+              let url = URL(string: "\(baseURL)/wiki/rest/api/user/current") else {
+            return .invalidURL
+        }
+
+        let trimmedEmail = rawEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let inputToken = rawToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        let credentialToken: String
+        if inputToken.isEmpty {
+            guard let storedToken = Self.loadAPIToken(keychainKey: keychainKey, tokenStorage: tokenStorage) else {
+                return .unauthorized
+            }
+            credentialToken = storedToken
+        } else {
+            credentialToken = inputToken
+        }
+        guard !trimmedEmail.isEmpty, !credentialToken.isEmpty else { return .unauthorized }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 12
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let credential = Data("\(trimmedEmail):\(credentialToken)".utf8).base64EncodedString()
+        request.setValue("Basic \(credential)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (_, response) = try await httpClient.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return .network }
+            switch http.statusCode {
+            case 200...299:
+                return .success
+            case 401:
+                return .unauthorized
+            case 403:
+                return .forbidden
+            default:
+                return .network
+            }
+        } catch {
+            return .network
+        }
+    }
+
     // MARK: - 검색
 
     /// 전사 키워드로 Confluence 페이지를 CQL 검색한다.
     /// 자격 미설정·빈 쿼리·오류는 모두 빈 배열로 fail-soft.
     public func search(_ query: String, limit: Int = 5) async -> [RelatedDoc] {
-        await searchHits(query, limit: limit).map(\.relatedDoc)
+        await searchHitResult(query, limit: limit).hits.map(\.relatedDoc)
     }
 
     /// 회의 시작 전 참고 문맥으로 쓸 Confluence 문서 본문을 조회한다.
     /// 본문 조회가 실패하면 검색 excerpt라도 참고자료로 사용한다.
-    public func searchContext(_ query: String, limit: Int = 3) async -> [ContextDocument] {
+    public func searchContext(_ query: String, limit: Int = 3) async -> ContextSearchResult {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let token = apiToken, let email, let baseURL, !trimmedQuery.isEmpty else { return [] }
-        let hits = await searchHits(trimmedQuery, limit: limit)
+        guard let token = apiToken, let email, let baseURL, !trimmedQuery.isEmpty,
+              Self.isAllowedCloudBaseURL(baseURL) else {
+            return ContextSearchResult(documents: [], failure: nil)
+        }
+        let result = await searchHitResult(trimmedQuery, limit: limit, token: token, email: email, baseURL: baseURL)
+        guard result.failure == nil else {
+            return ContextSearchResult(documents: [], failure: result.failure)
+        }
 
         var documents: [ContextDocument] = []
-        for hit in hits {
+        for hit in result.hits {
             let body: String?
             if let contentID = hit.contentID {
                 body = await fetchPageBody(contentID: contentID, token: token, email: email, baseURL: baseURL)
@@ -276,7 +366,7 @@ public final class ConfluenceService: ObservableObject {
             guard !text.isEmpty else { continue }
             documents.append(ContextDocument(title: hit.title, text: text, url: hit.url))
         }
-        return documents
+        return ContextSearchResult(documents: documents, failure: nil)
     }
 
     public func publishPage(
@@ -382,10 +472,22 @@ public final class ConfluenceService: ObservableObject {
         }
     }
 
-    private func searchHits(_ query: String, limit: Int) async -> [ConfluenceSearchHit] {
+    private func searchHitResult(_ query: String, limit: Int) async -> ConfluenceSearchHitResult {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let token = apiToken, let email, let baseURL, !trimmedQuery.isEmpty,
-              Self.isAllowedCloudBaseURL(baseURL) else { return [] }
+              Self.isAllowedCloudBaseURL(baseURL) else {
+            return ConfluenceSearchHitResult(hits: [], failure: nil)
+        }
+        return await searchHitResult(trimmedQuery, limit: limit, token: token, email: email, baseURL: baseURL)
+    }
+
+    private func searchHitResult(
+        _ trimmedQuery: String,
+        limit: Int,
+        token: String,
+        email: String,
+        baseURL: String
+    ) async -> ConfluenceSearchHitResult {
         let cql = Self.cqlQuery(for: trimmedQuery)
 
         var components = URLComponents(string: "\(baseURL)/wiki/rest/api/search")
@@ -393,7 +495,9 @@ public final class ConfluenceService: ObservableObject {
             URLQueryItem(name: "cql", value: cql),
             URLQueryItem(name: "limit", value: String(limit))
         ]
-        guard let url = components?.url else { return [] }
+        guard let url = components?.url else {
+            return ConfluenceSearchHitResult(hits: [], failure: nil)
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -404,20 +508,32 @@ public final class ConfluenceService: ObservableObject {
 
         do {
             let (data, response) = try await httpClient.data(for: request)
-            guard let http = response as? HTTPURLResponse else { return [] }
+            guard let http = response as? HTTPURLResponse else {
+                return ConfluenceSearchHitResult(hits: [], failure: .network)
+            }
             guard http.statusCode == 200 else {
                 FileHandle.standardError.write(Data("[Confluence] 검색 HTTP \(http.statusCode)\n".utf8))
-                if http.statusCode == 401 {
+                if http.statusCode == 401 || http.statusCode == 403 {
                     markNeedsReconnect()
                 }
-                return []
+                switch http.statusCode {
+                case 401:
+                    return ConfluenceSearchHitResult(hits: [], failure: .unauthorized)
+                case 403:
+                    return ConfluenceSearchHitResult(hits: [], failure: .forbidden)
+                default:
+                    return ConfluenceSearchHitResult(hits: [], failure: .network)
+                }
             }
-            return Self.parseSearchHits(data, fallbackBase: "\(baseURL)/wiki", limit: limit)
+            return ConfluenceSearchHitResult(
+                hits: Self.parseSearchHits(data, fallbackBase: "\(baseURL)/wiki", limit: limit),
+                failure: nil
+            )
         } catch {
             // URL 쿼리스트링에 CQL(전사 내용)이 실리므로 localizedDescription 대신 코드만 기록.
             let code = (error as? URLError)?.code.rawValue ?? -1
             FileHandle.standardError.write(Data("[Confluence] 검색 네트워크 오류(code=\(code))\n".utf8))
-            return []
+            return ConfluenceSearchHitResult(hits: [], failure: .network)
         }
     }
 
@@ -476,6 +592,17 @@ public final class ConfluenceService: ObservableObject {
             return false
         }
         return host.split(separator: ".").count >= 3
+    }
+
+    nonisolated static func normalizedBaseURL(from raw: String) -> String? {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        // `/wiki`, `/wiki/`, `/wiki/spaces/...` 등 컨텍스트 경로를 모두 잘라낸다.
+        if let range = value.range(of: "/wiki") {
+            value = String(value[..<range.lowerBound])
+        }
+        while value.hasSuffix("/") { value.removeLast() }
+        return value.isEmpty ? nil : value
     }
 
     nonisolated static func createPagePayload(
@@ -779,4 +906,9 @@ private struct ConfluenceSearchHit: Sendable, Hashable {
     var relatedDoc: RelatedDoc {
         RelatedDoc(source: .confluence, title: title, snippet: snippet, url: url)
     }
+}
+
+private struct ConfluenceSearchHitResult: Sendable {
+    let hits: [ConfluenceSearchHit]
+    let failure: ConfluenceService.SearchFailure?
 }

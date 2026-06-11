@@ -49,6 +49,29 @@ private enum LocalLLMContextWindowPreset: String, CaseIterable, Identifiable {
     }
 }
 
+enum ConfluenceSettingsInputValidator {
+    static let accountEmailWarning = "Atlassian 계정 이메일 전체를 입력하세요"
+
+    static func emailWarning(for raw: String) -> String? {
+        let email = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !email.isEmpty else { return nil }
+        return email.contains("@") ? nil : accountEmailWarning
+    }
+
+    static func hasCompleteAccountEmail(_ raw: String) -> Bool {
+        let email = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !email.isEmpty && emailWarning(for: email) == nil
+    }
+}
+
+private enum ConfluenceCredentialCheckState: Equatable {
+    case idle
+    case checking
+    case success
+    case saved
+    case failure(ConfluenceService.CredentialValidationOutcome)
+}
+
 public struct SettingsView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
     @AppStorage(SpeechEnginePreferences.selectedEngineKey) private var selectedSpeechEngineRaw = SpeechEngineID.defaultEngine.rawValue
@@ -92,11 +115,12 @@ public struct SettingsView: View {
     // 외부 연동(Notion MCP OAuth·Confluence token).
     @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
-    @AppStorage(ConfluenceService.baseURLKey) private var confluenceBaseURL = ""
-    @AppStorage(ConfluenceService.emailKey) private var confluenceEmail = ""
     @State private var notionConnectLoading = false
     @State private var notionConnectError: String? = nil
+    @State private var confluenceBaseURLInput = ""
+    @State private var confluenceEmailInput = ""
     @State private var confluenceTokenInput = ""
+    @State private var confluenceCredentialCheckState: ConfluenceCredentialCheckState = .idle
     @State private var showNotionSettings = false
     @State private var showConfluenceSettings = false
     @AppStorage("lastLLMProvider") private var lastLLMProviderRaw = "codex"
@@ -162,6 +186,7 @@ public struct SettingsView: View {
             normalizeSpeechEngineSelection()
             normalizeAccountModelSelectionIfNeeded()
             rememberCurrentProviderIfNeeded()
+            syncConfluenceInputsFromStoredValues()
             Task { await refreshSpeechEngineAvailability() }
         }
         .onChange(of: llmService.selectedProvider) { _, provider in
@@ -520,30 +545,195 @@ public struct SettingsView: View {
             .background(Color.secondary.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            TextField("사이트 URL (https://회사.atlassian.net)", text: $confluenceBaseURL)
+            TextField("사이트 URL (https://회사.atlassian.net)", text: confluenceBaseURLBinding)
                 .textContentType(.URL)
-            TextField("이메일", text: $confluenceEmail)
-            SecureField(confluence.isConfigured ? "새 API token 입력" : "API token", text: $confluenceTokenInput)
-            HStack {
-                Button("저장") {
-                    confluence.setAPIToken(confluenceTokenInput)
-                    confluenceTokenInput = ""
+                .textFieldStyle(.roundedBorder)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, minHeight: 32)
+            TextField("이메일", text: confluenceEmailBinding)
+                .textFieldStyle(.roundedBorder)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, minHeight: 32)
+            if let warning = confluenceEmailWarning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+            SecureField(confluence.hasStoredAPIToken ? "새 API token 입력" : "API token", text: confluenceTokenBinding)
+                .textFieldStyle(.roundedBorder)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, minHeight: 32)
+
+            HStack(spacing: 8) {
+                Button {
+                    Task { await validateConfluenceConnection() }
+                } label: {
+                    if confluenceCredentialCheckState == .checking {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("확인 중")
+                        }
+                    } else {
+                        Label("연결 확인", systemImage: "checkmark.seal")
+                    }
                 }
-                .disabled(confluenceTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(!canValidateConfluenceCredentials)
+
+                Button("연동") {
+                    saveConfluenceIntegration()
+                }
+                .disabled(!canSaveConfluenceIntegration)
+
                 if confluence.canDisconnect {
                     Button("연동 해제") {
                         confluence.disconnect()
-                        confluenceEmail = ""
-                        confluenceBaseURL = ""
+                        confluenceEmailInput = ""
+                        confluenceBaseURLInput = ""
                         confluenceTokenInput = ""
+                        confluenceCredentialCheckState = .idle
                     }
                     .foregroundColor(.red)
+                }
+            }
+            if let checkMessage = confluenceCredentialCheckMessage {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: confluenceCredentialCheckIcon)
+                        .font(.caption)
+                        .foregroundColor(confluenceCredentialCheckColor)
+                    Text(checkMessage)
+                        .font(.caption)
+                        .foregroundColor(confluenceCredentialCheckColor)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Text("토큰은 이 Mac의 비밀 저장소에만 저장돼요. 기본 저장소는 Keychain이에요. 사이트 URL과 이메일은 연결 상태 표시와 API 호출에만 사용돼요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
+    }
+
+    private var confluenceBaseURLBinding: Binding<String> {
+        Binding(
+            get: { confluenceBaseURLInput },
+            set: { value in
+                confluenceBaseURLInput = value
+                invalidateConfluenceCredentialCheck()
+            }
+        )
+    }
+
+    private var confluenceEmailBinding: Binding<String> {
+        Binding(
+            get: { confluenceEmailInput },
+            set: { value in
+                confluenceEmailInput = value
+                invalidateConfluenceCredentialCheck()
+            }
+        )
+    }
+
+    private var confluenceTokenBinding: Binding<String> {
+        Binding(
+            get: { confluenceTokenInput },
+            set: { value in
+                confluenceTokenInput = value
+                invalidateConfluenceCredentialCheck()
+            }
+        )
+    }
+
+    private var confluenceEmailWarning: String? {
+        ConfluenceSettingsInputValidator.emailWarning(for: confluenceEmailInput)
+    }
+
+    private var canValidateConfluenceCredentials: Bool {
+        let hasBaseURL = !confluenceBaseURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasTokenInput = !confluenceTokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return hasBaseURL
+            && ConfluenceSettingsInputValidator.hasCompleteAccountEmail(confluenceEmailInput)
+            && (hasTokenInput || confluence.hasStoredAPIToken)
+            && confluenceCredentialCheckState != .checking
+    }
+
+    private var canSaveConfluenceIntegration: Bool {
+        confluenceCredentialCheckState == .success
+    }
+
+    private var confluenceCredentialCheckMessage: String? {
+        switch confluenceCredentialCheckState {
+        case .idle, .checking:
+            return nil
+        case .success:
+            return "Confluence 연결을 확인했어요. 연동을 눌러 저장하세요."
+        case .saved:
+            return "Confluence 연동이 저장됐어요."
+        case .failure(let outcome):
+            return outcome.message
+        }
+    }
+
+    private var confluenceCredentialCheckIcon: String {
+        switch confluenceCredentialCheckState {
+        case .success, .saved:
+            return "checkmark.circle.fill"
+        case .failure:
+            return "exclamationmark.triangle.fill"
+        case .idle, .checking:
+            return "info.circle"
+        }
+    }
+
+    private var confluenceCredentialCheckColor: Color {
+        switch confluenceCredentialCheckState {
+        case .success, .saved:
+            return .green
+        case .failure(.forbidden):
+            return .orange
+        case .failure:
+            return .red
+        case .idle, .checking:
+            return .secondary
+        }
+    }
+
+    private func syncConfluenceInputsFromStoredValues() {
+        confluenceBaseURLInput = confluence.baseURL ?? ""
+        confluenceEmailInput = confluence.email ?? ""
+        confluenceTokenInput = ""
+        confluenceCredentialCheckState = .idle
+    }
+
+    private func invalidateConfluenceCredentialCheck() {
+        confluenceCredentialCheckState = .idle
+    }
+
+    private func validateConfluenceConnection() async {
+        guard canValidateConfluenceCredentials else { return }
+        let baseURL = confluenceBaseURLInput
+        let email = confluenceEmailInput
+        let token = confluenceTokenInput
+        confluenceCredentialCheckState = .checking
+
+        let outcome = await confluence.validateCredentials(baseURL: baseURL, email: email, token: token)
+        guard baseURL == confluenceBaseURLInput,
+              email == confluenceEmailInput,
+              token == confluenceTokenInput else {
+            return
+        }
+        confluenceCredentialCheckState = outcome == .success ? .success : .failure(outcome)
+    }
+
+    private func saveConfluenceIntegration() {
+        guard canSaveConfluenceIntegration else { return }
+        let token = confluenceTokenInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        confluence.setBaseURL(confluenceBaseURLInput)
+        confluence.setEmail(confluenceEmailInput)
+        if !token.isEmpty {
+            confluence.setAPIToken(token)
+        }
+        confluenceTokenInput = ""
+        confluenceCredentialCheckState = .saved
     }
 
     private var confluenceStatusIcon: String {

@@ -465,6 +465,243 @@ struct ConfluenceConfigTests {
     }
 }
 
+@Suite("Confluence 자격 검증")
+@MainActor
+struct ConfluenceCredentialValidationTests {
+
+    @Test("200 응답은 성공이고 저장 연결 상태를 바꾸지 않는다")
+    func successDoesNotMutateConnectionState() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 200, data: Data("{}".utf8))
+        ])
+        let service = ConfluenceService(
+            httpClient: httpClient,
+            defaults: InMemoryUserDefaults(),
+            tokenStorage: StubConfluenceTokenStorageBackend()
+        )
+
+        #expect(service.connectionState == .disconnected)
+
+        let outcome = await service.validateCredentials(
+            baseURL: "https://acme.atlassian.net/wiki/spaces/ENG",
+            email: "user@example.com",
+            token: "api-token"
+        )
+
+        #expect(outcome == .success)
+        #expect(service.connectionState == .disconnected)
+        #expect(httpClient.requests.count == 1)
+        #expect(httpClient.requests[0].url?.absoluteString == "https://acme.atlassian.net/wiki/rest/api/user/current")
+        #expect(httpClient.requests[0].value(forHTTPHeaderField: "Authorization")?.hasPrefix("Basic ") == true)
+    }
+
+    @Test("401 응답은 unauthorized")
+    func unauthorizedOutcome() async {
+        let service = makeValidationService(statusCode: 401)
+
+        let outcome = await service.validateCredentials(
+            baseURL: "https://acme.atlassian.net",
+            email: "user@example.com",
+            token: "bad-token"
+        )
+
+        #expect(outcome == .unauthorized)
+    }
+
+    @Test("403 응답은 forbidden")
+    func forbiddenOutcome() async {
+        let service = makeValidationService(statusCode: 403)
+
+        let outcome = await service.validateCredentials(
+            baseURL: "https://acme.atlassian.net",
+            email: "user@example.com",
+            token: "api-token"
+        )
+
+        #expect(outcome == .forbidden)
+    }
+
+    @Test("허용되지 않는 URL은 네트워크 호출 없이 invalidURL")
+    func invalidURLOutcome() async {
+        let httpClient = StubConfluenceHTTPClient()
+        let service = ConfluenceService(
+            httpClient: httpClient,
+            defaults: InMemoryUserDefaults(),
+            tokenStorage: StubConfluenceTokenStorageBackend()
+        )
+
+        let outcome = await service.validateCredentials(
+            baseURL: "https://evil.example.com",
+            email: "user@example.com",
+            token: "api-token"
+        )
+
+        #expect(outcome == .invalidURL)
+        #expect(httpClient.requests.isEmpty)
+    }
+
+    @Test("URLError는 network")
+    func networkOutcome() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(errorCode: .notConnectedToInternet)
+        ])
+        let service = ConfluenceService(
+            httpClient: httpClient,
+            defaults: InMemoryUserDefaults(),
+            tokenStorage: StubConfluenceTokenStorageBackend()
+        )
+
+        let outcome = await service.validateCredentials(
+            baseURL: "https://acme.atlassian.net",
+            email: "user@example.com",
+            token: "api-token"
+        )
+
+        #expect(outcome == .network)
+        #expect(service.connectionState == .disconnected)
+    }
+
+    @Test("검증 성공은 기존 재연결 필요 상태를 자동으로 지우지 않는다")
+    func validationDoesNotClearReconnectState() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 401, data: Data("unauthorized".utf8)),
+            .init(statusCode: 200, data: Data("{}".utf8))
+        ])
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let service = makeConfiguredConfluenceService(httpClient: httpClient, tokenStorage: tokenStorage)
+
+        _ = await service.search("회의 안건")
+
+        #expect(service.connectionState == .needsReconnect)
+
+        let outcome = await service.validateCredentials(
+            baseURL: "https://acme.atlassian.net",
+            email: "user@example.com",
+            token: "api-token"
+        )
+
+        #expect(outcome == .success)
+        #expect(service.connectionState == .needsReconnect)
+        #expect(httpClient.requests.count == 2)
+    }
+
+    private func makeValidationService(statusCode: Int) -> ConfluenceService {
+        ConfluenceService(
+            httpClient: StubConfluenceHTTPClient(responses: [
+                .init(statusCode: statusCode, data: Data())
+            ]),
+            defaults: InMemoryUserDefaults(),
+            tokenStorage: StubConfluenceTokenStorageBackend()
+        )
+    }
+
+    private func makeConfiguredConfluenceService(
+        httpClient: StubConfluenceHTTPClient,
+        tokenStorage: StubConfluenceTokenStorageBackend
+    ) -> ConfluenceService {
+        let defaults = InMemoryUserDefaults()
+        let service = ConfluenceService(
+            httpClient: httpClient,
+            defaults: defaults,
+            tokenStorage: tokenStorage
+        )
+        service.setBaseURL("https://acme.atlassian.net")
+        service.setEmail("user@example.com")
+        return service
+    }
+}
+
+@Suite("Confluence 문맥 검색 실패 구분")
+@MainActor
+struct ConfluenceContextSearchResultTests {
+
+    @Test("검색 401은 unauthorized failure와 재연결 상태를 남긴다")
+    func unauthorizedSearchContext() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 401, data: Data("unauthorized".utf8))
+        ])
+        let service = makeConfiguredConfluenceService(httpClient: httpClient)
+
+        let result = await service.searchContext("회의 안건")
+
+        #expect(result.documents.isEmpty)
+        #expect(result.failure == .unauthorized)
+        #expect(service.connectionState == .needsReconnect)
+    }
+
+    @Test("검색 403은 forbidden failure와 재연결 상태를 남긴다")
+    func forbiddenSearchContext() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 403, data: Data("forbidden".utf8))
+        ])
+        let service = makeConfiguredConfluenceService(httpClient: httpClient)
+
+        let result = await service.searchContext("회의 안건")
+
+        #expect(result.documents.isEmpty)
+        #expect(result.failure == .forbidden)
+        #expect(service.connectionState == .needsReconnect)
+    }
+
+    @Test("검색 네트워크 오류는 network failure")
+    func networkSearchContext() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(errorCode: .timedOut)
+        ])
+        let service = makeConfiguredConfluenceService(httpClient: httpClient)
+
+        let result = await service.searchContext("회의 안건")
+
+        #expect(result.documents.isEmpty)
+        #expect(result.failure == .network)
+        #expect(service.connectionState == .connected)
+    }
+
+    @Test("검색 0건은 failure 없이 빈 문서")
+    func emptySearchContext() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 200, data: Data(#"{"results":[]}"#.utf8))
+        ])
+        let service = makeConfiguredConfluenceService(httpClient: httpClient)
+
+        let result = await service.searchContext("회의 안건")
+
+        #expect(result.documents.isEmpty)
+        #expect(result.failure == nil)
+        #expect(service.connectionState == .connected)
+    }
+
+    private func makeConfiguredConfluenceService(httpClient: StubConfluenceHTTPClient) -> ConfluenceService {
+        let defaults = InMemoryUserDefaults()
+        let service = ConfluenceService(
+            httpClient: httpClient,
+            defaults: defaults,
+            tokenStorage: StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        )
+        service.setBaseURL("https://acme.atlassian.net")
+        service.setEmail("user@example.com")
+        return service
+    }
+}
+
+@Suite("Confluence 설정 입력 검증")
+struct ConfluenceSettingsInputValidatorTests {
+
+    @Test("@ 없는 이메일은 전체 계정 이메일 경고")
+    func warnsWhenEmailHasNoAtSign() {
+        #expect(ConfluenceSettingsInputValidator.emailWarning(for: "jaehwi.kim") == "Atlassian 계정 이메일 전체를 입력하세요")
+        #expect(!ConfluenceSettingsInputValidator.hasCompleteAccountEmail("jaehwi.kim"))
+    }
+
+    @Test("전체 이메일과 빈 값은 인라인 경고를 내지 않는다")
+    func acceptsCompleteEmailAndSuppressesEmptyWarning() {
+        #expect(ConfluenceSettingsInputValidator.emailWarning(for: "user@example.com") == nil)
+        #expect(ConfluenceSettingsInputValidator.hasCompleteAccountEmail("user@example.com"))
+        #expect(ConfluenceSettingsInputValidator.emailWarning(for: "   ") == nil)
+        #expect(!ConfluenceSettingsInputValidator.hasCompleteAccountEmail("   "))
+    }
+}
+
 @Suite("연동 token 재연결 상태")
 @MainActor
 struct IntegrationReconnectStateTests {
@@ -756,6 +993,19 @@ private final class StubConfluenceHTTPClient: ConfluenceHTTPClient, @unchecked S
     struct Response: Sendable {
         let statusCode: Int
         let data: Data
+        let errorCode: URLError.Code?
+
+        init(statusCode: Int, data: Data) {
+            self.statusCode = statusCode
+            self.data = data
+            self.errorCode = nil
+        }
+
+        init(errorCode: URLError.Code) {
+            self.statusCode = 0
+            self.data = Data()
+            self.errorCode = errorCode
+        }
     }
 
     private let lock = NSLock()
@@ -777,6 +1027,9 @@ private final class StubConfluenceHTTPClient: ConfluenceHTTPClient, @unchecked S
                 return Response(statusCode: 200, data: Data(#"{"results":[]}"#.utf8))
             }
             return responses.removeFirst()
+        }
+        if let errorCode = response.errorCode {
+            throw URLError(errorCode)
         }
         let url = request.url ?? URL(string: "https://acme.atlassian.net")!
         let http = HTTPURLResponse(
