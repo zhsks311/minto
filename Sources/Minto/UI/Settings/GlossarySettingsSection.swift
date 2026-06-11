@@ -13,6 +13,7 @@ struct GlossarySettingsSection: View {
     /// nil이 아니면 폼이 해당 용어의 수정 모드로 동작한다.
     @State private var editingGlossaryEntryID: UUID? = nil
     @State private var collapsedGlossaryCategories: Set<String> = []
+    @State private var expandedAliasSuggestionEntryIDs: Set<UUID> = []
     /// 후보 [추가]로 폼을 열었을 때의 출처 후보 id.
     /// 저장 성공 시 approveCandidate를 호출해 목록에서 제거한다.
     /// 폼 취소 시에는 nil만 초기화하고 후보는 유지한다.
@@ -88,6 +89,12 @@ struct GlossarySettingsSection: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(candidate.term)
                     .font(.callout.weight(.semibold))
+                if !candidate.suggestedAliases.isEmpty {
+                    Text("오인식: \(candidate.suggestedAliases.joined(separator: ", "))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
                 if let title = sourceMeetingTitle(for: candidate) {
                     Text(title)
                         .font(.caption2)
@@ -125,7 +132,7 @@ struct GlossarySettingsSection: View {
     private func prefillFormForCandidate(_ candidate: GlossaryCandidate) {
         editingGlossaryEntryID = nil
         glossaryCanonicalInput = candidate.term
-        glossaryAliasesInput = ""
+        glossaryAliasesInput = candidate.suggestedAliases.joined(separator: ", ")
         glossaryDescriptionInput = ""
         glossaryTagsInput = ""
         glossaryNewCategoryInput = ""
@@ -198,57 +205,140 @@ struct GlossarySettingsSection: View {
 
     /// 압축 행: 표기 + 설명/별칭은 한 줄로 잘라 길어져도 행 높이를 유지한다.
     private func glossaryEntryRow(_ entry: GlossaryEntry) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Toggle("", isOn: Binding(
-                get: { entry.enabled },
-                set: { glossaryStore.setEnabled(entry.id, enabled: $0) }
-            ))
-            .toggleStyle(.checkbox)
-            .labelsHidden()
-            .help("회의 시작 때 추천에 포함")
+        let aliasSuggestions = aliasSuggestions(for: entry)
+        let isExpanded = expandedAliasSuggestionEntryIDs.contains(entry.id)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.normalizedCanonical)
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(entry.enabled ? .primary : .secondary)
-                if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(entry.description)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Toggle("", isOn: Binding(
+                    get: { entry.enabled },
+                    set: { glossaryStore.setEnabled(entry.id, enabled: $0) }
+                ))
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+                .help("회의 시작 때 추천에 포함")
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.normalizedCanonical)
+                        .font(.callout.weight(.semibold))
+                        .foregroundColor(entry.enabled ? .primary : .secondary)
+                    if !entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(entry.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                    let meta = glossaryEntryMeta(entry)
+                    if !meta.isEmpty {
+                        Text(meta)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                if !aliasSuggestions.isEmpty {
+                    Button {
+                        toggleAliasSuggestions(for: entry.id)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("별칭 제안 \(aliasSuggestions.count)")
+                                .font(.caption2.weight(.semibold))
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .foregroundColor(.accentColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.accentColor.opacity(0.10))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("별칭 제안 보기")
+                }
+
+                Button {
+                    beginEditingGlossaryEntry(entry)
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(.borderless)
+                .help("편집")
+
+                Button(role: .destructive) {
+                    if editingGlossaryEntryID == entry.id {
+                        cancelGlossaryEditing()
+                    }
+                    glossaryStore.delete(entry.id)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("삭제")
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+
+            if isExpanded, !aliasSuggestions.isEmpty {
+                aliasSuggestionList(aliasSuggestions, entryID: entry.id)
+            }
+        }
+    }
+
+    private func aliasSuggestionList(_ suggestions: [GlossaryAliasSuggestion], entryID: UUID) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(suggestions) { suggestion in
+                HStack(spacing: 8) {
+                    Text("오인식: \(suggestion.alias)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
+                    Spacer()
+                    Button("추가") {
+                        glossaryStore.approveAliasSuggestion(suggestion.id)
+                        collapseAliasSuggestionsIfEmpty(entryID)
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+                    Button("무시") {
+                        glossaryStore.dismissAliasSuggestion(suggestion.id)
+                        collapseAliasSuggestionsIfEmpty(entryID)
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
-                let meta = glossaryEntryMeta(entry)
-                if !meta.isEmpty {
-                    Text(meta)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.secondary.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
-
-            Spacer()
-
-            Button {
-                beginEditingGlossaryEntry(entry)
-            } label: {
-                Image(systemName: "pencil")
-            }
-            .buttonStyle(.borderless)
-            .help("편집")
-
-            Button(role: .destructive) {
-                if editingGlossaryEntryID == entry.id {
-                    cancelGlossaryEditing()
-                }
-                glossaryStore.delete(entry.id)
-            } label: {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .help("삭제")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.leading, 34)
+        .padding(.trailing, 10)
+        .padding(.bottom, 8)
+    }
+
+    private func aliasSuggestions(for entry: GlossaryEntry) -> [GlossaryAliasSuggestion] {
+        glossaryStore.pendingAliases
+            .filter { $0.entryID == entry.id }
+            .sorted { $0.suggestedAt < $1.suggestedAt }
+    }
+
+    private func toggleAliasSuggestions(for entryID: UUID) {
+        if expandedAliasSuggestionEntryIDs.contains(entryID) {
+            expandedAliasSuggestionEntryIDs.remove(entryID)
+        } else {
+            expandedAliasSuggestionEntryIDs.insert(entryID)
+        }
+    }
+
+    private func collapseAliasSuggestionsIfEmpty(_ entryID: UUID) {
+        if !glossaryStore.pendingAliases.contains(where: { $0.entryID == entryID }) {
+            expandedAliasSuggestionEntryIDs.remove(entryID)
+        }
     }
 
     private func glossaryEntryMeta(_ entry: GlossaryEntry) -> String {
