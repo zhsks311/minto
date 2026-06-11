@@ -18,6 +18,7 @@ struct GlossarySettingsSection: View {
     /// 저장 성공 시 approveCandidate를 호출해 목록에서 제거한다.
     /// 폼 취소 시에는 nil만 초기화하고 후보는 유지한다.
     @State private var pendingCandidateIDForForm: UUID? = nil
+    @State private var aliasPrefillTask: Task<Void, Never>? = nil
 
     private static let glossaryNewCategoryTag = "__new-glossary-category__"
 
@@ -141,6 +142,7 @@ struct GlossarySettingsSection: View {
         }
         pendingCandidateIDForForm = candidate.id
         showGlossaryAddForm = true
+        startAliasPrefillIfNeeded(for: candidate)
     }
 
     /// 묶음 하나를 헤더 + 용어 행들로 묶은 카드. 헤더 클릭으로 접고 펼친다.
@@ -586,6 +588,8 @@ struct GlossarySettingsSection: View {
     }
 
     private func cancelGlossaryEditing() {
+        aliasPrefillTask?.cancel()
+        aliasPrefillTask = nil
         editingGlossaryEntryID = nil
         showGlossaryAddForm = false
         pendingCandidateIDForForm = nil  // 후보는 유지, id 참조만 해제
@@ -596,6 +600,25 @@ struct GlossarySettingsSection: View {
         glossaryNewCategoryInput = ""
         if glossaryCategoryInput == Self.glossaryNewCategoryTag {
             glossaryCategoryInput = glossaryCategoryOptions.first ?? "개발"
+        }
+    }
+
+    private func startAliasPrefillIfNeeded(for candidate: GlossaryCandidate) {
+        guard glossaryAliasesInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        aliasPrefillTask?.cancel()
+        let candidateID = candidate.id
+        let term = candidate.term
+
+        aliasPrefillTask = Task {
+            let aliases = await GlossaryAliasPrefillService.shared.suggestAliases(for: term)
+            guard !Task.isCancelled, !aliases.isEmpty else { return }
+
+            await MainActor.run {
+                guard pendingCandidateIDForForm == candidateID else { return }
+                guard editingGlossaryEntryID == nil, showGlossaryAddForm else { return }
+                guard glossaryAliasesInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                glossaryAliasesInput = aliases.joined(separator: ", ")
+            }
         }
     }
 
