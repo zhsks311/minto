@@ -141,16 +141,25 @@ public final class MeetingFileImportUseCase: ObservableObject {
         activeImportCount > 0
     }
 
+    internal static func resetImportStateForTesting(in defaults: UserDefaults = .standard) {
+        activeImportCount = 0
+        clearPendingImportMarker(in: defaults)
+    }
+
     public static func pendingImportFileName(in defaults: UserDefaults = .standard) -> String? {
-        let fileName = defaults.string(forKey: pendingImportFileNameKey)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !fileName.isEmpty else { return nil }
-        let lastPathComponent = URL(fileURLWithPath: fileName).lastPathComponent
-        return lastPathComponent.isEmpty ? nil : lastPathComponent
+        normalizedImportMarkerFileName(defaults.string(forKey: pendingImportFileNameKey))
     }
 
     public static func clearPendingImportMarker(in defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: pendingImportFileNameKey)
+    }
+
+    private static func normalizedImportMarkerFileName(_ fileName: String?) -> String? {
+        let trimmedFileName = fileName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmedFileName.isEmpty else { return nil }
+        let lastPathComponent = (trimmedFileName as NSString).lastPathComponent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return lastPathComponent.isEmpty ? nil : lastPathComponent
     }
 
     @Published public private(set) var state: MeetingFileImportState = .idle
@@ -404,13 +413,12 @@ public final class MeetingFileImportUseCase: ObservableObject {
         }
     }
 
-    private func updatePendingImportMarker(for nextState: MeetingFileImportState) {
+    internal func updatePendingImportMarker(for nextState: MeetingFileImportState) {
         if nextState.isRunning {
-            let fileName = nextState.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !fileName.isEmpty {
+            if let fileName = Self.normalizedImportMarkerFileName(nextState.fileName) {
                 defaults.set(fileName, forKey: Self.pendingImportFileNameKey)
             }
-        } else if nextState.stage == .idle || nextState.stage.isTerminal {
+        } else if !nextState.isRunning {
             Self.clearPendingImportMarker(in: defaults)
         }
     }

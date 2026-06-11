@@ -169,6 +169,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         let response = alert.runModal()
         if response == .alertSecondButtonReturn {
             Log.importer.info("terminate accepted during active import")
+            // 종료를 확정하면 pending marker를 남겨 다음 실행 때 안내 카드로 알려준다.
             return .terminateNow
         }
         Log.importer.info("terminate cancelled during active import")

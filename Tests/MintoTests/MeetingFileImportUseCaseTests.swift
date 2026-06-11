@@ -7,6 +7,9 @@ import Testing
 struct MeetingFileImportUseCaseTests {
     @Test("파일 샘플을 streaming chunk 전사 후 요약하고 일반 회의로 저장한다")
     func importsFileAsMeetingRecord() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let startedAt = Date(timeIntervalSince1970: 1_000)
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 48_000), durationSeconds: 3)
         let stt = StubFileImportSTT(texts: ["첫 문장", "둘 문장", "셋 문장"])
@@ -49,6 +52,9 @@ struct MeetingFileImportUseCaseTests {
     @Test("파일 가져오기 마커는 시작 시 저장되고 성공 시 제거된다")
     func pendingImportMarkerIsStoredThenRemovedOnSuccess() async throws {
         let defaults = InMemoryUserDefaults()
+        resetImportStateForTest(in: defaults)
+        defer { resetImportStateForTest(in: defaults) }
+
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
         let stt = StubFileImportSTT(texts: ["회의 내용"])
         let store = StubFileImportStore()
@@ -78,6 +84,9 @@ struct MeetingFileImportUseCaseTests {
     @Test("파일 가져오기 마커는 실패 시 제거된다")
     func pendingImportMarkerIsRemovedOnFailure() async {
         let defaults = InMemoryUserDefaults()
+        resetImportStateForTest(in: defaults)
+        defer { resetImportStateForTest(in: defaults) }
+
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
         let stt = StubFileImportSTT(texts: [""])
         var markerDuringImport: String?
@@ -108,6 +117,9 @@ struct MeetingFileImportUseCaseTests {
     @Test("파일 가져오기 마커는 취소 시 제거된다")
     func pendingImportMarkerIsRemovedOnCancellation() async {
         let defaults = InMemoryUserDefaults()
+        resetImportStateForTest(in: defaults)
+        defer { resetImportStateForTest(in: defaults) }
+
         let extractor = StubFileExtractor(cancelImmediately: true)
         let stt = StubFileImportSTT(texts: [])
         var markerDuringImport: String?
@@ -138,6 +150,9 @@ struct MeetingFileImportUseCaseTests {
     @Test("시작 시 남은 파일 가져오기 마커를 파일명으로 감지한다")
     func detectsPendingImportMarkerOnLaunch() {
         let defaults = InMemoryUserDefaults()
+        resetImportStateForTest(in: defaults)
+        defer { resetImportStateForTest(in: defaults) }
+
         defaults.set("/tmp/interrupted-meeting.mov", forKey: MeetingFileImportUseCase.pendingImportFileNameKey)
 
         #expect(MeetingFileImportUseCase.pendingImportFileName(in: defaults) == "interrupted-meeting.mov")
@@ -146,8 +161,30 @@ struct MeetingFileImportUseCaseTests {
         #expect(MeetingFileImportUseCase.pendingImportFileName(in: defaults) == nil)
     }
 
+    @Test("파일 가져오기 마커는 쓰기 시점에도 파일명만 저장한다")
+    func pendingImportMarkerStoresOnlyFileNameWhenStateHasFullPath() {
+        let defaults = InMemoryUserDefaults()
+        resetImportStateForTest(in: defaults)
+        defer { resetImportStateForTest(in: defaults) }
+
+        let useCase = MeetingFileImportUseCase(defaults: defaults)
+
+        useCase.updatePendingImportMarker(for: MeetingFileImportState(
+            stage: .analyzing,
+            progress: 0.1,
+            fileName: "/Users/local/meetings/interrupted-meeting.mov",
+            detailText: "가져오는 중"
+        ))
+
+        #expect(defaults.string(forKey: MeetingFileImportUseCase.pendingImportFileNameKey) == "interrupted-meeting.mov")
+        #expect(MeetingFileImportUseCase.pendingImportFileName(in: defaults) == "interrupted-meeting.mov")
+    }
+
     @Test("전사 교정이 켜져 있으면 파일 import context로 교정본을 만들고 저장한다")
     func appliesCorrectionBeforeSummaryAndSave() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let startedAt = Date(timeIntervalSince1970: 2_000)
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
         let stt = StubFileImportSTT(texts: ["raw text"])
@@ -182,6 +219,9 @@ struct MeetingFileImportUseCaseTests {
 
     @Test("파일 import UI 상태는 교정과 요약 단계를 순서대로 노출한다")
     func exposesCorrectionAndSummaryStagesDuringImport() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let startedAt = Date(timeIntervalSince1970: 3_000)
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 32_000), durationSeconds: 2)
         let stt = StubFileImportSTT(texts: ["raw first", "raw second"])
@@ -217,6 +257,9 @@ struct MeetingFileImportUseCaseTests {
 
     @Test("전사 결과가 비어 있으면 저장하지 않고 실패 상태를 남긴다")
     func failsWhenTranscriptIsEmpty() async {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
         let stt = StubFileImportSTT(texts: [""])
         let store = StubFileImportStore()
@@ -238,6 +281,9 @@ struct MeetingFileImportUseCaseTests {
 
     @Test("취소되면 저장하지 않고 cancelled 상태를 남긴다")
     func cancellationDoesNotSavePartialRecord() async {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let extractor = StubFileExtractor(cancelImmediately: true)
         let store = StubFileImportStore()
         let useCase = MeetingFileImportUseCase(
@@ -257,6 +303,9 @@ struct MeetingFileImportUseCaseTests {
 
     @Test("chunk 처리 중 취소되어도 부분 회의를 저장하지 않는다")
     func cancellationDuringChunkProcessingDoesNotSavePartialRecord() async {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
         let stt = StubFileImportSTT(texts: [""], cancelOnCall: 1)
         let store = StubFileImportStore()
@@ -277,6 +326,9 @@ struct MeetingFileImportUseCaseTests {
 
     @Test("파일 chunking은 마지막 짧은 구간의 offset과 duration을 보존한다")
     func chunkingPreservesRemainderTiming() {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let chunks = MeetingFileImportUseCase.makeChunks(
             samples: [Float](repeating: 0.1, count: 40_000),
             chunkSeconds: 1,
@@ -290,6 +342,9 @@ struct MeetingFileImportUseCaseTests {
 
     @Test("지원하지 않는 파일 형식은 읽기 전에 거부한다")
     func rejectsUnsupportedFileType() async {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         await #expect(throws: FileAudioExtractionError.unsupportedFile) {
             _ = try await FileAudioExtractor().extractChunks(
                 from: URL(fileURLWithPath: "/tmp/not-a-meeting.txt"),
@@ -301,6 +356,9 @@ struct MeetingFileImportUseCaseTests {
 
     @Test("작은 wav 파일은 실제 AVFoundation extractor를 통해 chunk를 방출한다")
     func extractsSmallWAVFixture() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let url = try makeTempWAV(samples: [Int16](repeating: 600, count: 8_000))
         var chunks: [FileAudioChunk] = []
 
@@ -320,6 +378,9 @@ struct MeetingFileImportUseCaseTests {
 
     @Test("실제 extractor는 부모 task 취소를 detached reader에 전파한다")
     func realExtractorCancellationPropagatesToDetachedReader() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
         let url = try makeTempWAV(samples: [Int16](repeating: 600, count: 32_000))
         let extractionTask = Task {
             try await FileAudioExtractor().extractChunks(
@@ -337,6 +398,11 @@ struct MeetingFileImportUseCaseTests {
         let outcome = await extractionOutcome(for: extractionTask, timeoutNanoseconds: 1_000_000_000)
         #expect(outcome == .cancelled)
     }
+}
+
+@MainActor
+private func resetImportStateForTest(in defaults: UserDefaults = .standard) {
+    MeetingFileImportUseCase.resetImportStateForTesting(in: defaults)
 }
 
 private struct StubFileExtractor: MeetingFileAudioExtracting {

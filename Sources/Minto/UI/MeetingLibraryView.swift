@@ -851,10 +851,15 @@ public struct MeetingLibraryView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("지난 가져오기가 완료되지 못했어요")
                             .font(.system(size: 12, weight: .bold))
-                        Text("지난 가져오기(\(fileName))가 완료되지 못했어요. 파일을 다시 가져와 주세요.")
+                        Text("파일을 다시 가져와 주세요.")
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        Text(fileName)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                     Spacer()
                     Button {
