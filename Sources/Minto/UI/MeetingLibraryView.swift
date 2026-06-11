@@ -29,7 +29,7 @@ public struct MeetingLibraryView: View {
     @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
     @StateObject private var searchAnswerController = MeetingSearchAnswerController()
-    @StateObject private var fileImportUseCase = MeetingFileImportUseCase()
+    @StateObject private var fileImportUseCase: MeetingFileImportUseCase
     @State private var selectedID: UUID?
     @State private var searchText = ""
     // 검색 인덱스·결과 캐시. 키 입력마다 전체 회의를 다시 청크하지 않도록
@@ -58,6 +58,9 @@ public struct MeetingLibraryView: View {
     @State private var embeddingBuildTask: Task<Void, Never>?
     /// 파일 선택 후 맥락 입력 시트를 띄울 URL. nil이면 시트 미표시.
     @State private var fileImportSetupURL: URL?
+    /// 이전 실행에서 완료되지 못한 파일 가져오기 마커.
+    @State private var unfinishedImportFileName: String?
+    @State private var didReportUnfinishedImport = false
     /// 재요약 진행 중인 회의 ID. nil이면 재요약 없음.
     /// record.id에 바인딩해 다른 회의 선택 시 상태 오염을 방지한다.
     @State private var retryingRecordID: UUID?
@@ -69,6 +72,7 @@ public struct MeetingLibraryView: View {
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
     private let onStopRecording: () -> Void
+    private let fileImportDefaults: UserDefaults
 
     private enum DetailTab {
         case summary
@@ -89,13 +93,16 @@ public struct MeetingLibraryView: View {
         viewModel: TranscriptionViewModel,
         onNewMeeting: @escaping () -> Void,
         onShowOverlay: @escaping () -> Void,
-        onStopRecording: @escaping () -> Void
+        onStopRecording: @escaping () -> Void,
+        fileImportDefaults: UserDefaults = .standard
     ) {
         self.store = store
         self.viewModel = viewModel
         self.onNewMeeting = onNewMeeting
         self.onShowOverlay = onShowOverlay
         self.onStopRecording = onStopRecording
+        self.fileImportDefaults = fileImportDefaults
+        _fileImportUseCase = StateObject(wrappedValue: MeetingFileImportUseCase(defaults: fileImportDefaults))
     }
 
     public var body: some View {
@@ -116,6 +123,7 @@ public struct MeetingLibraryView: View {
             rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
             searchAnswerController.refreshReadiness()
+            detectUnfinishedFileImportIfNeeded()
         }
         .onChange(of: store.meetings) { _, _ in
             searchAnswerController.reset()
@@ -178,6 +186,9 @@ public struct MeetingLibraryView: View {
             answerSettings.refreshEffective()
         }
         .onChange(of: fileImportUseCase.state) { _, state in
+            if state.stage != .idle {
+                unfinishedImportFileName = nil
+            }
             if let record = state.record {
                 selectedID = record.id
                 showingLiveMeeting = false
@@ -346,6 +357,7 @@ public struct MeetingLibraryView: View {
     private var resultsColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             searchReadiness
+            unfinishedFileImportCard
             fileImportStatusCard
 
             if isSearching {
@@ -825,6 +837,43 @@ public struct MeetingLibraryView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var unfinishedFileImportCard: some View {
+        if let fileName = unfinishedImportFileName {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.orange)
+                        .frame(width: 20, height: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("지난 가져오기가 완료되지 못했어요")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("지난 가져오기(\(fileName))가 완료되지 못했어요. 파일을 다시 가져와 주세요.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button {
+                        dismissUnfinishedFileImport()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .help("안내 닫기")
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.07))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     @ViewBuilder
@@ -2469,6 +2518,20 @@ public struct MeetingLibraryView: View {
     private func openSettingsWindow() {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
+    private func detectUnfinishedFileImportIfNeeded() {
+        guard !didReportUnfinishedImport else { return }
+        guard let fileName = MeetingFileImportUseCase.pendingImportFileName(in: fileImportDefaults) else { return }
+
+        unfinishedImportFileName = fileName
+        didReportUnfinishedImport = true
+        Log.importer.error("pending import marker found file=\(fileName, privacy: .public)")
+    }
+
+    private func dismissUnfinishedFileImport() {
+        MeetingFileImportUseCase.clearPendingImportMarker(in: fileImportDefaults)
+        unfinishedImportFileName = nil
     }
 
     private func selectFileForImport() {

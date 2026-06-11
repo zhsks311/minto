@@ -152,4 +152,26 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
+
+    @MainActor
+    public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard MeetingFileImportUseCase.isAnyImportRunning else {
+            return .terminateNow
+        }
+
+        Log.importer.info("terminate requested during active import")
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "파일 가져오기가 진행 중이에요. 지금 종료하면 가져오기가 사라져요."
+        alert.addButton(withTitle: "계속 가져오기")
+        alert.addButton(withTitle: "종료")
+
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            Log.importer.info("terminate accepted during active import")
+            return .terminateNow
+        }
+        Log.importer.info("terminate cancelled during active import")
+        return .terminateCancel
+    }
 }

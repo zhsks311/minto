@@ -3,7 +3,7 @@ import Testing
 @testable import MintoCore
 
 @MainActor
-@Suite("MeetingFileImportUseCase")
+@Suite("MeetingFileImportUseCase", .serialized)
 struct MeetingFileImportUseCaseTests {
     @Test("파일 샘플을 streaming chunk 전사 후 요약하고 일반 회의로 저장한다")
     func importsFileAsMeetingRecord() async throws {
@@ -42,6 +42,106 @@ struct MeetingFileImportUseCaseTests {
         #expect(store.savedRecords == [record])
         #expect(useCase.state.stage == .completed)
         #expect(useCase.state.record == record)
+    }
+
+    @Test("파일 가져오기 마커는 시작 시 저장되고 성공 시 제거된다")
+    func pendingImportMarkerIsStoredThenRemovedOnSuccess() async throws {
+        let defaults = InMemoryUserDefaults()
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
+        let stt = StubFileImportSTT(texts: ["회의 내용"])
+        let store = StubFileImportStore()
+        var markerDuringImport: String?
+        var runningDuringImport: Bool?
+        stt.loadProbe = {
+            markerDuringImport = MeetingFileImportUseCase.pendingImportFileName(in: defaults)
+            runningDuringImport = MeetingFileImportUseCase.isAnyImportRunning
+        }
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: StubFileImportCorrection(),
+            summaryService: StubFileImportSummary(summary: MeetingSummary(title: "완료 회의")),
+            store: store,
+            defaults: defaults
+        )
+
+        _ = try await useCase.importFile(URL(fileURLWithPath: "/tmp/source-meeting.m4a"), shouldCorrect: false)
+
+        #expect(markerDuringImport == "source-meeting.m4a")
+        #expect(runningDuringImport == true)
+        #expect(MeetingFileImportUseCase.pendingImportFileName(in: defaults) == nil)
+        #expect(MeetingFileImportUseCase.isAnyImportRunning == false)
+    }
+
+    @Test("파일 가져오기 마커는 실패 시 제거된다")
+    func pendingImportMarkerIsRemovedOnFailure() async {
+        let defaults = InMemoryUserDefaults()
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
+        let stt = StubFileImportSTT(texts: [""])
+        var markerDuringImport: String?
+        var runningDuringImport: Bool?
+        stt.loadProbe = {
+            markerDuringImport = MeetingFileImportUseCase.pendingImportFileName(in: defaults)
+            runningDuringImport = MeetingFileImportUseCase.isAnyImportRunning
+        }
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: StubFileImportCorrection(),
+            summaryService: StubFileImportSummary(),
+            store: StubFileImportStore(),
+            defaults: defaults
+        )
+
+        await #expect(throws: MeetingFileImportError.emptyTranscript) {
+            try await useCase.importFile(URL(fileURLWithPath: "/tmp/silent.wav"), shouldCorrect: false)
+        }
+
+        #expect(markerDuringImport == "silent.wav")
+        #expect(runningDuringImport == true)
+        #expect(MeetingFileImportUseCase.pendingImportFileName(in: defaults) == nil)
+        #expect(MeetingFileImportUseCase.isAnyImportRunning == false)
+    }
+
+    @Test("파일 가져오기 마커는 취소 시 제거된다")
+    func pendingImportMarkerIsRemovedOnCancellation() async {
+        let defaults = InMemoryUserDefaults()
+        let extractor = StubFileExtractor(cancelImmediately: true)
+        let stt = StubFileImportSTT(texts: [])
+        var markerDuringImport: String?
+        var runningDuringImport: Bool?
+        stt.loadProbe = {
+            markerDuringImport = MeetingFileImportUseCase.pendingImportFileName(in: defaults)
+            runningDuringImport = MeetingFileImportUseCase.isAnyImportRunning
+        }
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: StubFileImportCorrection(),
+            summaryService: StubFileImportSummary(),
+            store: StubFileImportStore(),
+            defaults: defaults
+        )
+
+        await #expect(throws: CancellationError.self) {
+            try await useCase.importFile(URL(fileURLWithPath: "/tmp/cancelled.mp4"), shouldCorrect: false)
+        }
+
+        #expect(markerDuringImport == "cancelled.mp4")
+        #expect(runningDuringImport == true)
+        #expect(MeetingFileImportUseCase.pendingImportFileName(in: defaults) == nil)
+        #expect(MeetingFileImportUseCase.isAnyImportRunning == false)
+    }
+
+    @Test("시작 시 남은 파일 가져오기 마커를 파일명으로 감지한다")
+    func detectsPendingImportMarkerOnLaunch() {
+        let defaults = InMemoryUserDefaults()
+        defaults.set("/tmp/interrupted-meeting.mov", forKey: MeetingFileImportUseCase.pendingImportFileNameKey)
+
+        #expect(MeetingFileImportUseCase.pendingImportFileName(in: defaults) == "interrupted-meeting.mov")
+
+        MeetingFileImportUseCase.clearPendingImportMarker(in: defaults)
+        #expect(MeetingFileImportUseCase.pendingImportFileName(in: defaults) == nil)
     }
 
     @Test("전사 교정이 켜져 있으면 파일 import context로 교정본을 만들고 저장한다")
@@ -270,6 +370,7 @@ private final class StubFileImportSTT: MeetingFileImportSTTServicing {
     var modelState: ModelState = .unloaded
     var loadedEngines: [SpeechEngineID] = []
     var transcribedSampleCounts: [Int] = []
+    var loadProbe: (@MainActor () -> Void)?
     private var texts: [String]
     private let cancelOnCall: Int?
 
@@ -281,6 +382,7 @@ private final class StubFileImportSTT: MeetingFileImportSTTServicing {
     func loadEngine(_ engineID: SpeechEngineID) async {
         loadedEngines.append(engineID)
         modelState = .loaded
+        loadProbe?()
     }
 
     func transcribe(pcmSamples: [Float]) async throws -> TranscriptionResult {
