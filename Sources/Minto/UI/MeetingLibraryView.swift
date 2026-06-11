@@ -23,6 +23,7 @@ public struct MeetingLibraryView: View {
     @ObservedObject private var viewModel: TranscriptionViewModel
     @ObservedObject private var summaryService = SummaryService.shared
     @ObservedObject private var answerSettings = MeetingSearchAnswerSettingsService.shared
+    @ObservedObject private var llmCorrectionService = LLMCorrectionService.shared
     @ObservedObject private var relatedInfo = RelatedInfoService.shared
     @ObservedObject private var notionMCP = NotionMCPService.shared
     @ObservedObject private var confluence = ConfluenceService.shared
@@ -161,10 +162,15 @@ public struct MeetingLibraryView: View {
             dismissSearchAnswerPresentation()
             searchAnswerController.refreshReadiness()
         }
-        .onChange(of: answerSettings.selectedProvider) { _, _ in
+        .onChange(of: answerSettings.effectiveProvider) { _, _ in
+            answerSettings.refreshEffective()
             searchAnswerController.reset(clearReadiness: true)
             dismissSearchAnswerPresentation()
             searchAnswerController.refreshReadiness()
+        }
+        .onChange(of: llmCorrectionService.selectedProvider) { _, _ in
+            // 활성 provider 변경 → follow 중인 서비스 effectiveProvider 갱신 → 위 onChange 연쇄 트리거
+            answerSettings.refreshEffective()
         }
         .onChange(of: fileImportUseCase.state) { _, state in
             if let record = state.record {

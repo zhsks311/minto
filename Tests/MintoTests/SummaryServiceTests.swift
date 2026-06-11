@@ -78,8 +78,8 @@ struct SummaryServiceTests {
     @Test("요약 설정 migration은 교정 provider를 한 번만 복사한다")
     func summarySettingsMigrationRunsOnce() {
         let defaults = InMemoryUserDefaults()
-
-        let settings = LLMSummarySettingsService(defaults: defaults)
+        // activeProvider를 .none으로 고정해 외부 LLMCorrectionService 상태에 의존하지 않는다.
+        let settings = LLMSummarySettingsService(defaults: defaults, activeProvider: { .none })
         settings.migrateIfNeeded(from: .gptAPI)
 
         #expect(settings.hasMigratedFromCorrectionProvider)
@@ -87,11 +87,14 @@ struct SummaryServiceTests {
         #expect(settings.selectedProvider == .gptAPI)
 
         settings.isEnabled = false
+        // .none setter는 override를 제거(follow 전환)한다.
         settings.selectedProvider = .none
+        #expect(!settings.hasOverride)
         settings.migrateIfNeeded(from: .claudeAPI)
 
+        // 두 번째 migrate는 hasMigrated 플래그로 차단되어 아무 변화 없다.
         #expect(settings.isEnabled == false)
-        #expect(settings.selectedProvider == .none)
+        #expect(!settings.hasOverride)
     }
 
     @Test("교정을 꺼도 요약 provider는 독립적으로 유지된다")

@@ -157,9 +157,10 @@ public struct SettingsView: View {
         .frame(width: 480, height: 640)
         .onAppear {
             summarySettings.migrateIfNeeded(from: llmService.selectedProvider)
+            summarySettings.migrateToFollowSemanticIfNeeded()
+            answerSettings.migrateToFollowSemanticIfNeeded()
             normalizeSpeechEngineSelection()
             normalizeAccountModelSelectionIfNeeded()
-            normalizeSearchAnswerProviderIfNeeded()
             rememberCurrentProviderIfNeeded()
             Task { await refreshSpeechEngineAvailability() }
         }
@@ -167,19 +168,20 @@ public struct SettingsView: View {
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
-            syncSearchAnswerProviderWithActiveAIIfNeeded()
+            // 활성 provider 변경 → follow 중인 서비스들의 effectiveProvider 갱신
+            summarySettings.refreshEffective()
+            answerSettings.refreshEffective()
             apiKeyInputs = [:]
             loginError = nil
         }
-        .onChange(of: summarySettings.selectedProvider) { _, provider in
+        .onChange(of: summarySettings.effectiveProvider) { _, provider in
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
-            syncSearchAnswerProviderWithActiveAIIfNeeded()
             apiKeyInputs = [:]
             loginError = nil
         }
-        .onChange(of: answerSettings.selectedProvider) { _, provider in
+        .onChange(of: answerSettings.effectiveProvider) { _, provider in
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
@@ -284,9 +286,6 @@ public struct SettingsView: View {
             get: { summarySettings.isEnabled },
             set: { enabled in
                 summarySettings.isEnabled = enabled
-                if enabled, summarySettings.selectedProvider == .none {
-                    summarySettings.selectedProvider = activeAIProvider
-                }
             }
         )
     }
@@ -296,9 +295,6 @@ public struct SettingsView: View {
             get: { answerSettings.isEnabled },
             set: { enabled in
                 answerSettings.isEnabled = enabled
-                if enabled {
-                    answerSettings.selectedProvider = activeAIProvider
-                }
             }
         )
     }
@@ -339,16 +335,11 @@ public struct SettingsView: View {
     private func rememberCurrentProviderIfNeeded() {
         if llmService.selectedProvider != .none {
             lastLLMProviderRaw = llmService.selectedProvider.rawValue
-        } else if summarySettings.selectedProvider != .none {
-            lastLLMProviderRaw = summarySettings.selectedProvider.rawValue
-        } else if answerSettings.selectedProvider != .none {
-            lastLLMProviderRaw = answerSettings.selectedProvider.rawValue
+        } else if summarySettings.effectiveProvider != .none {
+            lastLLMProviderRaw = summarySettings.effectiveProvider.rawValue
+        } else if answerSettings.effectiveProvider != .none {
+            lastLLMProviderRaw = answerSettings.effectiveProvider.rawValue
         }
-    }
-
-    private func normalizeSearchAnswerProviderIfNeeded() {
-        guard answerSettings.isEnabled else { return }
-        syncSearchAnswerProviderWithActiveAIIfNeeded()
     }
 
     private func normalizeAccountModelSelectionIfNeeded() {
@@ -360,14 +351,6 @@ public struct SettingsView: View {
         }
         if !CopilotOAuthService.availableModels.contains(where: { $0.id == copilotModel }) {
             copilotModel = CopilotOAuthService.defaultModelID
-        }
-    }
-
-    private func syncSearchAnswerProviderWithActiveAIIfNeeded() {
-        guard answerSettings.isEnabled else { return }
-        let provider = activeAIProvider
-        if provider != .none, provider != answerSettings.selectedProvider {
-            answerSettings.selectedProvider = provider
         }
     }
 
@@ -718,11 +701,11 @@ public struct SettingsView: View {
         if llmService.selectedProvider != .none {
             return llmService.selectedProvider
         }
-        if summarySettings.selectedProvider != .none {
-            return summarySettings.selectedProvider
+        if summarySettings.effectiveProvider != .none {
+            return summarySettings.effectiveProvider
         }
-        if answerSettings.isEnabled, answerSettings.selectedProvider != .none {
-            return answerSettings.selectedProvider
+        if answerSettings.isEnabled, answerSettings.effectiveProvider != .none {
+            return answerSettings.effectiveProvider
         }
         return restoredLLMProvider
     }
@@ -737,10 +720,10 @@ public struct SettingsView: View {
                     llmService.selectedProvider = provider
                 }
                 if summarySettings.isEnabled {
-                    summarySettings.selectedProvider = provider
+                    summarySettings.setOverride(provider)
                 }
                 if answerSettings.isEnabled {
-                    answerSettings.selectedProvider = provider
+                    answerSettings.setOverride(provider)
                 }
             }
         )
@@ -748,10 +731,10 @@ public struct SettingsView: View {
 
     private var searchAnswerProviderBinding: Binding<LLMProviderSelection> {
         Binding(
-            get: { answerCapableProvider(from: answerSettings.selectedProvider) },
+            get: { answerCapableProvider(from: answerSettings.effectiveProvider) },
             set: {
                 let provider = answerCapableProvider(from: $0)
-                answerSettings.selectedProvider = provider
+                answerSettings.setOverride(provider)
                 lastLLMProviderRaw = provider.rawValue
             }
         )
@@ -779,7 +762,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var searchAnswerConnectionRows: some View {
-        let provider = answerCapableProvider(from: answerSettings.selectedProvider)
+        let provider = answerCapableProvider(from: answerSettings.effectiveProvider)
         if let providerID = provider.providerID {
             VStack(alignment: .leading, spacing: 8) {
                 Text("검색 답변 연결")
