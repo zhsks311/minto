@@ -157,7 +157,7 @@ public final class CopilotOAuthService: ObservableObject {
 
     // MARK: - Correction API
 
-    public func correct(instructions: String, userContent: String) async throws -> String {
+    public func correct(instructions: String, userContent: String, maxOutputTokens: Int? = nil) async throws -> String {
         guard var creds = credentials else { throw CopilotError.notLoggedIn }
 
         if creds.isCopilotTokenExpired {
@@ -180,7 +180,7 @@ public final class CopilotOAuthService: ObservableObject {
         // 교정 규칙(instructions)은 system 메시지로, 가변 입력(userContent)은 user 메시지로 분리.
         let body: [String: Any] = [
             "model": Self.selectedModel,
-            "max_tokens": kCopilotMaxTokens,
+            "max_tokens": max(1, maxOutputTokens ?? kCopilotMaxTokens),
             "messages": [
                 ["role": "system", "content": instructions],
                 ["role": "user", "content": userContent]

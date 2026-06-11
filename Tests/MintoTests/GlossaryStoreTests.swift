@@ -326,6 +326,214 @@ struct GlossaryStoreTests {
         #expect(reloaded.pendingCandidates.map(\.term).sorted() == ["ArgoCD", "Terraform"])
     }
 
+    // MARK: - 교정 별칭 제안 테스트
+
+    @Test("ingestCorrectionAliases는 기존 용어에 alias 제안을 축적하고 중복을 제외한다")
+    func ingestCorrectionAliasesAccumulatesAliasSuggestionsForExistingEntry() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase", aliasesText: "리퀴베이스") == true)
+
+        store.ingestCorrectionAliases([
+            (canonical: "Liquibase", alias: "리퀴베이스"),
+            (canonical: "liquibase", alias: "리퀴 베이스"),
+            (canonical: "LIQUIBASE", alias: "리퀴 베이스")
+        ])
+
+        #expect(store.entries[0].aliases == ["리퀴베이스"])
+        #expect(store.pendingAliases.count == 1)
+        #expect(store.pendingAliases[0].entryID == store.entries[0].id)
+        #expect(store.pendingAliases[0].alias == "리퀴 베이스")
+    }
+
+    @Test("ingestCorrectionAliases는 기존 alias와 canonical을 대조해 entry를 찾는다")
+    func ingestCorrectionAliasesMatchesExistingEntryAlias() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase", aliasesText: "리퀴베이스") == true)
+
+        store.ingestCorrectionAliases([
+            (canonical: "리퀴베이스", alias: "리퀴 베이스")
+        ])
+
+        #expect(store.pendingAliases.count == 1)
+        #expect(store.pendingAliases[0].entryID == store.entries[0].id)
+        #expect(store.pendingCandidates.isEmpty)
+    }
+
+    @Test("pendingAliases는 30개 상한을 유지한다")
+    func ingestCorrectionAliasesCapsAliasSuggestions() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+
+        store.ingestCorrectionAliases((1...31).map {
+            (canonical: "Liquibase", alias: "alias-\($0)")
+        })
+
+        #expect(store.pendingAliases.count == 30)
+    }
+
+    @Test("기존 용어가 없으면 후보에 suggestedAliases를 함께 축적한다")
+    func ingestCorrectionAliasesAccumulatesCandidateAliases() {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        store.ingestCorrectionAliases([
+            (canonical: "Liquibase", alias: "리퀴베이스"),
+            (canonical: "liquibase", alias: "리퀴 베이스"),
+            (canonical: "LIQUIBASE", alias: "리퀴 베이스")
+        ])
+
+        #expect(store.pendingCandidates.count == 1)
+        #expect(store.pendingCandidates[0].term == "Liquibase")
+        #expect(store.pendingCandidates[0].sourceMeetingID == nil)
+        #expect(store.pendingCandidates[0].suggestedAliases == ["리퀴베이스", "리퀴 베이스"])
+        #expect(store.pendingAliases.isEmpty)
+    }
+
+    @Test("pendingAliases와 candidate suggestedAliases가 없는 snapshot을 하위 호환 로드한다")
+    func loadLegacySnapshotWithoutAliasSuggestionFields() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let candidateID = UUID()
+        let meetingID = UUID()
+        let json = """
+        {
+          "schemaVersion": 1,
+          "entries": [],
+          "pendingCandidates": [
+            {
+              "id": "\(candidateID.uuidString)",
+              "term": "Liquibase",
+              "sourceMeetingID": "\(meetingID.uuidString)",
+              "suggestedAt": "2026-06-11T00:00:00Z"
+            }
+          ]
+        }
+        """
+        try json.data(using: .utf8)!.write(to: url, options: .atomic)
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.pendingAliases.isEmpty)
+        #expect(store.dismissedAliasKeys.isEmpty)
+        #expect(store.pendingCandidates.count == 1)
+        #expect(store.pendingCandidates[0].suggestedAliases.isEmpty)
+        #expect(store.pendingCandidates[0].sourceMeetingID == meetingID)
+    }
+
+    @Test("approveAliasSuggestion은 entry aliases에 추가하고 영속한다")
+    func approveAliasSuggestionAddsAliasAndPersists() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+        store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        let suggestion = try #require(store.pendingAliases.first)
+        store.approveAliasSuggestion(suggestion.id)
+
+        #expect(store.pendingAliases.isEmpty)
+        #expect(store.entries[0].aliases == ["리퀴베이스"])
+
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(reloaded.pendingAliases.isEmpty)
+        #expect(reloaded.entries[0].aliases == ["리퀴베이스"])
+    }
+
+    @Test("dismissAliasSuggestion은 제안만 제거하고 영속한다")
+    func dismissAliasSuggestionRemovesSuggestionAndPersists() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+        store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        let suggestion = try #require(store.pendingAliases.first)
+        store.dismissAliasSuggestion(suggestion.id)
+
+        #expect(store.pendingAliases.isEmpty)
+        #expect(store.entries[0].aliases.isEmpty)
+
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(reloaded.pendingAliases.isEmpty)
+        #expect(reloaded.entries[0].aliases.isEmpty)
+    }
+
+    @Test("dismissAliasSuggestion은 같은 alias 제안 재유입을 영속 차단한다")
+    func dismissAliasSuggestionBlocksReinsertionAndPersists() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+        store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        let suggestion = try #require(store.pendingAliases.first)
+        store.dismissAliasSuggestion(suggestion.id)
+        store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        #expect(store.pendingAliases.isEmpty)
+
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        reloaded.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        #expect(reloaded.pendingAliases.isEmpty)
+        #expect(reloaded.entries[0].aliases.isEmpty)
+    }
+
+    @Test("dismissedAliasKeys는 200개 상한을 유지한다")
+    func dismissAliasSuggestionCapsDismissedKeys() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+
+        for index in 1...205 {
+            store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "alias-\(index)")])
+            let suggestion = try #require(store.pendingAliases.first)
+            store.dismissAliasSuggestion(suggestion.id)
+        }
+
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let snapshot = try decoder.decode(GlossarySnapshot.self, from: data)
+
+        #expect(snapshot.dismissedAliasKeys.count == 200)
+        #expect(!snapshot.dismissedAliasKeys.contains(where: { $0.hasSuffix("|alias-1") }))
+        #expect(snapshot.dismissedAliasKeys.contains(where: { $0.hasSuffix("|alias-6") }))
+        #expect(snapshot.dismissedAliasKeys.contains(where: { $0.hasSuffix("|alias-205") }))
+    }
+
+    @Test("alias 제안 저장 실패 시 메모리 상태를 먼저 바꾸지 않는다")
+    func ingestCorrectionAliasesDoesNotPublishOnSaveFailure() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+
+        store.ingestCorrectionAliases([(canonical: "Liquibase", alias: "리퀴베이스")])
+
+        #expect(store.pendingAliases.isEmpty)
+        #expect(store.entries[0].aliases.isEmpty)
+    }
+
     // MARK: - extractNewCandidates 순수 함수 테스트
 
     @Test("extractNewCandidates: 기존 entries canonical과 일치하는 키워드 제외")

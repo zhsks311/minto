@@ -116,6 +116,11 @@ public final class LLMCorrectionService: ObservableObject {
                 userContent: userContent
             ))
             let corrected = CorrectionOutputPostprocessor.clean(response.text)
+            let aliasPairs = CorrectionAliasExtractor.extract(raw: text, corrected: corrected)
+            Log.correction.debug("correction alias extraction pairs=\(aliasPairs.count, privacy: .public)")
+            if !aliasPairs.isEmpty {
+                GlossaryStore.shared.ingestCorrectionAliases(aliasPairs)
+            }
             Log.correction.info("correction completed via \(provider.descriptor.id.rawValue, privacy: .public) outputChars=\(corrected.count, privacy: .public)")
             return corrected
         } catch {

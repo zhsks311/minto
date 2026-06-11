@@ -331,7 +331,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
                 "stream": false,
                 "options": [
                     "temperature": 0.1,
-                    "num_predict": maxOutputTokens(for: request.useCase),
+                    "num_predict": maxOutputTokens(for: request),
                     "num_ctx": configuration.contextWindow
                 ]
             ]
@@ -343,7 +343,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
                     ["role": "user", "content": request.userContent]
                 ],
                 "temperature": 0.1,
-                "max_tokens": maxOutputTokens(for: request.useCase),
+                "max_tokens": maxOutputTokens(for: request),
                 "stream": false
             ]
         }
@@ -421,6 +421,13 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
     private func firstChoice(in json: [String: Any]) -> [String: Any]? {
         let choices = json["choices"] as? [[String: Any]] ?? []
         return choices.first
+    }
+
+    private func maxOutputTokens(for request: LLMTextRequest) -> Int {
+        if let maxOutputTokens = request.maxOutputTokens {
+            return max(1, maxOutputTokens)
+        }
+        return maxOutputTokens(for: request.useCase)
     }
 
     private func maxOutputTokens(for useCase: LLMUseCase) -> Int {

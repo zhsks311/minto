@@ -174,10 +174,26 @@ struct VADProcessorTests {
         vad.reset()
         try? await Task.sleep(nanoseconds: 50_000_000)
         chunks.removeAll()
+        let (stream, continuation) = AsyncStream<AudioChunk>.makeStream()
+        vad.onChunk = { chunk in
+            chunks.append(chunk)
+            continuation.yield(chunk)
+        }
 
         for _ in 0..<80 { vad.process(samples: speechSamples) }
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        #expect(!chunks.isEmpty, "After reset, ramp-up should apply again")
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            continuation.finish()
+        }
+
+        var received = false
+        for await _ in stream {
+            received = true
+            continuation.finish()
+            break
+        }
+
+        #expect(received, "After reset, ramp-up should apply again")
         if let first = chunks.first {
             #expect(first.durationSeconds <= 5.1, "Post-reset first chunk should ramp up at ~5s")
         }

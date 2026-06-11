@@ -4,18 +4,54 @@ import Foundation
 public struct GlossaryCandidate: Identifiable, Codable, Sendable, Equatable {
     public var id: UUID
     public var term: String
-    public var sourceMeetingID: UUID
+    public var sourceMeetingID: UUID?
+    public var suggestedAliases: [String]
     public var suggestedAt: Date
 
     public init(
         id: UUID = UUID(),
         term: String,
-        sourceMeetingID: UUID,
+        sourceMeetingID: UUID? = nil,
+        suggestedAliases: [String] = [],
         suggestedAt: Date = Date()
     ) {
         self.id = id
         self.term = term
         self.sourceMeetingID = sourceMeetingID
+        self.suggestedAliases = suggestedAliases
+        self.suggestedAt = suggestedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, term, sourceMeetingID, suggestedAliases, suggestedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        term = try c.decode(String.self, forKey: .term)
+        sourceMeetingID = try? c.decode(UUID.self, forKey: .sourceMeetingID)
+        suggestedAliases = (try? c.decode([String].self, forKey: .suggestedAliases)) ?? []
+        suggestedAt = try c.decode(Date.self, forKey: .suggestedAt)
+    }
+}
+
+/// 기존 용어에 추가할 별칭 제안. 사용자 승인 전에는 entry.aliases에 반영하지 않는다.
+public struct GlossaryAliasSuggestion: Identifiable, Codable, Sendable, Equatable {
+    public var id: UUID
+    public var entryID: UUID
+    public var alias: String
+    public var suggestedAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        entryID: UUID,
+        alias: String,
+        suggestedAt: Date = Date()
+    ) {
+        self.id = id
+        self.entryID = entryID
+        self.alias = alias
         self.suggestedAt = suggestedAt
     }
 }
