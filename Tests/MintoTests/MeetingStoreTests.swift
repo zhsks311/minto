@@ -50,6 +50,15 @@ struct MeetingStoreTests {
         #expect(loaded?.transcript.first?.text == "안녕하세요")
     }
 
+    @Test("MeetingRecordCoding 팩토리 encoder/decoder는 MeetingRecord를 보존한다")
+    func codingFactoryRoundTripsMeetingRecord() throws {
+        let record = sampleRecord()
+        let data = try MeetingRecordCoding.makeEncoder().encode(record)
+        let restored = try MeetingRecordCoding.makeDecoder().decode(MeetingRecord.self, from: data)
+
+        #expect(restored == record)
+    }
+
     @Test("빈 회의(전사·요약 없음)는 저장하지 않는다")
     func skipsEmpty() {
         let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }

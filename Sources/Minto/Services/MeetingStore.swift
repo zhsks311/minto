@@ -41,14 +41,8 @@ public final class MeetingStore: ObservableObject {
         searchIndexStore = MeetingSearchIndexStore(directory: dir)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        // SYNC: MeetingStore/MeetingSaveRecovery encoder 설정과 반드시 일치
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder = enc
-        let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
-        decoder = dec
+        encoder = MeetingRecordCoding.makeEncoder()
+        decoder = MeetingRecordCoding.makeDecoder()
 
         reload()
     }

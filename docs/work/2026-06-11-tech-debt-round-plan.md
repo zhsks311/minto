@@ -26,3 +26,8 @@
 - 각 작업 커밋 전 `./scripts/dev.sh test`
 - 앱 실행 금지
 - `Co-Authored-By` 없는 커밋 메시지 사용
+
+## 진행
+
+- 완료: 작업 1 provider follow Combine 구독, `./scripts/dev.sh build`, `./scripts/dev.sh test`, 커밋 `4281f00`
+- 진행 중: 작업 2 MeetingRecord encoder/decoder 공유 팩토리

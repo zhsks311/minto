@@ -41,9 +41,9 @@ public enum MeetingSaveRecovery {
             Log.store.error("복구 파일 쓰기 실패: \(error.localizedDescription, privacy: .public)")
         }
 
-        // .json: 프로그래밍 복원용 (MeetingStore와 동일한 encoder 설정)
+        // .json: 프로그래밍 복원용
         let jsonURL = dir.appendingPathComponent("\(stem).json")
-        let encoder = makeEncoder()
+        let encoder = MeetingRecordCoding.makeEncoder()
         guard let data = try? encoder.encode(record) else {
             Log.store.error("복구 JSON 인코딩 실패: \(record.id.uuidString, privacy: .public)")
             return
@@ -78,7 +78,7 @@ public enum MeetingSaveRecovery {
         let jsonURLs = urls.filter { $0.pathExtension == "json" }
         guard !jsonURLs.isEmpty else { return 0 }
 
-        let decoder = makeDecoder()
+        let decoder = MeetingRecordCoding.makeDecoder()
         var successCount = 0
         var failCount = 0
 
@@ -121,21 +121,6 @@ public enum MeetingSaveRecovery {
             .first ?? FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/Application Support")
         return base.appendingPathComponent("Minto/recovery", isDirectory: true)
-    }
-
-    // SYNC: MeetingStore/MeetingSaveRecovery encoder 설정과 반드시 일치
-    static func makeEncoder() -> JSONEncoder {
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return enc
-    }
-
-    // SYNC: MeetingStore/MeetingSaveRecovery encoder 설정과 반드시 일치
-    static func makeDecoder() -> JSONDecoder {
-        let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
-        return dec
     }
 
     static func buildMarkdown(for record: MeetingRecord) -> String {
