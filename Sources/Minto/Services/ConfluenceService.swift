@@ -269,14 +269,17 @@ public final class ConfluenceService: ObservableObject {
 
     public func setEmail(_ raw: String) {
         defaults.set(raw.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Self.emailKey)
-        needsReconnect = false
         objectWillChange.send()
     }
 
     public func setBaseURL(_ raw: String) {
         defaults.set(raw.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Self.baseURLKey)
-        needsReconnect = false
         objectWillChange.send()
+    }
+
+    /// 검증 성공 후 연동 저장 경로에서만 호출해 재연결 필요 상태를 해제한다.
+    public func markReconnected() {
+        needsReconnect = false
     }
 
     private func markNeedsReconnect() {
@@ -284,6 +287,7 @@ public final class ConfluenceService: ObservableObject {
         needsReconnect = true
     }
 
+    /// 입력 자격을 검증한다. token 입력이 비어 있으면 저장된 token을 fallback으로 사용하며, 저장 상태는 변경하지 않는다.
     public func validateCredentials(
         baseURL rawBaseURL: String,
         email rawEmail: String,
@@ -602,7 +606,7 @@ public final class ConfluenceService: ObservableObject {
             value = String(value[..<range.lowerBound])
         }
         while value.hasSuffix("/") { value.removeLast() }
-        return value.isEmpty ? nil : value
+        return value
     }
 
     nonisolated static func createPagePayload(

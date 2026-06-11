@@ -585,6 +585,57 @@ struct ConfluenceCredentialValidationTests {
         #expect(httpClient.requests.count == 2)
     }
 
+    @Test("저장된 token 검증 성공 후 명시적으로 재연결 완료 처리하면 connected")
+    func storedTokenValidationThenMarkReconnectedConnects() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 401, data: Data("unauthorized".utf8)),
+            .init(statusCode: 200, data: Data("{}".utf8))
+        ])
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let service = makeConfiguredConfluenceService(httpClient: httpClient, tokenStorage: tokenStorage)
+
+        _ = await service.search("회의 안건")
+
+        #expect(service.connectionState == .needsReconnect)
+
+        let outcome = await service.validateCredentials(
+            baseURL: "https://acme.atlassian.net",
+            email: "user@example.com",
+            token: ""
+        )
+
+        #expect(outcome == .success)
+        #expect(service.connectionState == .needsReconnect)
+
+        service.setBaseURL("https://acme.atlassian.net")
+        service.setEmail("user@example.com")
+        service.markReconnected()
+
+        #expect(service.connectionState == .connected)
+        #expect(httpClient.requests.count == 2)
+    }
+
+    @Test("baseURL과 email 저장만으로는 재연결 필요 상태를 지우지 않는다")
+    func baseURLAndEmailDoNotClearReconnectState() async {
+        let httpClient = StubConfluenceHTTPClient(responses: [
+            .init(statusCode: 401, data: Data("unauthorized".utf8))
+        ])
+        let tokenStorage = StubConfluenceTokenStorageBackend(loadData: Data("api-token".utf8), existsResult: true)
+        let service = makeConfiguredConfluenceService(httpClient: httpClient, tokenStorage: tokenStorage)
+
+        _ = await service.search("회의 안건")
+
+        #expect(service.connectionState == .needsReconnect)
+
+        service.setBaseURL("https://acme.atlassian.net/wiki/")
+        #expect(service.connectionState == .needsReconnect)
+        #expect(service.baseURL == "https://acme.atlassian.net")
+
+        service.setEmail("user@example.com")
+        #expect(service.connectionState == .needsReconnect)
+        #expect(service.email == "user@example.com")
+    }
+
     private func makeValidationService(statusCode: Int) -> ConfluenceService {
         ConfluenceService(
             httpClient: StubConfluenceHTTPClient(responses: [

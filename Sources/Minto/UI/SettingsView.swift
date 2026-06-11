@@ -732,6 +732,7 @@ public struct SettingsView: View {
         if !token.isEmpty {
             confluence.setAPIToken(token)
         }
+        confluence.markReconnected()
         confluenceTokenInput = ""
         confluenceCredentialCheckState = .saved
     }
