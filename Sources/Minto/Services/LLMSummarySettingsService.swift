@@ -36,6 +36,7 @@ public final class LLMSummarySettingsService: ObservableObject {
     @Published public private(set) var effectiveProvider: LLMProviderSelection
 
     /// 기존 코드와의 호환을 위한 별칭. effectiveProvider와 동일하다.
+    @available(*, deprecated, renamed: "effectiveProvider")
     public var selectedProvider: LLMProviderSelection {
         get { effectiveProvider }
         set { setOverride(newValue) }

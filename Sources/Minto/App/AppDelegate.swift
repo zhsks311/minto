@@ -111,7 +111,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         Log.app.info("app launched version=\(version, privacy: .public) build=\(build, privacy: .public)")
 
         NSApp.setActivationPolicy(.regular)
+        // migrateIfNeeded(교정 → 요약 초기 복사)를 먼저 실행한 뒤,
+        // follow 시맨틱 마이그레이션을 수행해야 한다.
+        // 순서 중요: migrateIfNeeded가 override를 먼저 채워야 follow 판단이 올바르다.
         LLMSummarySettingsService.shared.migrateIfNeeded(from: LLMCorrectionService.shared.selectedProvider)
+        LLMSummarySettingsService.shared.migrateToFollowSemanticIfNeeded()
+        MeetingSearchAnswerSettingsService.shared.migrateToFollowSemanticIfNeeded()
         SpeechEnginePreferences.normalizeLegacyValues()
         Task {
             let savedEngine = SpeechEnginePreferences.selectedEngine()

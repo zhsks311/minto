@@ -79,7 +79,7 @@ public final class MeetingSearchAnswerController: ObservableObject {
         if !settings.isEnabled {
             return "설정에서 검색 답변을 켜면 상위 회의 근거를 AI가 종합합니다."
         }
-        guard let providerID = settings.selectedProvider.providerID,
+        guard let providerID = settings.effectiveProvider.providerID,
               let descriptor = LLMProviderRegistry.shared.descriptor(for: providerID)
         else {
             return "검색 답변에 사용할 AI 서비스를 선택하세요."

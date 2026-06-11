@@ -22,6 +22,7 @@ public struct MeetingLibraryView: View {
     @ObservedObject private var store: MeetingStore
     @ObservedObject private var viewModel: TranscriptionViewModel
     @ObservedObject private var summaryService = SummaryService.shared
+    @ObservedObject private var summarySettings = LLMSummarySettingsService.shared
     @ObservedObject private var answerSettings = MeetingSearchAnswerSettingsService.shared
     @ObservedObject private var llmCorrectionService = LLMCorrectionService.shared
     @ObservedObject private var relatedInfo = RelatedInfoService.shared
@@ -106,6 +107,9 @@ public struct MeetingLibraryView: View {
         .background(LibraryPalette.background)
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
+            // 앱 시작 직후 follow 모드일 때 effective가 .none으로 표시되는 것을 방지한다.
+            summarySettings.refreshEffective()
+            answerSettings.refreshEffective()
             if hasLiveMeeting {
                 showingLiveMeeting = true
             }
@@ -170,6 +174,7 @@ public struct MeetingLibraryView: View {
         }
         .onChange(of: llmCorrectionService.selectedProvider) { _, _ in
             // 활성 provider 변경 → follow 중인 서비스 effectiveProvider 갱신 → 위 onChange 연쇄 트리거
+            summarySettings.refreshEffective()
             answerSettings.refreshEffective()
         }
         .onChange(of: fileImportUseCase.state) { _, state in
