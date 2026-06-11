@@ -73,15 +73,20 @@ public final class LLMSummarySettingsService: ObservableObject {
     /// 활성 provider가 변경될 때 호출한다.
     public func refreshEffective() {
         let newEffective = providerOverride ?? activeProvider()
+        // @Published 이중 발행 억제 — 이 가드 제거 시 UI 루프/부수효과 위험.
         if effectiveProvider != newEffective {
             effectiveProvider = newEffective
         }
     }
 
     private func startObservingActiveProvider(publisher: AnyPublisher<LLMProviderSelection, Never>) {
-        guard activeProviderCancellable == nil else { return }
+        guard activeProviderCancellable == nil else {
+            // 재구독은 의도적으로 무시한다. shared 서비스는 active provider publisher를 한 번만 관찰한다.
+            return
+        }
         activeProviderCancellable = publisher
             .sink { [weak self] _ in
+                // publisher 값 대신 activeProvider()로 다시 읽어 @MainActor 단일 큐에서 안전하게 override 우선 로직을 일원화한다.
                 Task { @MainActor in
                     self?.refreshEffective()
                 }

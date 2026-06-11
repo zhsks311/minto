@@ -34,13 +34,14 @@ public final class LLMCorrectionService: ObservableObject {
 
     private let defaults: UserDefaults
 
+    /// UserDefaults + @Published 단방향 저장이다. 같은 키를 다른 곳에서 @AppStorage로 바인딩하면 역동기화가 깨진다.
     @Published public var selectedProvider: Provider {
         didSet {
             defaults.set(selectedProvider.rawValue, forKey: Self.selectedProviderKey)
         }
     }
 
-    private init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         if let rawProvider = defaults.string(forKey: Self.selectedProviderKey),
            let provider = Provider(rawValue: rawProvider) {

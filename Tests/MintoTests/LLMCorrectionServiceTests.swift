@@ -3,16 +3,14 @@ import Testing
 @testable import MintoCore
 
 @MainActor
-@Suite("LLMCorrectionService", .serialized)
+@Suite("LLMCorrectionService")
 struct LLMCorrectionServiceTests {
     @Test("교정 성공 시 provider 응답을 postprocess해 반환한다")
     func returnsCorrectedTextOnSuccess() async throws {
-        let savedProvider = LLMCorrectionService.shared.selectedProvider
-        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
-        LLMCorrectionService.shared.selectedProvider = .gptAPI
+        let service = makeService(selectedProvider: .gptAPI)
         let provider = StubCorrectionProvider(responseText: "교정 결과: 교정된 문장")
 
-        let result = await LLMCorrectionService.shared.correct(
+        let result = await service.correct(
             text: "교정전 문장",
             context: LLMCorrectionContext(topic: "회의 주제"),
             providerResolver: { providerID in
@@ -29,13 +27,11 @@ struct LLMCorrectionServiceTests {
 
     @Test("provider 오류 시 nil을 반환해 호출자가 원문을 유지할 수 있다")
     func providerErrorKeepsOriginalViaFallback() async {
-        let savedProvider = LLMCorrectionService.shared.selectedProvider
-        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
-        LLMCorrectionService.shared.selectedProvider = .gptAPI
+        let service = makeService(selectedProvider: .gptAPI)
         let provider = StubCorrectionProvider(error: LLMProviderError.network("failed"))
         let original = "원문 문장"
 
-        let corrected = await LLMCorrectionService.shared.correct(
+        let corrected = await service.correct(
             text: original,
             context: LLMCorrectionContext(),
             providerResolver: { _ in provider }
@@ -47,13 +43,11 @@ struct LLMCorrectionServiceTests {
 
     @Test("provider 미선택이면 provider를 호출하지 않고 nil을 반환한다")
     func noneProviderSkipsCorrection() async {
-        let savedProvider = LLMCorrectionService.shared.selectedProvider
-        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
-        LLMCorrectionService.shared.selectedProvider = .none
+        let service = makeService(selectedProvider: .none)
         let provider = StubCorrectionProvider()
         var resolverWasCalled = false
 
-        let result = await LLMCorrectionService.shared.correct(
+        let result = await service.correct(
             text: "원문",
             context: LLMCorrectionContext(),
             providerResolver: { _ in
@@ -69,11 +63,9 @@ struct LLMCorrectionServiceTests {
 
     @Test("provider를 해석할 수 없으면 provider를 호출하지 않고 nil을 반환한다")
     func unresolvedProviderSkipsCorrection() async {
-        let savedProvider = LLMCorrectionService.shared.selectedProvider
-        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
-        LLMCorrectionService.shared.selectedProvider = .gptAPI
+        let service = makeService(selectedProvider: .gptAPI)
 
-        let result = await LLMCorrectionService.shared.correct(
+        let result = await service.correct(
             text: "원문",
             context: LLMCorrectionContext(),
             providerResolver: { _ in nil }
@@ -84,12 +76,10 @@ struct LLMCorrectionServiceTests {
 
     @Test("correction 미지원 provider는 호출하지 않고 nil을 반환한다")
     func unsupportedProviderSkipsCorrection() async {
-        let savedProvider = LLMCorrectionService.shared.selectedProvider
-        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
-        LLMCorrectionService.shared.selectedProvider = .gptAPI
+        let service = makeService(selectedProvider: .gptAPI)
         let provider = StubCorrectionProvider(supportedCapabilities: [.textGeneration, .answer])
 
-        let result = await LLMCorrectionService.shared.correct(
+        let result = await service.correct(
             text: "원문",
             context: LLMCorrectionContext(),
             providerResolver: { _ in provider }
@@ -101,12 +91,10 @@ struct LLMCorrectionServiceTests {
 
     @Test("빈 입력은 provider를 호출하지 않고 nil을 반환한다")
     func emptyInputSkipsCorrection() async {
-        let savedProvider = LLMCorrectionService.shared.selectedProvider
-        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
-        LLMCorrectionService.shared.selectedProvider = .gptAPI
+        let service = makeService(selectedProvider: .gptAPI)
         let provider = StubCorrectionProvider()
 
-        let result = await LLMCorrectionService.shared.correct(
+        let result = await service.correct(
             text: "",
             context: LLMCorrectionContext(),
             providerResolver: { _ in provider }
@@ -114,6 +102,12 @@ struct LLMCorrectionServiceTests {
 
         #expect(result == nil)
         #expect(provider.requests.isEmpty)
+    }
+
+    private func makeService(selectedProvider: LLMProviderSelection) -> LLMCorrectionService {
+        let service = LLMCorrectionService(defaults: InMemoryUserDefaults())
+        service.selectedProvider = selectedProvider
+        return service
     }
 }
 

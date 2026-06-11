@@ -32,3 +32,12 @@
 - 완료: 작업 1 provider follow Combine 구독, `./scripts/dev.sh build`, `./scripts/dev.sh test`, 커밋 `4281f00`
 - 완료: 작업 2 MeetingRecord encoder/decoder 공유 팩토리, `./scripts/dev.sh build`, `./scripts/dev.sh test`, 커밋 `8b7d93f`
 - 완료: 작업 3 LLMCorrectionService 단위 테스트 보강, `./scripts/dev.sh build`, `./scripts/dev.sh test`
+
+## 리뷰 반영 계획
+
+- [x] `LLMCorrectionService` 테스트가 `shared`/`UserDefaults.standard`를 변이하지 않도록 internal init과 격리 인스턴스로 전환한다.
+- [x] follow 설정 서비스 두 곳에 Combine 재구독, publisher 값 미사용, `@Published` 중복 발행 억제 의도 주석을 추가한다.
+- [x] `ProviderFollowSemanticTests`의 `Task.sleep(20ms)` 대기를 `waitUntil` 헬퍼 패턴으로 통일한다.
+- [x] `./scripts/dev.sh build`
+- [x] `./scripts/dev.sh test`
+- [x] 한 커밋으로 정리한다. `Co-Authored-By`는 쓰지 않는다.

@@ -68,7 +68,7 @@ struct ProviderFollowSemanticTests {
         settings.setOverride(.claudeAPI)
         activeProvider.send(.gptAPI)
 
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(!(await waitUntil(timeoutNanoseconds: 50_000_000) { settings.effectiveProvider != .claudeAPI }))
         #expect(settings.effectiveProvider == .claudeAPI)
     }
 
@@ -152,7 +152,7 @@ struct ProviderFollowSemanticTests {
         settings.setOverride(.gptAPI)
         activeProvider.send(.geminiAPI)
 
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(!(await waitUntil(timeoutNanoseconds: 50_000_000) { settings.effectiveProvider != .gptAPI }))
         #expect(settings.effectiveProvider == .gptAPI)
     }
 
