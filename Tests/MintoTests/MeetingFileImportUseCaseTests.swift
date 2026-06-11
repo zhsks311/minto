@@ -41,6 +41,8 @@ struct MeetingFileImportUseCaseTests {
         #expect(summary.receivedTranscript?.contains("[00:02] 셋 문장") == true)
         #expect(store.savedRecords == [record])
         #expect(useCase.state.stage == .completed)
+        #expect(useCase.state.stage.title == "가져오기 완료")
+        #expect(useCase.state.detailText == "'요약 제목'이 목록에 추가됐어요.")
         #expect(useCase.state.record == record)
     }
 

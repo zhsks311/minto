@@ -1245,6 +1245,7 @@ public struct MeetingLibraryView: View {
                 }
                 Spacer()
                 readingModeButton
+                summaryRetryHeaderButton(record)
 
                 Button {
                     exportRecord = record
@@ -1265,6 +1266,13 @@ public struct MeetingLibraryView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(record.transcript.isEmpty)
+            }
+            if !record.summary.isPlainFallback,
+               let retryMessage = retryError?.id == record.id ? retryError?.message : nil {
+                Text(retryMessage)
+                    .font(.system(size: 12))
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             detailTabs
         }
@@ -1314,6 +1322,29 @@ public struct MeetingLibraryView: View {
         .controlSize(.small)
         .help(useReadableDetailText ? "표준 글자 크기로 보기" : "큰 글자 크기로 보기")
         .accessibilityLabel(useReadableDetailText ? "표준 글자 크기로 보기" : "큰 글자 크기로 보기")
+    }
+
+    @ViewBuilder
+    private func summaryRetryHeaderButton(_ record: MeetingRecord) -> some View {
+        if !record.summary.isPlainFallback {
+            let isThisRetrying = retryingRecordID == record.id
+            Button {
+                retrySummary(for: record)
+            } label: {
+                HStack(spacing: 6) {
+                    if isThisRetrying {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Text("다시 요약")
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(hasLiveMeeting || retryingRecordID != nil)
+            .help("현재 회의 전사로 요약을 다시 만들어요")
+        }
     }
 
     private func whyThisResult(_ record: MeetingRecord) -> some View {
@@ -1373,26 +1404,10 @@ public struct MeetingLibraryView: View {
             } else {
                 HStack(spacing: 8) {
                     Button("다시 요약") {
-                        retryError = nil
-                        retryingRecordID = record.id
-                        Task {
-                            let useCase = MeetingSummaryRetryUseCase()
-                            // record: 버튼 누른 시점의 복사본을 캡처 — 다른 회의 선택 후에도 올바른 record로 재시도
-                            let result = await useCase.retry(record: record)
-                            retryingRecordID = nil
-                            if case .failure(let reason) = result {
-                                let message: String
-                                if case .saveFailed = reason {
-                                    message = "다시 요약 결과 저장에 실패했어요. 다시 시도해 보세요."
-                                } else {
-                                    message = "요약을 다시 만들지 못했어요. 다시 시도해 보세요."
-                                }
-                                retryError = (id: record.id, message: message)
-                            }
-                        }
+                        retrySummary(for: record)
                     }
                     .buttonStyle(.bordered)
-                    .disabled(hasLiveMeeting)
+                    .disabled(hasLiveMeeting || retryingRecordID != nil)
 
                     if let errorMessage = thisError {
                         Text(errorMessage)
@@ -2487,6 +2502,30 @@ public struct MeetingLibraryView: View {
     private func copyTranscript(_ record: MeetingRecord) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(record.transcript.map(\.text).joined(separator: "\n"), forType: .string)
+    }
+
+    private func retrySummary(for record: MeetingRecord) {
+        guard !hasLiveMeeting, retryingRecordID == nil else { return }
+
+        retryError = nil
+        retryingRecordID = record.id
+        Task { @MainActor in
+            let useCase = MeetingSummaryRetryUseCase()
+            let result = await useCase.retry(record: record)
+            if retryingRecordID == record.id {
+                retryingRecordID = nil
+            }
+            if case .failure(let reason) = result {
+                retryError = (id: record.id, message: retryFailureMessage(for: reason))
+            }
+        }
+    }
+
+    private func retryFailureMessage(for reason: SummaryRetryFailureReason) -> String {
+        if case .saveFailed = reason {
+            return "다시 요약 결과 저장에 실패했어요. 다시 시도해 보세요."
+        }
+        return "요약을 다시 만들지 못했어요. 다시 시도해 보세요."
     }
 
     private func copyMarkdown(_ text: String) {

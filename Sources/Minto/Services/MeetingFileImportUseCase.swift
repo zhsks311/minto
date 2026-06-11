@@ -28,7 +28,7 @@ public enum MeetingFileImportStage: String, Sendable, Equatable {
         case .saving:
             return "저장 중"
         case .completed:
-            return "회의록 생성 완료"
+            return "가져오기 완료"
         case .failed:
             return "파일 가져오기 실패"
         case .cancelled:
@@ -271,7 +271,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 stage: .completed,
                 progress: 1,
                 fileName: fileName,
-                detailText: "\(record.title) 회의록을 만들었습니다.",
+                detailText: "'\(record.title)'이 목록에 추가됐어요.",
                 record: record
             ))
             return record
