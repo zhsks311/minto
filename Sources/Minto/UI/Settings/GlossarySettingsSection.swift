@@ -72,9 +72,18 @@ struct GlossarySettingsSection: View {
 
     private var candidateSuggestionsArea: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("제안된 용어")
-                .font(.caption.weight(.bold))
-                .foregroundColor(.accentColor)
+            HStack(spacing: 8) {
+                Text("제안된 용어")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(.accentColor)
+                Spacer()
+                Button("모두 무시") {
+                    glossaryStore.dismissAllCandidates()
+                }
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
             Text("회의에서 발견한 용어예요. 추가하면 등록 폼이 열려요.")
                 .font(.caption2)
                 .foregroundColor(.secondary)

@@ -165,6 +165,15 @@ public final class GlossaryStore: ObservableObject {
         pendingCandidates = next
     }
 
+    /// 쌓인 후보 전체를 무시(제거)한다. 설정 화면의 "모두 무시" 버튼 경로.
+    public func dismissAllCandidates() {
+        guard !pendingCandidates.isEmpty else { return }
+        let count = pendingCandidates.count
+        guard save(entries, pendingCandidates: []) else { return }
+        pendingCandidates = []
+        Log.store.info("glossary candidates dismissed all count=\(count, privacy: .public)")
+    }
+
     /// 기존 용어에 대한 별칭 제안을 승인한다. 사용자 클릭 경로에서만 호출한다.
     public func approveAliasSuggestion(_ id: UUID) {
         guard let suggestion = pendingAliases.first(where: { $0.id == id }) else { return }

@@ -374,6 +374,29 @@ struct GlossaryStoreTests {
         #expect(reloaded.pendingCandidates.isEmpty)
     }
 
+    @Test("dismissAllCandidates는 후보 전체를 제거하고 영속한다 — 등록된 용어는 유지")
+    func dismissAllCandidatesRemovesAllAndPersists() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(store.add(canonical: "Liquibase") == true)
+        store.addCandidates([
+            GlossaryCandidate(term: "국가재정법"),
+            GlossaryCandidate(term: "자유무역협정"),
+            GlossaryCandidate(term: "조달사업에 관한 법률")
+        ])
+        #expect(store.pendingCandidates.count == 3)
+
+        store.dismissAllCandidates()
+        #expect(store.pendingCandidates.isEmpty)
+        #expect(store.entries.count == 1)
+
+        let reloaded = GlossaryStore(fileURL: url, meetingsPublisher: nil)
+        #expect(reloaded.pendingCandidates.isEmpty)
+        #expect(reloaded.entries.count == 1)
+    }
+
     @Test("approveCandidate는 해당 후보를 제거하고 영속한다")
     func approveCandidateRemovesAndPersists() throws {
         let url = tempFile()
