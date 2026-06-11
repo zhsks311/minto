@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import Combine
 @testable import MintoCore
 
 @Suite("Provider follow 시맨틱 + 마이그레이션", .serialized)
@@ -20,6 +21,24 @@ struct ProviderFollowSemanticTests {
     }
 
     @MainActor
+    @Test("요약 서비스: 활성 provider publisher 변경만으로 effectiveProvider를 갱신한다")
+    func summaryFollowsActivePublisherWithoutManualRefresh() async {
+        let defaults = InMemoryUserDefaults()
+        let activeProvider = CurrentValueSubject<LLMProviderSelection, Never>(.gptAPI)
+        let settings = LLMSummarySettingsService(
+            defaults: defaults,
+            activeProvider: { activeProvider.value },
+            activeProviderPublisher: activeProvider.eraseToAnyPublisher()
+        )
+
+        #expect(settings.effectiveProvider == .gptAPI)
+
+        activeProvider.send(.codex)
+
+        #expect(await waitUntil { settings.effectiveProvider == .codex })
+    }
+
+    @MainActor
     @Test("요약 서비스: override 설정 시 활성 provider와 무관하게 유지된다")
     func summaryOverrideIgnoresActive() {
         let defaults = InMemoryUserDefaults()
@@ -36,11 +55,29 @@ struct ProviderFollowSemanticTests {
     }
 
     @MainActor
+    @Test("요약 서비스: override가 있으면 활성 provider publisher 변경에 영향받지 않는다")
+    func summaryOverrideIgnoresActivePublisher() async {
+        let defaults = InMemoryUserDefaults()
+        let activeProvider = CurrentValueSubject<LLMProviderSelection, Never>(.codex)
+        let settings = LLMSummarySettingsService(
+            defaults: defaults,
+            activeProvider: { activeProvider.value },
+            activeProviderPublisher: activeProvider.eraseToAnyPublisher()
+        )
+
+        settings.setOverride(.claudeAPI)
+        activeProvider.send(.gptAPI)
+
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(settings.effectiveProvider == .claudeAPI)
+    }
+
+    @MainActor
     @Test("요약 서비스: override 제거 후 활성 provider를 따른다")
     func summaryClearOverrideFallsBackToActive() {
         let defaults = InMemoryUserDefaults()
-        var active: LLMProviderSelection = .gptAPI
-        let settings = LLMSummarySettingsService(defaults: defaults, activeProvider: { active })
+        let activeProvider = CurrentValueSubject<LLMProviderSelection, Never>(.gptAPI)
+        let settings = LLMSummarySettingsService(defaults: defaults, activeProvider: { activeProvider.value })
 
         settings.setOverride(.claudeAPI)
         #expect(settings.effectiveProvider == .claudeAPI)
@@ -51,7 +88,7 @@ struct ProviderFollowSemanticTests {
         #expect(settings.effectiveProvider == .gptAPI)
 
         // 활성 변경 → effective도 변경
-        active = .codex
+        activeProvider.send(.codex)
         settings.refreshEffective()
         #expect(settings.effectiveProvider == .codex)
     }
@@ -70,6 +107,24 @@ struct ProviderFollowSemanticTests {
     }
 
     @MainActor
+    @Test("답변 서비스: 활성 provider publisher 변경만으로 effectiveProvider를 갱신한다")
+    func answerFollowsActivePublisherWithoutManualRefresh() async {
+        let defaults = InMemoryUserDefaults()
+        let activeProvider = CurrentValueSubject<LLMProviderSelection, Never>(.codex)
+        let settings = MeetingSearchAnswerSettingsService(
+            defaults: defaults,
+            activeProvider: { activeProvider.value },
+            activeProviderPublisher: activeProvider.eraseToAnyPublisher()
+        )
+
+        #expect(settings.effectiveProvider == .codex)
+
+        activeProvider.send(.geminiAPI)
+
+        #expect(await waitUntil { settings.effectiveProvider == .geminiAPI })
+    }
+
+    @MainActor
     @Test("답변 서비스: override 설정 시 활성 provider와 무관하게 유지된다")
     func answerOverrideIgnoresActive() {
         let defaults = InMemoryUserDefaults()
@@ -84,18 +139,36 @@ struct ProviderFollowSemanticTests {
     }
 
     @MainActor
+    @Test("답변 서비스: override가 있으면 활성 provider publisher 변경에 영향받지 않는다")
+    func answerOverrideIgnoresActivePublisher() async {
+        let defaults = InMemoryUserDefaults()
+        let activeProvider = CurrentValueSubject<LLMProviderSelection, Never>(.codex)
+        let settings = MeetingSearchAnswerSettingsService(
+            defaults: defaults,
+            activeProvider: { activeProvider.value },
+            activeProviderPublisher: activeProvider.eraseToAnyPublisher()
+        )
+
+        settings.setOverride(.gptAPI)
+        activeProvider.send(.geminiAPI)
+
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(settings.effectiveProvider == .gptAPI)
+    }
+
+    @MainActor
     @Test("답변 서비스: override 제거 후 활성 provider를 따른다")
     func answerClearOverrideFallsBackToActive() {
         let defaults = InMemoryUserDefaults()
-        var active: LLMProviderSelection = .gptAPI
-        let settings = MeetingSearchAnswerSettingsService(defaults: defaults, activeProvider: { active })
+        let activeProvider = CurrentValueSubject<LLMProviderSelection, Never>(.gptAPI)
+        let settings = MeetingSearchAnswerSettingsService(defaults: defaults, activeProvider: { activeProvider.value })
 
         settings.setOverride(.claudeAPI)
         settings.clearOverride()
         settings.refreshEffective()
         #expect(settings.effectiveProvider == .gptAPI)
 
-        active = .geminiAPI
+        activeProvider.send(.geminiAPI)
         settings.refreshEffective()
         #expect(settings.effectiveProvider == .geminiAPI)
     }
@@ -201,5 +274,21 @@ struct ProviderFollowSemanticTests {
         // active가 .none이면 "같으면 follow" 조건이 성립하지 않으므로 override 유지
         #expect(settings.hasOverride)
         #expect(settings.effectiveProvider == .gptAPI)
+    }
+
+    @MainActor
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 500_000_000,
+        _ condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let step: UInt64 = 10_000_000
+        let attempts = max(1, Int(timeoutNanoseconds / step))
+        for _ in 0..<attempts {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: step)
+        }
+        return condition()
     }
 }

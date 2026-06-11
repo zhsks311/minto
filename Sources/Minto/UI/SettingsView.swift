@@ -168,9 +168,6 @@ public struct SettingsView: View {
             if provider != .none {
                 lastLLMProviderRaw = provider.rawValue
             }
-            // 활성 provider 변경 → follow 중인 서비스들의 effectiveProvider 갱신
-            summarySettings.refreshEffective()
-            answerSettings.refreshEffective()
             apiKeyInputs = [:]
             loginError = nil
         }

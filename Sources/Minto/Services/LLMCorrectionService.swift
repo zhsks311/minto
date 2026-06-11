@@ -1,6 +1,5 @@
 import os
 import Foundation
-import SwiftUI
 
 public struct LLMCorrectionContext: Sendable, Equatable {
     public let topic: String
@@ -30,9 +29,25 @@ public final class LLMCorrectionService: ObservableObject {
     public typealias Provider = LLMProviderSelection
 
     public static let shared = LLMCorrectionService()
-    private init() {}
+    public static let selectedProviderKey = "llmProvider"
 
-    @AppStorage("llmProvider") public var selectedProvider: Provider = .none
+    private let defaults: UserDefaults
+
+    @Published public var selectedProvider: Provider {
+        didSet {
+            defaults.set(selectedProvider.rawValue, forKey: Self.selectedProviderKey)
+        }
+    }
+
+    private init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        if let rawProvider = defaults.string(forKey: Self.selectedProviderKey),
+           let provider = Provider(rawValue: rawProvider) {
+            selectedProvider = provider
+        } else {
+            selectedProvider = .none
+        }
+    }
 
     // 교정 진행 중 카운터 (ViewModel에서 UI 인디케이터에 사용)
     @Published public var activeCorrections: Int = 0

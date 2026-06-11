@@ -1,9 +1,12 @@
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 public final class LLMSummarySettingsService: ObservableObject {
-    public static let shared = LLMSummarySettingsService()
+    public static let shared = LLMSummarySettingsService(
+        activeProviderPublisher: LLMCorrectionService.shared.$selectedProvider.eraseToAnyPublisher()
+    )
 
     public static let enabledKey = "llmSummaryEnabled"
     public static let providerKey = "llmSummaryProvider"
@@ -14,6 +17,7 @@ public final class LLMSummarySettingsService: ObservableObject {
     private let defaults: UserDefaults
     /// 활성 provider를 반환하는 클로저. 순환 참조 없이 LLMCorrectionService.shared를 참조한다.
     private let activeProvider: @MainActor () -> LLMProviderSelection
+    private var activeProviderCancellable: AnyCancellable?
 
     @Published public var isEnabled: Bool {
         didSet { defaults.set(isEnabled, forKey: Self.enabledKey) }
@@ -42,7 +46,8 @@ public final class LLMSummarySettingsService: ObservableObject {
 
     public init(
         defaults: UserDefaults = .standard,
-        activeProvider: (@MainActor () -> LLMProviderSelection)? = nil
+        activeProvider: (@MainActor () -> LLMProviderSelection)? = nil,
+        activeProviderPublisher: AnyPublisher<LLMProviderSelection, Never>? = nil
     ) {
         self.defaults = defaults
         self.activeProvider = activeProvider ?? { LLMCorrectionService.shared.selectedProvider }
@@ -56,9 +61,11 @@ public final class LLMSummarySettingsService: ObservableObject {
             self.effectiveProvider = selection
         } else {
             self.providerOverride = nil
-            // 초기화 시점에는 아직 activeProvider 클로저를 안전하게 호출할 수 없으므로 .none으로 임시 설정.
-            // refreshEffective()를 통해 올바른 값으로 갱신된다.
             self.effectiveProvider = .none
+        }
+        refreshEffective()
+        if let activeProviderPublisher {
+            startObservingActiveProvider(publisher: activeProviderPublisher)
         }
     }
 
@@ -69,6 +76,16 @@ public final class LLMSummarySettingsService: ObservableObject {
         if effectiveProvider != newEffective {
             effectiveProvider = newEffective
         }
+    }
+
+    private func startObservingActiveProvider(publisher: AnyPublisher<LLMProviderSelection, Never>) {
+        guard activeProviderCancellable == nil else { return }
+        activeProviderCancellable = publisher
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.refreshEffective()
+                }
+            }
     }
 
     /// override를 명시적으로 설정한다. .none을 전달하면 follow로 전환한다.

@@ -1,9 +1,12 @@
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 public final class MeetingSearchAnswerSettingsService: ObservableObject {
-    public static let shared = MeetingSearchAnswerSettingsService()
+    public static let shared = MeetingSearchAnswerSettingsService(
+        activeProviderPublisher: LLMCorrectionService.shared.$selectedProvider.eraseToAnyPublisher()
+    )
 
     public static let enabledKey = "meetingSearchAnswerEnabled"
     public static let providerKey = "meetingSearchAnswerProvider"
@@ -13,6 +16,7 @@ public final class MeetingSearchAnswerSettingsService: ObservableObject {
     private let defaults: UserDefaults
     /// 활성 provider를 반환하는 클로저. 순환 참조 없이 LLMCorrectionService.shared를 참조한다.
     private let activeProvider: @MainActor () -> LLMProviderSelection
+    private var activeProviderCancellable: AnyCancellable?
 
     @Published public var isEnabled: Bool {
         didSet { defaults.set(isEnabled, forKey: Self.enabledKey) }
@@ -37,7 +41,8 @@ public final class MeetingSearchAnswerSettingsService: ObservableObject {
 
     public init(
         defaults: UserDefaults = .standard,
-        activeProvider: (@MainActor () -> LLMProviderSelection)? = nil
+        activeProvider: (@MainActor () -> LLMProviderSelection)? = nil,
+        activeProviderPublisher: AnyPublisher<LLMProviderSelection, Never>? = nil
     ) {
         self.defaults = defaults
         self.activeProvider = activeProvider ?? { LLMCorrectionService.shared.selectedProvider }
@@ -52,6 +57,10 @@ public final class MeetingSearchAnswerSettingsService: ObservableObject {
             self.providerOverride = nil
             self.effectiveProvider = .none
         }
+        refreshEffective()
+        if let activeProviderPublisher {
+            startObservingActiveProvider(publisher: activeProviderPublisher)
+        }
     }
 
     /// effectiveProvider를 현재 override/active 상태에 맞게 갱신한다.
@@ -61,6 +70,16 @@ public final class MeetingSearchAnswerSettingsService: ObservableObject {
         if effectiveProvider != newEffective {
             effectiveProvider = newEffective
         }
+    }
+
+    private func startObservingActiveProvider(publisher: AnyPublisher<LLMProviderSelection, Never>) {
+        guard activeProviderCancellable == nil else { return }
+        activeProviderCancellable = publisher
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.refreshEffective()
+                }
+            }
     }
 
     /// override를 명시적으로 설정한다. .none을 전달하면 follow로 전환한다.
