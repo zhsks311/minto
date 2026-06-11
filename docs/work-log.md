@@ -23,6 +23,7 @@
 | 12 | 2026-06-10 | [계정 provider 모델 카탈로그 갱신](work-log/2026-06-10-12-account-provider-model-refresh.md) | GPT/Gemini/Copilot 계정 로그인 모델 목록 갱신, 최신 모델 실패 시 안정 모델 폴백 |
 | 13 | 2026-06-11 | [용어집 별칭 자동 수집](work-log/2026-06-11-13-alias-auto-collect.md) | 교정 diff 기반 alias 제안, 저장소 pendingAliases, 설정 UI 승인/무시, 후보 LLM 프리필 |
 | 14 | 2026-06-12 | [별칭 자동 수집 리뷰 반영](work-log/2026-06-12-14-alias-auto-collect-review-fixes.md) | dismissed alias 영속 차단, 혼재 alias 거부, 프리필 예산/파싱/덮어쓰기 방어 |
+| 15 | 2026-06-12 | [Confluence 연결 설정 UX 개선](work-log/2026-06-12-15-confluence-connection-validation-ux.md) | 연결 확인 성공 후 연동 저장, 검색 실패 사유 분리, 입력창 클릭 영역 확대 |
 
 ## 남은 과제
 
