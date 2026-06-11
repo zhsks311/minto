@@ -6,6 +6,8 @@ import Combine
 public final class GlossaryStore: ObservableObject {
     public static let shared = GlossaryStore()
     public static let schemaVersion = 1
+    nonisolated public static let uncategorizedCategoryName = "기타"
+    nonisolated public static let defaultCategoryPresets = ["개발", "인프라", "제품", "조직", "기타"]
 
     @Published public private(set) var entries: [GlossaryEntry] = []
     @Published public private(set) var pendingCandidates: [GlossaryCandidate] = []
@@ -381,6 +383,24 @@ public final class GlossaryStore: ObservableObject {
         return result.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
+    /// 설정 화면과 회의 시작 시트가 공유하는 분류별 묶음 목록.
+    public var groupedEntriesByCategory: [(category: String, entries: [GlossaryEntry])] {
+        Self.groupedEntriesByCategory(entries)
+    }
+
+    public var categorySelectionNames: [String] {
+        groupedEntriesByCategory.map(\.category)
+    }
+
+    /// 선택된 분류에 포함되는 usable 용어만 반환한다. "기타"는 빈 분류 항목을 뜻한다.
+    public func entries(inCategories selectedCategories: Set<String>) -> [GlossaryEntry] {
+        let selected = Set(selectedCategories.map(Self.displayCategoryName(for:)))
+        guard !selected.isEmpty else { return [] }
+        return entries.filter { entry in
+            entry.isUsable && selected.contains(Self.displayCategoryName(for: entry.category))
+        }
+    }
+
     public func setEnabled(_ id: UUID, enabled: Bool) {
         var nextEntries = entries
         guard let index = nextEntries.firstIndex(where: { $0.id == id }) else { return }
@@ -508,6 +528,29 @@ public final class GlossaryStore: ObservableObject {
             result.append(trimmed)
         }
         return result
+    }
+
+    nonisolated public static func displayCategoryName(for category: String) -> String {
+        let trimmed = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? uncategorizedCategoryName : trimmed
+    }
+
+    nonisolated public static func groupedEntriesByCategory(
+        _ entries: [GlossaryEntry]
+    ) -> [(category: String, entries: [GlossaryEntry])] {
+        let grouped = Dictionary(grouping: entries) { entry in
+            displayCategoryName(for: entry.category)
+        }
+        return grouped.keys.sorted { lhs, rhs in
+            let lhsIndex = defaultCategoryPresets.firstIndex(of: lhs) ?? Int.max
+            let rhsIndex = defaultCategoryPresets.firstIndex(of: rhs) ?? Int.max
+            if lhsIndex != rhsIndex { return lhsIndex < rhsIndex }
+            return lhs.localizedStandardCompare(rhs) == .orderedAscending
+        }
+        .map { category in
+            let entries = grouped[category] ?? []
+            return (category: category, entries: entries)
+        }
     }
 
     nonisolated private static func matchingEntry(for canonical: String, in entries: [GlossaryEntry]) -> GlossaryEntry? {
