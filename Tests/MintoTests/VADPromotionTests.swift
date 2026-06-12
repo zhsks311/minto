@@ -92,6 +92,38 @@ struct VoiceActivityDetectorFactoryPreferenceTests {
         #expect(detector is VADProcessor)
     }
 
+    @Test("makeNext는 엔진 종류가 같으면 기존 인스턴스를 재사용한다")
+    func makeNextReusesSameEngineKind() {
+        let defaults = InMemoryUserDefaults()
+        defaults.set(VADEngineID.energy.rawValue, forKey: VADEnginePreferences.selectedEngineKey)
+        let current = VADProcessor()
+
+        let next = VoiceActivityDetectorFactory.makeNext(
+            current: current,
+            environment: missingModelEnvironment,
+            defaults: defaults
+        )
+
+        #expect(next === current)
+    }
+
+    @Test("makeNext는 엔진 종류가 바뀌면 새 인스턴스로 교체한다")
+    func makeNextSwapsWhenEngineKindChanges() throws {
+        let modelRoot = try makeModelBundleFixture()
+        defer { try? FileManager.default.removeItem(at: modelRoot) }
+        let defaults = InMemoryUserDefaults()
+        defaults.set(VADEngineID.silero.rawValue, forKey: VADEnginePreferences.selectedEngineKey)
+        let current = VADProcessor()
+
+        let next = VoiceActivityDetectorFactory.makeNext(
+            current: current,
+            environment: ["MINTO_FLUIDAUDIO_MODEL_DIR": modelRoot.path],
+            defaults: defaults
+        )
+
+        #expect(next is SileroVADProcessor)
+    }
+
     @Test("기본 모델 경로는 temp가 아니라 Application Support 아래다")
     func defaultModelDirectoryIsPersistent() {
         let path = SileroVADProcessor.Configuration.defaultModelDirectory.path
@@ -179,7 +211,7 @@ struct TranscriptionViewModelVADRecreationTests {
             sttService: stt,
             audioSource: audioSource,
             vadProcessor: initialVAD,
-            vadProcessorFactory: {
+            vadProcessorFactory: { _ in
                 let vad = RecreationStubVAD()
                 madeVADs.append(vad)
                 return vad

@@ -36,6 +36,21 @@ public enum VADEnginePreferences {
 }
 
 public enum VoiceActivityDetectorFactory {
+    /// 녹음 시작 시 설정을 다시 읽되, 엔진 종류가 같으면 기존 인스턴스를 유지한다.
+    /// Silero는 첫 process에서 모델을 로드하므로, 매 녹음 재생성은 워밍업된 모델을
+    /// 버리고 첫 청크 처리에 불필요한 지연을 만든다.
+    public static func makeNext(
+        current: any VoiceActivityDetector,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        defaults: UserDefaults = .standard
+    ) -> any VoiceActivityDetector {
+        let desired = makeDefault(environment: environment, defaults: defaults)
+        if type(of: desired) == type(of: current) {
+            return current
+        }
+        return desired
+    }
+
     public static func makeDefault(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         defaults: UserDefaults = .standard

@@ -54,8 +54,10 @@ public final class TranscriptionViewModel: ObservableObject {
     private var audioSource: any AudioSourceProtocol
     private let audioSourceFactory: @MainActor (AudioInputMode) -> any AudioSourceProtocol
     private var vadProcessor: any VoiceActivityDetector
-    /// nil이면 녹음 시작마다 설정을 다시 읽어 VAD를 재생성한다. (설정 변경은 다음 녹음부터 적용)
-    private let vadProcessorFactory: (@MainActor () -> any VoiceActivityDetector)?
+    /// nil이면 주입된 VAD를 그대로 쓴다. 있으면 녹음 시작마다 현재 인스턴스를 넘겨
+    /// 다음 인스턴스를 결정한다 — 같은 엔진이면 재사용해 모델 워밍업을 유지하고,
+    /// 설정이 바뀌었으면 교체한다. (설정 변경은 다음 녹음부터 적용)
+    private let vadProcessorFactory: (@MainActor (any VoiceActivityDetector) -> any VoiceActivityDetector)?
     /// nil이면 사용 시점에 설정/환경변수에서 해석한다. (회의 중 토글이 현재 녹음에도 즉시 반영)
     private let injectedEmptyFinalRepairPolicy: EmptyFinalRepairPolicy?
     private let audioSampleBuffer: TranscriptionAudioSampleBuffer
@@ -94,7 +96,7 @@ public final class TranscriptionViewModel: ObservableObject {
             audioSource: MicrophoneSource(),
             vadProcessor: VoiceActivityDetectorFactory.makeDefault(),
             audioSourceFactory: AudioSourceFactory.makeSource(for:),
-            vadProcessorFactory: { VoiceActivityDetectorFactory.makeDefault() }
+            vadProcessorFactory: { VoiceActivityDetectorFactory.makeNext(current: $0) }
         )
     }
 
@@ -105,7 +107,7 @@ public final class TranscriptionViewModel: ObservableObject {
         summaryService: any TranscriptionSummaryGenerating = SummaryService.shared,
         emptyFinalRepairPolicy: EmptyFinalRepairPolicy? = nil,
         audioSourceFactory: (@MainActor (AudioInputMode) -> any AudioSourceProtocol)? = nil,
-        vadProcessorFactory: (@MainActor () -> any VoiceActivityDetector)? = nil
+        vadProcessorFactory: (@MainActor (any VoiceActivityDetector) -> any VoiceActivityDetector)? = nil
     ) {
         let initialAudioSource = audioSource
         self.sttService = sttService
@@ -218,9 +220,9 @@ public final class TranscriptionViewModel: ObservableObject {
         errorMessage = nil
         isFinalizingMeeting = false
         audioSampleBuffer.reset()
-        // VAD 엔진 설정 변경은 다음 녹음부터 적용 — 녹음 시작 시점에 설정을 다시 읽어 재생성한다.
+        // VAD 엔진 설정 변경은 다음 녹음부터 적용 — 녹음 시작 시점에 설정을 다시 읽는다.
         if let vadProcessorFactory {
-            vadProcessor = vadProcessorFactory()
+            vadProcessor = vadProcessorFactory(vadProcessor)
         }
         vadProcessor.reset()
         let appliedVADEngine = vadProcessor is SileroVADProcessor ? "silero" : "energy"

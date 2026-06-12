@@ -55,9 +55,10 @@ public final class SileroVADModelStore: ObservableObject {
                     config: .default,
                     modelDirectory: modelDirectory,
                     progressHandler: { progress in
+                        // 백그라운드 스레드 콜백 — 상태 접근은 MainActor Task 안에서만 한다.
                         let fraction = progress.fractionCompleted
-                        Task { @MainActor in
-                            guard case .downloading = self.state else { return }
+                        Task { @MainActor [weak self] in
+                            guard let self, case .downloading = self.state else { return }
                             self.state = .downloading(fraction)
                         }
                     }
