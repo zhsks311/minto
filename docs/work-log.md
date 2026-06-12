@@ -27,6 +27,7 @@
 | 16 | 2026-06-12 | [회의 시작 용어집 묶음 선택](work-log/2026-06-12-16-glossary-set-selection.md) | 회의 시작/파일 임포트 용어집을 분류 선택 + 직접 입력 방식으로 개편 |
 | 17 | 2026-06-12 | [용어집 묶음 선택 리뷰 반영](work-log/2026-06-12-17-glossary-set-selection-review-fixes.md) | 선택 UI disabled-only 분류 제외, defaults 주입, 선택 영속 helper 공유 |
 | 18 | 2026-06-12 | [진단 로그 정비](work-log/2026-06-12-18-diagnostic-log-cleanup.md) | OAuth 실패 body prefix, 모델/provider 변경, 검색 답변 생성 결과를 민감 원문 없이 기록 |
+| 19 | 2026-06-12 | [파일 임포트 교정 병렬 파이프라인](work-log/2026-06-12-19-file-import-correction-pipeline.md) | LLM 교정을 STT 뒤에 숨기는 동시 상한 파이프라인으로 임포트 wall-clock을 STT 시간으로 수렴 |
 
 ## 남은 과제
 

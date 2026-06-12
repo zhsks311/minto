@@ -170,6 +170,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
     private let summaryService: any MeetingFileImportSummaryGenerating
     private let store: any MeetingFileImportStoring
     private let chunkSeconds: TimeInterval
+    private let maxConcurrentCorrections: Int
     private let now: () -> Date
     private let defaults: UserDefaults
 
@@ -180,6 +181,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
         summaryService: any MeetingFileImportSummaryGenerating = SummaryService.shared,
         store: any MeetingFileImportStoring = MeetingStore.shared,
         chunkSeconds: TimeInterval = 30,
+        maxConcurrentCorrections: Int = 3,
         now: @escaping () -> Date = Date.init,
         defaults: UserDefaults = .standard
     ) {
@@ -189,6 +191,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
         self.summaryService = summaryService
         self.store = store
         self.chunkSeconds = max(1, chunkSeconds)
+        self.maxConcurrentCorrections = max(1, maxConcurrentCorrections)
         self.now = now
         self.defaults = defaults
     }
@@ -219,8 +222,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             document: document
         )
         var extractionDuration: TimeInterval = 0
-        var segments: [Segment] = []
-        var previousContext: [String] = []
+        let correctionPipeline = ImportCorrectionPipeline(maxConcurrent: maxConcurrentCorrections)
 
         Log.importer.info("import start file=\(fileName, privacy: .public) engine=\(engineID.rawValue, privacy: .public)")
         do {
@@ -243,17 +245,42 @@ public final class MeetingFileImportUseCase: ObservableObject {
                         glossary: glossary,
                         document: document,
                         shouldCorrect: shouldCorrect,
-                        segments: &segments,
-                        previousContext: &previousContext
+                        pipeline: correctionPipeline
                     )
                 }
             )
             extractionDuration = extraction.durationSeconds
-            Log.importer.info("import extract done file=\(fileName, privacy: .public) segments=\(segments.count, privacy: .public)")
+            Log.importer.info("import extract done file=\(fileName, privacy: .public) segments=\(correctionPipeline.segments.count, privacy: .public)")
             try Task.checkCancellation()
 
-            guard !segments.isEmpty else { throw MeetingFileImportError.emptyTranscript }
+            guard !correctionPipeline.segments.isEmpty else { throw MeetingFileImportError.emptyTranscript }
 
+            if correctionPipeline.totalCorrectionCount > 0 {
+                let pendingCount = correctionPipeline.totalCorrectionCount
+                update(
+                    .correcting,
+                    progress: 0.82,
+                    fileName: fileName,
+                    detail: "전사 다듬는 중 0/\(pendingCount)"
+                )
+                Log.importer.info("import correction drain start file=\(fileName, privacy: .public) pending=\(pendingCount, privacy: .public)")
+                await withTaskCancellationHandler {
+                    await correctionPipeline.drain { [weak self] done, total in
+                        self?.update(
+                            .correcting,
+                            progress: 0.82 + 0.03 * Double(done) / Double(max(1, total)),
+                            fileName: fileName,
+                            detail: "전사 다듬는 중 \(done)/\(total)"
+                        )
+                    }
+                } onCancel: {
+                    Task { @MainActor in correctionPipeline.cancelPendingCorrections() }
+                }
+                Log.importer.info("import corrections done file=\(fileName, privacy: .public) corrected=\(correctionPipeline.correctedCount, privacy: .public) fallback=\(correctionPipeline.fallbackCount, privacy: .public)")
+                try Task.checkCancellation()
+            }
+
+            let segments = correctionPipeline.segments
             update(.summarizing, progress: 0.86, fileName: fileName, detail: "회의 내용을 정리하고 있어요.")
             Log.importer.info("import summarize start file=\(fileName, privacy: .public)")
             let summary = await summaryService.generateFinal(
@@ -285,6 +312,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             ))
             return record
         } catch is CancellationError {
+            correctionPipeline.cancelPendingCorrections()
             Log.importer.info("import cancelled file=\(fileName, privacy: .public)")
             setState(MeetingFileImportState(
                 stage: .cancelled,
@@ -294,6 +322,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             ))
             throw CancellationError()
         } catch {
+            correctionPipeline.cancelPendingCorrections()
             let errorCase = String(describing: error).components(separatedBy: "(").first ?? String(describing: error)
             let nsError = error as NSError
             Log.importer.error("import failed file=\(fileName, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)")
@@ -316,8 +345,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
         glossary: String,
         document: String,
         shouldCorrect: Bool,
-        segments: inout [Segment],
-        previousContext: inout [String]
+        pipeline: ImportCorrectionPipeline
     ) async throws {
         try Task.checkCancellation()
         let progress = importProgress(for: chunk)
@@ -333,37 +361,28 @@ public final class MeetingFileImportUseCase: ObservableObject {
         let rawText = rawResult.segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawText.isEmpty else { return }
 
-        let finalText: String
-        if shouldCorrect {
-            update(
-                .correcting,
-                progress: min(progress + 0.02, 0.82),
-                fileName: fileName,
-                detail: "전사 다듬는 중 \(chunkLabel(chunk))"
-            )
-            let correctionContext = LLMCorrectionContext(
-                topic: topic,
-                glossary: glossary,
-                previousText: previousContext.suffix(5).joined(separator: "\n"),
-                runningSummary: "",
-                document: document
-            )
-            finalText = await correctionService.correct(text: rawText, context: correctionContext)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .nonEmpty ?? rawText
-            try Task.checkCancellation()
-        } else {
-            finalText = rawText
-        }
-
-        let segment = Segment(
+        // 문맥 스냅샷은 현재 청크를 추가하기 전에 떠야 "직전" 원문들만 담긴다.
+        let correctionContext = LLMCorrectionContext(
+            topic: topic,
+            glossary: glossary,
+            previousText: pipeline.contextSnapshot(),
+            runningSummary: "",
+            document: document
+        )
+        let segmentIndex = pipeline.appendRaw(Segment(
             id: rawResult.segment.id,
-            text: finalText,
+            text: rawText,
             timestamp: startedAt.addingTimeInterval(chunk.startSeconds),
             duration: chunk.durationSeconds
-        )
-        segments.append(segment)
-        previousContext.append(finalText)
+        ))
+        if shouldCorrect {
+            pipeline.dispatchCorrection(
+                at: segmentIndex,
+                rawText: rawText,
+                context: correctionContext,
+                using: correctionService
+            )
+        }
     }
 
     private func ensureSTTLoaded(_ engineID: SpeechEngineID) async throws {
@@ -454,6 +473,130 @@ public final class MeetingFileImportUseCase: ObservableObject {
             return String(format: "[%02d:%02d] %@", seconds / 60, seconds % 60, segment.text)
         }
         .joined(separator: "\n")
+    }
+}
+
+/// 파일 임포트 전사 교정 파이프라인.
+///
+/// STT는 ANE-bound라 직렬을 유지하고, 네트워크 대기인 LLM 교정만 동시 상한 안에서
+/// 백그라운드로 겹친다. segment 순서는 추가 시점 index로 고정되므로 교정 완료 순서와
+/// 무관하게 transcript 순서가 보존된다. 교정 실패/취소는 원문 유지(fail-soft).
+@MainActor
+final class ImportCorrectionPipeline {
+    private(set) var segments: [Segment] = []
+    private var rawTexts: [String] = []
+    private var correctionTasks: [Task<Void, Never>] = []
+    private let maxConcurrent: Int
+    private var runningCount = 0
+    private var slotWaiters: [CheckedContinuation<Bool, Never>] = []
+    private(set) var correctedCount = 0
+    private(set) var fallbackCount = 0
+
+    var totalCorrectionCount: Int { correctionTasks.count }
+
+    init(maxConcurrent: Int) {
+        self.maxConcurrent = max(1, maxConcurrent)
+    }
+
+    /// 직전 원문들로 교정 문맥을 만든다. 교정문 대기 없이 즉시 사용할 수 있어
+    /// 교정 호출 간 직렬 의존성이 생기지 않는다.
+    func contextSnapshot(limit: Int = 5) -> String {
+        rawTexts.suffix(limit).joined(separator: "\n")
+    }
+
+    func appendRaw(_ segment: Segment) -> Int {
+        segments.append(segment)
+        rawTexts.append(segment.text)
+        return segments.count - 1
+    }
+
+    func dispatchCorrection(
+        at index: Int,
+        rawText: String,
+        context: LLMCorrectionContext,
+        using service: any MeetingFileImportCorrecting
+    ) {
+        // [weak self]는 순환참조 방지용이고 격리는 @MainActor 상속이다. guard let 이후의
+        // 강참조 덕에 task가 하나라도 살아 있는 동안 pipeline은 해제되지 않는다.
+        let task = Task { [weak self] in
+            guard let self else { return }
+            guard await self.acquireSlot() else {
+                // 취소로 slot을 받지 못한 경우 — slot을 쥔 적이 없으므로 release 없이 끝낸다.
+                self.fallbackCount += 1
+                return
+            }
+            defer { self.releaseSlot() }
+            guard !Task.isCancelled else {
+                self.fallbackCount += 1
+                return
+            }
+            let corrected = await service.correct(text: rawText, context: context)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nonEmpty
+            if let corrected {
+                self.replaceText(at: index, with: corrected)
+                self.correctedCount += 1
+            } else {
+                self.fallbackCount += 1
+            }
+        }
+        correctionTasks.append(task)
+    }
+
+    func drain(onProgress: @MainActor (Int, Int) -> Void) async {
+        let total = correctionTasks.count
+        for (completed, task) in correctionTasks.enumerated() {
+            // 취소 시 남은 교정을 기다리지 않는다. 진행 중 task는 fail-soft로 알아서 끝나고,
+            // 호출부의 checkCancellation이 cancelled 경로로 빠지므로 결과는 버려진다.
+            if Task.isCancelled { break }
+            await task.value
+            onProgress(completed + 1, total)
+        }
+    }
+
+    func cancelPendingCorrections() {
+        for task in correctionTasks {
+            task.cancel()
+        }
+        // slot 대기자는 실행 중 task가 해제해 줄 때까지 잠들어 있으므로 직접 깨워야
+        // 취소가 즉시 전파된다. false로 재개된 task는 slot 없이 fallback으로 끝난다.
+        let waiters = slotWaiters
+        slotWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume(returning: false)
+        }
+    }
+
+    private func replaceText(at index: Int, with text: String) {
+        guard segments.indices.contains(index) else { return }
+        let original = segments[index]
+        segments[index] = Segment(
+            id: original.id,
+            text: text,
+            timestamp: original.timestamp,
+            duration: original.duration
+        )
+    }
+
+    /// slot을 얻으면 true, 취소로 깨워졌으면 false를 반환한다.
+    private func acquireSlot() async -> Bool {
+        guard !Task.isCancelled else { return false }
+        if runningCount < maxConcurrent {
+            runningCount += 1
+            return true
+        }
+        // true로 재개되면 releaseSlot()이 slot을 양도한 상태이므로 runningCount를 늘리지 않는다.
+        return await withCheckedContinuation { slotWaiters.append($0) }
+    }
+
+    private func releaseSlot() {
+        if slotWaiters.isEmpty {
+            runningCount -= 1
+        } else {
+            // decrement 후 resume 사이에 새 acquire가 끼어들어 상한을 넘는 것을 막기 위해
+            // count를 유지한 채 대기자에게 slot을 양도한다.
+            slotWaiters.removeFirst().resume(returning: true)
+        }
     }
 }
 
