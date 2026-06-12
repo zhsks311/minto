@@ -89,8 +89,11 @@ public final class MeetingStore: ObservableObject {
         return .success
     }
 
-    /// 회의를 삭제한다.
+    /// 회의를 삭제한다. 보존된 녹음 오디오가 있으면 함께 지운다.
     public func delete(_ id: UUID) {
+        if let audioFileName = meetings.first(where: { $0.id == id })?.audioFileName {
+            RecordingAudioArchiver.removeArchivedFile(named: audioFileName)
+        }
         let url = dir.appendingPathComponent("\(id.uuidString).json")
         try? FileManager.default.removeItem(at: url)
         meetings.removeAll { $0.id == id }

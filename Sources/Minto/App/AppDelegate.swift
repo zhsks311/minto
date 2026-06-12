@@ -61,7 +61,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 summary: summary ?? MeetingSummary(),
                 segments: segments,
                 topic: MeetingContext.shared.topic,
-                duration: self.viewModel.recordingDuration
+                duration: self.viewModel.recordingDuration,
+                audioFileName: self.viewModel.lastArchivedAudioFileName
             )
 
             // 메모리에 남은 tail 세그먼트를 보고서에 기록. evict된 배치는 이미 .transcriptionNeedsFlush로
@@ -78,6 +79,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             switch saveResult {
             case .skippedEmpty:
                 // (a) 빈 회의: 데이터가 없으므로 맥락 초기화는 정상 진행.
+                // 참조하는 record가 없으므로 보존된 오디오도 같이 정리한다.
+                if let audioFileName = record.audioFileName {
+                    RecordingAudioArchiver.removeArchivedFile(named: audioFileName)
+                }
                 self.viewModel.errorMessage = "저장할 회의 내용이 없어요."
                 MeetingContext.shared.clear()
             case .success:
@@ -95,12 +100,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
 
     /// 전사 세그먼트 + 구조화 요약 → 저장용 MeetingRecord. 제목·길이를 해소한다.
     @MainActor
-    static func makeRecord(summary: MeetingSummary, segments: [Segment], topic: String, duration: TimeInterval) -> MeetingRecord {
+    static func makeRecord(
+        summary: MeetingSummary,
+        segments: [Segment],
+        topic: String,
+        duration: TimeInterval,
+        audioFileName: String? = nil
+    ) -> MeetingRecord {
         MeetingRecordFactory.makeRecord(
             summary: summary,
             segments: segments,
             topic: topic,
-            duration: duration
+            duration: duration,
+            audioFileName: audioFileName
         )
     }
 
@@ -122,6 +134,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         // 준비 전 녹음은 factory가 Energy VAD로 fail-soft 한다.
         if VADEnginePreferences.selectedEngine() == .silero {
             SileroVADModelStore.shared.prepareIfNeeded()
+        }
+        // 보관 기간이 지난 녹음 오디오 정리(파일 IO라 백그라운드).
+        Task.detached(priority: .utility) {
+            let removedCount = RecordingAudioArchiver.cleanupExpired()
+            if removedCount > 0 {
+                Log.audio.info("recording audio cleanup removed=\(removedCount, privacy: .public)")
+            }
         }
         Task {
             let savedEngine = SpeechEnginePreferences.selectedEngine()
