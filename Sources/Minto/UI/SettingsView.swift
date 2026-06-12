@@ -1940,10 +1940,7 @@ public struct SettingsView: View {
                 .onChange(of: recordingAudioRetentionEnabled) { oldValue, newValue in
                     logSettingChange(key: RecordingAudioArchiver.preferenceKey, oldValue: "\(oldValue)", newValue: "\(newValue)")
                 }
-                .onChange(of: recordingAudioRetentionDays) { oldValue, newValue in
-                    logSettingChange(key: RecordingAudioArchiver.retentionDaysKey, oldValue: "\(oldValue)", newValue: "\(newValue)")
-                }
-            Text("회의 오디오를 이 Mac에만 저장해요(외부 전송 없음). 화자 구분 같은 후처리에 사용돼요. 다음 녹음부터 적용돼요.")
+            Text("회의 오디오를 이 Mac에만 저장해요(외부 전송 없음, 약 115MB/시간). 화자 구분 같은 후처리에 사용돼요. 다음 녹음부터 적용돼요.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1955,6 +1952,10 @@ public struct SettingsView: View {
                     Text("90일").tag(90)
                 }
                 .pickerStyle(.menu)
+                // Toggle이 꺼지면 이 Picker가 사라지므로 onChange는 값을 소유한 뷰에 직접 건다.
+                .onChange(of: recordingAudioRetentionDays) { oldValue, newValue in
+                    logSettingChange(key: RecordingAudioArchiver.retentionDaysKey, oldValue: "\(oldValue)", newValue: "\(newValue)")
+                }
                 Text("기간이 지난 오디오는 앱 시작 시 자동으로 정리돼요. 회의록 텍스트는 그대로 남아요.")
                     .font(.caption)
                     .foregroundColor(.secondary)

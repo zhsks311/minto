@@ -344,9 +344,22 @@ public final class TranscriptionViewModel: ObservableObject {
             Log.app.info("recording started engine=\(engineID, privacy: .public)")
             startTimer()
         } catch {
+            // 시작 실패 — 열린 아카이브 파일을 정리한다(0프레임이라 빈 파일은 남지 않는다).
+            discardAudioArchiver()
             chunkContinuation?.finish()
             transcriptionTask?.cancel()
             errorMessage = "오디오 엔진 시작 실패: \(error.localizedDescription)"
+        }
+    }
+
+    /// 정상 종료(stopRecordingAndDrain)가 아닌 경로에서 아카이버를 닫는다.
+    /// 기록된 프레임이 없으면 finish()가 빈 파일을 지우고, 일부 기록됐다면
+    /// 파일은 record에 연결되지 않은 채 남아 보관 기간 정리가 수거한다.
+    private func discardAudioArchiver() {
+        guard let archiver = audioArchiver else { return }
+        audioArchiver = nil
+        Task {
+            _ = await archiver.finish()
         }
     }
 
@@ -562,6 +575,12 @@ public final class TranscriptionViewModel: ObservableObject {
     // MARK: - Error handling
 
     private func handleAudioError(_ error: AudioSourceError) {
+        defer {
+            // 에러로 녹음이 중단된 경우 아카이버를 닫는다(정상 종료는 drain에서 finish).
+            if !isRecording {
+                discardAudioArchiver()
+            }
+        }
         switch error {
         case .permissionDenied:
             isPermissionDenied = true
