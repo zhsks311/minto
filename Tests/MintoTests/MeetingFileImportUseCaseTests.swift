@@ -355,13 +355,15 @@ struct MeetingFileImportUseCaseTests {
         #expect(record.transcript.map(\.text) == ["corrected first", "raw second"])
     }
 
-    @Test("교정 문맥은 직전 청크들의 원문으로 구성된다")
-    func correctionContextUsesPreviousRawTexts() async throws {
+    @Test("배치 교정 문맥은 배치 첫 청크 직전의 원문들로 구성된다")
+    func correctionContextUsesPreviousRawTextsAtBatchBoundary() async throws {
         resetImportStateForTest()
         defer { resetImportStateForTest() }
 
-        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 48_000), durationSeconds: 3)
-        let stt = StubFileImportSTT(texts: ["raw one", "raw two", "raw three"])
+        // 5청크 → 배치 3+2. 배치 안 청크들은 같은 프롬프트의 번호 목록으로 서로를
+        // 직접 보므로, previousText 문맥은 배치 첫 청크 기준 스냅샷이면 충분하다.
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 80_000), durationSeconds: 5)
+        let stt = StubFileImportSTT(texts: ["raw one", "raw two", "raw three", "raw four", "raw five"])
         let correction = StubFileImportCorrection()
         let useCase = MeetingFileImportUseCase(
             extractor: extractor,
@@ -377,10 +379,11 @@ struct MeetingFileImportUseCaseTests {
             shouldCorrect: true
         )
 
-        let firstCall = correction.calls.first { $0.text == "raw one" }
-        let thirdCall = correction.calls.first { $0.text == "raw three" }
-        #expect(firstCall?.context.previousText == "")
-        #expect(thirdCall?.context.previousText == "raw one\nraw two")
+        #expect(correction.batchCalls.count == 2)
+        #expect(correction.batchCalls.first?.texts == ["raw one", "raw two", "raw three"])
+        #expect(correction.batchCalls.first?.context.previousText == "")
+        #expect(correction.batchCalls.last?.texts == ["raw four", "raw five"])
+        #expect(correction.batchCalls.last?.context.previousText == "raw one\nraw two\nraw three")
     }
 
     @Test("교정 drain 중 취소되면 저장하지 않고 cancelled 상태를 남긴다")
@@ -687,13 +690,38 @@ private final class StubFileImportCorrection: MeetingFileImportCorrecting {
         return responses.isEmpty ? nil : responses.removeFirst()
     }
 
+    struct BatchCall: Equatable {
+        let texts: [String]
+        let context: LLMCorrectionContext
+    }
+
+    private(set) var batchCalls: [BatchCall] = []
+
     func correctBatch(texts: [String], context: LLMCorrectionContext) async -> [String?]? {
-        // stub: 단건 correct를 순서대로 호출하고 nil이 하나라도 있으면 nil 반환(실제 배치 fail-soft와 동일)
+        batchCalls.append(BatchCall(texts: texts, context: context))
+        if let stageProbe {
+            for _ in texts {
+                observedStages.append(stageProbe())
+            }
+        }
         var results: [String?] = []
         for text in texts {
-            let result = await correct(text: text, context: context)
+            activeCorrections += 1
+            maxActiveCorrections = max(maxActiveCorrections, activeCorrections)
+            let delay = delayNanosecondsByText[text] ?? defaultDelayNanoseconds
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            let result: String?
+            if let mapped = responseByText[text] {
+                result = mapped
+            } else {
+                result = responses.isEmpty ? nil : responses.removeFirst()
+            }
+            activeCorrections -= 1
             results.append(result)
         }
+        calls.append(contentsOf: texts.map { Call(text: $0, context: context) })
         return results
     }
 }
@@ -958,6 +986,124 @@ struct ImportCorrectionPipelineTests {
         await pipeline.drain { _, _ in }
         #expect(pipeline.correctedCount == 4)
         #expect(pipeline.segments.map(\.text) == ["done raw 0", "done raw 1", "done raw 2", "done raw 3"])
+    }
+
+    // MARK: - 배치 파이프라인 테스트
+
+    @Test("7청크는 배치 3+3+1로 디스패치된다")
+    func sevenChunksDispatchedAsThreeBatches() async {
+        let pipeline = ImportCorrectionPipeline(maxConcurrent: 3)
+        let correction = StubFileImportCorrection()
+        correction.responseByText = Dictionary(
+            uniqueKeysWithValues: (0..<7).map { ("raw \($0)", "corrected \($0)") }
+        )
+        let context = LLMCorrectionContext()
+
+        for i in 0..<7 {
+            let segment = Segment(text: "raw \(i)", timestamp: Date(), duration: 1)
+            pipeline.appendRawAndEnqueue(segment, context: context, using: correction)
+        }
+        pipeline.flushBatchBuffer(using: correction)
+
+        await pipeline.drain { _, _ in }
+
+        #expect(correction.batchCalls.count == 3)
+        #expect(correction.batchCalls[0].texts.count == 3)
+        #expect(correction.batchCalls[1].texts.count == 3)
+        #expect(correction.batchCalls[2].texts.count == 1)
+        #expect(pipeline.segments.map(\.text) == (0..<7).map { "corrected \($0)" })
+    }
+
+    @Test("배치 중 하나 파싱 실패 시 그 배치만 원문을 유지한다")
+    func batchParseFailureKeepsRawTextForThatBatch() async {
+        let pipeline = ImportCorrectionPipeline(maxConcurrent: 3)
+        // 첫 배치(0,1,2)는 성공, 두 번째 배치(3,4,5)는 nil(파싱 실패)
+        // 별도 stub을 인라인으로 만든다.
+        final class PartialFailBatchCorrection: MeetingFileImportCorrecting {
+            private(set) var batchCount = 0
+            func correct(text: String, context: LLMCorrectionContext) async -> String? { nil }
+            func correctBatch(texts: [String], context: LLMCorrectionContext) async -> [String?]? {
+                batchCount += 1
+                if batchCount == 2 {
+                    // 두 번째 배치는 파싱 실패를 시뮬레이션
+                    return nil
+                }
+                return texts.map { "ok_\($0)" }
+            }
+        }
+        let service = PartialFailBatchCorrection()
+        let ctx = LLMCorrectionContext()
+
+        for i in 0..<6 {
+            let segment = Segment(text: "raw \(i)", timestamp: Date(), duration: 1)
+            pipeline.appendRawAndEnqueue(segment, context: ctx, batchSize: 3, using: service)
+        }
+        pipeline.flushBatchBuffer(using: service)
+
+        await pipeline.drain { _, _ in }
+
+        // 첫 배치(0-2): 교정됨
+        #expect(pipeline.segments[0].text == "ok_raw 0")
+        #expect(pipeline.segments[1].text == "ok_raw 1")
+        #expect(pipeline.segments[2].text == "ok_raw 2")
+        // 두 번째 배치(3-5): 원문 유지
+        #expect(pipeline.segments[3].text == "raw 3")
+        #expect(pipeline.segments[4].text == "raw 4")
+        #expect(pipeline.segments[5].text == "raw 5")
+        #expect(pipeline.correctedCount == 3)
+        #expect(pipeline.fallbackCount == 3)
+    }
+
+    @Test("배치 파이프라인에서 순서가 보존된다")
+    func batchPipelinePreservesOrder() async {
+        let pipeline = ImportCorrectionPipeline(maxConcurrent: 3)
+        let correction = StubFileImportCorrection()
+        correction.responseByText = Dictionary(
+            uniqueKeysWithValues: (0..<5).map { ("raw \($0)", "corrected \($0)") }
+        )
+        // 두 번째 배치(인덱스 3,4)에 지연을 줘 순서 역전 가능성 유발
+        correction.delayNanosecondsByText = ["raw 3": 50_000_000]
+        let ctx = LLMCorrectionContext()
+
+        for i in 0..<5 {
+            let segment = Segment(text: "raw \(i)", timestamp: Date(), duration: 1)
+            pipeline.appendRawAndEnqueue(segment, context: ctx, batchSize: 3, using: correction)
+        }
+        pipeline.flushBatchBuffer(using: correction)
+
+        await pipeline.drain { _, _ in }
+
+        #expect(pipeline.segments.map(\.text) == ["corrected 0", "corrected 1", "corrected 2", "corrected 3", "corrected 4"])
+    }
+
+    @Test("배치 파이프라인 취소는 대기 task를 즉시 깨운다")
+    func batchPipelineCancellationWakesWaiters() async {
+        let pipeline = ImportCorrectionPipeline(maxConcurrent: 1)
+        let gate = GateFileImportCorrection()
+        let ctx = LLMCorrectionContext()
+
+        // 배치 2개: 첫 배치가 gate에서 막히고 두 번째는 slot 대기
+        for i in 0..<6 {
+            let segment = Segment(text: "raw \(i)", timestamp: Date(), duration: 1)
+            pipeline.appendRawAndEnqueue(segment, context: ctx, batchSize: 3, using: gate)
+        }
+        pipeline.flushBatchBuffer(using: gate)
+
+        // 첫 배치가 gate 진입할 때까지 대기
+        await yieldUntil { gate.enteredCount >= 1 }
+
+        pipeline.cancelPendingCorrections()
+        // gate 스텁의 correctBatch는 텍스트마다 gate를 기다리므로(배치 3 = gate 3회)
+        // 한 번의 releaseAll로는 첫 배치가 끝나지 않는다 — 전부 끝날 때까지 반복 release.
+        await yieldUntil {
+            gate.releaseAll()
+            return pipeline.correctedCount + pipeline.fallbackCount >= 6
+        }
+
+        await pipeline.drain { _, _ in }
+        // slot 대기 중이던 두 번째 배치는 service 진입 없이 fallback으로 깨어난다.
+        #expect(pipeline.fallbackCount == 3)
+        #expect(gate.enteredCount == 3)
     }
 
     @Test("취소는 slot 대기자를 즉시 깨워 service 진입 없이 fallback으로 끝낸다")
