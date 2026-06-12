@@ -217,7 +217,7 @@ struct MeetingFileImportUseCaseTests {
         #expect(summary.receivedTranscript == "[00:00] corrected text")
     }
 
-    @Test("파일 import UI 상태는 교정과 요약 단계를 순서대로 노출한다")
+    @Test("파일 import 교정은 전사와 겹쳐 돌고 요약 전에 모두 반영된다")
     func exposesCorrectionAndSummaryStagesDuringImport() async throws {
         resetImportStateForTest()
         defer { resetImportStateForTest() }
@@ -225,7 +225,11 @@ struct MeetingFileImportUseCaseTests {
         let startedAt = Date(timeIntervalSince1970: 3_000)
         let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 32_000), durationSeconds: 2)
         let stt = StubFileImportSTT(texts: ["raw first", "raw second"])
-        let correction = StubFileImportCorrection(responses: ["corrected first", "corrected second"])
+        let correction = StubFileImportCorrection()
+        correction.responseByText = [
+            "raw first": "corrected first",
+            "raw second": "corrected second",
+        ]
         let summary = StubFileImportSummary(summary: MeetingSummary(title: "정리된 회의", leadAnswer: "요약됨"))
         let store = StubFileImportStore()
         let useCase = MeetingFileImportUseCase(
@@ -248,11 +252,188 @@ struct MeetingFileImportUseCaseTests {
             shouldCorrect: true
         )
 
-        #expect(correction.observedStages == [.correcting, .correcting])
+        // 교정은 추출 중(transcribing) 백그라운드로 시작되거나 추출 후 drain(correcting)에서 돈다.
+        #expect(correction.observedStages.count == 2)
+        #expect(correction.observedStages.allSatisfy { $0 == .transcribing || $0 == .correcting })
         #expect(summary.observedStages == [.summarizing])
         #expect(record.transcript.map(\.text) == ["corrected first", "corrected second"])
         #expect(summary.receivedTranscript == "[00:00] corrected first\n[00:01] corrected second")
         #expect(useCase.state.stage == .completed)
+    }
+
+    @Test("교정이 청크 순서와 다르게 끝나도 transcript 순서는 보존된다")
+    func preservesChunkOrderWhenCorrectionsFinishOutOfOrder() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
+        let startedAt = Date(timeIntervalSince1970: 4_000)
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 32_000), durationSeconds: 2)
+        let stt = StubFileImportSTT(texts: ["raw first", "raw second"])
+        let correction = StubFileImportCorrection()
+        correction.responseByText = [
+            "raw first": "corrected first",
+            "raw second": "corrected second",
+        ]
+        correction.delayNanosecondsByText = [
+            "raw first": 200_000_000,
+            "raw second": 10_000_000,
+        ]
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: StubFileImportSummary(summary: MeetingSummary(title: "순서 보존")),
+            store: StubFileImportStore(),
+            chunkSeconds: 1,
+            now: { startedAt }
+        )
+
+        let record = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/out-of-order.wav"),
+            shouldCorrect: true
+        )
+
+        #expect(record.transcript.map(\.text) == ["corrected first", "corrected second"])
+        #expect(record.transcript[0].timestamp == startedAt)
+        #expect(record.transcript[1].timestamp == startedAt.addingTimeInterval(1))
+    }
+
+    @Test("동시 교정은 주입한 상한을 넘지 않는다")
+    func limitsConcurrentCorrections() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 64_000), durationSeconds: 4)
+        let stt = StubFileImportSTT(texts: ["one", "two", "three", "four"])
+        let correction = StubFileImportCorrection()
+        correction.defaultDelayNanoseconds = 50_000_000
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: StubFileImportSummary(summary: MeetingSummary(title: "상한")),
+            store: StubFileImportStore(),
+            chunkSeconds: 1,
+            maxConcurrentCorrections: 2
+        )
+
+        _ = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/concurrency-cap.wav"),
+            shouldCorrect: true
+        )
+
+        #expect(correction.calls.count == 4)
+        #expect(correction.maxActiveCorrections == 2)
+    }
+
+    @Test("교정 실패(nil)는 해당 청크만 원문으로 남긴다")
+    func correctionNilFallsBackToRawTextPerChunk() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 32_000), durationSeconds: 2)
+        let stt = StubFileImportSTT(texts: ["raw first", "raw second"])
+        let correction = StubFileImportCorrection()
+        correction.responseByText = [
+            "raw first": "corrected first",
+            "raw second": String?.none,
+        ]
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: StubFileImportSummary(summary: MeetingSummary(title: "fail-soft")),
+            store: StubFileImportStore(),
+            chunkSeconds: 1
+        )
+
+        let record = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/fail-soft.wav"),
+            shouldCorrect: true
+        )
+
+        #expect(record.transcript.map(\.text) == ["corrected first", "raw second"])
+    }
+
+    @Test("교정 문맥은 직전 청크들의 원문으로 구성된다")
+    func correctionContextUsesPreviousRawTexts() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 48_000), durationSeconds: 3)
+        let stt = StubFileImportSTT(texts: ["raw one", "raw two", "raw three"])
+        let correction = StubFileImportCorrection()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: StubFileImportSummary(summary: MeetingSummary(title: "문맥")),
+            store: StubFileImportStore(),
+            chunkSeconds: 1
+        )
+
+        _ = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/raw-context.wav"),
+            shouldCorrect: true
+        )
+
+        let firstCall = correction.calls.first { $0.text == "raw one" }
+        let thirdCall = correction.calls.first { $0.text == "raw three" }
+        #expect(firstCall?.context.previousText == "")
+        #expect(thirdCall?.context.previousText == "raw one\nraw two")
+    }
+
+    @Test("교정 drain 중 취소되면 저장하지 않고 cancelled 상태를 남긴다")
+    func cancellationDuringCorrectionDrainDoesNotSave() async {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 32_000), durationSeconds: 2)
+        let stt = StubFileImportSTT(texts: ["raw first", "raw second"])
+        let correction = StubFileImportCorrection()
+        correction.defaultDelayNanoseconds = 10_000_000_000
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: StubFileImportSummary(summary: MeetingSummary(title: "취소")),
+            store: store,
+            chunkSeconds: 1
+        )
+
+        let importTask = Task {
+            try await useCase.importFile(
+                URL(fileURLWithPath: "/tmp/drain-cancel.wav"),
+                shouldCorrect: true
+            )
+        }
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        importTask.cancel()
+
+        let cancelled = await withTaskGroup(of: Bool?.self) { group in
+            group.addTask {
+                do {
+                    _ = try await importTask.value
+                    return false
+                } catch is CancellationError {
+                    return true
+                } catch {
+                    return false
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                return nil
+            }
+            let outcome = await group.next() ?? nil
+            group.cancelAll()
+            return outcome
+        }
+
+        #expect(cancelled == true)
+        #expect(store.savedRecords.isEmpty)
+        #expect(useCase.state.stage == .cancelled)
     }
 
     @Test("전사 결과가 비어 있으면 저장하지 않고 실패 상태를 남긴다")
@@ -476,6 +657,12 @@ private final class StubFileImportCorrection: MeetingFileImportCorrecting {
     var calls: [Call] = []
     var observedStages: [MeetingFileImportStage] = []
     var stageProbe: (@MainActor () -> MeetingFileImportStage)?
+    /// 교정이 병렬로 돌면 호출 순서가 비결정적이라, 순서 의존 큐 대신 입력 텍스트로 응답을 매핑한다.
+    var responseByText: [String: String?] = [:]
+    var delayNanosecondsByText: [String: UInt64] = [:]
+    var defaultDelayNanoseconds: UInt64 = 0
+    private(set) var maxActiveCorrections = 0
+    private var activeCorrections = 0
     private var responses: [String?]
 
     init(responses: [String?] = []) {
@@ -487,6 +674,16 @@ private final class StubFileImportCorrection: MeetingFileImportCorrecting {
             observedStages.append(stageProbe())
         }
         calls.append(Call(text: text, context: context))
+        activeCorrections += 1
+        maxActiveCorrections = max(maxActiveCorrections, activeCorrections)
+        defer { activeCorrections -= 1 }
+        let delay = delayNanosecondsByText[text] ?? defaultDelayNanoseconds
+        if delay > 0 {
+            try? await Task.sleep(nanoseconds: delay)
+        }
+        if let mapped = responseByText[text] {
+            return mapped
+        }
         return responses.isEmpty ? nil : responses.removeFirst()
     }
 }
