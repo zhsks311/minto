@@ -867,3 +867,95 @@ struct FileAudioExtractionErrorMessageTests {
         }
     }
 }
+
+// MARK: - ImportCorrectionPipeline 단위 테스트
+
+/// 교정 호출을 외부에서 열어줄 때까지 막아두는 게이트 스텁.
+/// limiter의 동시 진입·대기자 wake를 suspension 경계에서 직접 관찰한다.
+@MainActor
+private final class GateFileImportCorrection: MeetingFileImportCorrecting {
+    private(set) var enteredCount = 0
+    private var gates: [CheckedContinuation<Void, Never>] = []
+
+    func correct(text: String, context: LLMCorrectionContext) async -> String? {
+        enteredCount += 1
+        await withCheckedContinuation { gates.append($0) }
+        return "done \(text)"
+    }
+
+    func releaseAll() {
+        let pending = gates
+        gates.removeAll()
+        for gate in pending {
+            gate.resume()
+        }
+    }
+}
+
+@MainActor
+@Suite("ImportCorrectionPipeline", .serialized)
+struct ImportCorrectionPipelineTests {
+    private func dispatchCorrections(
+        count: Int,
+        into pipeline: ImportCorrectionPipeline,
+        using service: GateFileImportCorrection
+    ) {
+        for index in 0..<count {
+            let raw = "raw \(index)"
+            let segmentIndex = pipeline.appendRaw(Segment(text: raw, timestamp: Date(), duration: 1))
+            pipeline.dispatchCorrection(
+                at: segmentIndex,
+                rawText: raw,
+                context: LLMCorrectionContext(),
+                using: service
+            )
+        }
+    }
+
+    /// 조건이 참이 될 때까지 양보한다. 조건 미충족이어도 유한 반복이라 suite가 멈추지 않는다.
+    private func yieldUntil(_ condition: @MainActor () -> Bool) async {
+        for _ in 0..<2_000 {
+            if condition() { return }
+            await Task.yield()
+        }
+    }
+
+    @Test("limiter는 동시 진입을 상한으로 막고 해제 시 대기자가 slot을 이어받는다")
+    func limiterCapsConcurrentEntries() async {
+        let pipeline = ImportCorrectionPipeline(maxConcurrent: 2)
+        let gate = GateFileImportCorrection()
+        dispatchCorrections(count: 4, into: pipeline, using: gate)
+
+        await yieldUntil { gate.enteredCount == 2 }
+        for _ in 0..<50 { await Task.yield() }
+        #expect(gate.enteredCount == 2)
+
+        gate.releaseAll()
+        await yieldUntil { gate.enteredCount == 4 }
+        #expect(gate.enteredCount == 4)
+        gate.releaseAll()
+
+        await pipeline.drain { _, _ in }
+        #expect(pipeline.correctedCount == 4)
+        #expect(pipeline.segments.map(\.text) == ["done raw 0", "done raw 1", "done raw 2", "done raw 3"])
+    }
+
+    @Test("취소는 slot 대기자를 즉시 깨워 service 진입 없이 fallback으로 끝낸다")
+    func cancellationWakesSlotWaiters() async {
+        let pipeline = ImportCorrectionPipeline(maxConcurrent: 1)
+        let gate = GateFileImportCorrection()
+        dispatchCorrections(count: 2, into: pipeline, using: gate)
+
+        await yieldUntil { gate.enteredCount == 1 }
+        #expect(gate.enteredCount == 1)
+
+        pipeline.cancelPendingCorrections()
+        await yieldUntil { pipeline.fallbackCount == 1 }
+        #expect(pipeline.fallbackCount == 1)
+        #expect(gate.enteredCount == 1)
+
+        gate.releaseAll()
+        await pipeline.drain { _, _ in }
+        #expect(pipeline.segments[1].text == "raw 1")
+    }
+}

@@ -488,7 +488,7 @@ final class ImportCorrectionPipeline {
     private var correctionTasks: [Task<Void, Never>] = []
     private let maxConcurrent: Int
     private var runningCount = 0
-    private var slotWaiters: [CheckedContinuation<Void, Never>] = []
+    private var slotWaiters: [CheckedContinuation<Bool, Never>] = []
     private(set) var correctedCount = 0
     private(set) var fallbackCount = 0
 
@@ -516,9 +516,15 @@ final class ImportCorrectionPipeline {
         context: LLMCorrectionContext,
         using service: any MeetingFileImportCorrecting
     ) {
+        // [weak self]는 순환참조 방지용이고 격리는 @MainActor 상속이다. guard let 이후의
+        // 강참조 덕에 task가 하나라도 살아 있는 동안 pipeline은 해제되지 않는다.
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.acquireSlot()
+            guard await self.acquireSlot() else {
+                // 취소로 slot을 받지 못한 경우 — slot을 쥔 적이 없으므로 release 없이 끝낸다.
+                self.fallbackCount += 1
+                return
+            }
             defer { self.releaseSlot() }
             guard !Task.isCancelled else {
                 self.fallbackCount += 1
@@ -540,6 +546,9 @@ final class ImportCorrectionPipeline {
     func drain(onProgress: @MainActor (Int, Int) -> Void) async {
         let total = correctionTasks.count
         for (completed, task) in correctionTasks.enumerated() {
+            // 취소 시 남은 교정을 기다리지 않는다. 진행 중 task는 fail-soft로 알아서 끝나고,
+            // 호출부의 checkCancellation이 cancelled 경로로 빠지므로 결과는 버려진다.
+            if Task.isCancelled { break }
             await task.value
             onProgress(completed + 1, total)
         }
@@ -548,6 +557,13 @@ final class ImportCorrectionPipeline {
     func cancelPendingCorrections() {
         for task in correctionTasks {
             task.cancel()
+        }
+        // slot 대기자는 실행 중 task가 해제해 줄 때까지 잠들어 있으므로 직접 깨워야
+        // 취소가 즉시 전파된다. false로 재개된 task는 slot 없이 fallback으로 끝난다.
+        let waiters = slotWaiters
+        slotWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume(returning: false)
         }
     }
 
@@ -562,13 +578,15 @@ final class ImportCorrectionPipeline {
         )
     }
 
-    private func acquireSlot() async {
+    /// slot을 얻으면 true, 취소로 깨워졌으면 false를 반환한다.
+    private func acquireSlot() async -> Bool {
+        guard !Task.isCancelled else { return false }
         if runningCount < maxConcurrent {
             runningCount += 1
-            return
+            return true
         }
-        await withCheckedContinuation { slotWaiters.append($0) }
-        // releaseSlot()이 slot을 양도한 상태로 재개하므로 여기서 runningCount를 늘리지 않는다.
+        // true로 재개되면 releaseSlot()이 slot을 양도한 상태이므로 runningCount를 늘리지 않는다.
+        return await withCheckedContinuation { slotWaiters.append($0) }
     }
 
     private func releaseSlot() {
@@ -577,7 +595,7 @@ final class ImportCorrectionPipeline {
         } else {
             // decrement 후 resume 사이에 새 acquire가 끼어들어 상한을 넘는 것을 막기 위해
             // count를 유지한 채 대기자에게 slot을 양도한다.
-            slotWaiters.removeFirst().resume()
+            slotWaiters.removeFirst().resume(returning: true)
         }
     }
 }
