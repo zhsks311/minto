@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>파일 임포트 교정 병렬화 &amp; 다음 작업 로드맵 — task-summary</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --accent: #0969da;
+      --code-bg: #f6f8fa;
+
+      --c-critical: #cf222e; --c-critical-bg: #fff0ee; --c-critical-border: #ff818266;
+      --c-high:     #9a6700; --c-high-bg:     #fff8c5; --c-high-border:     #f1e05a99;
+      --c-medium:   #0550ae; --c-medium-bg:   #ddf4ff; --c-medium-border:   #79c0ff99;
+      --c-low:      #116329; --c-low-bg:      #dafbe1; --c-low-border:      #56d36499;
+
+      --pass-bg: #f0fdf4; --pass-border: #bbf7d0;
+      --fail-bg: #fff0ee; --fail-border: #fecaca;
+
+      --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --surface: #161b22; --border: #30363d;
+        --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff; --code-bg: #161b22;
+
+        --c-critical: #ff7b72; --c-critical-bg: #2d0f0f; --c-critical-border: #ff7b7266;
+        --c-high:     #e3b341; --c-high-bg:     #2d1f04; --c-high-border:     #e3b34166;
+        --c-medium:   #79c0ff; --c-medium-bg:   #051d4d; --c-medium-border:   #79c0ff66;
+        --c-low:      #56d364; --c-low-bg:      #0a2d19; --c-low-border:      #56d36466;
+
+        --pass-bg: #0a2d19; --pass-border: #56d36444;
+        --fail-bg: #2d0f0f; --fail-border: #ff7b7244;
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg); color: var(--text);
+      font-size: 15px; line-height: 1.65;
+      max-width: 900px; margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; }
+    h2 { font-size: 1.05rem; font-weight: 600; margin: 2.5rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+    p { margin-bottom: 0.75rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .summary {
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid var(--accent); border-radius: 6px;
+      padding: 1.1rem 1.4rem; margin: 1.25rem 0 2rem;
+    }
+    .summary-label {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.4rem;
+    }
+    .summary p:last-child { margin-bottom: 0; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1rem 1.25rem;
+      display: flex; flex-direction: column; gap: 0.25rem;
+    }
+    .stat-card--danger  { background: var(--c-critical-bg); border-color: var(--c-critical-border); }
+    .stat-card--warning { background: var(--c-high-bg);     border-color: var(--c-high-border); }
+    .stat-card--success { background: var(--pass-bg);       border-color: var(--pass-border); }
+    .stat-card--info    { background: var(--c-medium-bg);   border-color: var(--c-medium-border); }
+    .stat-number {
+      font-size: 2rem; font-weight: 700; line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-card--danger  .stat-number { color: var(--c-critical); }
+    .stat-card--warning .stat-number { color: var(--c-high); }
+    .stat-card--success .stat-number { color: var(--c-low); }
+    .stat-card--info    .stat-number { color: var(--c-medium); }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .stat-sub   { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+    .finding {
+      border: 1px solid var(--border); border-left-width: 3px;
+      border-radius: 6px; padding: 0.9rem 1.1rem; margin: 0.65rem 0;
+    }
+    .finding--critical { border-left-color: var(--c-critical); background: var(--c-critical-bg); }
+    .finding--high     { border-left-color: var(--c-high);     background: var(--c-high-bg); }
+    .finding--medium   { border-left-color: var(--c-medium);   background: var(--c-medium-bg); }
+    .finding--low      { border-left-color: var(--c-low);      background: var(--c-low-bg); }
+    .finding-header { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+    .finding-title { font-weight: 600; font-size: 0.95rem; }
+    .finding-location { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .finding p { margin-bottom: 0.5rem; font-size: 0.9rem; }
+    .finding ul { font-size: 0.9rem; }
+
+    .tag {
+      display: inline-block; font-size: 0.72rem; font-weight: 700;
+      padding: 0.1rem 0.45rem; border-radius: 4px;
+      font-family: var(--font-mono); vertical-align: middle;
+    }
+    .tag-critical { background: var(--c-critical-bg); color: var(--c-critical); }
+    .tag-high     { background: var(--c-high-bg);     color: var(--c-high); }
+    .tag-medium   { background: var(--c-medium-bg);   color: var(--c-medium); }
+    .tag-low      { background: var(--c-low-bg);      color: var(--c-low); }
+    .tag-pass     { background: var(--pass-bg);        color: var(--c-low); }
+    .tag-fail     { background: var(--fail-bg);        color: var(--c-critical); }
+    .tag-info     { background: var(--surface);        color: var(--text-muted); }
+
+    .verify-table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .verify-table th {
+      text-align: left; font-size: 0.75rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-muted); background: var(--surface);
+      border-bottom: 2px solid var(--border); padding: 0.5rem 0.9rem;
+    }
+    .verify-table td { padding: 0.6rem 0.9rem; vertical-align: middle; }
+    .vrow-pass { background: var(--pass-bg); }
+    .vrow-fail { background: var(--fail-bg); }
+    .vrow-pass + tr, .vrow-fail + tr { border-top: 1px solid var(--border); }
+
+    table:not(.verify-table) { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    table:not(.verify-table) th {
+      text-align: left; font-size: 0.75rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-muted); border-bottom: 2px solid var(--border); padding: 0.45rem 0.75rem;
+    }
+    table:not(.verify-table) td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table:not(.verify-table) tr:last-child td { border-bottom: none; }
+
+    code {
+      font-family: var(--font-mono); font-size: 0.85em;
+      background: var(--code-bg); padding: 0.12em 0.35em;
+      border-radius: 4px; border: 1px solid var(--border);
+    }
+    pre {
+      font-family: var(--font-mono); font-size: 0.85rem;
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 1rem 1.25rem;
+      overflow-x: auto; margin: 0.75rem 0; line-height: 1.5;
+    }
+    pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+    details { border: 1px solid var(--border); border-radius: 6px; margin: 0.6rem 0; }
+    details > summary {
+      padding: 0.65rem 1rem; cursor: pointer; font-weight: 500; font-size: 0.92rem;
+      background: var(--surface); user-select: none; list-style: none;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before {
+      content: '▶'; font-size: 0.65rem; transition: transform 0.12s;
+      color: var(--text-muted); flex-shrink: 0;
+    }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details[open] > summary { border-bottom: 1px solid var(--border); }
+    .details-body { padding: 1rem 1.25rem; }
+
+    .flow-diagram { width: 100%; max-width: 760px; display: block; margin: 1rem 0; overflow: visible; }
+    .flow-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+    .flow-box-accent { fill: var(--c-medium-bg); stroke: var(--c-medium-border); stroke-width: 1.5; }
+    .flow-box-wait { fill: var(--c-critical-bg); stroke: var(--c-critical-border); stroke-width: 1.5; }
+    .flow-text { font-family: var(--font-body); font-size: 12px; fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+    .flow-label { font-family: var(--font-mono); font-size: 10px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: middle; }
+    .flow-arrow { stroke: var(--text-muted); stroke-width: 1.5; }
+    .flow-arrowhead { fill: var(--text-muted); }
+
+    footer {
+      margin-top: 3.5rem; padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono); font-size: 0.78rem;
+      color: var(--text-muted); display: flex; gap: 1.5rem; flex-wrap: wrap;
+    }
+
+    @media print {
+      body { max-width: none; padding: 0; background: #fff; color: #000; }
+      .stat-card { border: 1px solid #ccc; background: #f9f9f9; }
+      .stat-card--danger, .stat-card--warning, .stat-card--success, .stat-card--info { background: #f9f9f9; }
+      .finding { border: 1px solid #ccc; background: #fff; }
+      .vrow-pass, .vrow-fail { background: #fff; }
+      details { border: 1px solid #ccc; }
+      details[open] { page-break-inside: avoid; }
+      a[href]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #666; }
+      footer { color: #666; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>파일 임포트 교정 병렬화 &amp; 다음 작업 로드맵</h1>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">458</div>
+    <div class="stat-label">전체 테스트 통과</div>
+    <div class="stat-sub">65 suites, 신규 8개 포함</div>
+  </div>
+  <div class="stat-card stat-card--info">
+    <div class="stat-number">4</div>
+    <div class="stat-label">main 머지 커밋</div>
+    <div class="stat-sub">HEAD <code>d607168</code></div>
+  </div>
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">2/2</div>
+    <div class="stat-label">리뷰 Major 반영</div>
+    <div class="stat-sub">opus critic, Critical 0</div>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <div class="stat-number">~2×</div>
+    <div class="stat-label">임포트 속도 기대치</div>
+    <div class="stat-sub">교정 켜진 긴 파일 기준</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">Summary</div>
+  <p>파일 임포트의 LLM 교정을 STT 뒤에 숨기는 <strong>병렬 파이프라인(Phase 1)</strong>을 구현·리뷰·머지했다.
+  wall-clock의 절반 이상을 차지하던 교정 대기가 사라져 임포트가 STT 시간 수준으로 수렴한다.
+  다음 갈래는 세 개: <strong>① Phase 2 배치화</strong>(조건부 보류), <strong>② 화자분리 도입</strong>(오디오 보존 정책 결정 대기),
+  <strong>③ Silero VAD main 승격</strong>(검증된 조합 단위). 실행 중인 앱은 이전 빌드라 <strong>재시작해야 적용</strong>된다.</p>
+</div>
+
+<h2>1. 구조 변화 — 무엇이 빨라졌나</h2>
+
+<p>기존에는 청크마다 네트워크 교정(3~8초)이 STT를 막았다. 이제 STT(ANE-bound)는 직렬을 유지하고,
+네트워크 대기인 교정만 <strong>동시 상한 3</strong>의 백그라운드 task로 겹친다.</p>
+
+<svg class="flow-diagram" viewBox="0 0 760 190" xmlns="http://www.w3.org/2000/svg">
+  <text x="10" y="16" class="flow-label" style="text-anchor:start">BEFORE — 완전 직렬</text>
+  <rect x="10" y="28" width="90" height="34" rx="6" class="flow-box"/>
+  <text x="55" y="45" class="flow-text">STT 청크1</text>
+  <line x1="100" y1="45" x2="118" y2="45" class="flow-arrow"/>
+  <polygon points="118,40 128,45 118,50" class="flow-arrowhead"/>
+  <rect x="128" y="28" width="120" height="34" rx="6" class="flow-box-wait"/>
+  <text x="188" y="45" class="flow-text">교정 대기 3–8s</text>
+  <line x1="248" y1="45" x2="266" y2="45" class="flow-arrow"/>
+  <polygon points="266,40 276,45 266,50" class="flow-arrowhead"/>
+  <rect x="276" y="28" width="90" height="34" rx="6" class="flow-box"/>
+  <text x="321" y="45" class="flow-text">STT 청크2</text>
+  <line x1="366" y1="45" x2="384" y2="45" class="flow-arrow"/>
+  <polygon points="384,40 394,45 384,50" class="flow-arrowhead"/>
+  <rect x="394" y="28" width="120" height="34" rx="6" class="flow-box-wait"/>
+  <text x="454" y="45" class="flow-text">교정 대기 3–8s</text>
+  <line x1="514" y1="45" x2="532" y2="45" class="flow-arrow"/>
+  <polygon points="532,40 542,45 532,50" class="flow-arrowhead"/>
+  <text x="560" y="45" class="flow-label" style="text-anchor:start">⋯ ×120청크</text>
+
+  <text x="10" y="102" class="flow-label" style="text-anchor:start">AFTER — STT 직렬 + 교정 병렬(상한 3)</text>
+  <rect x="10" y="114" width="90" height="34" rx="6" class="flow-box"/>
+  <text x="55" y="131" class="flow-text">STT 청크1</text>
+  <line x1="100" y1="131" x2="118" y2="131" class="flow-arrow"/>
+  <polygon points="118,126 128,131 118,136" class="flow-arrowhead"/>
+  <rect x="128" y="114" width="90" height="34" rx="6" class="flow-box"/>
+  <text x="173" y="131" class="flow-text">STT 청크2</text>
+  <line x1="218" y1="131" x2="236" y2="131" class="flow-arrow"/>
+  <polygon points="236,126 246,131 236,136" class="flow-arrowhead"/>
+  <rect x="246" y="114" width="90" height="34" rx="6" class="flow-box"/>
+  <text x="291" y="131" class="flow-text">STT 청크3</text>
+  <line x1="336" y1="131" x2="354" y2="131" class="flow-arrow"/>
+  <polygon points="354,126 364,131 354,136" class="flow-arrowhead"/>
+  <rect x="364" y="114" width="70" height="34" rx="6" class="flow-box"/>
+  <text x="399" y="131" class="flow-text">⋯</text>
+  <line x1="434" y1="131" x2="452" y2="131" class="flow-arrow"/>
+  <polygon points="452,126 462,131 452,136" class="flow-arrowhead"/>
+  <rect x="462" y="114" width="90" height="34" rx="6" class="flow-box-accent"/>
+  <text x="507" y="131" class="flow-text">drain k/n</text>
+  <line x1="552" y1="131" x2="570" y2="131" class="flow-arrow"/>
+  <polygon points="570,126 580,131 570,136" class="flow-arrowhead"/>
+  <rect x="580" y="114" width="90" height="34" rx="6" class="flow-box"/>
+  <text x="625" y="131" class="flow-text">요약·저장</text>
+
+  <rect x="128" y="158" width="200" height="22" rx="5" class="flow-box-accent"/>
+  <text x="228" y="169" class="flow-label">교정 1·2·3 (백그라운드, 동시 ≤3)</text>
+  <line x1="173" y1="148" x2="173" y2="158" class="flow-arrow"/>
+</svg>
+
+<ul>
+  <li><strong>순서 보존</strong>: segment는 추가 시점 index로 고정 — 교정 완료 순서와 무관</li>
+  <li><strong>fail-soft</strong>: 교정 실패·nil·취소 → 해당 청크만 원문 유지</li>
+  <li><strong>교정 문맥</strong>: 직전 교정문 5개 → 직전 <em>원문</em> 5개 (직렬 의존성 제거, 트레이드오프 문서화)</li>
+  <li><strong>취소 전파</strong>: drain 중 취소 시 slot 대기자까지 즉시 wake (리뷰 M1 반영)</li>
+</ul>
+
+<h2>2. 변경 파일</h2>
+
+<table>
+  <thead><tr><th>파일</th><th>변경 내용</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Sources/Minto/Services/MeetingFileImportUseCase.swift</code></td>
+      <td>신규 <code>ImportCorrectionPipeline</code>(@MainActor) — slot 양도형 limiter, 순서 보존 누적기, corrected/fallback 카운트. importChunk를 STT 직렬 + 교정 디스패치로 재구성</td>
+    </tr>
+    <tr>
+      <td><code>Tests/MintoTests/MeetingFileImportUseCaseTests.swift</code></td>
+      <td>신규 8개: 순서 보존, 동시 상한==2, fail-soft, 원문 문맥, drain 취소, 단계 계약 갱신, limiter 게이트 검증 2종</td>
+    </tr>
+    <tr>
+      <td><code>docs/work/2026-06-12-file-import-correction-pipeline-plan.md</code></td>
+      <td>Phase 1/2 계획, Phase 2 보류 트리거 조건</td>
+    </tr>
+    <tr>
+      <td><code>docs/work-log/2026-06-12-19-file-import-correction-pipeline.md</code></td>
+      <td>작업 로그 #19 — 리뷰 지적·반영·미반영(관찰 항목) 기록</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3. 검증</h2>
+
+<table class="verify-table">
+  <thead><tr><th>결과</th><th>항목</th><th>비고</th></tr></thead>
+  <tbody>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>./scripts/dev.sh build</code></td>
+      <td>머지된 main, 서명 포함</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>./scripts/dev.sh test</code></td>
+      <td>458개 / 65 suites (이전 451 → 신규 8, 계약 갱신 1)</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td>opus critic 리뷰</td>
+      <td>ACCEPT-WITH-RESERVATIONS → Major 2건 모두 반영 후 머지</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">PASS</span></td>
+      <td><code>git diff --check</code> · 로그 민감값 점검</td>
+      <td>카운트류만 기록, 전사·프롬프트 원문 없음</td>
+    </tr>
+  </tbody>
+</table>
+
+<details>
+  <summary>리뷰 지적과 반영 상세 (Major 2 / minor 5)</summary>
+  <div class="details-body">
+    <ul>
+      <li><strong>M1 (반영)</strong>: <code>cancelPendingCorrections()</code>가 slot 대기자를 깨우지 않아 취소가 실행 중 교정의 해제까지 지연 → <code>acquireSlot()</code>을 Bool 반환으로 바꿔 취소 시 대기자를 <code>false</code>로 즉시 재개 + drain 취소 조기 탈출</li>
+      <li><strong>M2 (반영)</strong>: limiter 직접 검증 부재 → 게이트 스텁(continuation)으로 동시 진입 상한·slot 양도·취소 wake를 검증하는 <code>ImportCorrectionPipelineTests</code> 신설</li>
+      <li><strong>minor (반영)</strong>: Task 생명주기 주석([weak self]=순환참조 방지, guard let 후 강참조로 pipeline 유지)</li>
+      <li><strong>관찰 항목 (미반영)</strong>: <code>LLMCorrectionService.activeCorrections</code> 전역 카운터가 임포트 병렬 교정으로 최대 3 — 녹음 UI 인디케이터와 공유되는 기존 구조. 동시 사용 시 표시 의미를 다음 UI 작업에서 점검</li>
+      <li>나머지 minor 4건은 "확인됨" (진행률 역행 없음, 중복 cancel 멱등, emptyTranscript 경로 안전, 요약 전 drain 보장)</li>
+    </ul>
+  </div>
+</details>
+
+<h2>4. 다음 작업 로드맵</h2>
+
+<div class="finding finding--critical">
+  <div class="finding-header">
+    <span class="tag tag-critical">즉시</span>
+    <span class="finding-title">앱 재시작 — 새 파이프라인 적용</span>
+  </div>
+  <p>실행 중인 앱은 이전 빌드. 재시작 후 다음 임포트에서 <code>import correction drain</code> 로그로 실측 효과 확인 가능.
+  (사용 중 임의 재시작 금지 원칙에 따라 사용자 타이밍에 진행)</p>
+</div>
+
+<div class="finding finding--high">
+  <div class="finding-header">
+    <span class="tag tag-high">결정 필요</span>
+    <span class="finding-title">화자분리 — 오디오 보존 정책 결정이 모든 것의 전제</span>
+  </div>
+  <p>요구사항 5건은 설계 방향 확정됨(사후 확정 + 실시간 잠정, "알 수 없음" 라벨 + 클러스터 단위 수정 전파, 임포트 동일 적용).
+  그러나 <strong>녹음 오디오가 현재 디스크에 보존되지 않아</strong> 사후 diarization이 불가능 — 보존 기간·용량·프라이버시 정책을 먼저 정해야 한다.</p>
+  <ul>
+    <li>① 오디오 보존 설계(전제) → ② pyannote 3.x 사이드카로 7샘플 + display gate 비교(FluidAudio는 7개 중 1개만 게이트 통과로 기각됨) → ③ 채널 분리(마이크 vs 시스템, 힌트로만 사용) → ④ 단어 타임스탬프 정렬(<code>wordTimestamps</code> 현재 off)</li>
+  </ul>
+</div>
+
+<div class="finding finding--medium">
+  <div class="finding-header">
+    <span class="tag tag-medium">조건부</span>
+    <span class="finding-title">Phase 2 — 교정 배치화 (보류, 트리거 명시)</span>
+  </div>
+  <p>청크 3~5개를 한 호출로 묶어 호출 수 1/3~1/5. 단독 효과는 ~20-25%라 보류.
+  <strong>트리거</strong>: 긴 파일 임포트에서 429/rate limit 관측 또는 추가 단축 필요 시.
+  <strong>선행 조건</strong>: API key 경로 교정 출력 천장(900토큰) 상향 + 번호 파싱 fail-soft.</p>
+</div>
+
+<div class="finding finding--medium">
+  <div class="finding-header">
+    <span class="tag tag-medium">단기</span>
+    <span class="finding-title">Silero VAD main 승격 — 검증된 조합 단위로</span>
+  </div>
+  <p>실측으로 Energy VAD 대비 CER −10%p, empty final −199 입증. 단 <strong>"Silero + empty repair" 패키지</strong>로만 효과.
+  현재 <code>MINTO_VAD_ENGINE=silero</code> 환경변수 opt-in → 모델 배포 전략(앱 동봉 vs 최초 다운로드)과 설정 UI 설계가 도입 작업에 포함돼야 함.</p>
+</div>
+
+<div class="finding finding--low">
+  <div class="finding-header">
+    <span class="tag tag-low">대기</span>
+    <span class="finding-title">기타 관찰·정리 항목</span>
+  </div>
+  <ul>
+    <li>이전 세션 잔여 워크트리 40개+ 정리 (삭제 작업 — 사용자 확인 후)</li>
+    <li>correction 900토큰 천장 적정성 — inputChars/outputChars 로그 실측 (파일 로거 도입 시)</li>
+    <li><code>experiment/stt-engine-poc</code> 브랜치 처분 — 최종 판정은 <code>experimental_flag_only</code>(기본값 변경 불허). 선별 이식 대상: Silero VAD 패키지, 화자분리 계약 레이어, 벤치마크 하니스</li>
+  </ul>
+</div>
+
+<details>
+  <summary>이번 세션의 분석 작업 (구현 외)</summary>
+  <div class="details-body">
+    <ul>
+      <li><strong>브랜치 목표 변천 확인</strong>: <code>experiment/stt-engine-poc</code> 281커밋 추적 — 1일차 FluidAudio(Silero VAD·화자분리) 구조 구축 → 벤치마크가 드러낸 empty final 문제로 STT 품질 진단 → 엔진 채택 readiness gate로 목표 이동</li>
+      <li><strong>FluidAudio 도입 가치 평가</strong>: Silero VAD 조건부 채택(repair와 세트), 화자분리 기각(coverage 78%, 7샘플 중 1개만 노출 게이트 통과, 2개 화자 붕괴)</li>
+      <li><strong>화자분리 베스트 프랙티스 정리</strong>: 채널 분리 우선 → 사후 오프라인 패스 → 단어 정렬 → 신뢰도 게이팅/enrollment</li>
+      <li><strong>임포트 병목 진단</strong>: 직렬 LLM 교정이 wall-clock 절반 이상 — 이번 구현의 근거</li>
+    </ul>
+  </div>
+</details>
+
+<footer>
+  <span>생성: 2026-06-12 14:51 KST</span>
+  <span>모델: Claude Fable 5</span>
+  <span>유형: task-summary</span>
+</footer>
+
+</body>
+</html>
