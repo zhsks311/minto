@@ -686,6 +686,16 @@ private final class StubFileImportCorrection: MeetingFileImportCorrecting {
         }
         return responses.isEmpty ? nil : responses.removeFirst()
     }
+
+    func correctBatch(texts: [String], context: LLMCorrectionContext) async -> [String?]? {
+        // stub: 단건 correct를 순서대로 호출하고 nil이 하나라도 있으면 nil 반환(실제 배치 fail-soft와 동일)
+        var results: [String?] = []
+        for text in texts {
+            let result = await correct(text: text, context: context)
+            results.append(result)
+        }
+        return results
+    }
 }
 
 @MainActor
@@ -881,6 +891,16 @@ private final class GateFileImportCorrection: MeetingFileImportCorrecting {
         enteredCount += 1
         await withCheckedContinuation { gates.append($0) }
         return "done \(text)"
+    }
+
+    func correctBatch(texts: [String], context: LLMCorrectionContext) async -> [String?]? {
+        // gate stub: 배치를 단건처럼 직렬로 처리해 limiter 동작을 그대로 관찰한다
+        var results: [String?] = []
+        for text in texts {
+            let result = await correct(text: text, context: context)
+            results.append(result)
+        }
+        return results
     }
 
     func releaseAll() {

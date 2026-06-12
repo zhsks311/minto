@@ -112,6 +112,7 @@ extension STTService: MeetingFileImportSTTServicing {}
 @MainActor
 protocol MeetingFileImportCorrecting: AnyObject {
     func correct(text: String, context: LLMCorrectionContext) async -> String?
+    func correctBatch(texts: [String], context: LLMCorrectionContext) async -> [String?]?
 }
 
 extension LLMCorrectionService: MeetingFileImportCorrecting {}
