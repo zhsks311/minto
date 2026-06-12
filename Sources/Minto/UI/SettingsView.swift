@@ -79,6 +79,8 @@ public struct SettingsView: View {
     @AppStorage("selectedModel") private var selectedModel = "openai_whisper-large-v3-v20240930_turbo"
     @AppStorage(VADEnginePreferences.selectedEngineKey) private var selectedVADEngineRaw = VADEngineID.silero.rawValue
     @AppStorage(EmptyFinalRepairPolicy.preferenceKey) private var emptyFinalRepairEnabled = true
+    @AppStorage(RecordingAudioArchiver.preferenceKey) private var recordingAudioRetentionEnabled = true
+    @AppStorage(RecordingAudioArchiver.retentionDaysKey) private var recordingAudioRetentionDays = RecordingAudioArchiver.defaultRetentionDays
 
     // 교정 provider별 모델 선택(서비스가 같은 UserDefaults 키를 읽는다).
     @AppStorage("codexModel") private var codexModel = CodexOAuthService.defaultModelID
@@ -148,6 +150,7 @@ public struct SettingsView: View {
 
             speechEngineSection
             vadEngineSection
+            recordingAudioSection
 
             Section("오버레이") {
                 Text("투명도는 메뉴바에서 실시간으로 조절할 수 있어요.")
@@ -1925,6 +1928,38 @@ public struct SettingsView: View {
         }
         .onAppear {
             vadModelStore.prepareIfNeeded()
+        }
+    }
+
+    // MARK: - Recording audio retention section
+
+    private var recordingAudioSection: some View {
+        // onChange를 Form 체인이 아니라 섹션에 붙인다 — body 표현식이 커지면 타입체커가 터진다.
+        Section("녹음 오디오") {
+            Toggle("녹음 오디오 보관", isOn: $recordingAudioRetentionEnabled)
+                .onChange(of: recordingAudioRetentionEnabled) { oldValue, newValue in
+                    logSettingChange(key: RecordingAudioArchiver.preferenceKey, oldValue: "\(oldValue)", newValue: "\(newValue)")
+                }
+                .onChange(of: recordingAudioRetentionDays) { oldValue, newValue in
+                    logSettingChange(key: RecordingAudioArchiver.retentionDaysKey, oldValue: "\(oldValue)", newValue: "\(newValue)")
+                }
+            Text("회의 오디오를 이 Mac에만 저장해요(외부 전송 없음). 화자 구분 같은 후처리에 사용돼요. 다음 녹음부터 적용돼요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if recordingAudioRetentionEnabled {
+                Picker("보관 기간", selection: $recordingAudioRetentionDays) {
+                    Text("7일").tag(7)
+                    Text("30일").tag(30)
+                    Text("90일").tag(90)
+                }
+                .pickerStyle(.menu)
+                Text("기간이 지난 오디오는 앱 시작 시 자동으로 정리돼요. 회의록 텍스트는 그대로 남아요.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

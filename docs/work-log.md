@@ -29,6 +29,7 @@
 | 18 | 2026-06-12 | [진단 로그 정비](work-log/2026-06-12-18-diagnostic-log-cleanup.md) | OAuth 실패 body prefix, 모델/provider 변경, 검색 답변 생성 결과를 민감 원문 없이 기록 |
 | 19 | 2026-06-12 | [파일 임포트 교정 병렬 파이프라인](work-log/2026-06-12-19-file-import-correction-pipeline.md) | LLM 교정을 STT 뒤에 숨기는 동시 상한 파이프라인으로 임포트 wall-clock을 STT 시간으로 수렴 |
 | 20 | 2026-06-12 | [Silero VAD 승격](work-log/2026-06-12-20-silero-vad-promotion.md) | 검증 조합(Silero+빈 구간 복구)을 설정 기반 기본값으로, 모델 자동 다운로드·Energy fail-soft |
+| 21 | 2026-06-12 | [녹음 오디오 보존](work-log/2026-06-12-21-recording-audio-retention.md) | 화자분리 1단계 — 녹음 WAV 로컬 보존, 보관 기간 정리, 회의 삭제 연동, 스키마 하위 호환 |
 
 ## 남은 과제
 

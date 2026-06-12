@@ -61,6 +61,11 @@ public final class TranscriptionViewModel: ObservableObject {
     /// nil이면 사용 시점에 설정/환경변수에서 해석한다. (회의 중 토글이 현재 녹음에도 즉시 반영)
     private let injectedEmptyFinalRepairPolicy: EmptyFinalRepairPolicy?
     private let audioSampleBuffer: TranscriptionAudioSampleBuffer
+    /// nil이면 오디오 보존 안 함(테스트 기본). 프로덕션 convenience init이 factory를 공급한다.
+    private let audioArchiverFactory: (@MainActor () -> RecordingAudioArchiver)?
+    private var audioArchiver: RecordingAudioArchiver?
+    /// 직전 녹음에서 보존된 오디오 파일명. 저장 record에 연결하기 위해 노출한다.
+    public private(set) var lastArchivedAudioFileName: String?
 
     private var emptyFinalRepairPolicy: EmptyFinalRepairPolicy {
         injectedEmptyFinalRepairPolicy ?? .resolve()
@@ -96,7 +101,8 @@ public final class TranscriptionViewModel: ObservableObject {
             audioSource: MicrophoneSource(),
             vadProcessor: VoiceActivityDetectorFactory.makeDefault(),
             audioSourceFactory: AudioSourceFactory.makeSource(for:),
-            vadProcessorFactory: { VoiceActivityDetectorFactory.makeNext(current: $0) }
+            vadProcessorFactory: { VoiceActivityDetectorFactory.makeNext(current: $0) },
+            audioArchiverFactory: { RecordingAudioArchiver() }
         )
     }
 
@@ -107,7 +113,8 @@ public final class TranscriptionViewModel: ObservableObject {
         summaryService: any TranscriptionSummaryGenerating = SummaryService.shared,
         emptyFinalRepairPolicy: EmptyFinalRepairPolicy? = nil,
         audioSourceFactory: (@MainActor (AudioInputMode) -> any AudioSourceProtocol)? = nil,
-        vadProcessorFactory: (@MainActor (any VoiceActivityDetector) -> any VoiceActivityDetector)? = nil
+        vadProcessorFactory: (@MainActor (any VoiceActivityDetector) -> any VoiceActivityDetector)? = nil,
+        audioArchiverFactory: (@MainActor () -> RecordingAudioArchiver)? = nil
     ) {
         let initialAudioSource = audioSource
         self.sttService = sttService
@@ -116,6 +123,7 @@ public final class TranscriptionViewModel: ObservableObject {
         self.audioSourceFactory = audioSourceFactory ?? { _ in initialAudioSource }
         self.vadProcessor = vadProcessor
         self.vadProcessorFactory = vadProcessorFactory
+        self.audioArchiverFactory = audioArchiverFactory
         self.injectedEmptyFinalRepairPolicy = emptyFinalRepairPolicy
         self.audioSampleBuffer = TranscriptionAudioSampleBuffer(
             maxBufferedSeconds: emptyFinalRepairPolicy?.maxBufferedSeconds
@@ -227,6 +235,16 @@ public final class TranscriptionViewModel: ObservableObject {
         vadProcessor.reset()
         let appliedVADEngine = vadProcessor is SileroVADProcessor ? "silero" : "energy"
         Log.vad.info("recording vad engine=\(appliedVADEngine, privacy: .public) emptyFinalRepair=\(self.emptyFinalRepairPolicy.isEnabled, privacy: .public)")
+
+        // 녹음 오디오 보존(설정 기반) — 실패해도 전사에 영향 없음(fail-soft).
+        lastArchivedAudioFileName = nil
+        if let audioArchiverFactory, RecordingAudioArchiver.isEnabled() {
+            let archiver = audioArchiverFactory()
+            archiver.start()
+            audioArchiver = archiver
+        } else {
+            audioArchiver = nil
+        }
         // 이전 회의의 관련 문서 조회 결과가 새 회의에 남지 않도록 초기화.
         RelatedInfoService.shared.clear()
 
@@ -260,6 +278,7 @@ public final class TranscriptionViewModel: ObservableObject {
         audioSource.onBuffer = { [weak self] samples in
             Task { @MainActor [weak self] in
                 self?.audioSampleBuffer.append(samples)
+                self?.audioArchiver?.append(samples: samples)
                 self?.vadProcessor.process(samples: samples)
             }
         }
@@ -355,6 +374,11 @@ public final class TranscriptionViewModel: ObservableObject {
         // MicrophoneSource는 audio tap에서 DispatchQueue.main.async로 buffer를 넘긴다.
         // stop 직전에 이미 main queue에 올라온 마지막 buffer가 VAD queue에 들어간 뒤 drain한다.
         await waitForMainQueueTurn()
+        if let audioArchiver {
+            lastArchivedAudioFileName = await audioArchiver.finish()
+            self.audioArchiver = nil
+            Log.audio.info("recording audio archived file=\(self.lastArchivedAudioFileName ?? "none", privacy: .public)")
+        }
         if let finalChunk = await vadProcessor.flushPending() {
             enqueueChunk(finalChunk)
         }
