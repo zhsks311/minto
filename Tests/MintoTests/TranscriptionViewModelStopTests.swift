@@ -104,7 +104,8 @@ struct TranscriptionViewModelStopTests {
                 endSeconds: 3.75
             )
         )
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // 고정 sleep은 병렬 부하에서 preview 전사 완료 전에 깨어나 flaky했다 — 조건 대기로 교체.
+        await waitUntil { viewModel.pendingSegment != nil }
 
         let pending = try #require(viewModel.pendingSegment)
         #expect(pending.text == "미리보기 발화")
@@ -362,8 +363,10 @@ private final class StubSummaryGenerator: TranscriptionSummaryGenerating {
 }
 
 @MainActor
+// 타임아웃은 실패 한계일 뿐 정상 경로는 조건 충족 즉시 반환한다.
+// 500ms는 병렬 전체 테스트 부하에서 간헐 초과(flaky)가 관측돼 5초로 늘렸다.
 private func waitUntil(
-    timeoutNanoseconds: UInt64 = 500_000_000,
+    timeoutNanoseconds: UInt64 = 5_000_000_000,
     condition: @escaping @MainActor () -> Bool
 ) async {
     let started = DispatchTime.now().uptimeNanoseconds
