@@ -550,6 +550,8 @@ final class ImportCorrectionPipeline {
         batchBuffer.removeAll()
     }
 
+    /// 단건 교정 디스패치. 제품 임포트 경로는 배치(appendRawAndEnqueue)만 쓰고,
+    /// 이 경로는 limiter 계약을 단건 단위로 검증하는 테스트가 사용한다.
     func dispatchCorrection(
         at index: Int,
         rawText: String,

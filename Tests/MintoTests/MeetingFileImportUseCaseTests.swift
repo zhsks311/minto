@@ -298,7 +298,7 @@ struct MeetingFileImportUseCaseTests {
         #expect(record.transcript[1].timestamp == startedAt.addingTimeInterval(1))
     }
 
-    @Test("동시 교정은 주입한 상한을 넘지 않는다")
+    @Test("배치 경로에서도 모든 청크가 교정 호출을 거친다 (4청크 → 배치 3+1)")
     func limitsConcurrentCorrections() async throws {
         resetImportStateForTest()
         defer { resetImportStateForTest() }
@@ -323,7 +323,11 @@ struct MeetingFileImportUseCaseTests {
         )
 
         #expect(correction.calls.count == 4)
-        #expect(correction.maxActiveCorrections == 2)
+        #expect(correction.batchCalls.map(\.texts.count) == [3, 1])
+        // 동시 진입 상한 자체는 ImportCorrectionPipelineTests.limiterCapsConcurrentEntries가
+        // 게이트로 결정적으로 검증한다 — 배치 2개 + 지연 기반의 maxActive 단언은 타이밍에
+        // 따라 1이 될 수 있어(flaky) 여기서 검증하지 않는다.
+        #expect(correction.maxActiveCorrections <= 2)
     }
 
     @Test("교정 실패(nil)는 해당 청크만 원문으로 남긴다")
