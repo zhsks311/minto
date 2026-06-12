@@ -194,6 +194,36 @@ private struct SileroVADEmission: Sendable {
     var previewChunks: [AudioChunk] = []
 }
 
+/// 임의 크기로 들어오는 오디오를 모델 프레임 크기(4096샘플) 단위로 잘라 내보낸다.
+/// 잔여(<프레임)는 다음 append까지 보관한다.
+struct SileroModelFrameAccumulator {
+    private let frameSize: Int
+    private var pending: [Float] = []
+
+    init(frameSize: Int) {
+        self.frameSize = max(1, frameSize)
+    }
+
+    var pendingCount: Int { pending.count }
+
+    mutating func append(_ samples: [Float]) -> [[Float]] {
+        pending.append(contentsOf: samples)
+        guard pending.count >= frameSize else { return [] }
+        var frames: [[Float]] = []
+        var offset = 0
+        while pending.count - offset >= frameSize {
+            frames.append(Array(pending[offset..<(offset + frameSize)]))
+            offset += frameSize
+        }
+        pending.removeFirst(offset)
+        return frames
+    }
+
+    mutating func reset() {
+        pending = []
+    }
+}
+
 private actor SileroVADCore {
     private static let sampleRate = 16_000
     private static let minSpeechSamples = Int(VADProcessor.minSpeechDuration * Double(sampleRate))
@@ -209,6 +239,11 @@ private actor SileroVADCore {
     private var activeStartSample: Int?
     private var pendingFinalRange: Range<Int>?
     private var lastPreviewEndSample = 0
+    /// Silero 모델은 정확히 4096샘플(256ms) 프레임을 기대한다. FluidAudio는 모자란 입력을
+    /// 마지막 샘플 반복으로 패딩하는데, 라이브 마이크 버퍼(~85ms)를 그대로 넘기면 매 프레임의
+    /// 2/3가 패딩이 되어 음성 확률이 희석돼 speechStart가 영원히 발생하지 않는다.
+    /// 그래서 들어온 샘플을 여기 모았다가 정확히 프레임 단위로만 모델에 보낸다.
+    private var frameAccumulator = SileroModelFrameAccumulator(frameSize: VadManager.chunkSize)
 
     init(configuration: SileroVADProcessor.Configuration) {
         self.configuration = configuration
@@ -218,18 +253,29 @@ private actor SileroVADCore {
         guard !samples.isEmpty else { return SileroVADEmission() }
         sampleBuffer.append(contentsOf: samples)
 
+        var emission = SileroVADEmission()
+        for frame in frameAccumulator.append(samples) {
+            guard await processFrame(frame, into: &emission) else { break }
+        }
+        return emission
+    }
+
+    private func processFrame(_ frame: [Float], into emission: inout SileroVADEmission) async -> Bool {
         do {
             let manager = try await loadManager()
             let result = try await manager.processStreamingChunk(
-                samples,
+                frame,
                 state: streamState,
                 config: configuration.segmentationConfig
             )
             streamState = result.state
-            return handle(result: result)
+            let frameEmission = handle(result: result)
+            emission.finalChunks.append(contentsOf: frameEmission.finalChunks)
+            emission.previewChunks.append(contentsOf: frameEmission.previewChunks)
+            return true
         } catch {
             Log.vad.error("Silero processing failed: \(error.localizedDescription, privacy: .public)")
-            return SileroVADEmission()
+            return false
         }
     }
 
@@ -245,10 +291,13 @@ private actor SileroVADCore {
             trimBuffer(keepingFrom: streamState.processedSamples)
             return nil
         }
-        let chunk = makeChunk(startSample: start, endSample: streamState.processedSamples, trailingSilence: 0, isPreview: false)
+        // 발화가 진행 중이면 모델이 아직 못 본 프레임 미만 잔여(<256ms)도 마지막 발화에 포함한다.
+        let bufferEnd = bufferStartSample + sampleBuffer.count
+        let end = max(streamState.processedSamples, bufferEnd)
+        let chunk = makeChunk(startSample: start, endSample: end, trailingSilence: 0, isPreview: false)
         activeStartSample = nil
         if let chunk {
-            let endSeconds = chunk.endSeconds ?? Double(streamState.processedSamples) / Double(Self.sampleRate)
+            let endSeconds = chunk.endSeconds ?? Double(end) / Double(Self.sampleRate)
             trimBuffer(keepingFrom: Int(endSeconds * Double(Self.sampleRate)))
         }
         return chunk
@@ -262,6 +311,7 @@ private actor SileroVADCore {
         }
         sampleBuffer = []
         bufferStartSample = 0
+        frameAccumulator.reset()
         activeStartSample = nil
         pendingFinalRange = nil
         lastPreviewEndSample = 0
