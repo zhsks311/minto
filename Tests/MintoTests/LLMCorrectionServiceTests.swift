@@ -104,6 +104,83 @@ struct LLMCorrectionServiceTests {
         #expect(provider.requests.isEmpty)
     }
 
+    @Test("correctBatch는 번호 형식 응답을 파싱해 교정문 배열을 반환한다")
+    func correctBatchParsesNumberedResponse() async {
+        let service = makeService(selectedProvider: .gptAPI)
+        let provider = StubCorrectionProvider(responseText: "[1] 교정 첫째\n[2] 교정 둘째")
+
+        let result = await service.correctBatch(
+            texts: ["원문 첫째", "원문 둘째"],
+            context: LLMCorrectionContext(topic: "배치 테스트"),
+            providerResolver: { _ in provider }
+        )
+
+        #expect(result?.count == 2)
+        #expect(result?[0] == "교정 첫째")
+        #expect(result?[1] == "교정 둘째")
+        #expect(provider.requests.count == 1)
+        #expect(provider.requests.first?.useCase == .correction)
+        #expect(provider.requests.first?.maxOutputTokens == 1800)
+    }
+
+    @Test("correctBatch는 파싱 실패 시 nil을 반환한다")
+    func correctBatchReturnsNilOnParseFail() async {
+        let service = makeService(selectedProvider: .gptAPI)
+        // 번호 없는 잘못된 응답
+        let provider = StubCorrectionProvider(responseText: "교정 결과 두 줄")
+
+        let result = await service.correctBatch(
+            texts: ["첫째", "둘째"],
+            context: LLMCorrectionContext(),
+            providerResolver: { _ in provider }
+        )
+
+        #expect(result == nil)
+    }
+
+    @Test("correctBatch는 provider 오류 시 nil을 반환한다")
+    func correctBatchReturnsNilOnProviderError() async {
+        let service = makeService(selectedProvider: .gptAPI)
+        let provider = StubCorrectionProvider(error: LLMProviderError.network("failed"))
+
+        let result = await service.correctBatch(
+            texts: ["텍스트"],
+            context: LLMCorrectionContext(),
+            providerResolver: { _ in provider }
+        )
+
+        #expect(result == nil)
+    }
+
+    @Test("correctBatch는 provider 미선택이면 nil을 반환한다")
+    func correctBatchNoneProviderReturnsNil() async {
+        let service = makeService(selectedProvider: .none)
+        let provider = StubCorrectionProvider()
+
+        let result = await service.correctBatch(
+            texts: ["텍스트"],
+            context: LLMCorrectionContext(),
+            providerResolver: { _ in provider }
+        )
+
+        #expect(result == nil)
+        #expect(provider.requests.isEmpty)
+    }
+
+    @Test("correctBatch maxOutputTokens는 900 × 항목 수다")
+    func correctBatchMaxOutputTokensScalesWithCount() async {
+        let service = makeService(selectedProvider: .gptAPI)
+        let provider = StubCorrectionProvider(responseText: "[1] a\n[2] b\n[3] c")
+
+        _ = await service.correctBatch(
+            texts: ["x", "y", "z"],
+            context: LLMCorrectionContext(),
+            providerResolver: { _ in provider }
+        )
+
+        #expect(provider.requests.first?.maxOutputTokens == 2700)
+    }
+
     private func makeService(selectedProvider: LLMProviderSelection) -> LLMCorrectionService {
         let service = LLMCorrectionService(defaults: InMemoryUserDefaults())
         service.selectedProvider = selectedProvider

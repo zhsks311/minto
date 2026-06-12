@@ -129,6 +129,57 @@ public final class LLMCorrectionService: ObservableObject {
         }
     }
 
+    // MARK: - Batch Correct
+
+    /// 여러 텍스트를 한 번의 LLM 호출로 배치 교정한다.
+    /// 파싱 실패 또는 provider 오류 시 nil 반환 — 호출부가 원문 유지(fail-soft)를 담당한다.
+    public func correctBatch(texts: [String], context: LLMCorrectionContext) async -> [String?]? {
+        await correctBatch(texts: texts, context: context, providerResolver: nil)
+    }
+
+    func correctBatch(
+        texts: [String],
+        context: LLMCorrectionContext,
+        providerResolver: TextProviderResolver? = nil
+    ) async -> [String?]? {
+        guard selectedProvider != .none, !texts.isEmpty else { return nil }
+
+        activeCorrections += 1
+        defer { activeCorrections -= 1 }
+
+        let (instructions, userContent) = BatchCorrectionPrompt.build(
+            texts: texts,
+            topic: context.topic,
+            glossary: context.glossary,
+            context: context.previousText,
+            summary: context.runningSummary,
+            document: context.document
+        )
+
+        guard let provider = selectedTextProvider(providerResolver: providerResolver) else { return nil }
+
+        let maxTokens = 900 * texts.count
+        Log.correction.info("correctBatch via \(provider.descriptor.id.rawValue, privacy: .public) batchSize=\(texts.count, privacy: .public)")
+        do {
+            let response = try await provider.generateText(LLMTextRequest(
+                useCase: .correction,
+                instructions: instructions,
+                userContent: userContent,
+                maxOutputTokens: maxTokens
+            ))
+            let parsed = BatchCorrectionPrompt.parse(response: response.text, expectedCount: texts.count)
+            if parsed == nil {
+                Log.correction.info("correctBatch parse failed batchSize=\(texts.count, privacy: .public)")
+            } else {
+                Log.correction.info("correctBatch completed via \(provider.descriptor.id.rawValue, privacy: .public) batchSize=\(texts.count, privacy: .public)")
+            }
+            return parsed
+        } catch {
+            Log.correction.error("correctBatch failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     // MARK: - Auth helpers
 
     public var isLoggedIn: Bool {

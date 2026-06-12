@@ -112,6 +112,7 @@ extension STTService: MeetingFileImportSTTServicing {}
 @MainActor
 protocol MeetingFileImportCorrecting: AnyObject {
     func correct(text: String, context: LLMCorrectionContext) async -> String?
+    func correctBatch(texts: [String], context: LLMCorrectionContext) async -> [String?]?
 }
 
 extension LLMCorrectionService: MeetingFileImportCorrecting {}
@@ -250,6 +251,10 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 }
             )
             extractionDuration = extraction.durationSeconds
+            // 배치 버퍼에 남은 청크를 마지막 배치로 flush한다.
+            if shouldCorrect {
+                correctionPipeline.flushBatchBuffer(using: correctionService)
+            }
             Log.importer.info("import extract done file=\(fileName, privacy: .public) segments=\(correctionPipeline.segments.count, privacy: .public)")
             try Task.checkCancellation()
 
@@ -369,19 +374,20 @@ public final class MeetingFileImportUseCase: ObservableObject {
             runningSummary: "",
             document: document
         )
-        let segmentIndex = pipeline.appendRaw(Segment(
+        let segment = Segment(
             id: rawResult.segment.id,
             text: rawText,
             timestamp: startedAt.addingTimeInterval(chunk.startSeconds),
             duration: chunk.durationSeconds
-        ))
+        )
         if shouldCorrect {
-            pipeline.dispatchCorrection(
-                at: segmentIndex,
-                rawText: rawText,
+            pipeline.appendRawAndEnqueue(
+                segment,
                 context: correctionContext,
                 using: correctionService
             )
+        } else {
+            pipeline.appendRaw(segment)
         }
     }
 
@@ -481,6 +487,9 @@ public final class MeetingFileImportUseCase: ObservableObject {
 /// STT는 ANE-bound라 직렬을 유지하고, 네트워크 대기인 LLM 교정만 동시 상한 안에서
 /// 백그라운드로 겹친다. segment 순서는 추가 시점 index로 고정되므로 교정 완료 순서와
 /// 무관하게 transcript 순서가 보존된다. 교정 실패/취소는 원문 유지(fail-soft).
+///
+/// 배치 모드: appendRawAndEnqueue로 청크를 누적하고, batchSize개가 차면 자동으로
+/// correctBatch를 호출한다. 추출 완료 후 flushBatchBuffer()로 잔여 청크를 처리한다.
 @MainActor
 final class ImportCorrectionPipeline {
     private(set) var segments: [Segment] = []
@@ -491,6 +500,15 @@ final class ImportCorrectionPipeline {
     private var slotWaiters: [CheckedContinuation<Bool, Never>] = []
     private(set) var correctedCount = 0
     private(set) var fallbackCount = 0
+
+    // 배치 버퍼: (segmentIndex, rawText, context)
+    private struct BatchEntry {
+        let segmentIndex: Int
+        let rawText: String
+        let context: LLMCorrectionContext
+    }
+    private var batchBuffer: [BatchEntry] = []
+    static let defaultBatchSize = 3
 
     var totalCorrectionCount: Int { correctionTasks.count }
 
@@ -510,6 +528,30 @@ final class ImportCorrectionPipeline {
         return segments.count - 1
     }
 
+    /// 원문을 배치 버퍼에 추가하고, batchSize에 도달하면 즉시 배치를 디스패치한다.
+    func appendRawAndEnqueue(
+        _ segment: Segment,
+        context: LLMCorrectionContext,
+        batchSize: Int = defaultBatchSize,
+        using service: any MeetingFileImportCorrecting
+    ) {
+        let index = appendRaw(segment)
+        batchBuffer.append(BatchEntry(segmentIndex: index, rawText: segment.text, context: context))
+        if batchBuffer.count >= batchSize {
+            dispatchBatch(entries: batchBuffer, using: service)
+            batchBuffer.removeAll()
+        }
+    }
+
+    /// 추출 완료 후 버퍼에 남은 청크를 마지막 배치로 디스패치한다.
+    func flushBatchBuffer(using service: any MeetingFileImportCorrecting) {
+        guard !batchBuffer.isEmpty else { return }
+        dispatchBatch(entries: batchBuffer, using: service)
+        batchBuffer.removeAll()
+    }
+
+    /// 단건 교정 디스패치. 제품 임포트 경로는 배치(appendRawAndEnqueue)만 쓰고,
+    /// 이 경로는 limiter 계약을 단건 단위로 검증하는 테스트가 사용한다.
     func dispatchCorrection(
         at index: Int,
         rawText: String,
@@ -538,6 +580,50 @@ final class ImportCorrectionPipeline {
                 self.correctedCount += 1
             } else {
                 self.fallbackCount += 1
+            }
+        }
+        correctionTasks.append(task)
+    }
+
+    /// 배치 단위로 교정을 디스패치한다. slot 1개를 점유(배치 = 호출 1회).
+    private func dispatchBatch(
+        entries: [BatchEntry],
+        using service: any MeetingFileImportCorrecting
+    ) {
+        guard !entries.isEmpty else { return }
+        // 배치의 문맥은 첫 청크의 context를 사용한다(직전 원문 5개 스냅샷).
+        let batchContext = entries[0].context
+        let texts = entries.map(\.rawText)
+        let indices = entries.map(\.segmentIndex)
+
+        let task = Task { [weak self] in
+            guard let self else { return }
+            guard await self.acquireSlot() else {
+                self.fallbackCount += entries.count
+                return
+            }
+            defer { self.releaseSlot() }
+            guard !Task.isCancelled else {
+                self.fallbackCount += entries.count
+                return
+            }
+            let results = await service.correctBatch(texts: texts, context: batchContext)
+            // 배치 파싱 실패 시 그 배치 전체 원문 유지
+            guard let results else {
+                self.fallbackCount += entries.count
+                return
+            }
+            for (offset, correctedItem) in results.enumerated() {
+                guard offset < indices.count else { break }
+                let segIndex = indices[offset]
+                if let corrected = correctedItem?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .nonEmpty {
+                    self.replaceText(at: segIndex, with: corrected)
+                    self.correctedCount += 1
+                } else {
+                    self.fallbackCount += 1
+                }
             }
         }
         correctionTasks.append(task)
