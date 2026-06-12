@@ -15,6 +15,20 @@ struct EmptyFinalRepairPolicy: Sendable, Equatable {
         maxBufferedSeconds: 0
     )
 
+    static let preferenceKey = "emptyFinalRepairEnabled"
+    /// 토글이 꺼져 있어도 회의 중 켜면 즉시 동작해야 하므로 버퍼는 항상 이 크기로 유지한다.
+    static let defaultMaxBufferedSeconds = 45.0
+
+    /// 검증된 조합(repair pad=1.0s, min chunk=2.0s, min audio=-35dB) — 벤치마크에서
+    /// empty final을 short3 기준 42→9개로 줄인 값이라 설정으로 노출하지 않고 고정한다.
+    static let verifiedCandidate = EmptyFinalRepairPolicy(
+        isEnabled: true,
+        padSeconds: 1.0,
+        minChunkSeconds: 2.0,
+        minAudioDB: -35.0,
+        maxBufferedSeconds: defaultMaxBufferedSeconds
+    )
+
     static func fromEnvironment(
         _ environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> EmptyFinalRepairPolicy {
@@ -29,6 +43,26 @@ struct EmptyFinalRepairPolicy: Sendable, Equatable {
             minAudioDB: Float(double(environment["MINTO_EMPTY_FINAL_REPAIR_MIN_AUDIO_DB"]) ?? -35.0),
             maxBufferedSeconds: nonNegativeDouble(environment["MINTO_EMPTY_FINAL_REPAIR_BUFFER_SEC"]) ?? 45.0
         )
+    }
+
+    /// 벤치마크/진단용 환경변수가 있으면 그것이 사용자 설정보다 우선한다.
+    /// 환경변수가 없으면 설정 토글(기본 켬)에 따라 검증된 조합을 쓴다.
+    static func resolve(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        defaults: UserDefaults = .standard
+    ) -> EmptyFinalRepairPolicy {
+        if environment["MINTO_EMPTY_FINAL_REPAIR"] != nil {
+            return fromEnvironment(environment)
+        }
+        guard preferenceEnabled(in: defaults) else {
+            return .disabled
+        }
+        return .verifiedCandidate
+    }
+
+    static func preferenceEnabled(in defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: preferenceKey) != nil else { return true }
+        return defaults.bool(forKey: preferenceKey)
     }
 
     func allowsRetry(for chunk: AudioChunk, audioDB: Float) -> Bool {

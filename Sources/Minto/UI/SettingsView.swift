@@ -74,8 +74,11 @@ private enum ConfluenceCredentialCheckState: Equatable {
 
 public struct SettingsView: View {
     @ObservedObject public var viewModel: TranscriptionViewModel
+    @ObservedObject private var vadModelStore = SileroVADModelStore.shared
     @AppStorage(SpeechEnginePreferences.selectedEngineKey) private var selectedSpeechEngineRaw = SpeechEngineID.defaultEngine.rawValue
     @AppStorage("selectedModel") private var selectedModel = "openai_whisper-large-v3-v20240930_turbo"
+    @AppStorage(VADEnginePreferences.selectedEngineKey) private var selectedVADEngineRaw = VADEngineID.silero.rawValue
+    @AppStorage(EmptyFinalRepairPolicy.preferenceKey) private var emptyFinalRepairEnabled = true
 
     // 교정 provider별 모델 선택(서비스가 같은 UserDefaults 키를 읽는다).
     @AppStorage("codexModel") private var codexModel = CodexOAuthService.defaultModelID
@@ -144,6 +147,7 @@ public struct SettingsView: View {
             sourceConnectionsSection
 
             speechEngineSection
+            vadEngineSection
 
             Section("오버레이") {
                 Text("투명도는 메뉴바에서 실시간으로 조절할 수 있어요.")
@@ -237,6 +241,15 @@ public struct SettingsView: View {
         }
         .onChange(of: localLLMModelID) { oldValue, newValue in
             logSettingChange(key: LocalLLMProviderConfiguration.modelIDKey, oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: selectedVADEngineRaw) { oldValue, newValue in
+            logSettingChange(key: VADEnginePreferences.selectedEngineKey, oldValue: oldValue, newValue: newValue)
+            if newValue == VADEngineID.silero.rawValue {
+                vadModelStore.prepareIfNeeded()
+            }
+        }
+        .onChange(of: emptyFinalRepairEnabled) { oldValue, newValue in
+            logSettingChange(key: EmptyFinalRepairPolicy.preferenceKey, oldValue: "\(oldValue)", newValue: "\(newValue)")
         }
     }
 
@@ -1816,6 +1829,102 @@ public struct SettingsView: View {
                 }
                 .padding(.vertical, 4)
             }
+        }
+    }
+
+    // MARK: - VAD engine section
+
+    private var selectedVADEngine: VADEngineID {
+        VADEngineID(rawValue: selectedVADEngineRaw) ?? .silero
+    }
+
+    private var vadEngineSection: some View {
+        Section("음성 구간 감지") {
+            ForEach(VADEngineID.allCases) { engine in
+                Button {
+                    selectedVADEngineRaw = engine.rawValue
+                } label: {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: selectedVADEngine == engine ? "largecircle.fill.circle" : "circle")
+                            .foregroundColor(selectedVADEngine == engine ? .accentColor : .secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(engine.title)
+                                .foregroundColor(.primary)
+                            Text(engine.subtitle)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
+            if selectedVADEngine == .silero {
+                vadModelStatusRow
+            }
+
+            Toggle("빈 구간 복구", isOn: $emptyFinalRepairEnabled)
+            Text("녹음 종료 시 전사가 비어 있는 구간을 앞뒤 음성을 더 붙여 한 번 더 인식해요. 회의 중에 바꿔도 바로 적용돼요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if viewModel.isRecording {
+                Label("감지 방식 변경은 다음 녹음부터 적용돼요.", systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+
+    private var vadModelStatusRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            switch vadModelStore.state {
+            case .unloaded:
+                HStack {
+                    Text("감지 모델이 아직 준비되지 않았어요. (약 1MB)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Button("지금 받기") {
+                        vadModelStore.prepare()
+                    }
+                    .font(.caption)
+                }
+                Text("준비 전에는 기본 감지로 동작해요.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            case .downloading(let progress):
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.7)
+                    Text("감지 모델 다운로드 중 \(Int(progress * 100))%")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            case .loading:
+                Text("감지 모델 초기화 중")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            case .loaded:
+                Label("감지 모델 준비됨", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            case .failed(let message):
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("감지 모델 준비 실패: \(message)")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    Button("다시 시도") {
+                        vadModelStore.prepare()
+                    }
+                    .font(.caption)
+                    Text("준비 전에는 기본 감지로 동작해요.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .onAppear {
+            vadModelStore.prepareIfNeeded()
         }
     }
 
