@@ -4,9 +4,13 @@ import Testing
 
 @Suite("VoiceActivityDetectorFactory Tests")
 struct VoiceActivityDetectorFactoryTests {
-    @Test("환경값이 없으면 기존 Energy VAD를 사용한다")
-    func defaultUsesEnergyVAD() {
-        let detector = VoiceActivityDetectorFactory.makeDefault(environment: [:])
+    @Test("환경값이 없으면 사용자 설정을 따르고, 모델이 없으면 Energy VAD로 fallback한다")
+    func defaultFollowsPreferenceAndFallsBackWithoutModel() {
+        // 설정 기본값(silero)이라도 모델 경로가 비어 있으면 Energy로 내려간다.
+        let detector = VoiceActivityDetectorFactory.makeDefault(
+            environment: ["MINTO_FLUIDAUDIO_MODEL_DIR": "/private/tmp/minto2-missing-silero-\(UUID().uuidString)"],
+            defaults: InMemoryUserDefaults()
+        )
 
         #expect(detector is VADProcessor)
     }

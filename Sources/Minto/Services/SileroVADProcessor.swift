@@ -84,10 +84,21 @@ public final class SileroVADProcessor: @unchecked Sendable {
             minSilenceDuration: 0.4,
             maxSpeechDuration: 14.0,
             speechPadding: 0.12,
-            modelDirectory: URL(fileURLWithPath: "/private/tmp/minto2-fluidaudio-models", isDirectory: true),
+            modelDirectory: Configuration.defaultModelDirectory,
             mergeGapSeconds: 1.1,
             mergeMaxSeconds: VADProcessor.maxChunkDuration
         )
+
+        /// 모델은 재시작 후에도 유지돼야 하므로 temp가 아니라 Application Support에 둔다.
+        /// 벤치마크는 MINTO_FLUIDAUDIO_MODEL_DIR 환경변수로 자체 경로를 쓴다.
+        static var defaultModelDirectory: URL {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            return base
+                .appendingPathComponent("Minto", isDirectory: true)
+                .appendingPathComponent("models", isDirectory: true)
+                .appendingPathComponent("fluidaudio", isDirectory: true)
+        }
 
         init(
             threshold: Float,

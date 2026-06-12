@@ -53,9 +53,18 @@ public final class TranscriptionViewModel: ObservableObject {
     private var chunkContinuation: AsyncStream<AudioChunk>.Continuation?
     private var audioSource: any AudioSourceProtocol
     private let audioSourceFactory: @MainActor (AudioInputMode) -> any AudioSourceProtocol
-    private let vadProcessor: any VoiceActivityDetector
-    private let emptyFinalRepairPolicy: EmptyFinalRepairPolicy
+    private var vadProcessor: any VoiceActivityDetector
+    /// nil이면 주입된 VAD를 그대로 쓴다. 있으면 녹음 시작마다 현재 인스턴스를 넘겨
+    /// 다음 인스턴스를 결정한다 — 같은 엔진이면 재사용해 모델 워밍업을 유지하고,
+    /// 설정이 바뀌었으면 교체한다. (설정 변경은 다음 녹음부터 적용)
+    private let vadProcessorFactory: (@MainActor (any VoiceActivityDetector) -> any VoiceActivityDetector)?
+    /// nil이면 사용 시점에 설정/환경변수에서 해석한다. (회의 중 토글이 현재 녹음에도 즉시 반영)
+    private let injectedEmptyFinalRepairPolicy: EmptyFinalRepairPolicy?
     private let audioSampleBuffer: TranscriptionAudioSampleBuffer
+
+    private var emptyFinalRepairPolicy: EmptyFinalRepairPolicy {
+        injectedEmptyFinalRepairPolicy ?? .resolve()
+    }
     private var state = TranscriptionState()
     private var recordingStartDate: Date?
 
@@ -86,7 +95,8 @@ public final class TranscriptionViewModel: ObservableObject {
             sttService: STTService(),
             audioSource: MicrophoneSource(),
             vadProcessor: VoiceActivityDetectorFactory.makeDefault(),
-            audioSourceFactory: AudioSourceFactory.makeSource(for:)
+            audioSourceFactory: AudioSourceFactory.makeSource(for:),
+            vadProcessorFactory: { VoiceActivityDetectorFactory.makeNext(current: $0) }
         )
     }
 
@@ -95,8 +105,9 @@ public final class TranscriptionViewModel: ObservableObject {
         audioSource: any AudioSourceProtocol,
         vadProcessor: any VoiceActivityDetector,
         summaryService: any TranscriptionSummaryGenerating = SummaryService.shared,
-        emptyFinalRepairPolicy: EmptyFinalRepairPolicy = .fromEnvironment(),
-        audioSourceFactory: (@MainActor (AudioInputMode) -> any AudioSourceProtocol)? = nil
+        emptyFinalRepairPolicy: EmptyFinalRepairPolicy? = nil,
+        audioSourceFactory: (@MainActor (AudioInputMode) -> any AudioSourceProtocol)? = nil,
+        vadProcessorFactory: (@MainActor (any VoiceActivityDetector) -> any VoiceActivityDetector)? = nil
     ) {
         let initialAudioSource = audioSource
         self.sttService = sttService
@@ -104,9 +115,11 @@ public final class TranscriptionViewModel: ObservableObject {
         self.audioSource = audioSource
         self.audioSourceFactory = audioSourceFactory ?? { _ in initialAudioSource }
         self.vadProcessor = vadProcessor
-        self.emptyFinalRepairPolicy = emptyFinalRepairPolicy
+        self.vadProcessorFactory = vadProcessorFactory
+        self.injectedEmptyFinalRepairPolicy = emptyFinalRepairPolicy
         self.audioSampleBuffer = TranscriptionAudioSampleBuffer(
-            maxBufferedSeconds: emptyFinalRepairPolicy.maxBufferedSeconds
+            maxBufferedSeconds: emptyFinalRepairPolicy?.maxBufferedSeconds
+                ?? EmptyFinalRepairPolicy.defaultMaxBufferedSeconds
         )
 
         // STTService 상태 변화 → ViewModel @Published 전파
@@ -207,7 +220,13 @@ public final class TranscriptionViewModel: ObservableObject {
         errorMessage = nil
         isFinalizingMeeting = false
         audioSampleBuffer.reset()
+        // VAD 엔진 설정 변경은 다음 녹음부터 적용 — 녹음 시작 시점에 설정을 다시 읽는다.
+        if let vadProcessorFactory {
+            vadProcessor = vadProcessorFactory(vadProcessor)
+        }
         vadProcessor.reset()
+        let appliedVADEngine = vadProcessor is SileroVADProcessor ? "silero" : "energy"
+        Log.vad.info("recording vad engine=\(appliedVADEngine, privacy: .public) emptyFinalRepair=\(self.emptyFinalRepairPolicy.isEnabled, privacy: .public)")
         // 이전 회의의 관련 문서 조회 결과가 새 회의에 남지 않도록 초기화.
         RelatedInfoService.shared.clear()
 

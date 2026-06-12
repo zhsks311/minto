@@ -118,6 +118,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         LLMSummarySettingsService.shared.migrateToFollowSemanticIfNeeded()
         MeetingSearchAnswerSettingsService.shared.migrateToFollowSemanticIfNeeded()
         SpeechEnginePreferences.normalizeLegacyValues()
+        // Silero VAD가 선택돼 있고 모델(~1MB)이 없으면 백그라운드로 받아 둔다.
+        // 준비 전 녹음은 factory가 Energy VAD로 fail-soft 한다.
+        if VADEnginePreferences.selectedEngine() == .silero {
+            SileroVADModelStore.shared.prepareIfNeeded()
+        }
         Task {
             let savedEngine = SpeechEnginePreferences.selectedEngine()
             let availability = await STTService.engineAvailability(for: savedEngine)
