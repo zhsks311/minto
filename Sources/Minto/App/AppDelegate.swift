@@ -164,9 +164,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         // 이전 저장 실패 복구본이 있으면 자동 복원한다.
         // MeetingStore.shared는 @MainActor static let이라 이 첫 접근에서
         // sync 초기화(reload 포함)가 완료된 뒤 복원이 진행된다.
-        let restored = MeetingSaveRecovery.restorePendingRecords(into: MeetingStore.shared)
-        if restored > 0 {
-            Log.store.info("복구 완료: \(restored, privacy: .public)건")
+        Task {
+            let (restored, failed) = MeetingSaveRecovery.restorePendingRecords(into: MeetingStore.shared)
+            if restored > 0 {
+                Log.store.info("복구 완료: \(restored, privacy: .public)건")
+            }
+            if failed > 0 {
+                Log.store.error("복원 실패 \(failed, privacy: .public)건, 파일 유지")
+            }
         }
 
         // 런치 시 회의 목록 메인 윈도우를 띄워 저장된 회의를 바로 볼 수 있게 한다.
