@@ -49,7 +49,13 @@ public struct MeetingResult: Sendable {
         public let id = UUID()
         public let time: String
         public let text: String
-        public init(time: String, text: String) { self.time = time; self.text = text }
+        public let speaker: String?
+
+        public init(time: String, text: String, speaker: String? = nil) {
+            self.time = time
+            self.text = text
+            self.speaker = speaker
+        }
     }
 
     public init(title: String, metaText: String, summary: MeetingSummary, transcript: [TranscriptLine]) {
@@ -278,6 +284,12 @@ public struct MeetingSummaryView: View {
                     HStack(alignment: .top, spacing: 12) {
                         Text(line.time).font(.system(size: 12, weight: .bold)).foregroundColor(RC.time)
                             .frame(width: 44, alignment: .leading)
+                        if let speaker = normalizedSpeaker(line.speaker) {
+                            Text(speaker).font(.system(size: 12, weight: .semibold)).foregroundColor(RC.meta)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: 72, alignment: .leading)
+                        }
                         Text(line.text).font(.system(size: 13)).foregroundColor(RC.bodyAlt)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .fixedSize(horizontal: false, vertical: true)
@@ -341,6 +353,14 @@ public struct MeetingSummaryView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(r.summary.markdown(), forType: .string)
     }
+
+    private func normalizedSpeaker(_ speaker: String?) -> String? {
+        guard let speaker = speaker?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !speaker.isEmpty else {
+            return nil
+        }
+        return speaker
+    }
 }
 
 extension MeetingResult {
@@ -349,7 +369,11 @@ extension MeetingResult {
         let start = record.transcript.first?.timestamp ?? record.startedAt
         let lines = record.transcript.map { seg in
             let s = max(0, Int(seg.timestamp.timeIntervalSince(start).rounded()))
-            return TranscriptLine(time: String(format: "%02d:%02d", s / 60, s % 60), text: seg.text)
+            return TranscriptLine(
+                time: String(format: "%02d:%02d", s / 60, s % 60),
+                text: seg.text,
+                speaker: seg.speaker
+            )
         }
         return MeetingResult(title: record.title, metaText: record.subtitle, summary: record.summary, transcript: lines)
     }

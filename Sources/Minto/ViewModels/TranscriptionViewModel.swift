@@ -510,7 +510,8 @@ public final class TranscriptionViewModel: ObservableObject {
                 id: segment.id,
                 text: segment.text,
                 timestamp: timestamp,
-                duration: duration
+                duration: duration,
+                speaker: segment.speaker
             ),
             isFinal: result.isFinal
         )

@@ -378,7 +378,8 @@ public final class MeetingFileImportUseCase: ObservableObject {
             id: rawResult.segment.id,
             text: rawText,
             timestamp: startedAt.addingTimeInterval(chunk.startSeconds),
-            duration: chunk.durationSeconds
+            duration: chunk.durationSeconds,
+            speaker: rawResult.segment.speaker
         )
         if shouldCorrect {
             pipeline.appendRawAndEnqueue(
@@ -660,7 +661,8 @@ final class ImportCorrectionPipeline {
             id: original.id,
             text: text,
             timestamp: original.timestamp,
-            duration: original.duration
+            duration: original.duration,
+            speaker: original.speaker
         )
     }
 

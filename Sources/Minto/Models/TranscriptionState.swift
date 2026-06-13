@@ -49,7 +49,8 @@ public struct TranscriptionState: Sendable {
             id: first.id,
             text: correctedText,
             timestamp: first.timestamp,
-            duration: totalDuration
+            duration: totalDuration,
+            speaker: first.speaker
         )
         committedSegments.removeAll { idSet.contains($0.id) }
         committedSegments.insert(merged, at: firstIdx)
@@ -59,7 +60,13 @@ public struct TranscriptionState: Sendable {
     public mutating func updateSegmentText(id: UUID, newText: String) {
         guard let idx = committedSegments.firstIndex(where: { $0.id == id }) else { return }
         let old = committedSegments[idx]
-        committedSegments[idx] = Segment(id: old.id, text: newText, timestamp: old.timestamp, duration: old.duration)
+        committedSegments[idx] = Segment(
+            id: old.id,
+            text: newText,
+            timestamp: old.timestamp,
+            duration: old.duration,
+            speaker: old.speaker
+        )
     }
 
     private func isSimilar(_ a: String, _ b: String) -> Bool {

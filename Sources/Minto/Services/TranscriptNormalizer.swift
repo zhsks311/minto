@@ -67,6 +67,7 @@ enum TranscriptNormalizer {
         maxDuration: TimeInterval,
         maxGap: TimeInterval
     ) -> Bool {
+        guard current.speaker == next.speaker else { return false }
         guard isLikelyIncompleteEnding(current.text) else { return false }
 
         let combinedLength = current.text.count + 1 + next.text.count
@@ -88,7 +89,8 @@ enum TranscriptNormalizer {
             id: current.id,
             text: text,
             timestamp: current.timestamp,
-            duration: current.duration + next.duration
+            duration: current.duration + next.duration,
+            speaker: current.speaker
         )
     }
 
@@ -97,7 +99,8 @@ enum TranscriptNormalizer {
             id: segment.id,
             text: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
             timestamp: segment.timestamp,
-            duration: segment.duration
+            duration: segment.duration,
+            speaker: segment.speaker
         )
     }
 }

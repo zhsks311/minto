@@ -5,12 +5,20 @@ public struct Segment: Identifiable, Sendable, Hashable, Codable {
     public let text: String
     public let timestamp: Date
     public let duration: TimeInterval
+    public var speaker: String?
 
-    public init(id: UUID = UUID(), text: String, timestamp: Date, duration: TimeInterval) {
+    public init(
+        id: UUID = UUID(),
+        text: String,
+        timestamp: Date,
+        duration: TimeInterval,
+        speaker: String? = nil
+    ) {
         self.id = id
         self.text = text
         self.timestamp = timestamp
         self.duration = duration
+        self.speaker = speaker
     }
 }
 

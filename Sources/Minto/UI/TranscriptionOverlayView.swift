@@ -342,6 +342,15 @@ public struct TranscriptionOverlayView: View {
                 .foregroundColor(.secondary)
                 .fixedSize()
                 .padding(.top, 2)
+            if let speaker = normalizedSpeaker(segment.speaker) {
+                Text(speaker)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 64, alignment: .leading)
+                    .padding(.top, 2)
+            }
             Text(segment.text)
                 .font(.callout)
                 .foregroundColor(.primary)
@@ -414,6 +423,14 @@ public struct TranscriptionOverlayView: View {
     private func copyTranscript() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(viewModel.allText, forType: .string)
+    }
+
+    private func normalizedSpeaker(_ speaker: String?) -> String? {
+        guard let speaker = speaker?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !speaker.isEmpty else {
+            return nil
+        }
+        return speaker
     }
 
     // MARK: - Formatters
