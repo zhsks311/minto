@@ -13,7 +13,7 @@ public struct TranscriptSpeakerMatcher: Sendable {
         meetingStart: Date
     ) -> [Segment] {
         let timeline = diarizedSegments.filter { $0.endSeconds > $0.startSeconds }
-        let labelMap = Self.makeSpeakerLabelMap(from: timeline)
+        let labelMap = DiarizationSpeakerLabeling.makeLabelMap(from: timeline)
 
         return transcript.map { segment in
             let speaker = bestSpeaker(
@@ -67,16 +67,6 @@ public struct TranscriptSpeakerMatcher: Sendable {
         let overlapRatio = best.value.seconds / segment.duration
         guard overlapRatio >= minimumOverlapRatio else { return nil }
         return best.key
-    }
-
-    private static func makeSpeakerLabelMap(
-        from segments: [DiarizedSpeakerSegment]
-    ) -> [String: String] {
-        var labels: [String: String] = [:]
-        for segment in segments where labels[segment.speakerId] == nil {
-            labels[segment.speakerId] = "화자 \(labels.count + 1)"
-        }
-        return labels
     }
 
     private static func overlapSeconds(

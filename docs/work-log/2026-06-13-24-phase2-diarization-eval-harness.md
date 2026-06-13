@@ -53,3 +53,10 @@ DIARIZATION_EVAL_TRANSCRIPT_JSON="$HOME/Library/Application Support/Minto/meetin
 - 이 작업은 평가용 테스트 브랜치 하니스다. 제품 동작은 명시 호출 전까지 바뀌지 않는다.
 - eval runner는 모델 자동 다운로드가 일어날 수 있으므로 반드시 `RUN_DIARIZATION_EVAL=1` 게이트 뒤에서만 실행한다.
 - 로그는 `Log.diarization` 숫자 지표만 사용하며 전사 원문, 토큰, 프롬프트는 남기지 않는다.
+
+## 수치 해석 주의 (리뷰 반영)
+
+- **startedAt ↔ WAV t=0 오프셋**: `MeetingRecord.startedAt`은 첫 전사 세그먼트 시각이라 WAV t=0(오디오 엔진 첫 샘플)보다 늦을 수 있다. matcher는 `segment.timestamp - meetingStart`로 상대초를 잡으므로, 녹음 시작에 침묵이 길면 diarizer 타임라인과 절대 오프셋이 어긋나 **coverage가 낮게** 나올 수 있다. coverage가 낮으면 파라미터 품질보다 **오프셋을 먼저 의심**하라. 단, 같은 녹음으로 `warmStartFa`/`threshold`를 비교하는 한 오프셋은 상수이므로 **상대 비교는 유효**하다.
+- **speaker switch 과소계산**: `speakerSwitchCount`는 라벨 없는(nil) 세그먼트를 투명 처리한다. A→nil→B는 전환 2가 아니라 1로 집계되어, coverage가 낮은 녹음일수록 switch가 과소계산된다. 06-10 display gate의 switch와 직접 비교 시 이 점을 감안하라.
+- **화자 번호 결정성**: "화자 N"은 `DiarizationSpeakerLabeling`이 등장 시각순으로 부여하므로 같은 녹음·파라미터에서 실행마다 동일하다(DiarizationResult.segments 배열 순서와 무관).
+- **minimumOverlapRatio**(기본 0.5): 러너 env로 노출 안 됨. 조정하려면 `TranscriptSpeakerMatcher(minimumOverlapRatio:)`를 직접 생성한다.

@@ -36,7 +36,7 @@ public struct DiarizationQualityMetrics: Sendable, Equatable {
         meetingStart: Date
     ) -> DiarizationQualityMetrics {
         let timeline = diarizedSegments.filter { $0.endSeconds > $0.startSeconds }
-        let labels = makeSpeakerLabelMap(from: timeline)
+        let labels = DiarizationSpeakerLabeling.makeLabelMap(from: timeline)
         let segmentsByLabel = Dictionary(grouping: timeline) { labels[$0.speakerId] ?? $0.speakerId }
 
         let labeledSegments = matchedTranscript.filter { normalizedSpeaker($0.speaker) != nil }
@@ -60,16 +60,6 @@ public struct DiarizationQualityMetrics: Sendable, Equatable {
             transcriptTimeCoverage: totalDuration > 0 ? labeledDuration / totalDuration : 0,
             averageOverlapRatio: overlapRatios.isEmpty ? 0 : overlapRatios.reduce(0, +) / Double(overlapRatios.count)
         )
-    }
-
-    private static func makeSpeakerLabelMap(
-        from segments: [DiarizedSpeakerSegment]
-    ) -> [String: String] {
-        var labels: [String: String] = [:]
-        for segment in segments where labels[segment.speakerId] == nil {
-            labels[segment.speakerId] = "화자 \(labels.count + 1)"
-        }
-        return labels
     }
 
     private static func speakerSwitchCount(in transcript: [Segment]) -> Int {

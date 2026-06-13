@@ -100,6 +100,28 @@ struct TranscriptSpeakerMatcherTests {
         #expect(matched.map(\.speaker) == ["화자 1", "화자 2", "화자 1"])
     }
 
+    @Test("화자 번호는 배열 순서가 아니라 시작 시각 순으로 매겨진다")
+    func speakerLabelsFollowStartTimeNotArrayOrder() {
+        let matcher = TranscriptSpeakerMatcher()
+        let transcript = [
+            segment(offset: 0, duration: 2),
+            segment(offset: 2, duration: 2),
+        ]
+
+        // DiarizationResult.segments가 시작 시각순 정렬을 보장하지 않으므로,
+        // 배열에 늦게 시작한 화자를 먼저 넣어도 번호는 시작 시각순(먼저 말한 사람=화자 1)이어야 한다.
+        let matched = matcher.assignSpeakers(
+            diarizedSegments: [
+                diarized("late-speaker", start: 2, end: 4),
+                diarized("early-speaker", start: 0, end: 2),
+            ],
+            transcript: transcript,
+            meetingStart: meetingStart
+        )
+
+        #expect(matched.map(\.speaker) == ["화자 1", "화자 2"])
+    }
+
     private func segment(offset: TimeInterval, duration: TimeInterval) -> Segment {
         Segment(
             id: UUID(),
