@@ -25,7 +25,10 @@ public final class SearchEmbeddingViewModel: ObservableObject {
             let built = try? await MeetingSearchEmbeddingBuilder(
                 provider: LocalHashEmbeddingProvider()
             ).build(from: index)
-            guard !Task.isCancelled else { return }
+            // try?가 CancellationError를 삼키므로 Task.isCancelled만으로는
+            // 취소 경로를 못 잡는다. built == nil(빌드 실패/취소)이면 기존 인덱스를
+            // nil로 덮어쓰지 않도록 함께 가드한다.
+            guard !Task.isCancelled, let built else { return }
             await MainActor.run {
                 self?.embeddingIndex = built
             }
