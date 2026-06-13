@@ -140,6 +140,36 @@ struct TranscriptionViewModelStopTests {
         viewModel.clearTranscript()
     }
 
+    @Test("mixed mode에서 preview segment는 speaker를 채우지 않는다 (final만 라벨)")
+    func mixedModePreviewSegmentKeepsSpeakerNil() async throws {
+        let audioSource = StubAudioSource()
+        audioSource.dominantChannelResult = .microphone
+        let vad = StubVoiceActivityDetector()
+        let stt = StubSTTService(resultText: "미리보기 발화")
+        let viewModel = TranscriptionViewModel(sttService: stt, audioSource: audioSource, vadProcessor: vad)
+
+        viewModel.startNewRecordingSession(inputMode: .mixed)
+        vad.onPreviewChunk?(
+            AudioChunk(
+                samples: [Float](repeating: 0.5, count: 8_000),
+                durationSeconds: 0.5,
+                trailingSilence: 0,
+                isPreview: true,
+                startSeconds: 1.0,
+                endSeconds: 1.5
+            )
+        )
+        await waitUntil { viewModel.pendingSegment != nil }
+
+        let pending = try #require(viewModel.pendingSegment)
+        // preview는 발화가 끝나지 않아 채널 판정이 불완전 → 라벨을 붙이지 않는다(깜빡임 방지).
+        #expect(pending.speaker == nil)
+        #expect(audioSource.dominantChannelRequests.isEmpty)
+
+        await viewModel.stopRecordingAndDrain()
+        viewModel.clearTranscript()
+    }
+
     @Test("preview chunk도 오디오 offset 기반 timestamp와 duration을 사용한다")
     func previewChunkUsesAudioOffset() async throws {
         let audioSource = StubAudioSource()

@@ -233,6 +233,8 @@ public final class TranscriptionViewModel: ObservableObject {
         audioSampleBuffer.reset()
         recordingInputMode = audioInputMode
         channelActivityProvider = audioSource as? RecordingChannelActivityProviding
+        // 녹음 생명주기 소유자인 VM이 직전 녹음의 stale 타임라인을 명시적으로 비운다.
+        // (MixedAudioSource.start()도 방어적으로 초기화하지만, 여기서 먼저 끊는다.)
         channelActivityProvider?.resetChannelActivity()
         // VAD 엔진 설정 변경은 다음 녹음부터 적용 — 녹음 시작 시점에 설정을 다시 읽는다.
         if let vadProcessorFactory {
@@ -510,12 +512,18 @@ public final class TranscriptionViewModel: ObservableObject {
         } else {
             duration = segment.duration
         }
-        let speaker = channelSpeakerLabeler.speaker(
-            inputMode: recordingInputMode,
-            activityProvider: channelActivityProvider,
-            startSeconds: chunk.startSeconds,
-            endSeconds: chunk.endSeconds
-        )
+        // preview는 발화가 끝나지 않은 부분 데이터라 채널 우세 판정이 불완전하다.
+        // 라벨을 붙이면 final에서 다른 채널로 확정될 때 "나"↔"상대"가 깜빡인다.
+        // result.isFinal은 STT 결과 자체 속성이라 preview 전사도 true로 오므로,
+        // preview/final을 가르는 chunk.isPreview로 게이트한다(final 청크에만 라벨).
+        let speaker = chunk.isPreview
+            ? nil
+            : channelSpeakerLabeler.speaker(
+                inputMode: recordingInputMode,
+                activityProvider: channelActivityProvider,
+                startSeconds: chunk.startSeconds,
+                endSeconds: chunk.endSeconds
+            )
 
         return TranscriptionResult(
             segment: Segment(
