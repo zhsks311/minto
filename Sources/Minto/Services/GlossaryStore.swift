@@ -153,16 +153,26 @@ public final class GlossaryStore: ObservableObject {
 
     /// 후보를 승인 처리(폼 프리필용) — 실제 등록은 UI 폼에서 사용자가 직접 한다. 후보 목록에서만 제거.
     public func approveCandidate(_ id: UUID) {
+        guard let candidate = pendingCandidates.first(where: { $0.id == id }) else { return }
         let next = pendingCandidates.filter { $0.id != id }
-        guard save(entries, pendingCandidates: next) else { return }
+        guard save(entries, pendingCandidates: next) else {
+            Log.store.error("Failed to save after approving candidate: \(candidate.term, privacy: .public)")
+            return
+        }
         pendingCandidates = next
+        Log.store.info("Approved term: \(candidate.term, privacy: .public)")
     }
 
     /// 후보를 무시(제거)한다.
     public func dismissCandidate(_ id: UUID) {
+        guard let candidate = pendingCandidates.first(where: { $0.id == id }) else { return }
         let next = pendingCandidates.filter { $0.id != id }
-        guard save(entries, pendingCandidates: next) else { return }
+        guard save(entries, pendingCandidates: next) else {
+            Log.store.error("Failed to save after rejecting candidate: \(candidate.term, privacy: .public)")
+            return
+        }
         pendingCandidates = next
+        Log.store.info("Rejected term: \(candidate.term, privacy: .public)")
     }
 
     /// 쌓인 후보 전체를 무시(제거)한다. 설정 화면의 "모두 무시" 버튼 경로.
@@ -614,6 +624,8 @@ public final class GlossaryStore: ObservableObject {
     }
 }
 
+// schemaVersion = 1 유지: pendingCandidates 필드 추가에도 버전 미변경.
+// 이유: optional decode로 하위호환 처리 (기존 JSON에 필드 없으면 기본 [])
 public struct GlossarySnapshot: Codable, Sendable, Equatable {
     public let schemaVersion: Int
     public let entries: [GlossaryEntry]
