@@ -90,7 +90,8 @@ enum TranscriptNormalizer {
             text: text,
             timestamp: current.timestamp,
             duration: current.duration + next.duration,
-            speaker: current.speaker
+            speaker: current.speaker,
+            words: mergedWords(current.words, next.words)
         )
     }
 
@@ -100,7 +101,13 @@ enum TranscriptNormalizer {
             text: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
             timestamp: segment.timestamp,
             duration: segment.duration,
-            speaker: segment.speaker
+            speaker: segment.speaker,
+            words: segment.words
         )
+    }
+
+    private static func mergedWords(_ current: [WordTimestamp]?, _ next: [WordTimestamp]?) -> [WordTimestamp]? {
+        guard current != nil || next != nil else { return nil }
+        return (current ?? []) + (next ?? [])
     }
 }

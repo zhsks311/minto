@@ -45,12 +45,16 @@ public struct TranscriptionState: Sendable {
             return
         }
         let totalDuration = members.reduce(0) { $0 + $1.duration }
+        let mergedWords: [WordTimestamp]? = members.contains { $0.words != nil }
+            ? members.flatMap { $0.words ?? [] }
+            : nil
         let merged = Segment(
             id: first.id,
             text: correctedText,
             timestamp: first.timestamp,
             duration: totalDuration,
-            speaker: first.speaker
+            speaker: first.speaker,
+            words: mergedWords
         )
         committedSegments.removeAll { idSet.contains($0.id) }
         committedSegments.insert(merged, at: firstIdx)
@@ -65,7 +69,8 @@ public struct TranscriptionState: Sendable {
             text: newText,
             timestamp: old.timestamp,
             duration: old.duration,
-            speaker: old.speaker
+            speaker: old.speaker,
+            words: old.words
         )
     }
 

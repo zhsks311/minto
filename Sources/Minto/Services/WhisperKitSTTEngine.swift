@@ -57,7 +57,7 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
 
         let options = DecodingOptions(
             language: "ko",
-            wordTimestamps: false,
+            wordTimestamps: true,
             // 윈도우 첫 토큰 위치에서 공백·EOT를 억제(OpenAI Whisper 기본값과 일치).
             // 발화가 있는 청크가 빈 출력으로 끝나는 경우를 줄인다.
             suppressBlank: true,
@@ -73,6 +73,7 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
         )
 
         var fullText = ""
+        var fullWords: [WordTimestamp]?
         for result in wkResults {
             for seg in result.segments {
                 guard seg.avgLogprob > -1.0 else {
@@ -88,6 +89,12 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
                 guard !text.hasPrefix("["), !text.hasPrefix("(") else { continue }
                 guard !Self.isKnownHallucination(text) else { continue }
                 fullText += text
+                if let words = Self.wordTimestamps(from: seg.words?.map(WhisperWordTimingSnapshot.init)) {
+                    if fullWords == nil {
+                        fullWords = []
+                    }
+                    fullWords?.append(contentsOf: words)
+                }
             }
         }
 
@@ -101,7 +108,8 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
         let segment = Segment(
             text: trimmed,
             timestamp: Date(),
-            duration: Double(samples.count) / STTAudioUtilities.sampleRate
+            duration: Double(samples.count) / STTAudioUtilities.sampleRate,
+            words: fullWords
         )
         return TranscriptionResult(segment: segment, isFinal: true)
     }
@@ -126,5 +134,28 @@ final class WhisperKitSTTEngine: SpeechTranscriptionEngine {
 
     private static func isKnownHallucination(_ text: String) -> Bool {
         false
+    }
+
+    nonisolated static func wordTimestamps(from timings: [WhisperWordTimingSnapshot]?) -> [WordTimestamp]? {
+        guard let timings else { return nil }
+        return timings.map {
+            WordTimestamp(word: $0.word, start: TimeInterval($0.start), end: TimeInterval($0.end))
+        }
+    }
+}
+
+struct WhisperWordTimingSnapshot: Sendable, Equatable {
+    let word: String
+    let start: Float
+    let end: Float
+
+    init(word: String, start: Float, end: Float) {
+        self.word = word
+        self.start = start
+        self.end = end
+    }
+
+    init(_ timing: WordTiming) {
+        self.init(word: timing.word, start: timing.start, end: timing.end)
     }
 }

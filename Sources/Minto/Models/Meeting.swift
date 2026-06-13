@@ -1,24 +1,39 @@
 import Foundation
 
+public struct WordTimestamp: Sendable, Hashable, Codable {
+    public let word: String
+    public let start: TimeInterval
+    public let end: TimeInterval
+
+    public init(word: String, start: TimeInterval, end: TimeInterval) {
+        self.word = word
+        self.start = start
+        self.end = end
+    }
+}
+
 public struct Segment: Identifiable, Sendable, Hashable, Codable {
     public let id: UUID
     public let text: String
     public let timestamp: Date
     public let duration: TimeInterval
     public var speaker: String?
+    public var words: [WordTimestamp]?
 
     public init(
         id: UUID = UUID(),
         text: String,
         timestamp: Date,
         duration: TimeInterval,
-        speaker: String? = nil
+        speaker: String? = nil,
+        words: [WordTimestamp]? = nil
     ) {
         self.id = id
         self.text = text
         self.timestamp = timestamp
         self.duration = duration
         self.speaker = speaker
+        self.words = words
     }
 }
 
