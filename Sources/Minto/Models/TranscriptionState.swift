@@ -45,11 +45,16 @@ public struct TranscriptionState: Sendable {
             return
         }
         let totalDuration = members.reduce(0) { $0 + $1.duration }
+        let mergedWords: [WordTimestamp]? = members.contains { $0.words != nil }
+            ? members.flatMap { $0.words ?? [] }
+            : nil
         let merged = Segment(
             id: first.id,
             text: correctedText,
             timestamp: first.timestamp,
-            duration: totalDuration
+            duration: totalDuration,
+            speaker: first.speaker,
+            words: mergedWords
         )
         committedSegments.removeAll { idSet.contains($0.id) }
         committedSegments.insert(merged, at: firstIdx)
@@ -59,7 +64,14 @@ public struct TranscriptionState: Sendable {
     public mutating func updateSegmentText(id: UUID, newText: String) {
         guard let idx = committedSegments.firstIndex(where: { $0.id == id }) else { return }
         let old = committedSegments[idx]
-        committedSegments[idx] = Segment(id: old.id, text: newText, timestamp: old.timestamp, duration: old.duration)
+        committedSegments[idx] = Segment(
+            id: old.id,
+            text: newText,
+            timestamp: old.timestamp,
+            duration: old.duration,
+            speaker: old.speaker,
+            words: old.words
+        )
     }
 
     private func isSimilar(_ a: String, _ b: String) -> Bool {

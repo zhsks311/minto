@@ -279,7 +279,7 @@ public struct TranscriptionOverlayView: View {
                     NSWorkspace.shared.open(url)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(ProminentActionButtonStyle())
             Spacer()
         }
         .padding(.horizontal, 28)
@@ -342,6 +342,15 @@ public struct TranscriptionOverlayView: View {
                 .foregroundColor(.secondary)
                 .fixedSize()
                 .padding(.top, 2)
+            if let speaker = SpeakerLabel.normalized(segment.speaker) {
+                Text(speaker)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 64, alignment: .leading)
+                    .padding(.top, 2)
+            }
             Text(segment.text)
                 .font(.callout)
                 .foregroundColor(.primary)
@@ -408,22 +417,7 @@ public struct TranscriptionOverlayView: View {
 
     // 16-bar 오디오 레벨 미터
     private var audioLevelMeter: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<16, id: \.self) { i in
-                let threshold = Float(i + 1) / 16.0
-                let active = viewModel.audioLevel >= threshold
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(active ? levelBarColor(at: Float(i) / 16.0) : Color.secondary.opacity(0.12))
-                    .frame(width: 3, height: active ? 12 : 7)
-                    .animation(.easeOut(duration: 0.04), value: active)
-            }
-        }
-    }
-
-    private func levelBarColor(at position: Float) -> Color {
-        if position < 0.6 { return .green }
-        if position < 0.85 { return .yellow }
-        return .red
+        AudioLevelMeterView(audioLevel: viewModel.audioLevel)
     }
 
     private func copyTranscript() {

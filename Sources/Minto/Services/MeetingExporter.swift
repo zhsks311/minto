@@ -19,7 +19,12 @@ public enum MeetingExporter {
         if !result.transcript.isEmpty {
             out += "## 전사\n\n"
             out += result.transcript
-                .map { "**[\($0.time)]** \($0.text)" }
+                .map { line in
+                    if let speaker = normalizedSpeaker(line.speaker) {
+                        return "**[\(line.time)]** **\(escapeMarkdownControlCharacters(speaker)):** \(line.text)"
+                    }
+                    return "**[\(line.time)]** \(line.text)"
+                }
                 .joined(separator: "\n\n")
             out += "\n"
         }
@@ -57,5 +62,26 @@ public enum MeetingExporter {
             Log.store.error("export 저장 실패: \(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    private static func normalizedSpeaker(_ speaker: String?) -> String? {
+        guard let speaker = speaker?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !speaker.isEmpty else {
+            return nil
+        }
+        return speaker
+    }
+
+    private static func escapeMarkdownControlCharacters(_ text: String) -> String {
+        let controlCharacters = Set("\\`*_{}[]<>()#+-.!|")
+        var escaped = ""
+        escaped.reserveCapacity(text.count)
+        for character in text {
+            if controlCharacters.contains(character) {
+                escaped.append("\\")
+            }
+            escaped.append(character)
+        }
+        return escaped
     }
 }

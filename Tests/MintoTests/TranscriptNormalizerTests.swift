@@ -71,6 +71,47 @@ struct TranscriptNormalizerTests {
         #expect(normalized.count == 2)
     }
 
+    @Test("speaker가 다르면 incomplete ending이어도 병합하지 않는다")
+    func differentSpeakerPreventsMerge() {
+        let segments = [
+            segment("스키마가 변경될 때마다", offset: 0, speaker: "나"),
+            segment("직접 수행하지 않고 자동으로 맞춰줘서 편합니다.", offset: 30, speaker: "상대"),
+        ]
+
+        let normalized = TranscriptNormalizer.normalize(segments)
+
+        #expect(normalized.count == 2)
+        #expect(normalized.map(\.speaker) == ["나", "상대"])
+    }
+
+    @Test("speaker가 같으면 병합하고 speaker를 보존한다")
+    func sameSpeakerMergesAndPreservesSpeaker() {
+        let segments = [
+            segment(
+                "스키마가 변경될 때마다",
+                offset: 0,
+                speaker: "나",
+                words: [WordTimestamp(word: "스키마", start: 0.0, end: 0.5)]
+            ),
+            segment(
+                "직접 수행하지 않고 자동으로 맞춰줘서 편합니다.",
+                offset: 30,
+                speaker: "나",
+                words: [WordTimestamp(word: "직접", start: 30.0, end: 30.4)]
+            ),
+        ]
+
+        let normalized = TranscriptNormalizer.normalize(segments)
+
+        #expect(normalized.count == 1)
+        #expect(normalized[0].speaker == "나")
+        #expect(normalized[0].words == [
+            WordTimestamp(word: "스키마", start: 0.0, end: 0.5),
+            WordTimestamp(word: "직접", start: 30.0, end: 30.4),
+        ])
+        #expect(normalized[0].text.contains("때마다 직접 수행하지 않고"))
+    }
+
     @MainActor
     @Test("makeRecord stores normalized transcript")
     func makeRecordStoresNormalizedTranscript() {
@@ -122,7 +163,18 @@ struct TranscriptNormalizerTests {
         #expect(markdown.contains("마지막으로 남은 전사입니다."))
     }
 
-    private func segment(_ text: String, offset: TimeInterval) -> Segment {
-        Segment(text: text, timestamp: baseDate.addingTimeInterval(offset), duration: 30)
+    private func segment(
+        _ text: String,
+        offset: TimeInterval,
+        speaker: String? = nil,
+        words: [WordTimestamp]? = nil
+    ) -> Segment {
+        Segment(
+            text: text,
+            timestamp: baseDate.addingTimeInterval(offset),
+            duration: 30,
+            speaker: speaker,
+            words: words
+        )
     }
 }

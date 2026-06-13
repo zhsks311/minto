@@ -40,6 +40,24 @@ struct MeetingExporterTests {
         #expect(md.contains("**[00:10]** 시작합니다"))
     }
 
+    @Test("markdown: speaker가 있으면 화자 라벨을 추가하고 없으면 기존 포맷을 유지")
+    func markdownTranscriptSpeakerBranch() {
+        let result = MeetingResult(
+            title: "화자 회의",
+            metaText: "",
+            summary: MeetingSummary(leadAnswer: "요약"),
+            transcript: [
+                .init(time: "00:00", text: "안녕하세요", speaker: "나*팀"),
+                .init(time: "00:10", text: "시작합니다"),
+            ]
+        )
+
+        let md = MeetingExporter.markdown(for: result)
+
+        #expect(md.contains(#"**[00:00]** **나\*팀:** 안녕하세요"#))
+        #expect(md.contains("**[00:10]** 시작합니다"))
+    }
+
     @Test("filename: 불법 문자 제거 + .md 확장자")
     func filenameSanitized() {
         let r = MeetingResult(title: "a/b:c?d", metaText: "", summary: MeetingSummary(leadAnswer: "x"), transcript: [])

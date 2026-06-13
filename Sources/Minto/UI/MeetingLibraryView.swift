@@ -932,15 +932,22 @@ public struct MeetingLibraryView: View {
                 selectLiveMeeting()
             } label: {
                 VStack(alignment: .leading, spacing: 7) {
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(alignment: .center) {
                         Text(liveTitle)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.primary)
                             .lineLimit(1)
                         Spacer(minLength: 8)
-                        Text(viewModel.isFinalizingMeeting ? "정리 중" : "녹음 중")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(viewModel.isFinalizingMeeting ? .orange : .red)
+                        HStack(spacing: 6) {
+                            AudioLevelMeterView(audioLevel: viewModel.audioLevel, barCount: 10)
+                                .scaleEffect(x: 0.85, y: 0.72, anchor: .leading)
+                                .frame(width: 28, height: 10, alignment: .leading)
+                                .opacity(viewModel.isFinalizingMeeting ? 0.35 : 1)
+                                .accessibilityHidden(true)
+                            Text(viewModel.isFinalizingMeeting ? "정리 중" : "녹음 중")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(viewModel.isFinalizingMeeting ? .orange : .red)
+                        }
                     }
 
                     Text(liveSubtitle)
@@ -1788,6 +1795,14 @@ public struct MeetingLibraryView: View {
                             .font(.system(size: detailTimestampFontSize, weight: .bold, design: .monospaced))
                             .foregroundColor(.secondary)
                             .frame(width: 46, alignment: .leading)
+                        if let speaker = SpeakerLabel.normalized(segment.speaker) {
+                            Text(speaker)
+                                .font(.system(size: detailTimestampFontSize, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: 64, alignment: .leading)
+                        }
                         Text(segment.text)
                             .font(.system(size: detailBodyFontSize))
                             .lineSpacing(detailLineSpacing)
@@ -2487,6 +2502,7 @@ public struct MeetingLibraryView: View {
         }
         return Text(text)
     }
+
 
     private func copyFullMeeting(_ record: MeetingRecord) {
         NSPasteboard.general.clearContents()
