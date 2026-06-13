@@ -31,6 +31,7 @@
 | 20 | 2026-06-12 | [Silero VAD 승격](work-log/2026-06-12-20-silero-vad-promotion.md) | 검증 조합(Silero+빈 구간 복구)을 설정 기반 기본값으로, 모델 자동 다운로드·Energy fail-soft |
 | 21 | 2026-06-12 | [녹음 오디오 보존](work-log/2026-06-12-21-recording-audio-retention.md) | 화자분리 1단계 — 녹음 WAV 로컬 보존, 보관 기간 정리, 회의 삭제 연동, 스키마 하위 호환 |
 | 22 | 2026-06-13 | [임포트 교정 배치화](work-log/2026-06-13-22-import-correction-batching.md) | 청크 3개를 한 LLM 호출로 — 호출 수 1/3, 번호 파싱 fail-soft, 배치 경계 문맥 |
+| 23 | 2026-06-13 | [채널 기반 화자 라벨링](work-log/2026-06-13-23-channel-speaker-labeling.md) | mixed sample-clock 채널 활동으로 마이크=나, 시스템=상대 speaker 라벨 주입 |
 
 ## 남은 과제
 
