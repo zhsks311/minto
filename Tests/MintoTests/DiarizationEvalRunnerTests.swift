@@ -19,9 +19,15 @@ struct DiarizationEvalRunnerTests {
 
         let warmStartFa = try doubleEnvironmentValue("DIARIZATION_WARMSTART_FA", in: environment)
         let clusteringThreshold = try doubleEnvironmentValue("DIARIZATION_CLUSTERING_THRESHOLD", in: environment)
+        let exactSpeakerCount = try intEnvironmentValue("DIARIZATION_EXACT_SPEAKER_COUNT", in: environment)
+        let minSpeakers = try intEnvironmentValue("DIARIZATION_MIN_SPEAKERS", in: environment)
+        let maxSpeakers = try intEnvironmentValue("DIARIZATION_MAX_SPEAKERS", in: environment)
         let provider = FluidAudioOfflineDiarizationProvider(
             clusteringThreshold: clusteringThreshold,
-            warmStartFa: warmStartFa
+            warmStartFa: warmStartFa,
+            minSpeakers: minSpeakers,
+            maxSpeakers: maxSpeakers,
+            exactSpeakerCount: exactSpeakerCount
         )
 
         let diarizedSegments = try await provider.diarize(audioFileURL: wavURL)
@@ -31,7 +37,12 @@ struct DiarizationEvalRunnerTests {
         )
         // 평가 러너는 측정값을 눈으로 봐야 하므로 stdout에도 찍는다(Log는 통합 로깅이라 캡처가 안 됨).
         // print 금지 규칙은 제품 Sources 대상이고, 이 게이트 테스트는 측정 출력이 목적이다.
-        print("[DIAR-EVAL] fa=\(warmStartFa.map { "\($0)" } ?? "default") threshold=\(clusteringThreshold.map { "\($0)" } ?? "default") diarizedSegments=\(diarizedSegments.count) uniqueSpeakers=\(speakerCount)")
+        let warmStartFaLabel = warmStartFa.map { "\($0)" } ?? "default"
+        let clusteringThresholdLabel = clusteringThreshold.map { "\($0)" } ?? "default"
+        let exactSpeakerCountLabel = exactSpeakerCount.map { "\($0)" } ?? "nil"
+        let minSpeakersLabel = minSpeakers.map { "\($0)" } ?? "nil"
+        let maxSpeakersLabel = maxSpeakers.map { "\($0)" } ?? "nil"
+        print("[DIAR-EVAL] fa=\(warmStartFaLabel) threshold=\(clusteringThresholdLabel) exactN=\(exactSpeakerCountLabel) minN=\(minSpeakersLabel) maxN=\(maxSpeakersLabel) diarizedSegments=\(diarizedSegments.count) uniqueSpeakers=\(speakerCount)")
         #expect(!diarizedSegments.isEmpty, "FluidAudio diarization 결과 segment가 있어야 합니다")
 
         guard let transcriptPath = nonEmptyEnvironmentValue(
@@ -84,9 +95,24 @@ struct DiarizationEvalRunnerTests {
         _ key: String,
         in environment: [String: String]
     ) throws -> Double? {
-        guard let rawValue = nonEmptyEnvironmentValue(key, in: environment) else { return nil }
+        guard let rawValue = nonEmptyEnvironmentValue(key, in: environment) else {
+            return nil
+        }
         guard let value = Double(rawValue) else {
             throw DiarizationEvalRunnerError.invalidDouble(key: key, value: rawValue)
+        }
+        return value
+    }
+
+    private func intEnvironmentValue(
+        _ key: String,
+        in environment: [String: String]
+    ) throws -> Int? {
+        guard let rawValue = nonEmptyEnvironmentValue(key, in: environment) else {
+            return nil
+        }
+        guard let value = Int(rawValue) else {
+            throw DiarizationEvalRunnerError.invalidInt(key: key, value: rawValue)
         }
         return value
     }
@@ -94,11 +120,14 @@ struct DiarizationEvalRunnerTests {
 
 private enum DiarizationEvalRunnerError: Error, CustomStringConvertible {
     case invalidDouble(key: String, value: String)
+    case invalidInt(key: String, value: String)
 
     var description: String {
         switch self {
         case .invalidDouble(let key, let value):
             return "\(key)는 Double 값이어야 합니다: \(value)"
+        case .invalidInt(let key, let value):
+            return "\(key)는 Int 값이어야 합니다: \(value)"
         }
     }
 }
