@@ -86,12 +86,16 @@ public struct MeetingSearchEmbeddingIndex: Codable, Sendable, Equatable {
     /// 토큰 기반 검색 결과를 임베딩 코사인 유사도로 재랭킹한다.
     ///
     /// - Parameters:
-    ///   - results: 원 검색 결과 (토큰 점수 기준 정렬)
+    ///   - results: 원 검색 결과. **MUST**: score 내림차순 정렬 상태여야 한다.
+    ///     정렬이 보장되지 않으면 fail-soft 시 원순위 유지의 의미가 달라진다.
     ///   - queryVector: 쿼리 임베딩 벡터
     ///   - embeddings: 청크 임베딩 인덱스
     ///   - weight: 코사인 기여 비중 (0~1). 0이면 원순위 반환
     /// - Returns: 혼합 점수 `(1-weight)*정규화토큰점수 + weight*코사인` 기준 정렬 결과.
-    ///   차원 불일치·벡터 없음·정규화 불가 등 어떤 문제든 원순위 그대로 반환(fail-soft).
+    ///   다음 경우 모두 fail-soft로 원순위를 그대로 반환한다:
+    ///   - 벡터 차원 불일치 (`queryVector.count ≠ embeddings.dimensions`): `similarity` 가 nil을 반환하므로 정규화 토큰 점수로 폴백
+    ///   - 청크 임베딩 없음 (`embeddings`에 해당 chunkID 레코드 부재): 동일하게 정규화 토큰 점수로 폴백
+    ///   - 정규화 불가 (maxScore ≤ 0): 재랭킹 없이 원 results를 즉시 반환
     public static func rerank(
         results: [MeetingSearchResult],
         queryVector: [Double],
