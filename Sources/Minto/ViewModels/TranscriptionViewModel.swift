@@ -234,7 +234,7 @@ public final class TranscriptionViewModel: ObservableObject {
         }
         vadProcessor.reset()
         let appliedVADEngine = vadProcessor is SileroVADProcessor ? "silero" : "energy"
-        Log.vad.info("recording vad engine=\(appliedVADEngine, privacy: .public) emptyFinalRepair=\(self.emptyFinalRepairPolicy.isEnabled, privacy: .public)")
+        Log.vad.notice("recording vad engine=\(appliedVADEngine, privacy: .public) emptyFinalRepair=\(self.emptyFinalRepairPolicy.isEnabled, privacy: .public)")
 
         // 녹음 오디오 보존(설정 기반) — 실패해도 전사에 영향 없음(fail-soft).
         lastArchivedAudioFileName = nil
@@ -341,7 +341,7 @@ public final class TranscriptionViewModel: ObservableObject {
             try audioSource.start()
             isRecording = true
             let engineID = sttService.speechEngineID.rawValue
-            Log.app.info("recording started engine=\(engineID, privacy: .public)")
+            Log.app.notice("recording started engine=\(engineID, privacy: .public)")
             startTimer()
         } catch {
             // 시작 실패 — 열린 아카이브 파일을 정리한다(0프레임이라 빈 파일은 남지 않는다).
