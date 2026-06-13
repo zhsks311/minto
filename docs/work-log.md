@@ -32,6 +32,7 @@
 | 21 | 2026-06-12 | [녹음 오디오 보존](work-log/2026-06-12-21-recording-audio-retention.md) | 화자분리 1단계 — 녹음 WAV 로컬 보존, 보관 기간 정리, 회의 삭제 연동, 스키마 하위 호환 |
 | 22 | 2026-06-13 | [임포트 교정 배치화](work-log/2026-06-13-22-import-correction-batching.md) | 청크 3개를 한 LLM 호출로 — 호출 수 1/3, 번호 파싱 fail-soft, 배치 경계 문맥 |
 | 23 | 2026-06-13 | [채널 기반 화자 라벨링](work-log/2026-06-13-23-channel-speaker-labeling.md) | mixed sample-clock 채널 활동으로 마이크=나, 시스템=상대 speaker 라벨 주입 |
+| 24 | 2026-06-13 | [Phase 2 화자분리 평가 하니스](work-log/2026-06-13-24-phase2-diarization-eval-harness.md) | FluidAudio offline diarizer 후처리 평가, 전사 화자 매칭, coverage/overlap metric, env 게이트 러너 |
 
 ## 남은 과제
 
