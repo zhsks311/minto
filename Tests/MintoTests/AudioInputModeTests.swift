@@ -133,14 +133,27 @@ struct AudioInputModeTests {
         #expect(mixer.append([0.5, 1.0], source: .microphone).isEmpty)
 
         let firstOutput = mixer.append([0.5, -1.0, 0.5], source: .systemAudio)
-        #expect(samples(firstOutput.first, approximatelyEqualTo: [0.5, 0.0]))
+        #expect(samples(firstOutput.first?.samples, approximatelyEqualTo: [0.5, 0.0]))
 
         let secondOutput = mixer.append([0.5], source: .microphone)
-        #expect(samples(secondOutput.first, approximatelyEqualTo: [0.5]))
+        #expect(samples(secondOutput.first?.samples, approximatelyEqualTo: [0.5]))
         #expect(samples(
             DualAudioBufferMixer.mix(microphone: [2.0], systemAudio: [2.0], gain: 1.0),
             approximatelyEqualTo: [1.0]
         ))
+    }
+
+    @Test("mixer는 정렬 구간의 RMS 우세 채널을 판정한다")
+    func dualAudioBufferMixerDetectsDominantChannel() {
+        let micDominant = dominantChunk(microphone: [0.9, 0.9], systemAudio: [0.1, 0.1])
+        let systemDominant = dominantChunk(microphone: [0.1, 0.1], systemAudio: [0.9, 0.9])
+        let silent = dominantChunk(microphone: [0.0, 0.0], systemAudio: [0.0, 0.0])
+        let overlap = dominantChunk(microphone: [0.4, 0.4], systemAudio: [0.3, 0.3])
+
+        #expect(micDominant?.dominant == .microphone)
+        #expect(systemDominant?.dominant == .systemAudio)
+        #expect(silent?.dominant == nil)
+        #expect(overlap?.dominant == nil)
     }
 
     @Test("mixer는 한쪽 입력만 오래 쌓이면 오래된 샘플을 passthrough해 지연과 메모리 증가를 제한한다")
@@ -148,10 +161,11 @@ struct AudioInputModeTests {
         let mixer = DualAudioBufferMixer(gain: 0.5, maxBufferedSamples: 2)
 
         let overflow = mixer.append([0.2, 0.4, 2.0], source: .microphone)
-        #expect(samples(overflow.first, approximatelyEqualTo: [0.2]))
+        #expect(samples(overflow.first?.samples, approximatelyEqualTo: [0.2]))
+        #expect(overflow.first?.dominant == .microphone)
 
         let mixed = mixer.append([0.0, 0.0], source: .systemAudio)
-        #expect(samples(mixed.first, approximatelyEqualTo: [0.2, 1.0]))
+        #expect(samples(mixed.first?.samples, approximatelyEqualTo: [0.2, 1.0]))
     }
 
     @Test("MixedAudioSource는 두 child source를 시작하고 섞인 buffer만 전달한다")
@@ -184,6 +198,73 @@ struct AudioInputModeTests {
         #expect(microphone.stopCount == 1)
         #expect(systemAudio.stopCount == 1)
         #expect(bufferSink.buffers.count == 1)
+    }
+
+    @Test("MixedAudioSource는 sample 가중 다수결로 dominant channel을 조회한다")
+    func mixedAudioSourceReportsDominantChannelBySampleMajority() throws {
+        let microphone = InputModeStubAudioSource()
+        let systemAudio = InputModeStubAudioSource()
+        let source = MixedAudioSource(
+            microphone: microphone,
+            systemAudio: systemAudio,
+            mixer: DualAudioBufferMixer(gain: 0.5)
+        )
+
+        try source.start()
+        microphone.emitBuffer([Float](repeating: 0.9, count: 1_600))
+        systemAudio.emitBuffer([Float](repeating: 0.1, count: 1_600))
+        microphone.emitBuffer([Float](repeating: 0.1, count: 3_200))
+        systemAudio.emitBuffer([Float](repeating: 0.9, count: 3_200))
+
+        #expect(source.dominantChannel(startSeconds: 0.0, endSeconds: 0.1) == .microphone)
+        #expect(source.dominantChannel(startSeconds: 0.12, endSeconds: 0.25) == .systemAudio)
+        #expect(source.dominantChannel(startSeconds: 0.0, endSeconds: 0.25) == .systemAudio)
+        #expect(source.dominantChannel(startSeconds: 1.0, endSeconds: 1.5) == nil)
+
+        source.stop()
+    }
+
+    @Test("ChannelSpeakerLabeler는 입력 모드와 dominant channel을 speaker 라벨로 변환한다")
+    func channelSpeakerLabelerMapsInputModeAndDominantChannel() {
+        let labeler = ChannelSpeakerLabeler()
+        let provider = InputModeChannelActivityProvider()
+
+        #expect(labeler.speaker(
+            inputMode: .microphone,
+            activityProvider: provider,
+            startSeconds: 0,
+            endSeconds: 1
+        ) == nil)
+        #expect(labeler.speaker(
+            inputMode: .systemAudio,
+            activityProvider: nil,
+            startSeconds: nil,
+            endSeconds: nil
+        ) == kSpeakerOtherLabel)
+
+        provider.result = .microphone
+        #expect(labeler.speaker(
+            inputMode: .mixed,
+            activityProvider: provider,
+            startSeconds: 0,
+            endSeconds: 1
+        ) == kSpeakerSelfLabel)
+
+        provider.result = .systemAudio
+        #expect(labeler.speaker(
+            inputMode: .mixed,
+            activityProvider: provider,
+            startSeconds: 0,
+            endSeconds: 1
+        ) == kSpeakerOtherLabel)
+
+        provider.result = nil
+        #expect(labeler.speaker(
+            inputMode: .mixed,
+            activityProvider: provider,
+            startSeconds: 0,
+            endSeconds: 1
+        ) == nil)
     }
 
     @Test("ViewModel은 녹음 시작 전에 선택한 입력 source로 교체한다")
@@ -282,9 +363,25 @@ private final class InputModeBufferSink: @unchecked Sendable {
     }
 }
 
+private func dominantChunk(microphone: [Float], systemAudio: [Float]) -> MixedChunk? {
+    let mixer = DualAudioBufferMixer(gain: 0.5)
+    _ = mixer.append(microphone, source: .microphone)
+    return mixer.append(systemAudio, source: .systemAudio).first
+}
+
 private func samples(_ lhs: [Float]?, approximatelyEqualTo rhs: [Float], tolerance: Float = 0.0001) -> Bool {
     guard let lhs, lhs.count == rhs.count else { return false }
     return zip(lhs, rhs).allSatisfy { abs($0 - $1) <= tolerance }
+}
+
+private final class InputModeChannelActivityProvider: RecordingChannelActivityProviding {
+    var result: MixedAudioInputSource?
+
+    func dominantChannel(startSeconds: Double, endSeconds: Double) -> MixedAudioInputSource? {
+        result
+    }
+
+    func resetChannelActivity() {}
 }
 
 private final class InputModeErrorSink: @unchecked Sendable {
