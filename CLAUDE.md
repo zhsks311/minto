@@ -102,6 +102,22 @@ Minto2는 macOS 회의 기록 앱이다.
 - 기능 정의: `docs/service-definition.md`
 - Pencil 결과물: `Resources/designs/`
 
+## 로컬 빌드·실행·서명 (dev.sh)
+
+앱을 **실제로 띄워서** 동작(OAuth, Keychain 토큰 접근 등)을 확인할 때는 `scripts/dev.sh`를 쓴다. 아래 "검증 명령"의 raw `swift build/test`는 *컴파일·테스트 통과 확인*용이고, dev.sh는 *앱 실행*을 위한 안정 서명 경로다 — 역할이 다르다.
+
+```bash
+./scripts/dev.sh run            # 빌드 + 서명 + 실행
+./scripts/dev.sh build          # 빌드 + 서명
+./scripts/dev.sh test [필터]    # 테스트 빌드 + 서명 + 실행
+./scripts/dev.sh sign           # 현재 산출물 재서명
+```
+
+- **`swift run` 금지.** SPM이 실행 직전 adhoc 서명을 덮어써 Keychain ACL이 깨지고 매 실행 권한창이 뜬다. 반드시 `./scripts/dev.sh run`.
+- **코드서명 인증서 "Minto2 Dev" 필요** (자가서명 Code Signing). 없으면 dev.sh가 안내하며 중단한다. 생성법은 `README.md`. (`MINTO_SIGN_IDENTITY`로 이름 변경 가능)
+- **`Minto.entitlements`의 `cs.disable-library-validation` / `cs.allow-jit`는 Metal 셰이더(WhisperKit) 로딩에 필요**하다. 함부로 제거하면 STT가 깨진다.
+- **STT 모델은 첫 실행 시 다운로드**된다(WhisperKit). 오프라인 사전배치는 `WHISPER_MODEL_FOLDER` 환경변수.
+
 ## 검증 명령
 
 기본:
