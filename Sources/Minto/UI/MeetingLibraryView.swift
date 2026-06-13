@@ -1795,7 +1795,7 @@ public struct MeetingLibraryView: View {
                             .font(.system(size: detailTimestampFontSize, weight: .bold, design: .monospaced))
                             .foregroundColor(.secondary)
                             .frame(width: 46, alignment: .leading)
-                        if let speaker = normalizedSpeaker(segment.speaker) {
+                        if let speaker = SpeakerLabel.normalized(segment.speaker) {
                             Text(speaker)
                                 .font(.system(size: detailTimestampFontSize, weight: .semibold))
                                 .foregroundColor(.secondary)
@@ -2503,13 +2503,6 @@ public struct MeetingLibraryView: View {
         return Text(text)
     }
 
-    private func normalizedSpeaker(_ speaker: String?) -> String? {
-        guard let speaker = speaker?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !speaker.isEmpty else {
-            return nil
-        }
-        return speaker
-    }
 
     private func copyFullMeeting(_ record: MeetingRecord) {
         NSPasteboard.general.clearContents()

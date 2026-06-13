@@ -67,6 +67,8 @@ enum TranscriptNormalizer {
         maxDuration: TimeInterval,
         maxGap: TimeInterval
     ) -> Bool {
+        // 화자가 다르면 합치지 않는다. 둘 다 nil(화자 미주입 상태)이면 nil==nil이라
+        // 기존(화자 없던 시절) 병합 동작이 그대로 유지된다.
         guard current.speaker == next.speaker else { return false }
         guard isLikelyIncompleteEnding(current.text) else { return false }
 
@@ -107,6 +109,8 @@ enum TranscriptNormalizer {
     }
 
     private static func mergedWords(_ current: [WordTimestamp]?, _ next: [WordTimestamp]?) -> [WordTimestamp]? {
+        // current가 시간상 앞 세그먼트라 그대로 이어 붙이면 단어 순서가 보존된다
+        // (normalizer는 입력을 시간 순서대로 처리한다).
         guard current != nil || next != nil else { return nil }
         return (current ?? []) + (next ?? [])
     }

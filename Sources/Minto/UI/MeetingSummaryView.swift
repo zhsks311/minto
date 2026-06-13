@@ -284,7 +284,7 @@ public struct MeetingSummaryView: View {
                     HStack(alignment: .top, spacing: 12) {
                         Text(line.time).font(.system(size: 12, weight: .bold)).foregroundColor(RC.time)
                             .frame(width: 44, alignment: .leading)
-                        if let speaker = normalizedSpeaker(line.speaker) {
+                        if let speaker = SpeakerLabel.normalized(line.speaker) {
                             Text(speaker).font(.system(size: 12, weight: .semibold)).foregroundColor(RC.meta)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -354,13 +354,6 @@ public struct MeetingSummaryView: View {
         NSPasteboard.general.setString(r.summary.markdown(), forType: .string)
     }
 
-    private func normalizedSpeaker(_ speaker: String?) -> String? {
-        guard let speaker = speaker?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !speaker.isEmpty else {
-            return nil
-        }
-        return speaker
-    }
 }
 
 extension MeetingResult {

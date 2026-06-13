@@ -24,6 +24,27 @@ struct SegmentCodingTests {
         #expect(segment.words == nil)
     }
 
+    @Test("실제 저장 decoder(iso8601)로 speaker/words 없는 레거시 레코드를 로드한다")
+    func decodesLegacySegmentWithRealDecoder() throws {
+        // 실제 디스크 레코드는 MeetingRecordCoding.makeDecoder()(.iso8601)로 읽히고
+        // timestamp가 ISO 문자열이다. 기본 JSONDecoder 테스트만으론 이 핫패스가 안 덮인다.
+        let decoder = MeetingRecordCoding.makeDecoder()
+        let json = """
+        {
+          "id": "11111111-1111-1111-1111-111111111111",
+          "text": "기존 전사",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "duration": 3.5
+        }
+        """
+
+        let segment = try decoder.decode(Segment.self, from: Data(json.utf8))
+
+        #expect(segment.text == "기존 전사")
+        #expect(segment.speaker == nil)
+        #expect(segment.words == nil)
+    }
+
     @Test("speaker와 words는 Codable 왕복에서 보존된다")
     func roundTripsSpeakerAndWords() throws {
         let segment = Segment(
