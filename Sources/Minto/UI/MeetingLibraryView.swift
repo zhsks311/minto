@@ -33,9 +33,7 @@ public struct MeetingLibraryView: View {
     // 검색 인덱스·결과 캐시. 키 입력마다 전체 회의를 다시 청크하지 않도록
     // 인덱스는 회의 목록 변경 시에만, 결과는 디바운스된 쿼리 변경 시에만 갱신한다.
     @State private var searchIndex = MeetingSearchIndex(chunks: [])
-    /// LocalHash 임베딩 인덱스. rebuildSearchIndex() 후 백그라운드에서 빌드되며,
-    /// 준비되면 refreshSearchResults()에서 재랭킹에 사용된다. 디스크 영속 없음.
-    @State private var embeddingIndex: MeetingSearchEmbeddingIndex? = nil
+    @StateObject private var embeddingViewModel = SearchEmbeddingViewModel()
     @State private var meetingSearchResults: [MeetingSearchResult] = []
     /// 필터 미적용 전체 검색 결과. AI 답변 생성에는 필터된 결과 대신 이 값을 사용해
     /// 요약/결정 등 근거가 누락되지 않게 한다.
@@ -52,8 +50,6 @@ public struct MeetingLibraryView: View {
     @State private var detailTab: DetailTab = .summary
     @State private var lastRelatedQuery = ""
     @State private var fileImportTask: Task<Void, Never>?
-    /// 임베딩 인덱스 빌드 Task 핸들. 연속 호출 시 이전 Task를 취소해 stale 인덱스 설치를 막는다.
-    @State private var embeddingBuildTask: Task<Void, Never>?
     /// 파일 선택 후 맥락 입력 시트를 띄울 URL. nil이면 시트 미표시.
     @State private var fileImportSetupURL: URL?
     /// 이전 실행에서 완료되지 못한 파일 가져오기 마커.
@@ -2100,28 +2096,15 @@ public struct MeetingLibraryView: View {
             if indexedIDs == currentIDs {
                 searchIndex = loaded
                 refreshSearchResults()
-                rebuildEmbeddingIndex(from: loaded)
+                embeddingViewModel.rebuildEmbeddingIndex(from: loaded)
                 return
             }
         }
         searchIndex = MeetingSearchIndex(records: store.meetings)
         refreshSearchResults()
-        rebuildEmbeddingIndex(from: searchIndex)
+        embeddingViewModel.rebuildEmbeddingIndex(from: searchIndex)
     }
 
-    private func rebuildEmbeddingIndex(from index: MeetingSearchIndex) {
-        embeddingBuildTask?.cancel()
-        embeddingIndex = nil
-        embeddingBuildTask = Task.detached(priority: .background) {
-            let built = try? await MeetingSearchEmbeddingBuilder(
-                provider: LocalHashEmbeddingProvider()
-            ).build(from: index)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self.embeddingIndex = built
-            }
-        }
-    }
 
     private func refreshSearchResults() {
         guard isSearching else {
@@ -2135,7 +2118,7 @@ public struct MeetingLibraryView: View {
         let expandedTokens = GlossaryQueryExpander.expand(queryTokens: queryTokens, entries: usableEntries)
         let tokenResults = searchIndex.search(trimmedSearch, limit: Int.max, expandedTokens: expandedTokens)
         let all: [MeetingSearchResult]
-        if let embIdx = embeddingIndex {
+        if let embIdx = embeddingViewModel.embeddingIndex {
             let queryVector = LocalHashEmbeddingProvider.vector(for: trimmedSearch)
             all = MeetingSearchEmbeddingIndex.rerank(
                 results: tokenResults,
