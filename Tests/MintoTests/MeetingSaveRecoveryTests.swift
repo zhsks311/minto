@@ -146,9 +146,7 @@ struct MeetingSaveRecoveryTests {
         let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
         let jsonFile = try #require(files.first { $0.pathExtension == "json" })
         let data = try Data(contentsOf: jsonFile)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let restored = try decoder.decode(MeetingRecord.self, from: data)
+        let restored = try MeetingRecordCoding.makeDecoder().decode(MeetingRecord.self, from: data)
         #expect(restored.id == record.id)
     }
 

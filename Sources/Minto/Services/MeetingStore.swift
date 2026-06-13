@@ -14,7 +14,7 @@ public enum MeetingSaveResult {
 
 /// 회의 기록을 JSON으로 영속화하고 목록을 제공한다.
 /// 저장 위치: ~/Library/Application Support/Minto/meetings/{id}.json
-/// 손상된 파일은 조용히 건너뛴다(fail-soft). 목록은 시작 시각 내림차순.
+/// 손상된 파일은 quarantine/으로 옮기고 목록은 시작 시각 내림차순.
 @MainActor
 public final class MeetingStore: ObservableObject {
 
@@ -22,6 +22,8 @@ public final class MeetingStore: ObservableObject {
 
     /// 최신순 회의 목록.
     @Published public private(set) var meetings: [MeetingRecord] = []
+    /// 마지막 reload에서 격리한 손상 회의 파일 수.
+    @Published public private(set) var corruptedCount: Int = 0
 
     private let dir: URL
     private let encoder: JSONEncoder
@@ -47,18 +49,23 @@ public final class MeetingStore: ObservableObject {
         reload()
     }
 
-    /// 디스크에서 전체 목록을 다시 읽는다. 손상 항목은 skip.
+    /// 디스크에서 전체 목록을 다시 읽는다. 손상 항목은 quarantine/으로 보존한다.
     public func reload() {
         let urls = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
         var loaded: [MeetingRecord] = []
+        var quarantinedCount = 0
         for url in urls where url.pathExtension == "json" {
             guard let data = try? Data(contentsOf: url),
                   let record = try? decoder.decode(MeetingRecord.self, from: data) else {
                 Log.store.error("손상/디코드 실패 skip: \(url.lastPathComponent, privacy: .public)")
+                if quarantineCorruptedFile(at: url) {
+                    quarantinedCount += 1
+                }
                 continue
             }
             loaded.append(record)
         }
+        corruptedCount = quarantinedCount
         meetings = loaded.sorted { $0.startedAt > $1.startedAt }
         rebuildSearchIndex()
     }
@@ -110,5 +117,36 @@ public final class MeetingStore: ObservableObject {
         if !searchIndexStore.save(index) {
             searchIndexStore.invalidate()
         }
+    }
+
+    private func quarantineCorruptedFile(at url: URL) -> Bool {
+        let quarantineDir = dir.appendingPathComponent("quarantine", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: quarantineDir, withIntermediateDirectories: true)
+            let destination = quarantineDestination(for: url, in: quarantineDir)
+            try FileManager.default.moveItem(at: url, to: destination)
+            return true
+        } catch {
+            Log.store.error("손상 파일 격리 실패: \(url.lastPathComponent, privacy: .public)")
+            return false
+        }
+    }
+
+    private func quarantineDestination(for url: URL, in quarantineDir: URL) -> URL {
+        let stem = url.deletingPathExtension().lastPathComponent
+        let pathExtension = url.pathExtension
+        var candidate = quarantineDir.appendingPathComponent(url.lastPathComponent)
+        var suffix = 1
+
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            let filename = "\(stem)-\(suffix)"
+            candidate = quarantineDir.appendingPathComponent(filename)
+            if !pathExtension.isEmpty {
+                candidate = candidate.appendingPathExtension(pathExtension)
+            }
+            suffix += 1
+        }
+
+        return candidate
     }
 }

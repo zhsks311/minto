@@ -50,13 +50,17 @@ struct MeetingStoreTests {
         #expect(loaded?.transcript.first?.text == "안녕하세요")
     }
 
-    @Test("MeetingRecordCoding 팩토리 encoder/decoder는 MeetingRecord를 보존한다")
+    @Test("MeetingRecordCoding 팩토리 encoder/decoder는 schemaVersion과 모든 필드를 보존한다")
     func codingFactoryRoundTripsMeetingRecord() throws {
-        let record = sampleRecord()
+        var record = sampleRecord()
+        record.schemaVersion = 2
+        record.audioFileName = "meeting.wav"
         let data = try MeetingRecordCoding.makeEncoder().encode(record)
         let restored = try MeetingRecordCoding.makeDecoder().decode(MeetingRecord.self, from: data)
 
         #expect(restored == record)
+        #expect(restored.schemaVersion == 2)
+        #expect(restored.audioFileName == "meeting.wav")
     }
 
     @Test("빈 회의(전사·요약 없음)는 저장하지 않는다")
@@ -79,14 +83,94 @@ struct MeetingStoreTests {
         #expect(MeetingStore(directory: dir).meetings.isEmpty)
     }
 
-    @Test("손상 JSON은 skip하고 정상만 로드")
-    func skipsCorrupt() throws {
+    @Test("손상 JSON은 quarantine으로 이동하고 회의 목록에서 제외한다")
+    func quarantinesCorruptJSON() throws {
         let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try "{ 깨진 json".write(to: dir.appendingPathComponent("\(UUID().uuidString).json"), atomically: true, encoding: .utf8)
+
+        let record = sampleRecord()
+        let recordData = try MeetingRecordCoding.makeEncoder().encode(record)
+        try recordData.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+
+        let corruptURL = dir.appendingPathComponent("corrupt.json")
+        try Data("{ 깨진 json".utf8).write(to: corruptURL)
+
         let store = MeetingStore(directory: dir)
-        store.save(sampleRecord())
         #expect(store.meetings.count == 1)
+        #expect(store.meetings.first?.id == record.id)
+        #expect(store.corruptedCount == 1)
+        #expect(!FileManager.default.fileExists(atPath: corruptURL.path))
+
+        let quarantinedURL = dir
+            .appendingPathComponent("quarantine", isDirectory: true)
+            .appendingPathComponent("corrupt.json")
+        #expect(FileManager.default.fileExists(atPath: quarantinedURL.path))
+    }
+
+    @Test("키는 있으나 값이 손상된 JSON은 기본값으로 덮지 않고 quarantine한다")
+    func quarantinesStructurallyCorruptValues() throws {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        // summary 키가 존재하지만 타입이 객체가 아니라 문자열 — decodeIfPresent가 throw해야 한다.
+        // try?였다면 빈 MeetingSummary()로 조용히 덮여 부분 데이터가 유실됐을 경로.
+        let id = UUID()
+        let corruptSummaryJSON = """
+        {
+          "id": "\(id.uuidString)",
+          "title": "요약 손상 회의",
+          "startedAt": "2026-06-13T12:00:00Z",
+          "summary": "this should be an object"
+        }
+        """
+        let corruptURL = dir.appendingPathComponent("\(id.uuidString).json")
+        try Data(corruptSummaryJSON.utf8).write(to: corruptURL)
+
+        // id가 유효한 UUID 형식이 아니면 필수 필드 실패로 quarantine된다.
+        let badIdJSON = """
+        { "id": "not-a-uuid", "title": "회의", "startedAt": "2026-06-13T12:00:00Z" }
+        """
+        let badIdURL = dir.appendingPathComponent("bad-id.json")
+        try Data(badIdJSON.utf8).write(to: badIdURL)
+
+        let store = MeetingStore(directory: dir)
+        #expect(store.meetings.isEmpty)
+        #expect(store.corruptedCount == 2)
+        // 원본은 삭제되지 않고 quarantine으로 이동되어야 한다 — 데이터 유실 방지.
+        let quarantineDir = dir.appendingPathComponent("quarantine", isDirectory: true)
+        #expect(!FileManager.default.fileExists(atPath: corruptURL.path))
+        #expect(!FileManager.default.fileExists(atPath: badIdURL.path))
+        let quarantined = (try? FileManager.default.contentsOfDirectory(atPath: quarantineDir.path)) ?? []
+        #expect(quarantined.count == 2)
+    }
+
+    @Test("이전 스키마 JSON은 누락된 필드를 기본값으로 채워 로드한다")
+    func loadsOldSchemaWithDefaults() throws {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let id = UUID()
+        let startedAt = "2026-06-13T12:00:00Z"
+        let oldSchemaJSON = """
+        {
+          "id": "\(id.uuidString)",
+          "title": "이전 회의",
+          "startedAt": "\(startedAt)"
+        }
+        """
+        try Data(oldSchemaJSON.utf8).write(to: dir.appendingPathComponent("\(id.uuidString).json"))
+
+        let store = MeetingStore(directory: dir)
+        let loaded = try #require(store.meetings.first)
+        #expect(loaded.id == id)
+        #expect(loaded.title == "이전 회의")
+        #expect(loaded.schemaVersion == 1)
+        #expect(loaded.durationSeconds == 0)
+        #expect(loaded.topic == "")
+        #expect(loaded.summary == MeetingSummary())
+        #expect(loaded.transcript == [])
+        #expect(loaded.audioFileName == nil)
+        #expect(store.corruptedCount == 0)
     }
 
     @Test("목록은 최신순 정렬")

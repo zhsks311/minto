@@ -342,6 +342,9 @@ public struct MeetingLibraryView: View {
     private var resultsColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             searchReadiness
+            if store.corruptedCount > 0 {
+                corruptedMeetingNotice
+            }
             unfinishedFileImportCard
             fileImportStatusCard
 
@@ -382,6 +385,24 @@ public struct MeetingLibraryView: View {
         .padding(18)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(LibraryPalette.surface.opacity(0.45))
+    }
+
+    private var corruptedMeetingNotice: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.orange)
+            Text("\(store.corruptedCount)건의 회의를 불러오지 못했어요")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.08))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.2), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var detailColumn: some View {
