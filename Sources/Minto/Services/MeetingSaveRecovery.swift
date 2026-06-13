@@ -62,21 +62,21 @@ public enum MeetingSaveRecovery {
     /// - 디코드 실패(손상 파일): 파일 유지 + Log.store.error, 다음 파일 계속
     /// - store.save() == .success: .json + 짝 .md 삭제
     /// - store.save() != .success: 파일 유지 + Log.store.error
-    /// - 반환값: 복원 성공 건수
+    /// - 반환값: (복원 성공 건수, 실패 건수)
     @MainActor
     public static func restorePendingRecords(
         into store: MeetingStore,
         recoveryDirectory: URL? = nil
-    ) -> Int {
+    ) -> (restored: Int, failed: Int) {
         let dir = recoveryDirectory ?? defaultRecoveryDirectory()
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil
         ) else {
-            return 0
+            return (0, 0)
         }
 
         let jsonURLs = urls.filter { $0.pathExtension == "json" }
-        guard !jsonURLs.isEmpty else { return 0 }
+        guard !jsonURLs.isEmpty else { return (0, 0) }
 
         let decoder = MeetingRecordCoding.makeDecoder()
         var successCount = 0
@@ -110,7 +110,7 @@ public enum MeetingSaveRecovery {
             Log.store.error("복원 실패 \(failCount, privacy: .public)건, 파일 유지")
         }
 
-        return successCount
+        return (restored: successCount, failed: failCount)
     }
 
     // MARK: - Internal

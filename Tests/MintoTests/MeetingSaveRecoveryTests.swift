@@ -167,9 +167,9 @@ struct MeetingSaveRecoveryTests {
         MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: recoveryDir)
 
         let store = MeetingStore(directory: storeDir)
-        let count = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
+        let (restored, _) = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
 
-        #expect(count == 1)
+        #expect(restored == 1)
         let remaining = try FileManager.default.contentsOfDirectory(at: recoveryDir, includingPropertiesForKeys: nil)
         #expect(remaining.isEmpty)
         #expect(store.meetings.contains { $0.id == record.id })
@@ -186,9 +186,9 @@ struct MeetingSaveRecoveryTests {
         // 쓰기 불가 경로로 store를 초기화해 .failed 유도
         let unwritable = URL(fileURLWithPath: "/dev/null/nonexistent-\(UUID().uuidString)")
         let failingStore = MeetingStore(directory: unwritable)
-        let count = MeetingSaveRecovery.restorePendingRecords(into: failingStore, recoveryDirectory: recoveryDir)
+        let (restored, _) = MeetingSaveRecovery.restorePendingRecords(into: failingStore, recoveryDirectory: recoveryDir)
 
-        #expect(count == 0)
+        #expect(restored == 0)
         let remaining = try FileManager.default.contentsOfDirectory(at: recoveryDir, includingPropertiesForKeys: nil)
         let jsonFiles = remaining.filter { $0.pathExtension == "json" }
         #expect(jsonFiles.count == 1)
@@ -216,10 +216,10 @@ struct MeetingSaveRecoveryTests {
         MeetingSaveRecovery.writeRecoveryFile(for: record, recoveryDirectory: recoveryDir)
 
         let store = MeetingStore(directory: storeDir)
-        let count = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
+        let (restored, _) = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
 
         // 정상 파일 1건은 복원, 손상 파일은 유지
-        #expect(count == 1)
+        #expect(restored == 1)
         let remaining = try FileManager.default.contentsOfDirectory(at: recoveryDir, includingPropertiesForKeys: nil)
         #expect(remaining.count == 1)
         #expect(remaining[0].lastPathComponent == "corrupt.json")
@@ -236,7 +236,7 @@ struct MeetingSaveRecoveryTests {
 
         try FileManager.default.createDirectory(at: recoveryDir, withIntermediateDirectories: true)
         let store = MeetingStore(directory: storeDir)
-        let count = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
-        #expect(count == 0)
+        let (restored, _) = MeetingSaveRecovery.restorePendingRecords(into: store, recoveryDirectory: recoveryDir)
+        #expect(restored == 0)
     }
 }
