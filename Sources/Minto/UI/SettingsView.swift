@@ -1,5 +1,4 @@
 import os
-import OSLog
 import SwiftUI
 
 private enum LocalLLMContextWindowPreset: String, CaseIterable, Identifiable {
@@ -1326,13 +1325,14 @@ public struct SettingsView: View {
         isDetectingLocalLLMCompatibility = true
         defer { isDetectingLocalLLMCompatibility = false }
 
-        if await endpointResponds(baseURL.appendingPathComponent("api").appendingPathComponent("tags")) {
+        let endpointProbe = LocalEndpointProbe()
+        if await endpointProbe.responds(to: baseURL.appendingPathComponent("api").appendingPathComponent("tags")) {
             localLLMCompatibilityRaw = LocalLLMEndpointCompatibility.ollamaGenerate.rawValue
             await refreshLocalLLMModelCatalog(force: true)
             return
         }
 
-        if await endpointResponds(baseURL.appendingPathComponent("v1").appendingPathComponent("models")) {
+        if await endpointProbe.responds(to: baseURL.appendingPathComponent("v1").appendingPathComponent("models")) {
             localLLMCompatibilityRaw = LocalLLMEndpointCompatibility.openAIChatCompletions.rawValue
             localLLMModelCatalog = nil
             localLLMModelCatalogKey = nil
@@ -1345,21 +1345,6 @@ public struct SettingsView: View {
             warning: "Endpoint에서 Ollama 또는 OpenAI 호환 서버를 확인하지 못했어요."
         )
         localLLMModelCatalogKey = localLLMModelCatalogRefreshKey
-    }
-
-    private func endpointResponds(_ url: URL) async -> Bool {
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 5
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else { return false }
-            return (200..<300).contains(httpResponse.statusCode)
-        } catch {
-            return false
-        }
     }
 
     private var tosWarningRow: some View {
@@ -2341,34 +2326,8 @@ public struct SettingsView: View {
         Task { @MainActor in
             defer { isExportingLogs = false }
             do {
-                // scope: .currentProcessIdentifier — 현재 프로세스 세션 로그만 수집
-                let store = try OSLogStore(scope: .currentProcessIdentifier)
-                let subsystem = Bundle.main.bundleIdentifier ?? "com.minto.app"
-                let predicate = NSPredicate(format: "subsystem == %@", subsystem)
-                // position(date:) 대신 프로세스 첫 항목부터 수집 (현재 실행 분만 해당)
-                let entries = try store.getEntries(
-                    with: [],
-                    at: store.position(timeIntervalSinceLatestBoot: 0),
-                    matching: predicate
-                )
-                var lines: [String] = []
-                for entry in entries {
-                    if let logEntry = entry as? OSLogEntryLog {
-                        // 주의: 같은 프로세스에서 읽는 composedMessage는 privacy 마스킹이
-                        // 적용되지 않은 원문이다. 내보내기 안전의 전제는 마스킹이 아니라
-                        // "Logger에 전사·주제·검색어·절대경로 같은 민감/식별 값을 넣지 않기"다.
-                        lines.append("[\(logEntry.date)] [\(logEntry.category)] \(logEntry.composedMessage)")
-                    }
-                }
-
-                guard !lines.isEmpty else {
-                    logExportError = "내보낼 로그가 없어요."
-                    Log.app.info("log export: no entries found")
-                    return
-                }
-
-                let content = lines.joined(separator: "\n")
-                guard let data = content.data(using: .utf8) else { return }
+                let logExportService = DiagnosticLogExportService()
+                let exportFile = try logExportService.makeCurrentProcessExportFile()
 
                 // beginSheetModal(for:) 대신 begin { } — keyWindow nil 시 무음 실패 방지
                 let panel = NSSavePanel()
@@ -2380,8 +2339,11 @@ public struct SettingsView: View {
                     }
                 }
                 guard result == .OK, let url = panel.url else { return }
-                try data.write(to: url, options: .atomic)
-                Log.app.info("log export success lines=\(lines.count, privacy: .public)")
+                try logExportService.write(exportFile, to: url)
+                Log.app.info("log export success lines=\(exportFile.lineCount, privacy: .public)")
+            } catch DiagnosticLogExportServiceError.noEntries {
+                logExportError = "내보낼 로그가 없어요."
+                Log.app.info("log export: no entries found")
             } catch {
                 Log.app.error("log export failed: \(error.localizedDescription, privacy: .public)")
                 logExportError = "로그 내보내기 실패: \(error.localizedDescription)"
