@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// 파일 임포트 시 주제·용어집 맥락을 입력하는 경량 시트.
+/// 파일 임포트 시 주제·용어집·예상 참석 인원 맥락을 입력하는 경량 시트.
 /// MeetingSetupView의 glossaryContextEditor 패턴을 따르되,
 /// 오디오 입력/Confluence 연동 부분은 포함하지 않는다.
 struct FileImportSetupSheet: View {
     let fileURL: URL
-    let onImport: (String, String) -> Void  // (topic, glossary)
+    let onImport: (String, String, Int?) -> Void  // (topic, glossary, expectedSpeakerCount)
     let onSkip: () -> Void
 
     @ObservedObject private var glossaryStore = GlossaryStore.shared
     @State private var topic: String = ""
+    @State private var expectedSpeakerCountText: String = ""
     @State private var manualGlossary: String = ""
     @State private var selectedGlossaryCategories: Set<String> = []
     @State private var showGlossary = false
@@ -18,7 +19,7 @@ struct FileImportSetupSheet: View {
 
     init(
         fileURL: URL,
-        onImport: @escaping (String, String) -> Void,
+        onImport: @escaping (String, String, Int?) -> Void,
         onSkip: @escaping () -> Void,
         glossarySelectionDefaults: UserDefaults = .standard
     ) {
@@ -32,6 +33,7 @@ struct FileImportSetupSheet: View {
         VStack(alignment: .leading, spacing: 20) {
             header
             topicField
+            expectedSpeakerCountField
             glossaryContextEditor
             Spacer(minLength: 0)
             actionButtons
@@ -70,6 +72,20 @@ struct FileImportSetupSheet: View {
                 .font(.system(size: 13, weight: .semibold))
             TextField("예: Q2 스프린트 회고, 신규 기능 기획", text: $topic)
                 .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    // MARK: - Expected speakers
+
+    private var expectedSpeakerCountField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("예상 참석 인원")
+                .font(.system(size: 13, weight: .semibold))
+            TextField("예: 4", text: $expectedSpeakerCountText)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: expectedSpeakerCountText) { _, newValue in
+                    normalizeExpectedSpeakerCountInput(newValue)
+                }
         }
     }
 
@@ -125,7 +141,11 @@ struct FileImportSetupSheet: View {
             Spacer()
             Button {
                 dismiss()
-                onImport(topic.trimmingCharacters(in: .whitespacesAndNewlines), combinedGlossary)
+                onImport(
+                    topic.trimmingCharacters(in: .whitespacesAndNewlines),
+                    combinedGlossary,
+                    expectedSpeakerCount
+                )
             } label: {
                 Label("임포트", systemImage: "tray.and.arrow.down")
                     .font(.system(size: 13, weight: .semibold))
@@ -142,6 +162,13 @@ struct FileImportSetupSheet: View {
 
     private var combinedGlossary: String {
         GlossaryContextResolver().resolve(manualGlossary: manualGlossary, selectedEntries: selectedGlossaryEntries)
+    }
+
+    private var expectedSpeakerCount: Int? {
+        let trimmedText = expectedSpeakerCountText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return nil }
+        guard let count = Int(trimmedText), count > 0 else { return nil }
+        return count
     }
 
     private var glossaryBadgeText: String {
@@ -179,5 +206,11 @@ struct FileImportSetupSheet: View {
         )
         guard pruned != selectedGlossaryCategories else { return }
         selectedGlossaryCategories = pruned
+    }
+
+    private func normalizeExpectedSpeakerCountInput(_ value: String) {
+        let filteredValue = value.filter(\.isNumber)
+        guard filteredValue != value else { return }
+        expectedSpeakerCountText = filteredValue
     }
 }

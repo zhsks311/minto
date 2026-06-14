@@ -209,6 +209,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
         topic: String? = nil,
         glossary: String = "",
         document: String = "",
+        expectedSpeakerCount: Int? = nil,
         engineID: SpeechEngineID = SpeechEnginePreferences.selectedEngine(),
         shouldCorrect: Bool = LLMCorrectionService.shared.selectedProvider != .none
     ) async throws -> MeetingRecord {
@@ -296,7 +297,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
 
             update(.saving, progress: 0.96, fileName: fileName, detail: "회의 목록에 저장하고 있어요.")
             Log.importer.info("import save start file=\(fileName, privacy: .public)")
-            let record = MeetingRecordFactory.makeRecord(
+            var record = MeetingRecordFactory.makeRecord(
                 summary: summary,
                 segments: segments,
                 topic: topicText,
@@ -305,6 +306,15 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 duration: extractionDuration,
                 startedAt: startedAt
             )
+            if let expectedSpeakerCount {
+                record.transcript = await assignSpeakersIfNeeded(
+                    transcript: record.transcript,
+                    audioFileURL: url,
+                    meetingStart: record.startedAt,
+                    expectedSpeakerCount: expectedSpeakerCount,
+                    fileName: fileName
+                )
+            }
             guard store.save(record) == .success else { throw MeetingFileImportError.saveFailed }
 
             Log.importer.info("import success file=\(fileName, privacy: .public)")
@@ -339,6 +349,46 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 errorMessage: error.localizedDescription
             ))
             throw error
+        }
+    }
+
+    private func assignSpeakersIfNeeded(
+        transcript: [Segment],
+        audioFileURL: URL,
+        meetingStart: Date,
+        expectedSpeakerCount: Int,
+        fileName: String
+    ) async -> [Segment] {
+        guard expectedSpeakerCount > 0 else {
+            Log.diarization.error(
+                "import diarization skipped file=\(fileName, privacy: .public) invalidSpeakerCount=\(expectedSpeakerCount, privacy: .public)"
+            )
+            return transcript
+        }
+
+        let provider = FluidAudioOfflineDiarizationProvider(exactSpeakerCount: expectedSpeakerCount)
+        Log.diarization.info(
+            "import diarization assign start file=\(fileName, privacy: .public) expectedSpeakers=\(expectedSpeakerCount, privacy: .public)"
+        )
+        do {
+            let diarizedSegments = try await provider.diarize(audioFileURL: audioFileURL)
+            let labeledTranscript = TranscriptSpeakerMatcher().assignSpeakers(
+                diarizedSegments: diarizedSegments,
+                transcript: transcript,
+                meetingStart: meetingStart
+            )
+            let labeledCount = labeledTranscript.filter { $0.speaker != nil }.count
+            Log.diarization.info(
+                "import diarization assign complete file=\(fileName, privacy: .public) transcriptSegments=\(labeledTranscript.count, privacy: .public) labeledSegments=\(labeledCount, privacy: .public)"
+            )
+            return labeledTranscript
+        } catch {
+            let errorCase = String(describing: error).components(separatedBy: "(").first ?? String(describing: error)
+            let nsError = error as NSError
+            Log.diarization.error(
+                "import diarization failed file=\(fileName, privacy: .public) expectedSpeakers=\(expectedSpeakerCount, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
+            )
+            return transcript
         }
     }
 

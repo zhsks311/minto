@@ -232,11 +232,16 @@ public struct MeetingLibraryView: View {
             if let url = fileImportSetupURL {
                 FileImportSetupSheet(
                     fileURL: url,
-                    onImport: { topic, glossary in
-                        startFileImport(url: url, topic: topic, glossary: glossary)
+                    onImport: { topic, glossary, expectedSpeakerCount in
+                        startFileImport(
+                            url: url,
+                            topic: topic,
+                            glossary: glossary,
+                            expectedSpeakerCount: expectedSpeakerCount
+                        )
                     },
                     onSkip: {
-                        startFileImport(url: url, topic: nil, glossary: "")
+                        startFileImport(url: url, topic: nil, glossary: "", expectedSpeakerCount: nil)
                     }
                 )
             }
@@ -2600,7 +2605,12 @@ public struct MeetingLibraryView: View {
         }
     }
 
-    private func startFileImport(url: URL, topic: String?, glossary: String) {
+    private func startFileImport(
+        url: URL,
+        topic: String?,
+        glossary: String,
+        expectedSpeakerCount: Int?
+    ) {
         fileImportSetupURL = nil
         fileImportTask?.cancel()
         fileImportTask = Task { @MainActor in
@@ -2608,7 +2618,8 @@ public struct MeetingLibraryView: View {
                 _ = try await fileImportUseCase.importFile(
                     url,
                     topic: topic.flatMap { $0.isEmpty ? nil : $0 },
-                    glossary: glossary
+                    glossary: glossary,
+                    expectedSpeakerCount: expectedSpeakerCount
                 )
             } catch is CancellationError {
                 // 취소 상태는 use-case가 이미 반영한다.
