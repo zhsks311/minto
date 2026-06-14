@@ -307,6 +307,8 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 startedAt: startedAt
             )
             if let expectedSpeakerCount {
+                try Task.checkCancellation()
+                update(.saving, progress: 0.97, fileName: fileName, detail: "화자를 구분하고 있어요.")
                 record.transcript = await assignSpeakersIfNeeded(
                     transcript: record.transcript,
                     audioFileURL: url,
@@ -314,6 +316,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
                     expectedSpeakerCount: expectedSpeakerCount,
                     fileName: fileName
                 )
+                try Task.checkCancellation()
             }
             guard store.save(record) == .success else { throw MeetingFileImportError.saveFailed }
 

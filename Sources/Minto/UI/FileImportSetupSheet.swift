@@ -209,7 +209,7 @@ struct FileImportSetupSheet: View {
     }
 
     private func normalizeExpectedSpeakerCountInput(_ value: String) {
-        let filteredValue = value.filter(\.isNumber)
+        let filteredValue = value.filter { $0.isASCII && $0.isNumber }
         guard filteredValue != value else { return }
         expectedSpeakerCountText = filteredValue
     }
