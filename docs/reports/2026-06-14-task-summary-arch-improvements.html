@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>minto2 아키텍처 개선 작업 — task-summary</title>
+  <style>
+    :root {
+      --bg: #ffffff; --surface: #f6f8fa; --border: #d0d7de;
+      --text: #1f2328; --text-muted: #656d76; --accent: #0969da; --code-bg: #f6f8fa;
+      --c-critical: #cf222e; --c-critical-bg: #fff0ee; --c-critical-border: #ff818266;
+      --c-high:     #9a6700; --c-high-bg:     #fff8c5; --c-high-border:     #f1e05a99;
+      --c-medium:   #0550ae; --c-medium-bg:   #ddf4ff; --c-medium-border:   #79c0ff99;
+      --c-low:      #116329; --c-low-bg:      #dafbe1; --c-low-border:      #56d36499;
+      --pass-bg: #f0fdf4; --pass-border: #bbf7d0;
+      --fail-bg: #fff0ee; --fail-border: #fecaca;
+      --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --surface: #161b22; --border: #30363d;
+        --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff; --code-bg: #161b22;
+        --c-critical: #ff7b72; --c-critical-bg: #2d0f0f; --c-critical-border: #ff7b7266;
+        --c-high:     #e3b341; --c-high-bg:     #2d1f04; --c-high-border:     #e3b34166;
+        --c-medium:   #79c0ff; --c-medium-bg:   #051d4d; --c-medium-border:   #79c0ff66;
+        --c-low:      #56d364; --c-low-bg:      #0a2d19; --c-low-border:      #56d36466;
+        --pass-bg: #0a2d19; --pass-border: #56d36444;
+        --fail-bg: #2d0f0f; --fail-border: #ff7b7244;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--text);
+      font-size: 15px; line-height: 1.65; max-width: 900px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; }
+    h2 { font-size: 1.05rem; font-weight: 600; margin: 2.5rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+    p { margin-bottom: 0.75rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .summary { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+      border-radius: 6px; padding: 1.1rem 1.4rem; margin: 1.25rem 0 2rem; }
+    .summary-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .summary p:last-child { margin-bottom: 0; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin: 1.25rem 0 2rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.25rem; }
+    .stat-card--danger  { background: var(--c-critical-bg); border-color: var(--c-critical-border); }
+    .stat-card--warning { background: var(--c-high-bg);     border-color: var(--c-high-border); }
+    .stat-card--success { background: var(--pass-bg);       border-color: var(--pass-border); }
+    .stat-card--info    { background: var(--c-medium-bg);   border-color: var(--c-medium-border); }
+    .stat-number { font-size: 2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat-card--danger  .stat-number { color: var(--c-critical); }
+    .stat-card--warning .stat-number { color: var(--c-high); }
+    .stat-card--success .stat-number { color: var(--c-low); }
+    .stat-card--info    .stat-number { color: var(--c-medium); }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .stat-sub   { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .finding { border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px; padding: 0.9rem 1.1rem; margin: 0.65rem 0; }
+    .finding--critical { border-left-color: var(--c-critical); background: var(--c-critical-bg); }
+    .finding--high     { border-left-color: var(--c-high);     background: var(--c-high-bg); }
+    .finding--medium   { border-left-color: var(--c-medium);   background: var(--c-medium-bg); }
+    .finding--low      { border-left-color: var(--c-low);      background: var(--c-low-bg); }
+    .finding-header { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+    .finding-title { font-weight: 600; font-size: 0.95rem; }
+    .finding-location { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .finding p { margin-bottom: 0.5rem; font-size: 0.9rem; }
+    .tag { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 4px; font-family: var(--font-mono); vertical-align: middle; }
+    .tag-critical { background: var(--c-critical-bg); color: var(--c-critical); }
+    .tag-high     { background: var(--c-high-bg);     color: var(--c-high); }
+    .tag-medium   { background: var(--c-medium-bg);   color: var(--c-medium); }
+    .tag-low      { background: var(--c-low-bg);      color: var(--c-low); }
+    .tag-pass     { background: var(--pass-bg);        color: var(--c-low); }
+    .tag-fail     { background: var(--fail-bg);        color: var(--c-critical); }
+    .tag-info     { background: var(--surface);        color: var(--text-muted); }
+    .verify-table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .verify-table th { text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); background: var(--surface); border-bottom: 2px solid var(--border); padding: 0.5rem 0.9rem; }
+    .verify-table td { padding: 0.6rem 0.9rem; vertical-align: middle; }
+    .vrow-pass { background: var(--pass-bg); }
+    .vrow-fail { background: var(--fail-bg); }
+    table:not(.verify-table) { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    table:not(.verify-table) th { text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 2px solid var(--border); padding: 0.45rem 0.75rem; }
+    table:not(.verify-table) td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table:not(.verify-table) tr:last-child td { border-bottom: none; }
+    code { font-family: var(--font-mono); font-size: 0.85em; background: var(--code-bg); padding: 0.12em 0.35em; border-radius: 4px; border: 1px solid var(--border); }
+    pre { font-family: var(--font-mono); font-size: 0.85rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; overflow-x: auto; margin: 0.75rem 0; line-height: 1.5; }
+    pre code { background: none; border: none; padding: 0; font-size: inherit; }
+    details { border: 1px solid var(--border); border-radius: 6px; margin: 0.6rem 0; }
+    details > summary { padding: 0.65rem 1rem; cursor: pointer; font-weight: 500; font-size: 0.92rem; background: var(--surface); user-select: none; list-style: none; display: flex; align-items: center; gap: 0.5rem; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before { content: '▶'; font-size: 0.65rem; transition: transform 0.12s; color: var(--text-muted); flex-shrink: 0; }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details[open] > summary { border-bottom: 1px solid var(--border); }
+    .details-body { padding: 1rem 1.25rem; }
+    .flow-diagram { width: 100%; max-width: 760px; display: block; margin: 1rem 0; overflow: visible; }
+    .flow-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+    .flow-box-accent { fill: var(--c-medium-bg); stroke: var(--c-medium-border); stroke-width: 1.5; }
+    .flow-box-success { fill: var(--pass-bg); stroke: var(--pass-border); stroke-width: 1.5; }
+    .flow-text { font-family: var(--font-body); font-size: 12px; fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+    .flow-label { font-family: var(--font-mono); font-size: 10px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: middle; }
+    .flow-arrow { stroke: var(--text-muted); stroke-width: 1.5; }
+    .flow-arrowhead { fill: var(--text-muted); }
+    footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    @media print {
+      body { max-width: none; padding: 0; background: #fff; color: #000; }
+      .stat-card, .stat-card--danger, .stat-card--warning, .stat-card--success, .stat-card--info { border: 1px solid #ccc; background: #f9f9f9; }
+      .finding { border: 1px solid #ccc; background: #fff; }
+      .vrow-pass, .vrow-fail { background: #fff; }
+      details { border: 1px solid #ccc; }
+      details[open] { page-break-inside: avoid; }
+      a[href]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #666; }
+      footer { color: #666; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>minto2 아키텍처 점검 → 개선 작업 정리</h1>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">3</div>
+    <div class="stat-label">main 머지 완료</div>
+    <div class="stat-sub">P1 · P2 · P4</div>
+  </div>
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">543</div>
+    <div class="stat-label">테스트 통과</div>
+    <div class="stat-sub">82 suites · 0 실패</div>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <div class="stat-number">1</div>
+    <div class="stat-label">머지 보류</div>
+    <div class="stat-sub">P3 · 라이브 QA 필요</div>
+  </div>
+  <div class="stat-card stat-card--info">
+    <div class="stat-number">3</div>
+    <div class="stat-label">독립 리뷰 관점</div>
+    <div class="stat-sub">audit · critic · codex</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">Summary</div>
+  <p><strong>아키텍처 골격은 건강하며 재설계가 필요 없다.</strong> 3자 교차검증(자체 감사 + 적대적 critic + codex 독립 리뷰)으로 "god object·MVVM·폴더 구조" 비판은 과장으로 철회됐고, 진짜 위험은 <strong>도메인 안전성(회의 데이터 유실 가능성)</strong>에 집중돼 있음이 드러났다.</p>
+  <p>개선 4건을 codex로 병렬 구현 → opus로 각각 리뷰 → 검증 후 머지했다. <strong>P1(데이터 유실 방지)·P2(UI IO 분리)·P4(dead code 제거)는 main에 머지 완료</strong>(통합 543 테스트 통과), <strong>P3(오디오 stop-drain)은 BLOCKER 해소 후에도 라이브 QA가 필요해 로컬 브랜치로 보류</strong>했다.</p>
+</div>
+
+<h2>작업 흐름</h2>
+<svg class="flow-diagram" viewBox="0 0 760 70" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="작업 파이프라인">
+  <rect x="2" y="18" width="120" height="36" rx="6" class="flow-box"/>
+  <text x="62" y="36" class="flow-text">아키텍처 감사</text>
+  <line x1="122" y1="36" x2="146" y2="36" class="flow-arrow"/>
+  <polygon points="146,31 156,36 146,41" class="flow-arrowhead"/>
+  <rect x="158" y="18" width="120" height="36" rx="6" class="flow-box"/>
+  <text x="218" y="32" class="flow-text">3자 교차검증</text>
+  <text x="218" y="46" class="flow-label">critic · codex</text>
+  <line x1="278" y1="36" x2="302" y2="36" class="flow-arrow"/>
+  <polygon points="302,31 312,36 302,41" class="flow-arrowhead"/>
+  <rect x="314" y="18" width="120" height="36" rx="6" class="flow-box"/>
+  <text x="374" y="32" class="flow-text">개선 계획</text>
+  <text x="374" y="46" class="flow-label">공수 추정</text>
+  <line x1="434" y1="36" x2="458" y2="36" class="flow-arrow"/>
+  <polygon points="458,31 468,36 458,41" class="flow-arrowhead"/>
+  <rect x="470" y="18" width="130" height="36" rx="6" class="flow-box-accent"/>
+  <text x="535" y="32" class="flow-text">codex 병렬 구현</text>
+  <text x="535" y="46" class="flow-label">4-way worktree</text>
+  <line x1="600" y1="36" x2="624" y2="36" class="flow-arrow"/>
+  <polygon points="624,31 634,36 624,41" class="flow-arrowhead"/>
+  <rect x="636" y="18" width="120" height="36" rx="6" class="flow-box-success"/>
+  <text x="696" y="32" class="flow-text">opus 리뷰</text>
+  <text x="696" y="46" class="flow-label">→ main 머지</text>
+</svg>
+
+<h2>변경 내역 (Changes)</h2>
+<table>
+  <thead><tr><th>작업</th><th>내용</th><th>주요 파일</th><th>상태</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>P1</strong><br><span class="tag tag-critical">데이터 안전</span></td>
+      <td>저장 스키마 안전 경계. 손상 회의를 조용히 skip → <code>quarantine/</code>로 이동 + <code>corruptedCount</code> 노출. <code>MeetingRecord.schemaVersion</code> + tolerant decoder(키 누락=기본값, 값 손상=throw→격리).</td>
+      <td><code>MeetingStore.swift</code><br><code>MeetingRecord.swift</code><br><code>MeetingLibraryView.swift</code></td>
+      <td><span class="tag tag-pass">MERGED</span></td>
+    </tr>
+    <tr>
+      <td><strong>P2</strong><br><span class="tag tag-medium">테스트성</span></td>
+      <td>SettingsView의 IO 분리. raw <code>URLSession</code> → <code>LocalEndpointProbe</code>(주입형 transport), <code>OSLogStore</code> 읽기·쓰기 → <code>DiagnosticLogExportService</code>.</td>
+      <td><code>SettingsView.swift</code><br><code>LocalEndpointProbe.swift</code><br><code>DiagnosticLogExportService.swift</code></td>
+      <td><span class="tag tag-pass">MERGED</span></td>
+    </tr>
+    <tr>
+      <td><strong>P4</strong><br><span class="tag tag-low">정리</span></td>
+      <td>미사용 <code>ModelActor</code> 제거(<code>@ModelActor</code> 사용처 0건, 실제 격리 모델 오도).</td>
+      <td><code>ModelActor.swift</code> (삭제)</td>
+      <td><span class="tag tag-pass">MERGED</span></td>
+    </tr>
+    <tr>
+      <td><strong>P3</strong><br><span class="tag tag-high">라이브 경로</span></td>
+      <td>오디오 stop-drain 계약 일관화. 소스별 onBuffer 전달 스레드 차이로 마지막 버퍼가 누락되던 문제. 세마포어 데드락 BLOCKER 제거, drain barrier·취소 경로 정리.</td>
+      <td><code>SystemAudioSource.swift</code><br><code>MicrophoneSource.swift</code> 외</td>
+      <td><span class="tag tag-fail">보류</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>검증 (Verification)</h2>
+<table class="verify-table">
+  <thead><tr><th>결과</th><th>대상</th><th>비고</th></tr></thead>
+  <tbody>
+    <tr class="vrow-pass"><td><span class="tag tag-pass">PASS</span></td><td><code>main</code> 통합 빌드+테스트</td><td>543 tests / 82 suites · 0 실패 (P1+P2+P4 머지 후)</td></tr>
+    <tr class="vrow-pass"><td><span class="tag tag-pass">PASS</span></td><td>P1 worktree</td><td>538 tests · HIGH 수정(try?→try decodeIfPresent) + 구조 손상 격리 테스트 추가</td></tr>
+    <tr class="vrow-pass"><td><span class="tag tag-pass">PASS</span></td><td>P2 worktree</td><td>541 tests · opus APPROVE-WITH-NITS</td></tr>
+    <tr class="vrow-pass"><td><span class="tag tag-pass">PASS</span></td><td>P3 worktree (단위)</td><td>537 tests · 단, 라이브 3모드 QA 미수행 / 회귀 테스트 비결정성 잔존</td></tr>
+    <tr class="vrow-fail"><td><span class="tag tag-fail">HOLD</span></td><td>P3 라이브 오디오 QA</td><td>실기기 마이크/시스템/믹스 캡처 필요 — 에이전트 환경에서 검증 불가</td></tr>
+  </tbody>
+</table>
+
+<details>
+  <summary>3자 검증에서 철회/수정된 1차 감사 주장</summary>
+  <div class="details-body">
+    <table>
+      <thead><tr><th>1차 주장</th><th>최종 평결</th></tr></thead>
+      <tbody>
+        <tr><td>2,672 LOC = god object, 분해 필요</td><td>과장 — SwiftUI 서브뷰 합성. 문제는 크기가 아니라 내장된 IO/workflow</td></tr>
+        <tr><td>MVVM 비일관</td><td>잘못된 잣대 — 프로젝트는 헥사고날 선언, MVVM 비필수</td></tr>
+        <tr><td>Services = 잡동사니 서랍 → 폴더 재분할</td><td>ROI 낮음 — 솔로 개발자에게 행동 변화 0의 비용. 제외 권고</td></tr>
+        <tr><td><code>nonisolated(unsafe)</code> 레이스 위험</td><td>사실 오류 — <code>@MainActor</code> 격리라 현재 레이스 아님</td></tr>
+        <tr><td>(누락) 데이터 유실</td><td><strong>codex가 발견 → P1으로 처리</strong>. 진짜 최우선 도메인 리스크</td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<h2>앞으로 할 일 (Next Steps)</h2>
+
+<h3>P3 머지까지 — 라이브 QA + 후속 구현</h3>
+<p>브랜치 <code>fix/audio-stop-drain</code> (워크트리 <code>/Users/d66hjkxwt9/Idea/private/minto2-p3</code>). 아래는 <code>docs/work/2026-06-14-audio-stop-drain-plan.md</code>에도 기록됨.</p>
+
+<div class="finding finding--high">
+  <div class="finding-header"><span class="tag tag-high">필수 QA</span><span class="finding-title">3모드 라이브 녹음 종료 검증</span></div>
+  <p><code>cd minto2-p3 &amp;&amp; ./scripts/dev.sh run</code> — 마이크 / 시스템오디오 / 믹스 각각에서 녹음→종료 시 <strong>마지막 발화 구간이 누락 없이</strong> transcript·요약에 들어가는지 육안 확인. 단위 테스트로 대체 불가.</p>
+</div>
+
+<div class="finding finding--high">
+  <div class="finding-header"><span class="tag tag-high">후속 #1</span><span class="finding-title"><code>stop()</code>의 MainActor 블록 해소 (보류된 HIGH)</span></div>
+  <div class="finding-location"><code>TranscriptionViewModel.swift:384</code></div>
+  <p>정확성 버그가 아닌 UI 반응성 이슈. 단순 오프로드는 위험(<code>engine</code> 락 없음 + <code>AVAudioEngine</code> 스레드 안전 미보장)이라 아래 순서로 처리:</p>
+  <details>
+    <summary>처리 순서</summary>
+    <div class="details-body">
+      <ol>
+        <li><code>MicrophoneSource</code>의 <code>engine</code>/<code>converter</code>/<code>configObserver</code> 접근을 락(또는 dedicated serial queue)으로 보호</li>
+        <li><code>AudioSourceProtocol: AnyObject, Sendable</code>로 격상(세 구현체 모두 이미 <code>@unchecked Sendable</code>)</li>
+        <li><code>audioSource.stop()</code>을 <code>await Task.detached { [audioSource] in audioSource.stop() }.value</code>로 오프로드</li>
+        <li>위 3모드 라이브 QA와 같은 패스에서 검증</li>
+      </ol>
+    </div>
+  </details>
+</div>
+
+<div class="finding finding--medium">
+  <div class="finding-header"><span class="tag tag-medium">후속 #2</span><span class="finding-title">회귀 테스트 비결정성 재설계</span></div>
+  <div class="finding-location"><code>TranscriptionViewModelStopTests.swift</code></div>
+  <p><code>BackgroundDrainAudioSource</code>가 queue→MainActor executor 경계를 넘어 emit 순서가 비결정적(<code>.concurrent</code>/serial 모두 불안정). 결정적 동기화(barrier + MainActor 큐 flush 보장)로 재설계 필요.</p>
+</div>
+
+<h3>P1에서 남긴 저위험 후속 (선택, 단일 사용자 앱이라 우선순위 낮음)</h3>
+<ul>
+  <li>quarantine 파일명 타임스탬프화(TOCTOU 회피) · reload 재처리 방어 · 이동 실패 시 <code>corruptedCount</code> 반영 — opus가 MEDIUM/LOW로 지적, 후속 처리</li>
+</ul>
+
+<h3>P2에서 남긴 nit (선택)</h3>
+<ul>
+  <li>diagnostic log 내보내기 OSLogStore 이중 읽기 단순화(HIGH-설계퇴행, 동작 무해) · 날짜 포맷 로케일 견고화(KST 환경 테스트 flake 방지)</li>
+</ul>
+
+<h3>장기 (이번 범위 밖, 권고만)</h3>
+<ul>
+  <li>P2에서 만든 추출 패턴을 다른 god object(MeetingLibraryView의 검색/임포트 workflow)로 점진 확대 — 전면 리팩터링이 아니라 IO/workflow만 분리</li>
+  <li>레이어 경계는 폴더 재분할 대신 "필요할 때 책임 혼합만 분리"로 — 3자 모두 전면 재배치는 ROI 음수 판정</li>
+</ul>
+
+<details>
+  <summary>git 상태 / 브랜치 참조</summary>
+  <div class="details-body">
+    <pre><code>main 최근:
+  806bd54 Merge refactor/ui-io-extraction (P2)
+  0b0a8cf Merge feat/persistence-safety (P1)
+  21157d6 Merge chore/remove-modelactor (P4)
+
+보류 브랜치:
+  fix/audio-stop-drain (e7b042c) — 워크트리 minto2-p3, 미push(로컬 전용)
+
+검증 명령:
+  swift test --disable-sandbox --scratch-path /tmp/minto2-test</code></pre>
+    <p>참고: origin(<code>zhsks311/Minto2</code>)은 빈 원격 — 현재 로컬 전용. PR은 push(=비공개 저장소 최초 공개) 필요해 보류 중.</p>
+  </div>
+</details>
+
+<footer>
+  <span>생성: 2026-06-14</span>
+  <span>모델: Claude Opus 4.8 (1M)</span>
+  <span>유형: task-summary</span>
+</footer>
+
+</body>
+</html>
