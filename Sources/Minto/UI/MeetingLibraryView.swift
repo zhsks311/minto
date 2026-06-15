@@ -1957,10 +1957,11 @@ public struct MeetingLibraryView: View {
     }
 
     private func saveSpeakerEdit(source: String, target: String, kind: String, in record: MeetingRecord) {
-        var updated = record
-        updated.transcript = SpeakerLabelEditing.replacingSpeaker(source, with: target, in: record.transcript)
+        let current = store.meetings.first(where: { $0.id == record.id }) ?? record
+        var updated = current
+        updated.transcript = SpeakerLabelEditing.replacingSpeaker(source, with: target, in: current.transcript)
 
-        let changedSegmentCount = zip(record.transcript, updated.transcript).reduce(0) { count, pair in
+        let changedSegmentCount = zip(current.transcript, updated.transcript).reduce(0) { count, pair in
             count + (pair.0.speaker == pair.1.speaker ? 0 : 1)
         }
         guard changedSegmentCount > 0 else {
