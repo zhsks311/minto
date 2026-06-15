@@ -1814,7 +1814,9 @@ public struct MeetingLibraryView: View {
                             .font(.system(size: detailTimestampFontSize, weight: .bold, design: .monospaced))
                             .foregroundColor(.secondary)
                             .frame(width: 46, alignment: .leading)
-                        if let speaker = SpeakerLabel.normalized(segment.speaker) {
+                        if let record, !speakerLabels.isEmpty {
+                            segmentSpeakerReassignmentMenu(segment: segment, labels: speakerLabels, record: record)
+                        } else if let speaker = SpeakerLabel.normalized(segment.speaker) {
                             Text(speaker)
                                 .font(.system(size: detailTimestampFontSize, weight: .semibold))
                                 .foregroundColor(.secondary)
@@ -1837,6 +1839,53 @@ public struct MeetingLibraryView: View {
         .background(LibraryPalette.elevated)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func segmentSpeakerReassignmentMenu(
+        segment: Segment,
+        labels: [String],
+        record: MeetingRecord
+    ) -> some View {
+        let currentSpeaker = SpeakerLabel.normalized(segment.speaker)
+
+        return Menu {
+            ForEach(labels, id: \.self) { label in
+                Button {
+                    reassignSegment(segment.id, to: label, in: record)
+                } label: {
+                    if label == currentSpeaker {
+                        Label(label, systemImage: "checkmark")
+                    } else {
+                        Text(label)
+                    }
+                }
+                .disabled(label == currentSpeaker)
+            }
+
+            Divider()
+
+            Button {
+                reassignSegmentToNewSpeaker(segment.id, in: record)
+            } label: {
+                Label("새 화자", systemImage: "plus")
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(currentSpeaker ?? "화자 지정")
+                    .font(.system(size: detailTimestampFontSize, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: 76, alignment: .leading)
+        }
+        .controlSize(.small)
+        .frame(width: 84, alignment: .leading)
+        .help("화자 재배정")
     }
 
     private func speakerEditor(record: MeetingRecord, labels: [String]) -> some View {
@@ -1963,6 +2012,16 @@ public struct MeetingLibraryView: View {
         saveSpeakerEdit(source: label, target: target, kind: "merge", in: record)
     }
 
+    private func reassignSegment(_ segmentID: Segment.ID, to target: String, in record: MeetingRecord) {
+        saveSegmentSpeakerReassignment(segmentID: segmentID, target: target, kind: "reassign", in: record)
+    }
+
+    private func reassignSegmentToNewSpeaker(_ segmentID: Segment.ID, in record: MeetingRecord) {
+        let current = store.meetings.first(where: { $0.id == record.id }) ?? record
+        let target = SpeakerLabelEditing.nextNewSpeakerLabel(existing: SpeakerLabelEditing.labels(in: current.transcript))
+        saveSegmentSpeakerReassignment(segmentID: segmentID, target: target, kind: "reassign-new", in: record)
+    }
+
     private func saveSpeakerEdit(source: String, target: String, kind: String, in record: MeetingRecord) {
         let current = store.meetings.first(where: { $0.id == record.id }) ?? record
         var updated = current
@@ -1981,6 +2040,37 @@ public struct MeetingLibraryView: View {
         case .success:
             speakerRenameDrafts.removeValue(forKey: source)
             speakerMergeTargets.removeValue(forKey: source)
+            Log.store.info("speaker label edit success kind=\(kind, privacy: .public) changedSegments=\(changedSegmentCount, privacy: .public)")
+        case .skippedEmpty:
+            speakerEditError = (id: record.id, message: "저장할 전사 내용이 없어요.")
+            Log.store.error("speaker label edit skipped kind=\(kind, privacy: .public)")
+        case .failed:
+            speakerEditError = (id: record.id, message: "화자 변경을 저장하지 못했어요.")
+            Log.store.error("speaker label edit failed kind=\(kind, privacy: .public)")
+        }
+    }
+
+    private func saveSegmentSpeakerReassignment(
+        segmentID: Segment.ID,
+        target: String,
+        kind: String,
+        in record: MeetingRecord
+    ) {
+        let current = store.meetings.first(where: { $0.id == record.id }) ?? record
+        var updated = current
+        updated.transcript = SpeakerLabelEditing.reassignSegment(id: segmentID, to: target, in: current.transcript)
+
+        let changedSegmentCount = zip(current.transcript, updated.transcript).reduce(0) { count, pair in
+            count + (pair.0.speaker == pair.1.speaker ? 0 : 1)
+        }
+        guard changedSegmentCount > 0 else {
+            return
+        }
+
+        speakerEditError = nil
+        Log.store.info("speaker label edit start kind=\(kind, privacy: .public) changedSegments=\(changedSegmentCount, privacy: .public)")
+        switch store.save(updated) {
+        case .success:
             Log.store.info("speaker label edit success kind=\(kind, privacy: .public) changedSegments=\(changedSegmentCount, privacy: .public)")
         case .skippedEmpty:
             speakerEditError = (id: record.id, message: "저장할 전사 내용이 없어요.")

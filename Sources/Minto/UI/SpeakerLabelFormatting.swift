@@ -47,4 +47,28 @@ enum SpeakerLabelEditing {
             return updated
         }
     }
+
+    static func reassignSegment(id: Segment.ID, to label: String, in segments: [Segment]) -> [Segment] {
+        guard let targetLabel = SpeakerLabel.normalized(label) else {
+            return segments
+        }
+
+        return segments.map { segment in
+            guard segment.id == id else {
+                return segment
+            }
+            var updated = segment
+            updated.speaker = targetLabel
+            return updated
+        }
+    }
+
+    static func nextNewSpeakerLabel(existing labels: [String]) -> String {
+        let existingLabels = Set(labels.compactMap { SpeakerLabel.normalized($0) })
+        var index = 1
+        while existingLabels.contains("화자 \(index)") {
+            index += 1
+        }
+        return "화자 \(index)"
+    }
 }

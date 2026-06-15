@@ -75,8 +75,79 @@ struct SpeakerLabelEditingTests {
         #expect(updated == segments)
     }
 
-    private func segment(_ text: String, speaker: String?) -> Segment {
+    @Test("reassignSegment: 지정 구간 하나만 target speaker로 변경한다")
+    func reassignSegmentUpdatesOnlyMatchingSegment() {
+        let targetID = Segment.ID()
+        let segments = [
+            segment("a", speaker: "화자 1"),
+            segment("b", speaker: "화자 2", id: targetID),
+            segment("c", speaker: "화자 3"),
+        ]
+
+        let updated = SpeakerLabelEditing.reassignSegment(id: targetID, to: "PM", in: segments)
+
+        #expect(updated.map(\.speaker) == ["화자 1", "PM", "화자 3"])
+        #expect(updated[0] == segments[0])
+        #expect(updated[2] == segments[2])
+    }
+
+    @Test("reassignSegment: 없는 id는 원본을 유지한다")
+    func reassignSegmentKeepsSegmentsWhenIDDoesNotMatch() {
+        let segments = [
+            segment("a", speaker: "화자 1"),
+            segment("b", speaker: "화자 2"),
+        ]
+
+        let updated = SpeakerLabelEditing.reassignSegment(id: Segment.ID(), to: "PM", in: segments)
+
+        #expect(updated == segments)
+    }
+
+    @Test("reassignSegment: 빈 target 라벨은 원본을 유지한다")
+    func reassignSegmentKeepsSegmentsWhenTargetLabelIsBlank() {
+        let targetID = Segment.ID()
+        let segments = [
+            segment("a", speaker: "화자 1", id: targetID),
+            segment("b", speaker: "화자 2"),
+        ]
+
+        let updated = SpeakerLabelEditing.reassignSegment(id: targetID, to: " \n\t", in: segments)
+
+        #expect(updated == segments)
+    }
+
+    @Test("reassignSegment: target 라벨 공백을 정규화해서 저장한다")
+    func reassignSegmentNormalizesTargetWhitespace() {
+        let targetID = Segment.ID()
+        let segments = [
+            segment("a", speaker: "화자 1", id: targetID),
+            segment("b", speaker: "화자 2"),
+        ]
+
+        let updated = SpeakerLabelEditing.reassignSegment(id: targetID, to: "\tPM\n", in: segments)
+
+        #expect(updated.map(\.speaker) == ["PM", "화자 2"])
+    }
+
+    @Test("nextNewSpeakerLabel: 기존 라벨이 없으면 화자 1을 반환한다")
+    func nextNewSpeakerLabelReturnsFirstSpeakerForEmptyLabels() {
+        #expect(SpeakerLabelEditing.nextNewSpeakerLabel(existing: []) == "화자 1")
+    }
+
+    @Test("nextNewSpeakerLabel: 사용 중인 화자 번호 다음 최소 번호를 반환한다")
+    func nextNewSpeakerLabelReturnsSmallestUnusedSpeakerNumber() {
+        #expect(SpeakerLabelEditing.nextNewSpeakerLabel(existing: ["화자 1"]) == "화자 2")
+        #expect(SpeakerLabelEditing.nextNewSpeakerLabel(existing: ["화자 1", "화자 3"]) == "화자 2")
+    }
+
+    @Test("nextNewSpeakerLabel: 임의 라벨과 겹치지 않는 화자 라벨을 반환한다")
+    func nextNewSpeakerLabelAvoidsCollisionWithArbitraryLabels() {
+        #expect(SpeakerLabelEditing.nextNewSpeakerLabel(existing: ["A", "화자 1", "화자 2"]) == "화자 3")
+    }
+
+    private func segment(_ text: String, speaker: String?, id: Segment.ID = Segment.ID()) -> Segment {
         Segment(
+            id: id,
             text: text,
             timestamp: Date(timeIntervalSinceReferenceDate: 0),
             duration: 1,
