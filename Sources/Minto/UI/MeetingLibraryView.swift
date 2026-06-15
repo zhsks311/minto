@@ -240,11 +240,18 @@ public struct MeetingLibraryView: View {
                             url: url,
                             topic: topic,
                             glossary: glossary,
-                            expectedSpeakerCount: expectedSpeakerCount
+                            expectedSpeakerCount: expectedSpeakerCount,
+                            diarizeSpeakers: true
                         )
                     },
                     onSkip: {
-                        startFileImport(url: url, topic: nil, glossary: "", expectedSpeakerCount: nil)
+                        startFileImport(
+                            url: url,
+                            topic: nil,
+                            glossary: "",
+                            expectedSpeakerCount: nil,
+                            diarizeSpeakers: false
+                        )
                     }
                 )
             }
@@ -2768,7 +2775,8 @@ public struct MeetingLibraryView: View {
         url: URL,
         topic: String?,
         glossary: String,
-        expectedSpeakerCount: Int?
+        expectedSpeakerCount: Int?,
+        diarizeSpeakers: Bool = false
     ) {
         fileImportSetupURL = nil
         fileImportTask?.cancel()
@@ -2778,7 +2786,8 @@ public struct MeetingLibraryView: View {
                     url,
                     topic: topic.flatMap { $0.isEmpty ? nil : $0 },
                     glossary: glossary,
-                    expectedSpeakerCount: expectedSpeakerCount
+                    expectedSpeakerCount: expectedSpeakerCount,
+                    diarizeSpeakers: diarizeSpeakers
                 )
             } catch is CancellationError {
                 // 취소 상태는 use-case가 이미 반영한다.

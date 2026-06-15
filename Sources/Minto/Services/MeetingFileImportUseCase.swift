@@ -210,6 +210,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
         glossary: String = "",
         document: String = "",
         expectedSpeakerCount: Int? = nil,
+        diarizeSpeakers: Bool = false,
         engineID: SpeechEngineID = SpeechEnginePreferences.selectedEngine(),
         shouldCorrect: Bool = LLMCorrectionService.shared.selectedProvider != .none
     ) async throws -> MeetingRecord {
@@ -306,10 +307,10 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 duration: extractionDuration,
                 startedAt: startedAt
             )
-            if let expectedSpeakerCount {
+            if diarizeSpeakers {
                 try Task.checkCancellation()
                 update(.saving, progress: 0.97, fileName: fileName, detail: "화자를 구분하고 있어요.")
-                record.transcript = await assignSpeakersIfNeeded(
+                record.transcript = try await assignSpeakersIfNeeded(
                     transcript: record.transcript,
                     audioFileURL: url,
                     meetingStart: record.startedAt,
@@ -359,19 +360,22 @@ public final class MeetingFileImportUseCase: ObservableObject {
         transcript: [Segment],
         audioFileURL: URL,
         meetingStart: Date,
-        expectedSpeakerCount: Int,
+        expectedSpeakerCount: Int?,
         fileName: String
-    ) async -> [Segment] {
-        guard expectedSpeakerCount > 0 else {
-            Log.diarization.error(
-                "import diarization skipped file=\(fileName, privacy: .public) invalidSpeakerCount=\(expectedSpeakerCount, privacy: .public)"
-            )
-            return transcript
+    ) async throws -> [Segment] {
+        let provider: FluidAudioOfflineDiarizationProvider
+        let expectedSpeakers = if let expectedSpeakerCount, expectedSpeakerCount > 0 {
+            String(expectedSpeakerCount)
+        } else {
+            "auto"
         }
-
-        let provider = FluidAudioOfflineDiarizationProvider(exactSpeakerCount: expectedSpeakerCount)
+        if let expectedSpeakerCount, expectedSpeakerCount > 0 {
+            provider = FluidAudioOfflineDiarizationProvider(exactSpeakerCount: expectedSpeakerCount)
+        } else {
+            provider = FluidAudioOfflineDiarizationProvider()
+        }
         Log.diarization.info(
-            "import diarization assign start file=\(fileName, privacy: .public) expectedSpeakers=\(expectedSpeakerCount, privacy: .public)"
+            "import diarization assign start file=\(fileName, privacy: .public) expectedSpeakers=\(expectedSpeakers, privacy: .public)"
         )
         do {
             let diarizedSegments = try await provider.diarize(audioFileURL: audioFileURL)
@@ -385,11 +389,13 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 "import diarization assign complete file=\(fileName, privacy: .public) transcriptSegments=\(labeledTranscript.count, privacy: .public) labeledSegments=\(labeledCount, privacy: .public)"
             )
             return labeledTranscript
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             let errorCase = String(describing: error).components(separatedBy: "(").first ?? String(describing: error)
             let nsError = error as NSError
             Log.diarization.error(
-                "import diarization failed file=\(fileName, privacy: .public) expectedSpeakers=\(expectedSpeakerCount, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
+                "import diarization failed file=\(fileName, privacy: .public) expectedSpeakers=\(expectedSpeakers, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
             )
             return transcript
         }
