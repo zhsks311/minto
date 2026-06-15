@@ -86,6 +86,9 @@ struct FileImportSetupSheet: View {
                 .onChange(of: expectedSpeakerCountText) { _, newValue in
                     normalizeExpectedSpeakerCountInput(newValue)
                 }
+            Text("비우면 화자 수를 자동으로 추정해요. 인원을 알면 입력하는 게 더 정확합니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 
