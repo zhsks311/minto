@@ -64,6 +64,9 @@ public struct MeetingLibraryView: View {
     @State private var retryingRecordID: UUID?
     /// 재요약 실패 정보. id가 현재 표시 중인 record와 일치할 때만 에러를 렌더한다.
     @State private var retryError: (id: UUID, message: String)?
+    @State private var speakerRenameDrafts: [String: String] = [:]
+    @State private var speakerMergeTargets: [String: String] = [:]
+    @State private var speakerEditError: (id: UUID, message: String)?
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
     @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -1787,8 +1790,12 @@ public struct MeetingLibraryView: View {
         emptyText: String,
         record: MeetingRecord? = nil
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let speakerLabels = SpeakerLabelEditing.labels(in: segments)
+        return VStack(alignment: .leading, spacing: 12) {
             sectionTitle("전사", systemImage: "quote.bubble")
+            if let record, !speakerLabels.isEmpty {
+                speakerEditor(record: record, labels: speakerLabels)
+            }
             if segments.isEmpty {
                 Text(emptyText)
                     .font(.system(size: detailBodyFontSize))
@@ -1823,6 +1830,157 @@ public struct MeetingLibraryView: View {
         .background(LibraryPalette.elevated)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func speakerEditor(record: MeetingRecord, labels: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                sectionTitle("화자", systemImage: "person.2")
+                Spacer()
+                Text("\(labels.count)명")
+                    .font(.system(size: detailTimestampFontSize, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(labels, id: \.self) { label in
+                    speakerEditorRow(label: label, labels: labels, record: record)
+                }
+            }
+
+            if let error = speakerEditError, error.id == record.id {
+                Text(error.message)
+                    .font(.system(size: detailTimestampFontSize, weight: .medium))
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(12)
+        .background(LibraryPalette.surface.opacity(0.55))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func speakerEditorRow(label: String, labels: [String], record: MeetingRecord) -> some View {
+        let renameDraft = SpeakerLabel.normalized(speakerRenameDrafts[label] ?? label) ?? ""
+        let isDuplicateRename = labels.contains { $0 != label && $0 == renameDraft }
+        let canRename = !renameDraft.isEmpty && renameDraft != label && !isDuplicateRename
+        let mergeTargets = labels.filter { $0 != label }
+
+        return HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: detailTimestampFontSize, weight: .semibold))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(width: 74, alignment: .leading)
+
+            TextField("화자 이름", text: speakerRenameBinding(for: label))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: detailTimestampFontSize))
+                .frame(minWidth: 120)
+
+            Button {
+                renameSpeaker(label, in: record)
+            } label: {
+                Label("이름변경", systemImage: "checkmark")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!canRename)
+
+            if !mergeTargets.isEmpty {
+                Divider()
+                    .frame(height: 22)
+
+                Picker("병합 대상", selection: speakerMergeTargetBinding(for: label, labels: labels)) {
+                    ForEach(mergeTargets, id: \.self) { target in
+                        Text(target).tag(target)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .frame(width: 110)
+
+                Button {
+                    mergeSpeaker(label, labels: labels, in: record)
+                } label: {
+                    Label("병합", systemImage: "arrow.triangle.merge")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private func speakerRenameBinding(for label: String) -> Binding<String> {
+        Binding(
+            get: { speakerRenameDrafts[label] ?? label },
+            set: { speakerRenameDrafts[label] = $0 }
+        )
+    }
+
+    private func speakerMergeTargetBinding(for label: String, labels: [String]) -> Binding<String> {
+        Binding(
+            get: { speakerMergeTarget(for: label, labels: labels) },
+            set: { speakerMergeTargets[label] = $0 }
+        )
+    }
+
+    private func speakerMergeTarget(for label: String, labels: [String]) -> String {
+        if let selected = speakerMergeTargets[label],
+           selected != label,
+           labels.contains(selected) {
+            return selected
+        }
+        return labels.first { $0 != label } ?? label
+    }
+
+    private func renameSpeaker(_ label: String, in record: MeetingRecord) {
+        guard let target = SpeakerLabel.normalized(speakerRenameDrafts[label] ?? label),
+              target != label else {
+            return
+        }
+        let labels = SpeakerLabelEditing.labels(in: record.transcript)
+        guard !labels.contains(target) else {
+            return
+        }
+        saveSpeakerEdit(source: label, target: target, kind: "rename", in: record)
+    }
+
+    private func mergeSpeaker(_ label: String, labels: [String], in record: MeetingRecord) {
+        let target = speakerMergeTarget(for: label, labels: labels)
+        guard target != label else {
+            return
+        }
+        saveSpeakerEdit(source: label, target: target, kind: "merge", in: record)
+    }
+
+    private func saveSpeakerEdit(source: String, target: String, kind: String, in record: MeetingRecord) {
+        var updated = record
+        updated.transcript = SpeakerLabelEditing.replacingSpeaker(source, with: target, in: record.transcript)
+
+        let changedSegmentCount = zip(record.transcript, updated.transcript).reduce(0) { count, pair in
+            count + (pair.0.speaker == pair.1.speaker ? 0 : 1)
+        }
+        guard changedSegmentCount > 0 else {
+            return
+        }
+
+        speakerEditError = nil
+        Log.store.info("speaker label edit start kind=\(kind, privacy: .public) changedSegments=\(changedSegmentCount, privacy: .public)")
+        switch store.save(updated) {
+        case .success:
+            speakerRenameDrafts.removeValue(forKey: source)
+            speakerMergeTargets.removeValue(forKey: source)
+            Log.store.info("speaker label edit success kind=\(kind, privacy: .public) changedSegments=\(changedSegmentCount, privacy: .public)")
+        case .skippedEmpty:
+            speakerEditError = (id: record.id, message: "저장할 전사 내용이 없어요.")
+            Log.store.error("speaker label edit skipped kind=\(kind, privacy: .public)")
+        case .failed:
+            speakerEditError = (id: record.id, message: "화자 변경을 저장하지 못했어요.")
+            Log.store.error("speaker label edit failed kind=\(kind, privacy: .public)")
+        }
     }
 
     private func relatedDocsSection(query: String, emptyText: String) -> some View {
