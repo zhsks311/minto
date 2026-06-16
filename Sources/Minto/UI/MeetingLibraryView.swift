@@ -1985,6 +1985,7 @@ public struct MeetingLibraryView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(!canEnroll)
+            .help("이 화자의 목소리 데이터(임베딩)가 있고 실제 이름을 입력했을 때만 등록할 수 있어요.")
 
             if !mergeTargets.isEmpty {
                 Divider()
@@ -2075,7 +2076,8 @@ public struct MeetingLibraryView: View {
             speakerEnrollNotice = (id: record.id, message: "실제 이름을 입력해 주세요.", isError: true)
             return
         }
-        if VoiceprintStore.shared.voiceprints.contains(where: { $0.displayName == trimmedName }) {
+        // usablePrints가 현재 modelID로 필터링하므로 같은 모델 공간의 동명만 차단한다.
+        if VoiceprintStore.shared.voiceprints.contains(where: { $0.displayName == trimmedName && $0.embeddingModelID == entry.embeddingModelID }) {
             speakerEditError = nil
             speakerEnrollNotice = (id: record.id, message: "'\(trimmedName)'은 이미 등록된 이름이에요.", isError: true)
             return
@@ -2153,7 +2155,7 @@ public struct MeetingLibraryView: View {
         let current = store.meetings.first(where: { $0.id == record.id }) ?? record
         var updated = current
         updated.transcript = SpeakerLabelEditing.reassignSegment(id: segmentID, to: target, in: current.transcript)
-        // 구간 단위 재배정은 라벨 집합 기준 centroid 의미를 바꾸지 않으므로 speakerEmbeddings는 유지한다.
+        // 구간 재배정은 speakerEmbeddings를 건드리지 않는다. 기존 라벨로의 재배정은 centroid 소유를 바꾸지 않고, '새 화자'로 만든 라벨은 임베딩 없이 수동 생성된 것이라 대응 centroid가 애초에 없다(그 라벨은 등록 버튼이 비활성된다).
 
         let changedSegmentCount = zip(current.transcript, updated.transcript).reduce(0) { count, pair in
             count + (pair.0.speaker == pair.1.speaker ? 0 : 1)
