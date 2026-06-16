@@ -1383,7 +1383,7 @@ public struct MeetingLibraryView: View {
             }
             .buttonStyle(.bordered)
             .disabled(hasLiveMeeting || retryingRecordID != nil)
-            .help("현재 회의 전사로 요약을 다시 만들어요")
+            .help(reSummaryHelpText(for: record))
         }
     }
 
@@ -1448,6 +1448,7 @@ public struct MeetingLibraryView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(hasLiveMeeting || retryingRecordID != nil)
+                    .help(reSummaryHelpText(for: record))
 
                     if let errorMessage = thisError {
                         Text(errorMessage)
@@ -2785,6 +2786,19 @@ public struct MeetingLibraryView: View {
     private func copyTranscript(_ record: MeetingRecord) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(record.transcript.map(\.text).joined(separator: "\n"), forType: .string)
+    }
+
+    private func reSummaryHelpText(for record: MeetingRecord) -> String {
+        if hasLiveMeeting {
+            return "진행 중인 회의를 종료한 뒤 다시 요약할 수 있어요."
+        }
+        if let retryingRecordID, retryingRecordID != record.id {
+            return "다른 회의를 다시 요약하는 중이에요. 끝나면 다시 시도할 수 있어요."
+        }
+        if retryingRecordID == record.id {
+            return "요약을 다시 만드는 중이에요."
+        }
+        return "현재 회의 전사로 요약을 다시 만들어요."
     }
 
     private func presentReSummarySheet(for record: MeetingRecord) {
