@@ -60,6 +60,8 @@ public struct MeetingLibraryView: View {
     @State private var retryingRecordID: UUID?
     /// 재요약 실패 정보. id가 현재 표시 중인 record와 일치할 때만 에러를 렌더한다.
     @State private var retryError: (id: UUID, message: String)?
+    /// 재요약 전에 용어집을 다시 선택할 회의.
+    @State private var reSummaryGlossaryRecord: MeetingRecord?
     @State private var speakerRenameDrafts: [String: String] = [:]
     @State private var speakerMergeTargets: [String: String] = [:]
     @State private var speakerEditError: (id: UUID, message: String)?
@@ -250,6 +252,11 @@ public struct MeetingLibraryView: View {
                         )
                     }
                 )
+            }
+        }
+        .sheet(item: $reSummaryGlossaryRecord) { record in
+            ReSummaryGlossarySheet(record: record) { glossary in
+                await retrySummary(for: record, glossary: glossary)
             }
         }
     }
@@ -1362,7 +1369,7 @@ public struct MeetingLibraryView: View {
         if !record.summary.isPlainFallback {
             let isThisRetrying = retryingRecordID == record.id
             Button {
-                retrySummary(for: record)
+                presentReSummarySheet(for: record)
             } label: {
                 HStack(spacing: 6) {
                     if isThisRetrying {
@@ -1437,7 +1444,7 @@ public struct MeetingLibraryView: View {
             } else {
                 HStack(spacing: 8) {
                     Button("다시 요약") {
-                        retrySummary(for: record)
+                        presentReSummarySheet(for: record)
                     }
                     .buttonStyle(.bordered)
                     .disabled(hasLiveMeeting || retryingRecordID != nil)
@@ -1463,6 +1470,7 @@ public struct MeetingLibraryView: View {
         let summary = record.summary
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("요약", systemImage: "list.bullet.rectangle")
+            SummaryGlossaryBanner(glossary: record.summaryGlossary)
             if summary.isEmpty {
                 Text("요약이 없어요. 전사 내용을 먼저 확인하세요.")
                     .font(.system(size: detailBodyFontSize))
@@ -2779,21 +2787,36 @@ public struct MeetingLibraryView: View {
         NSPasteboard.general.setString(record.transcript.map(\.text).joined(separator: "\n"), forType: .string)
     }
 
-    private func retrySummary(for record: MeetingRecord) {
+    private func presentReSummarySheet(for record: MeetingRecord) {
         guard !hasLiveMeeting, retryingRecordID == nil else { return }
+        retryError = nil
+        reSummaryGlossaryRecord = record
+    }
+
+    @MainActor
+    private func retrySummary(for record: MeetingRecord, glossary: String) async -> String? {
+        guard !hasLiveMeeting else {
+            return "진행 중인 회의를 종료한 뒤 다시 요약할 수 있어요."
+        }
+        guard retryingRecordID == nil else {
+            return "이미 다시 요약하는 중이에요."
+        }
 
         retryError = nil
         retryingRecordID = record.id
-        Task { @MainActor in
-            let useCase = MeetingSummaryRetryUseCase()
-            let result = await useCase.retry(record: record)
-            if retryingRecordID == record.id {
-                retryingRecordID = nil
-            }
-            if case .failure(let reason) = result {
-                retryError = (id: record.id, message: retryFailureMessage(for: reason))
-            }
+        let useCase = MeetingSummaryRetryUseCase()
+        let result = await useCase.retry(record: record, glossary: glossary)
+        if retryingRecordID == record.id {
+            retryingRecordID = nil
         }
+
+        if case .failure(let reason) = result {
+            let message = retryFailureMessage(for: reason)
+            retryError = (id: record.id, message: message)
+            return message
+        }
+        retryError = nil
+        return nil
     }
 
     private func retryFailureMessage(for reason: SummaryRetryFailureReason) -> String {

@@ -83,6 +83,13 @@ public final class MeetingSummaryRetryUseCase {
     /// - Returns: 성공 시 `.success(updated record)`, 실패 시 `.failure(reason)`.
     ///            기존 record는 실패 시 절대 수정하지 않는다.
     public func retry(record: MeetingRecord) async -> SummaryRetryResult {
+        let glossary = glossaryResolver(record.topic)
+        return await retry(record: record, glossary: glossary)
+    }
+
+    /// 명시적으로 해석된 glossary 문자열을 사용해 구조화 요약을 재시도한다.
+    /// sheet에서 선택한 로컬 draft 용어집을 주입할 때 사용하며, 빈 값은 저장하지 않는다.
+    public func retry(record: MeetingRecord, glossary: String) async -> SummaryRetryResult {
         let segmentCount = record.transcript.count
         Log.summary.info("summary retry start segmentCount=\(segmentCount, privacy: .public)")
 
@@ -92,10 +99,10 @@ public final class MeetingSummaryRetryUseCase {
             return .failure(.emptyTranscript)
         }
 
-        let glossary = glossaryResolver(record.topic)
+        let normalizedGlossary = MeetingRecord.normalizedSummaryGlossary(glossary)
         let context = SummaryGenerationContext(
             topic: record.topic,
-            glossary: glossary,
+            glossary: normalizedGlossary ?? "",
             runningSummary: "",
             document: ""
         )
@@ -113,6 +120,7 @@ public final class MeetingSummaryRetryUseCase {
 
         var updated = record
         updated.summary = newSummary
+        updated.summaryGlossary = normalizedGlossary
 
         // MeetingStore.save()는 디스크 write 성공 후에 메모리(meetings)를 갱신한다.
         // 따라서 .failed/.skippedEmpty 시 메모리는 원상태 — 별도 원복 불필요.

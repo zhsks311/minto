@@ -23,10 +23,12 @@ private final class StubRetryGenerator: MeetingSummaryRetryGenerating {
 
 @MainActor
 private final class StubRetryStore: MeetingSummaryRetryStoring {
+    var attemptedRecords: [MeetingRecord] = []
     var savedRecords: [MeetingRecord] = []
     var saveResult: MeetingSaveResult = .success
 
     func save(_ record: MeetingRecord) -> MeetingSaveResult {
+        attemptedRecords.append(record)
         if saveResult == .success {
             savedRecords.append(record)
         }
@@ -274,10 +276,91 @@ struct MeetingSummaryRetryUseCaseTests {
         #expect(generator.receivedContext?.document == "")
     }
 
+    @Test("retry(record:glossary:)는 주입 glossary를 사용하고 성공 저장 시 snapshot을 갱신한다")
+    func retryWithInjectedGlossaryUpdatesSnapshotOnSuccess() async {
+        let segments = makeSegments(texts: ["발언"])
+        var record = makePlainRecord(transcript: segments, topic: "스프린트 회고")
+        record.summaryGlossary = "이전 용어"
+        let structured = makeStructuredSummary()
+        let generator = StubRetryGenerator(result: structured)
+        let store = StubRetryStore()
+        let ingester = StubRetryCandidateIngester()
+        let useCase = MeetingSummaryRetryUseCase(
+            summaryService: generator,
+            store: store,
+            glossaryStore: ingester,
+            glossaryResolver: { _ in "자동 용어" }
+        )
+
+        let result = await useCase.retry(record: record, glossary: "SwiftUI = UI 프레임워크\nMinto")
+
+        guard case .success(let updated) = result else {
+            Issue.record("성공 기대했지만 실패: \(result)")
+            return
+        }
+        #expect(generator.receivedContext?.glossary == "SwiftUI = UI 프레임워크\nMinto")
+        #expect(updated.summary == structured)
+        #expect(updated.summaryGlossary == "SwiftUI = UI 프레임워크\nMinto")
+        #expect(store.savedRecords.first?.summaryGlossary == "SwiftUI = UI 프레임워크\nMinto")
+        #expect(ingester.ingestedRecords.first?.summaryGlossary == "SwiftUI = UI 프레임워크\nMinto")
+    }
+
+    @Test("retry(record:glossary:)는 빈 glossary를 nil snapshot으로 저장한다")
+    func retryWithEmptyInjectedGlossaryClearsSnapshotOnSuccess() async {
+        let segments = makeSegments(texts: ["발언"])
+        var record = makePlainRecord(transcript: segments)
+        record.summaryGlossary = "이전 용어"
+        let generator = StubRetryGenerator(result: makeStructuredSummary())
+        let store = StubRetryStore()
+        let useCase = MeetingSummaryRetryUseCase(
+            summaryService: generator,
+            store: store,
+            glossaryStore: StubRetryCandidateIngester()
+        )
+
+        let result = await useCase.retry(record: record, glossary: " \n ")
+
+        guard case .success(let updated) = result else {
+            Issue.record("성공 기대했지만 실패: \(result)")
+            return
+        }
+        #expect(generator.receivedContext?.glossary == "")
+        #expect(updated.summaryGlossary == nil)
+        #expect(store.savedRecords.first?.summaryGlossary == nil)
+    }
+
+    @Test("재요약 LLM 실패 시 기존 summary와 snapshot을 저장하지 않는다")
+    func retryWithInjectedGlossaryPreservesSnapshotWhenLLMFails() async {
+        let segments = makeSegments(texts: ["발언 내용"])
+        var record = makePlainRecord(transcript: segments)
+        record.summaryGlossary = "이전 용어"
+        let generator = StubRetryGenerator(result: nil)
+        let store = StubRetryStore()
+        let ingester = StubRetryCandidateIngester()
+        let useCase = MeetingSummaryRetryUseCase(
+            summaryService: generator,
+            store: store,
+            glossaryStore: ingester
+        )
+
+        let result = await useCase.retry(record: record, glossary: "새 용어")
+
+        guard case .failure(let reason) = result else {
+            Issue.record("실패 기대했지만 성공")
+            return
+        }
+        #expect(reason == .llmFailed)
+        #expect(store.attemptedRecords.isEmpty)
+        #expect(store.savedRecords.isEmpty)
+        #expect(ingester.ingestedRecords.isEmpty)
+        #expect(record.summaryGlossary == "이전 용어")
+    }
+
     @Test("store 저장 실패 시 후보 미추가 + saveFailed 반환")
     func retryStoreSaveFailedDoesNotIngestCandidates() async {
         let segments = makeSegments(texts: ["발언 내용"])
-        let record = makePlainRecord(transcript: segments)
+        var record = makePlainRecord(transcript: segments)
+        record.summaryGlossary = "이전 용어"
         let generator = StubRetryGenerator(result: makeStructuredSummary())
         let store = StubRetryStore()
         store.saveResult = .failed
@@ -296,8 +379,10 @@ struct MeetingSummaryRetryUseCaseTests {
             return
         }
         #expect(reason == .saveFailed)
+        #expect(store.attemptedRecords.first?.summaryGlossary == nil)
         #expect(store.savedRecords.isEmpty)
         #expect(ingester.ingestedRecords.isEmpty)
+        #expect(record.summaryGlossary == "이전 용어")
     }
 
     @Test("LLM이 빈 JSON {}을 반환하면 isEmpty=true로 거부 + stillPlainFallback")

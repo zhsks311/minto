@@ -124,12 +124,14 @@ struct TranscriptNormalizerTests {
             summary: MeetingSummary(title: "DB 형상관리"),
             segments: segments,
             topic: "db 스키마 관리",
-            duration: 60
+            duration: 60,
+            summaryGlossary: "Liquibase = DB 형상관리"
         )
 
         #expect(record.transcript.count == 1)
         #expect(record.transcript[0].text.contains("때마다 직접 수행"))
         #expect(record.title == "DB 형상관리")
+        #expect(record.summaryGlossary == "Liquibase = DB 형상관리")
     }
 
     @MainActor

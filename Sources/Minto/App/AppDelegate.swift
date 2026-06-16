@@ -55,6 +55,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             await self.viewModel.stopRecordingAndDrain()
             let summary = await self.viewModel.finalizeMeeting()
             let segments = self.viewModel.committedSegments
+            let summaryGlossary = summary == nil ? nil : MeetingContext.shared.glossary
 
             // 회의 기록을 영속화(요약이 없어도 전사가 있으면 저장 → 나중에 열람). 빈 회의는 store가 skip.
             let record = Self.makeRecord(
@@ -62,6 +63,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 segments: segments,
                 topic: MeetingContext.shared.topic,
                 duration: self.viewModel.recordingDuration,
+                summaryGlossary: summaryGlossary,
                 audioFileName: self.viewModel.lastArchivedAudioFileName
             )
 
@@ -105,6 +107,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         segments: [Segment],
         topic: String,
         duration: TimeInterval,
+        summaryGlossary: String? = nil,
         audioFileName: String? = nil
     ) -> MeetingRecord {
         MeetingRecordFactory.makeRecord(
@@ -112,6 +115,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             segments: segments,
             topic: topic,
             duration: duration,
+            summaryGlossary: summaryGlossary,
             audioFileName: audioFileName
         )
     }

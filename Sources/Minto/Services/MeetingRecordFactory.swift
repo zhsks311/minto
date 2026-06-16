@@ -10,6 +10,7 @@ enum MeetingRecordFactory {
         fallbackTitle: String = "회의 결과",
         duration: TimeInterval,
         startedAt fallbackStart: Date = Date(),
+        summaryGlossary: String? = nil,
         audioFileName: String? = nil
     ) -> MeetingRecord {
         let transcript = TranscriptNormalizer.normalize(segments)
@@ -34,6 +35,7 @@ enum MeetingRecordFactory {
             durationSeconds: meetingSeconds,
             topic: topic,
             summary: summary,
+            summaryGlossary: summaryGlossary,
             transcript: transcript,
             audioFileName: audioFileName
         )

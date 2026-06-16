@@ -9,6 +9,8 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
     public var durationSeconds: TimeInterval
     public var topic: String
     public var summary: MeetingSummary
+    /// 최종 요약 생성에 사용된 resolved glossary 문자열 스냅샷. 빈 값은 저장하지 않는다.
+    public var summaryGlossary: String?
     public var transcript: [Segment]
     /// 보존된 녹음 오디오 파일명(recordings 디렉터리 기준). 화자분리 등 사후 처리 입력.
     /// optional이라 기존 저장 파일은 nil로 로드된다. 보관 기간 경과로 파일이 지워졌을 수 있다.
@@ -21,6 +23,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         durationSeconds: TimeInterval,
         topic: String = "",
         summary: MeetingSummary = MeetingSummary(),
+        summaryGlossary: String? = nil,
         transcript: [Segment] = [],
         audioFileName: String? = nil,
         schemaVersion: Int = 1
@@ -32,6 +35,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         self.durationSeconds = durationSeconds
         self.topic = topic
         self.summary = summary
+        self.summaryGlossary = Self.normalizedSummaryGlossary(summaryGlossary)
         self.transcript = transcript
         self.audioFileName = audioFileName
     }
@@ -44,6 +48,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         case durationSeconds
         case topic
         case summary
+        case summaryGlossary
         case transcript
         case audioFileName
     }
@@ -60,8 +65,16 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         durationSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .durationSeconds) ?? 0
         topic = try c.decodeIfPresent(String.self, forKey: .topic) ?? ""
         summary = try c.decodeIfPresent(MeetingSummary.self, forKey: .summary) ?? MeetingSummary()
+        summaryGlossary = Self.normalizedSummaryGlossary(
+            try c.decodeIfPresent(String.self, forKey: .summaryGlossary)
+        )
         transcript = try c.decodeIfPresent([Segment].self, forKey: .transcript) ?? []
         audioFileName = try c.decodeIfPresent(String.self, forKey: .audioFileName)
+    }
+
+    static func normalizedSummaryGlossary(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// 비어있는 회의(전사·요약 모두 없음)인지 — 저장 가치 판단용.

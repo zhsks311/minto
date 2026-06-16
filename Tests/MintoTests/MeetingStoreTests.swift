@@ -55,12 +55,55 @@ struct MeetingStoreTests {
         var record = sampleRecord()
         record.schemaVersion = 2
         record.audioFileName = "meeting.wav"
+        record.summaryGlossary = "Minto = 회의 기록 앱\nSwiftUI"
         let data = try MeetingRecordCoding.makeEncoder().encode(record)
         let restored = try MeetingRecordCoding.makeDecoder().decode(MeetingRecord.self, from: data)
 
         #expect(restored == record)
         #expect(restored.schemaVersion == 2)
         #expect(restored.audioFileName == "meeting.wav")
+        #expect(restored.summaryGlossary == "Minto = 회의 기록 앱\nSwiftUI")
+    }
+
+    @Test("summaryGlossary는 저장 라운드트립에서 보존된다")
+    func roundTripsSummaryGlossary() throws {
+        var record = sampleRecord()
+        record.summaryGlossary = "루션 = 프로젝트명\nMinto = 회의 앱"
+
+        let data = try MeetingRecordCoding.makeEncoder().encode(record)
+        let restored = try MeetingRecordCoding.makeDecoder().decode(MeetingRecord.self, from: data)
+
+        #expect(restored.summaryGlossary == "루션 = 프로젝트명\nMinto = 회의 앱")
+    }
+
+    @Test("빈 summaryGlossary는 nil로 정규화된다")
+    func emptySummaryGlossaryNormalizesToNil() throws {
+        let record = MeetingRecord(
+            title: "회의",
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            durationSeconds: 60,
+            summary: MeetingSummary(leadAnswer: "요약"),
+            summaryGlossary: " \n\t "
+        )
+
+        let data = try MeetingRecordCoding.makeEncoder().encode(record)
+        let restored = try MeetingRecordCoding.makeDecoder().decode(MeetingRecord.self, from: data)
+
+        let id = UUID()
+        let jsonWithEmptyGlossary = """
+        {
+          "id": "\(id.uuidString)",
+          "title": "회의",
+          "startedAt": "2026-06-17T12:00:00Z",
+          "summaryGlossary": " \\n\\t "
+        }
+        """
+        let decoded = try MeetingRecordCoding.makeDecoder()
+            .decode(MeetingRecord.self, from: Data(jsonWithEmptyGlossary.utf8))
+
+        #expect(record.summaryGlossary == nil)
+        #expect(restored.summaryGlossary == nil)
+        #expect(decoded.summaryGlossary == nil)
     }
 
     @Test("빈 회의(전사·요약 없음)는 저장하지 않는다")
@@ -168,6 +211,7 @@ struct MeetingStoreTests {
         #expect(loaded.durationSeconds == 0)
         #expect(loaded.topic == "")
         #expect(loaded.summary == MeetingSummary())
+        #expect(loaded.summaryGlossary == nil)
         #expect(loaded.transcript == [])
         #expect(loaded.audioFileName == nil)
         #expect(store.corruptedCount == 0)
