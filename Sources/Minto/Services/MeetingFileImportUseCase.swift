@@ -290,10 +290,11 @@ public final class MeetingFileImportUseCase: ObservableObject {
             let segments = correctionPipeline.segments
             update(.summarizing, progress: 0.86, fileName: fileName, detail: "회의 내용을 정리하고 있어요.")
             Log.importer.info("import summarize start file=\(fileName, privacy: .public)")
-            let summary = await summaryService.generateFinal(
+            let generatedSummary = await summaryService.generateFinal(
                 transcript: Self.transcriptText(from: segments, startedAt: startedAt),
                 context: summaryContext
-            ) ?? MeetingSummary()
+            )
+            let summary = generatedSummary ?? MeetingSummary()
             try Task.checkCancellation()
 
             update(.saving, progress: 0.96, fileName: fileName, detail: "회의 목록에 저장하고 있어요.")
@@ -305,7 +306,8 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 preferredTitle: title,
                 fallbackTitle: "파일 회의록",
                 duration: extractionDuration,
-                startedAt: startedAt
+                startedAt: startedAt,
+                summaryGlossary: generatedSummary == nil ? nil : summaryContext.glossary
             )
             if diarizeSpeakers {
                 try Task.checkCancellation()

@@ -214,7 +214,9 @@ struct MeetingFileImportUseCaseTests {
         #expect(correction.calls.first?.context.glossary == "Minto")
         #expect(correction.calls.first?.context.document == "사후 처리 자료")
         #expect(record.transcript.map(\.text) == ["corrected text"])
+        #expect(record.summaryGlossary == "Minto")
         #expect(summary.receivedTranscript == "[00:00] corrected text")
+        #expect(store.savedRecords.first?.summaryGlossary == "Minto")
     }
 
     @Test("파일 import 교정은 전사와 겹쳐 돌고 요약 전에 모두 반영된다")
