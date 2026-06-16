@@ -1,6 +1,9 @@
 import Foundation
 
 public enum VoiceprintMatching {
+    /// PoC에서 reject 5.2%/acceptedAccuracy 1.00 지점. 실사용 튜닝 대상.
+    public static let defaultIdentificationThreshold = 0.65
+
     /// Returns 0 for dimension mismatch, empty vectors, zero vectors, or non-finite values.
     public static func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Double {
         guard a.count == b.count, !a.isEmpty else { return 0 }

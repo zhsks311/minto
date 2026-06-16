@@ -2960,7 +2960,10 @@ public struct MeetingLibraryView: View {
                     topic: topic.flatMap { $0.isEmpty ? nil : $0 },
                     glossary: glossary,
                     expectedSpeakerCount: expectedSpeakerCount,
-                    diarizeSpeakers: diarizeSpeakers
+                    diarizeSpeakers: diarizeSpeakers,
+                    enrolledVoiceprints: VoiceprintStore.shared.usablePrints(
+                        forModelID: FluidAudioOfflineDiarizationProvider.embeddingModelID
+                    )
                 )
             } catch is CancellationError {
                 // 취소 상태는 use-case가 이미 반영한다.
