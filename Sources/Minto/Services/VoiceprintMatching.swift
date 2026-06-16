@@ -81,4 +81,61 @@ public enum VoiceprintMatching {
         guard bestScore >= threshold else { return nil }
         return bestPrint
     }
+
+    public static func identifySpeakers(
+        labeledCentroids: [(speakerLabel: String, centroid: [Float])],
+        among prints: [Voiceprint],
+        embeddingModelID: String,
+        threshold: Double
+    ) -> [String: Voiceprint] {
+        var candidates: [(speakerLabel: String, voiceprint: Voiceprint, score: Double)] = []
+
+        for labeledCentroid in labeledCentroids {
+            for voiceprint in prints {
+                guard voiceprint.embeddingModelID == embeddingModelID,
+                      voiceprint.dimensions == labeledCentroid.centroid.count,
+                      voiceprint.embedding.count == labeledCentroid.centroid.count else {
+                    continue
+                }
+
+                let score = cosineSimilarity(labeledCentroid.centroid, voiceprint.embedding)
+                guard score >= threshold else {
+                    continue
+                }
+
+                candidates.append((
+                    speakerLabel: labeledCentroid.speakerLabel,
+                    voiceprint: voiceprint,
+                    score: score
+                ))
+            }
+        }
+
+        candidates.sort { lhs, rhs in
+            if lhs.score != rhs.score {
+                return lhs.score > rhs.score
+            }
+            if lhs.speakerLabel != rhs.speakerLabel {
+                return lhs.speakerLabel < rhs.speakerLabel
+            }
+            return lhs.voiceprint.id.uuidString < rhs.voiceprint.id.uuidString
+        }
+
+        var result: [String: Voiceprint] = [:]
+        var assignedLabels = Set<String>()
+        var assignedPrintIDs = Set<UUID>()
+
+        for candidate in candidates {
+            guard !assignedLabels.contains(candidate.speakerLabel),
+                  !assignedPrintIDs.contains(candidate.voiceprint.id) else {
+                continue
+            }
+
+            result[candidate.speakerLabel] = candidate.voiceprint
+            assignedLabels.insert(candidate.speakerLabel)
+            assignedPrintIDs.insert(candidate.voiceprint.id)
+        }
+
+        return result
+    }
 }

@@ -310,13 +310,17 @@ public final class MeetingFileImportUseCase: ObservableObject {
             if diarizeSpeakers {
                 try Task.checkCancellation()
                 update(.saving, progress: 0.97, fileName: fileName, detail: "화자를 구분하고 있어요.")
-                record.transcript = try await assignSpeakersIfNeeded(
+                let diarizationResult = try await assignSpeakersIfNeeded(
                     transcript: record.transcript,
                     audioFileURL: url,
                     meetingStart: record.startedAt,
                     expectedSpeakerCount: expectedSpeakerCount,
                     fileName: fileName
                 )
+                record.transcript = diarizationResult.transcript
+                if !diarizationResult.speakerEmbeddings.isEmpty {
+                    record.speakerEmbeddings = diarizationResult.speakerEmbeddings
+                }
                 try Task.checkCancellation()
             }
             guard store.save(record) == .success else { throw MeetingFileImportError.saveFailed }
@@ -362,7 +366,10 @@ public final class MeetingFileImportUseCase: ObservableObject {
         meetingStart: Date,
         expectedSpeakerCount: Int?,
         fileName: String
-    ) async throws -> [Segment] {
+    ) async throws -> (
+        transcript: [Segment],
+        speakerEmbeddings: [MeetingRecord.MeetingSpeakerEmbedding]
+    ) {
         let provider: FluidAudioOfflineDiarizationProvider
         let expectedSpeakers = if let expectedSpeakerCount, expectedSpeakerCount > 0 {
             String(expectedSpeakerCount)
@@ -378,17 +385,33 @@ public final class MeetingFileImportUseCase: ObservableObject {
             "import diarization assign start file=\(fileName, privacy: .public) expectedSpeakers=\(expectedSpeakers, privacy: .public)"
         )
         do {
-            let diarizedSegments = try await provider.diarize(audioFileURL: audioFileURL)
+            let diarization = try await provider.diarizeWithSegmentsAndEmbeddings(audioFileURL: audioFileURL)
+            let diarizedSegments = diarization.segments
             let labeledTranscript = TranscriptSpeakerMatcher().assignSpeakers(
                 diarizedSegments: diarizedSegments,
                 transcript: transcript,
                 meetingStart: meetingStart
             )
+            let timeline = diarizedSegments.filter { $0.endSeconds > $0.startSeconds }
+            let labelMap = DiarizationSpeakerLabeling.makeLabelMap(from: timeline)
+            let rawCentroids = VoiceprintMatching.centroids(from: diarization.embeddings)
+            let speakerEmbeddings = rawCentroids.compactMap { rawCentroid -> MeetingRecord.MeetingSpeakerEmbedding? in
+                guard let label = labelMap[rawCentroid.speakerId] else {
+                    return nil
+                }
+                return MeetingRecord.MeetingSpeakerEmbedding(
+                    speakerLabel: label,
+                    embedding: rawCentroid.centroid,
+                    embeddingModelID: FluidAudioOfflineDiarizationProvider.embeddingModelID
+                )
+            }.sorted { lhs, rhs in
+                lhs.speakerLabel < rhs.speakerLabel
+            }
             let labeledCount = labeledTranscript.filter { $0.speaker != nil }.count
             Log.diarization.info(
-                "import diarization assign complete file=\(fileName, privacy: .public) transcriptSegments=\(labeledTranscript.count, privacy: .public) labeledSegments=\(labeledCount, privacy: .public)"
+                "import diarization assign complete file=\(fileName, privacy: .public) transcriptSegments=\(labeledTranscript.count, privacy: .public) labeledSegments=\(labeledCount, privacy: .public) speakerEmbeddings=\(speakerEmbeddings.count, privacy: .public)"
             )
-            return labeledTranscript
+            return (transcript: labeledTranscript, speakerEmbeddings: speakerEmbeddings)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -397,7 +420,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             Log.diarization.error(
                 "import diarization failed file=\(fileName, privacy: .public) expectedSpeakers=\(expectedSpeakers, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
             )
-            return transcript
+            return (transcript: transcript, speakerEmbeddings: [])
         }
     }
 

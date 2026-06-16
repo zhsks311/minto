@@ -2,6 +2,26 @@ import Foundation
 
 /// 저장·열람되는 회의 한 건. 전사 + 구조화 요약 + 메타를 담아 JSON으로 영속화한다.
 public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
+    public struct MeetingSpeakerEmbedding: Codable, Sendable, Equatable {
+        public let speakerLabel: String
+        public let embedding: [Float]
+        public let embeddingModelID: String
+        /// Voiceprint 타입과 인터페이스를 대칭으로 맞춰 VoiceprintMatching의 차원/모델ID 일치 필터가 양쪽에서 동일하게 동작하도록 별도 저장한다.
+        public let dimensions: Int
+
+        public init(
+            speakerLabel: String,
+            embedding: [Float],
+            embeddingModelID: String,
+            dimensions: Int? = nil
+        ) {
+            self.speakerLabel = speakerLabel
+            self.embedding = embedding
+            self.embeddingModelID = embeddingModelID
+            self.dimensions = dimensions ?? embedding.count
+        }
+    }
+
     public var schemaVersion: Int
     public let id: UUID
     public var title: String
@@ -13,6 +33,9 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
     /// 보존된 녹음 오디오 파일명(recordings 디렉터리 기준). 화자분리 등 사후 처리 입력.
     /// optional이라 기존 저장 파일은 nil로 로드된다. 보관 기간 경과로 파일이 지워졌을 수 있다.
     public var audioFileName: String?
+    /// transcript의 "화자 N" 라벨별 대표 임베딩. 등록/식별의 입력으로 쓰는 L2 정규화 centroid.
+    /// optional이라 기존 저장 파일은 nil로 로드된다. 추가 optional 필드라 schemaVersion은 1을 유지한다.
+    public var speakerEmbeddings: [MeetingSpeakerEmbedding]?
 
     public init(
         id: UUID = UUID(),
@@ -23,6 +46,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         summary: MeetingSummary = MeetingSummary(),
         transcript: [Segment] = [],
         audioFileName: String? = nil,
+        speakerEmbeddings: [MeetingSpeakerEmbedding]? = nil,
         schemaVersion: Int = 1
     ) {
         self.schemaVersion = schemaVersion
@@ -34,6 +58,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         self.summary = summary
         self.transcript = transcript
         self.audioFileName = audioFileName
+        self.speakerEmbeddings = speakerEmbeddings
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -46,6 +71,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         case summary
         case transcript
         case audioFileName
+        case speakerEmbeddings
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,6 +88,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         summary = try c.decodeIfPresent(MeetingSummary.self, forKey: .summary) ?? MeetingSummary()
         transcript = try c.decodeIfPresent([Segment].self, forKey: .transcript) ?? []
         audioFileName = try c.decodeIfPresent(String.self, forKey: .audioFileName)
+        speakerEmbeddings = try c.decodeIfPresent([MeetingSpeakerEmbedding].self, forKey: .speakerEmbeddings)
     }
 
     /// 비어있는 회의(전사·요약 모두 없음)인지 — 저장 가치 판단용.

@@ -134,6 +134,51 @@ struct MeetingRecordAudioFileNameTests {
     }
 }
 
+@Suite("MeetingRecord 화자 임베딩 스키마")
+struct MeetingRecordSpeakerEmbeddingTests {
+    @Test("speakerEmbeddings 없는 기존 JSON도 로드된다(하위 호환)")
+    func decodesLegacyJSONWithoutSpeakerEmbeddings() throws {
+        let legacyJSON = """
+        {
+          "id": "11111111-2222-3333-4444-555555555555",
+          "title": "기존 회의",
+          "startedAt": "2026-06-01T09:00:00Z",
+          "durationSeconds": 60,
+          "topic": "",
+          "summary": {},
+          "transcript": []
+        }
+        """
+        let decoder = MeetingRecordCoding.makeDecoder()
+
+        let record = try decoder.decode(MeetingRecord.self, from: Data(legacyJSON.utf8))
+
+        #expect(record.title == "기존 회의")
+        #expect(record.speakerEmbeddings == nil)
+    }
+
+    @Test("speakerEmbeddings는 저장/로드 왕복에서 보존된다")
+    func roundTripsSpeakerEmbeddings() throws {
+        let speakerEmbedding = MeetingRecord.MeetingSpeakerEmbedding(
+            speakerLabel: "화자 1",
+            embedding: [1, 0],
+            embeddingModelID: "speaker-v1"
+        )
+        let record = MeetingRecord(
+            title: "화자 임베딩 회의",
+            startedAt: Date(timeIntervalSince1970: 1_000),
+            durationSeconds: 30,
+            speakerEmbeddings: [speakerEmbedding]
+        )
+        let encoder = MeetingRecordCoding.makeEncoder()
+        let decoder = MeetingRecordCoding.makeDecoder()
+
+        let decoded = try decoder.decode(MeetingRecord.self, from: encoder.encode(record))
+
+        #expect(decoded.speakerEmbeddings == [speakerEmbedding])
+    }
+}
+
 @MainActor
 @Suite("녹음 오디오 보존 통합", .serialized)
 struct RecordingAudioRetentionIntegrationTests {

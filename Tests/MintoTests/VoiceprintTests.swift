@@ -168,6 +168,82 @@ struct VoiceprintMatchingTests {
         #expect(match?.id == higher.id)
     }
 
+    @Test("identifySpeakers는 threshold 이상 단일 라벨을 매칭한다")
+    func identifySpeakersMatchesSingleLabelAboveThreshold() throws {
+        let voiceprint = makeVoiceprint(name: "Alice", embedding: [1, 0], modelID: "speaker-v1")
+
+        let result = VoiceprintMatching.identifySpeakers(
+            labeledCentroids: [(speakerLabel: "화자 1", centroid: [1, 0])],
+            among: [voiceprint],
+            embeddingModelID: "speaker-v1",
+            threshold: 0.99
+        )
+
+        let matched = try #require(result["화자 1"])
+        #expect(matched.id == voiceprint.id)
+    }
+
+    @Test("identifySpeakers는 threshold 미만이면 빈 맵을 반환한다")
+    func identifySpeakersReturnsEmptyBelowThreshold() {
+        let voiceprint = makeVoiceprint(name: "Alice", embedding: [0, 1], modelID: "speaker-v1")
+
+        let result = VoiceprintMatching.identifySpeakers(
+            labeledCentroids: [(speakerLabel: "화자 1", centroid: [1, 0])],
+            among: [voiceprint],
+            embeddingModelID: "speaker-v1",
+            threshold: 0.1
+        )
+
+        #expect(result.isEmpty)
+    }
+
+    @Test("identifySpeakers는 모델ID 불일치 후보를 제외한다")
+    func identifySpeakersExcludesModelMismatch() {
+        let voiceprint = makeVoiceprint(name: "Alice", embedding: [1, 0], modelID: "speaker-v2")
+
+        let result = VoiceprintMatching.identifySpeakers(
+            labeledCentroids: [(speakerLabel: "화자 1", centroid: [1, 0])],
+            among: [voiceprint],
+            embeddingModelID: "speaker-v1",
+            threshold: 0
+        )
+
+        #expect(result.isEmpty)
+    }
+
+    @Test("identifySpeakers는 같은 보이스프린트를 두 라벨에 중복 배정하지 않는다")
+    func identifySpeakersAssignsOnePrintToHighestScoringLabel() throws {
+        let voiceprint = makeVoiceprint(name: "Alice", embedding: [1, 0], modelID: "speaker-v1")
+
+        let result = VoiceprintMatching.identifySpeakers(
+            labeledCentroids: [
+                (speakerLabel: "화자 1", centroid: [1, 0]),
+                (speakerLabel: "화자 2", centroid: [0.8, 0.6])
+            ],
+            among: [voiceprint],
+            embeddingModelID: "speaker-v1",
+            threshold: 0.1
+        )
+
+        let matched = try #require(result["화자 1"])
+        #expect(matched.id == voiceprint.id)
+        #expect(result["화자 2"] == nil)
+    }
+
+    @Test("identifySpeakers는 빈 입력이면 빈 맵을 반환한다")
+    func identifySpeakersReturnsEmptyForEmptyInput() {
+        let voiceprint = makeVoiceprint(name: "Alice", embedding: [1, 0], modelID: "speaker-v1")
+
+        let result = VoiceprintMatching.identifySpeakers(
+            labeledCentroids: [],
+            among: [voiceprint],
+            embeddingModelID: "speaker-v1",
+            threshold: 0
+        )
+
+        #expect(result.isEmpty)
+    }
+
     private func makeVoiceprint(name: String, embedding: [Float], modelID: String) -> Voiceprint {
         Voiceprint(
             displayName: name,

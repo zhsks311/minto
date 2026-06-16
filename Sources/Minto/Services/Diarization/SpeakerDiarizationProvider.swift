@@ -19,6 +19,10 @@ public protocol SpeakerDiarizationProvider: Sendable {
 }
 
 public struct FluidAudioOfflineDiarizationProvider: SpeakerDiarizationProvider {
+    /// FluidAudio Embedding.mlmodelc(256차원) 좌표공간 식별자.
+    /// 임베딩 모델 교체 시 값을 bump해 기존 보이스프린트를 매칭에서 제외하고 재등록을 유도한다.
+    public static let embeddingModelID = "fluidaudio-offline-embedding-256"
+
     public let identifier = "fluidaudio-offline"
 
     private let config: OfflineDiarizerConfig
@@ -70,13 +74,41 @@ public struct FluidAudioOfflineDiarizationProvider: SpeakerDiarizationProvider {
         return segments
     }
 
-    func diarizeWithEmbeddings(audioFileURL: URL) async throws -> [(speakerId: String, embedding: [Float])] {
+    /// 같은 모듈의 MeetingFileImportUseCase만 쓰는 임포트 전용 경로다.
+    /// process()가 실제 ML 모델과 오디오를 요구해 기존 diarize처럼 단위테스트로 격리 검증할 수 없으므로 공개 API로 넓히지 않는다.
+    /// exposeChunkEmbeddings=true는 chunk 임베딩을 추가로 노출할 뿐 segments의 speakerId 클러스터링 결과를 바꾸지 않는다고 가정한다.
+    /// FluidAudio 업그레이드 시 이 가정을 재확인해야 한다. 깨지면 centroid가 다른 화자에 붙는 silent regression이 된다.
+    func diarizeWithSegmentsAndEmbeddings(
+        audioFileURL: URL
+    ) async throws -> (
+        segments: [DiarizedSpeakerSegment],
+        embeddings: [(speakerId: String, embedding: [Float])]
+    ) {
+        let startedAt = Date()
+        Log.diarization.info(
+            "diarization start provider=\(identifier, privacy: .public) threshold=\(config.clustering.threshold, privacy: .public) warmStartFa=\(config.clustering.warmStartFa, privacy: .public)"
+        )
+
         var embeddingConfig = config
         embeddingConfig.exposeChunkEmbeddings = true
         let manager = OfflineDiarizerManager(config: embeddingConfig)
         let result = try await manager.process(audioFileURL)
-        return (result.chunkEmbeddings ?? []).map { chunkEmbedding in
+        let segments = result.segments.map {
+            DiarizedSpeakerSegment(
+                speakerId: $0.speakerId,
+                startSeconds: Double($0.startTimeSeconds),
+                endSeconds: Double($0.endTimeSeconds)
+            )
+        }
+        let embeddings = (result.chunkEmbeddings ?? []).map { chunkEmbedding in
             (speakerId: chunkEmbedding.speakerId, embedding: chunkEmbedding.embedding256)
         }
+
+        let elapsedSeconds = Date().timeIntervalSince(startedAt)
+        let speakerCount = Set(segments.map(\.speakerId)).count
+        Log.diarization.info(
+            "diarization complete provider=\(identifier, privacy: .public) segments=\(segments.count, privacy: .public) speakers=\(speakerCount, privacy: .public) embeddings=\(embeddings.count, privacy: .public) elapsedSeconds=\(elapsedSeconds, privacy: .public)"
+        )
+        return (segments: segments, embeddings: embeddings)
     }
 }
