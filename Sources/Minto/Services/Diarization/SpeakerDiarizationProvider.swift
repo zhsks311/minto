@@ -69,4 +69,14 @@ public struct FluidAudioOfflineDiarizationProvider: SpeakerDiarizationProvider {
         )
         return segments
     }
+
+    func diarizeWithEmbeddings(audioFileURL: URL) async throws -> [(speakerId: String, embedding: [Float])] {
+        var embeddingConfig = config
+        embeddingConfig.exposeChunkEmbeddings = true
+        let manager = OfflineDiarizerManager(config: embeddingConfig)
+        let result = try await manager.process(audioFileURL)
+        return (result.chunkEmbeddings ?? []).map { chunkEmbedding in
+            (speakerId: chunkEmbedding.speakerId, embedding: chunkEmbedding.embedding256)
+        }
+    }
 }

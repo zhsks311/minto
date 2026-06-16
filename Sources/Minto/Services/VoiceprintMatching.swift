@@ -21,6 +21,40 @@ public enum VoiceprintMatching {
         return dot / (sqrt(aNorm) * sqrt(bNorm))
     }
 
+    public static func centroids(
+        from pairs: [(speakerId: String, embedding: [Float])]
+    ) -> [(speakerId: String, centroid: [Float])] {
+        let grouped = Dictionary(grouping: pairs) { $0.speakerId }
+
+        return grouped.keys.sorted().compactMap { speakerId in
+            guard let speakerPairs = grouped[speakerId] else { return nil }
+            let embeddings = speakerPairs.map { $0.embedding }.filter { !$0.isEmpty }
+            guard !embeddings.isEmpty else { return nil }
+
+            let dimensions = embeddings[0].count
+            guard embeddings.allSatisfy({ $0.count == dimensions }) else { return nil }
+
+            var sums = Array(repeating: 0.0, count: dimensions)
+            for embedding in embeddings {
+                for index in embedding.indices {
+                    let value = Double(embedding[index])
+                    guard value.isFinite else { return nil }
+                    sums[index] += value
+                }
+            }
+
+            let count = Double(embeddings.count)
+            let averaged = sums.map { $0 / count }
+            let norm = sqrt(averaged.reduce(0.0) { $0 + ($1 * $1) })
+            guard norm.isFinite, norm > 0 else { return nil }
+
+            return (
+                speakerId: speakerId,
+                centroid: averaged.map { Float($0 / norm) }
+            )
+        }
+    }
+
     public static func bestMatch(
         for embedding: [Float],
         among prints: [Voiceprint],

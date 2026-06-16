@@ -22,6 +22,81 @@ struct VoiceprintMatchingTests {
         #expect(VoiceprintMatching.cosineSimilarity([1, 0], [1, 0, 0]) == 0)
     }
 
+    @Test("화자별 centroid는 평균 후 정규화한다")
+    func centroidsAverageEmbeddingsBySpeaker() throws {
+        let centroids = VoiceprintMatching.centroids(
+            from: [
+                (speakerId: "speaker-b", embedding: [1, 0]),
+                (speakerId: "speaker-a", embedding: [2, 0]),
+                (speakerId: "speaker-a", embedding: [0, 2])
+            ]
+        )
+
+        let speakerA = try #require(centroids.first { $0.speakerId == "speaker-a" })
+        #expect(abs(Double(speakerA.centroid[0]) - sqrt(0.5)) < 0.000_000_1)
+        #expect(abs(Double(speakerA.centroid[1]) - sqrt(0.5)) < 0.000_000_1)
+    }
+
+    @Test("빈 입력 centroid는 빈 결과를 반환한다")
+    func centroidsReturnEmptyForEmptyInput() {
+        #expect(VoiceprintMatching.centroids(from: []).isEmpty)
+    }
+
+    @Test("한 화자의 여러 임베딩은 centroid 하나로 합친다")
+    func centroidsReturnOneCentroidPerSpeaker() {
+        let centroids = VoiceprintMatching.centroids(
+            from: [
+                (speakerId: "speaker-a", embedding: [1, 0]),
+                (speakerId: "speaker-a", embedding: [0, 1]),
+                (speakerId: "speaker-a", embedding: [1, 1])
+            ]
+        )
+
+        #expect(centroids.count == 1)
+        #expect(centroids.first?.speakerId == "speaker-a")
+    }
+
+    @Test("centroid는 L2 정규화한다")
+    func centroidsNormalizeToUnitLength() throws {
+        let centroid = try #require(
+            VoiceprintMatching.centroids(
+                from: [
+                    (speakerId: "speaker-a", embedding: [3, 0]),
+                    (speakerId: "speaker-a", embedding: [0, 4])
+                ]
+            ).first?.centroid
+        )
+
+        let norm = sqrt(centroid.reduce(0.0) { $0 + (Double($1) * Double($1)) })
+        #expect(abs(norm - 1) < 0.000_000_1)
+    }
+
+    @Test("차원이 섞인 화자는 centroid에서 제외한다")
+    func centroidsExcludeSpeakerWithMixedDimensions() {
+        let centroids = VoiceprintMatching.centroids(
+            from: [
+                (speakerId: "speaker-a", embedding: [1, 0]),
+                (speakerId: "speaker-a", embedding: [1, 0, 0]),
+                (speakerId: "speaker-b", embedding: [0, 1])
+            ]
+        )
+
+        #expect(centroids.map { $0.speakerId } == ["speaker-b"])
+    }
+
+    @Test("centroid 반환 순서는 speakerId 정렬을 따른다")
+    func centroidsSortBySpeakerID() {
+        let centroids = VoiceprintMatching.centroids(
+            from: [
+                (speakerId: "speaker-c", embedding: [0, 1]),
+                (speakerId: "speaker-a", embedding: [1, 0]),
+                (speakerId: "speaker-b", embedding: [1, 1])
+            ]
+        )
+
+        #expect(centroids.map { $0.speakerId } == ["speaker-a", "speaker-b", "speaker-c"])
+    }
+
     @Test("threshold 이상이면 최적 보이스프린트를 반환한다")
     func bestMatchReturnsPrintAboveThreshold() {
         let voiceprint = makeVoiceprint(name: "Alice", embedding: [1, 0], modelID: "speaker-v1")
