@@ -150,6 +150,7 @@ public struct SettingsView: View {
             speechEngineSection
             vadEngineSection
             recordingAudioSection
+            VoiceprintSettingsSection()
 
             Section("오버레이") {
                 Text("투명도는 메뉴바에서 실시간으로 조절할 수 있어요.")
