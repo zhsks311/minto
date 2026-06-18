@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STT 런타임 범주와 Nemotron 통합 검토 — analysis</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --surface-2: #eef2f7;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --accent: #0969da;
+      --code-bg: #f6f8fa;
+      --c-critical: #cf222e; --c-critical-bg: #fff0ee; --c-critical-border: #ff818266;
+      --c-high: #9a6700; --c-high-bg: #fff8c5; --c-high-border: #f1e05a99;
+      --c-medium: #0550ae; --c-medium-bg: #ddf4ff; --c-medium-border: #79c0ff99;
+      --c-low: #116329; --c-low-bg: #dafbe1; --c-low-border: #56d36499;
+      --pass-bg: #f0fdf4; --pass-border: #bbf7d0;
+      --fail-bg: #fff0ee; --fail-border: #fecaca;
+      --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --surface: #161b22; --surface-2: #1f2630; --border: #30363d;
+        --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff; --code-bg: #161b22;
+        --c-critical: #ff7b72; --c-critical-bg: #2d0f0f; --c-critical-border: #ff7b7266;
+        --c-high: #e3b341; --c-high-bg: #2d1f04; --c-high-border: #e3b34166;
+        --c-medium: #79c0ff; --c-medium-bg: #051d4d; --c-medium-border: #79c0ff66;
+        --c-low: #56d364; --c-low-bg: #0a2d19; --c-low-border: #56d36466;
+        --pass-bg: #0a2d19; --pass-border: #56d36444;
+        --fail-bg: #2d0f0f; --fail-border: #ff7b7244;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.65;
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+    h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: 0; }
+    h2 { font-size: 1.08rem; font-weight: 650; margin: 2.5rem 0 1rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 0.98rem; font-weight: 650; margin: 1.25rem 0 0.45rem; }
+    p { margin-bottom: 0.75rem; }
+    ul { padding-left: 1.35rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .summary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 1.1rem 1.4rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .summary-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    .summary p:last-child { margin-bottom: 0; }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .stat-card--danger { background: var(--c-critical-bg); border-color: var(--c-critical-border); }
+    .stat-card--warning { background: var(--c-high-bg); border-color: var(--c-high-border); }
+    .stat-card--success { background: var(--pass-bg); border-color: var(--pass-border); }
+    .stat-card--info { background: var(--c-medium-bg); border-color: var(--c-medium-border); }
+    .stat-number { font-size: 2rem; font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat-card--danger .stat-number { color: var(--c-critical); }
+    .stat-card--warning .stat-number { color: var(--c-high); }
+    .stat-card--success .stat-number { color: var(--c-low); }
+    .stat-card--info .stat-number { color: var(--c-medium); }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 550; }
+    .stat-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .finding {
+      border: 1px solid var(--border);
+      border-left-width: 3px;
+      border-radius: 6px;
+      padding: 0.95rem 1.1rem;
+      margin: 0.75rem 0;
+      background: var(--surface);
+    }
+    .finding--critical { border-left-color: var(--c-critical); background: var(--c-critical-bg); }
+    .finding--high { border-left-color: var(--c-high); background: var(--c-high-bg); }
+    .finding--medium { border-left-color: var(--c-medium); background: var(--c-medium-bg); }
+    .finding--low { border-left-color: var(--c-low); background: var(--c-low-bg); }
+    .finding-header { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+    .finding-title { font-weight: 650; font-size: 0.96rem; }
+    .finding-location { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .finding p { margin-bottom: 0.5rem; font-size: 0.92rem; }
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      vertical-align: middle;
+    }
+    .tag-critical { background: var(--c-critical-bg); color: var(--c-critical); border: 1px solid var(--c-critical-border); }
+    .tag-high { background: var(--c-high-bg); color: var(--c-high); border: 1px solid var(--c-high-border); }
+    .tag-medium { background: var(--c-medium-bg); color: var(--c-medium); border: 1px solid var(--c-medium-border); }
+    .tag-low { background: var(--c-low-bg); color: var(--c-low); border: 1px solid var(--c-low-border); }
+    .tag-pass { background: var(--pass-bg); color: var(--c-low); border: 1px solid var(--pass-border); }
+    .tag-fail { background: var(--fail-bg); color: var(--c-critical); border: 1px solid var(--fail-border); }
+    .tag-info { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    th {
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      padding: 0.45rem 0.75rem;
+    }
+    td { padding: 0.58rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .verify-table { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .verify-table th { background: var(--surface); }
+    .verify-table td { vertical-align: middle; }
+    .vrow-pass { background: var(--pass-bg); }
+    .vrow-fail { background: var(--fail-bg); }
+    .vrow-warn { background: var(--c-high-bg); }
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    pre {
+      font-family: var(--font-mono);
+      font-size: 0.83rem;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+      line-height: 1.5;
+    }
+    pre code { background: none; border: none; padding: 0; font-size: inherit; }
+    details { border: 1px solid var(--border); border-radius: 6px; margin: 0.75rem 0; }
+    details > summary {
+      padding: 0.65rem 1rem;
+      cursor: pointer;
+      font-weight: 550;
+      font-size: 0.92rem;
+      background: var(--surface);
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before { content: '▶'; font-size: 0.65rem; color: var(--text-muted); flex-shrink: 0; }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details[open] > summary { border-bottom: 1px solid var(--border); }
+    .details-body { padding: 1rem 1.25rem; }
+    .flow-diagram { width: 100%; max-width: 900px; display: block; margin: 1rem 0; overflow: visible; }
+    .flow-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+    .flow-box-accent { fill: var(--c-medium-bg); stroke: var(--c-medium-border); stroke-width: 1.5; }
+    .flow-box-good { fill: var(--pass-bg); stroke: var(--pass-border); stroke-width: 1.5; }
+    .flow-box-risk { fill: var(--c-high-bg); stroke: var(--c-high-border); stroke-width: 1.5; }
+    .flow-text { font-family: var(--font-body); font-size: 12px; fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+    .flow-label { font-family: var(--font-mono); font-size: 10px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: middle; }
+    .flow-arrow { stroke: var(--text-muted); stroke-width: 1.5; }
+    .flow-arrowhead { fill: var(--text-muted); }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.85rem;
+      margin: 0.75rem 0;
+    }
+    .mini-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      background: var(--surface);
+    }
+    .mini-card h3 { margin-top: 0; }
+    .note { color: var(--text-muted); font-size: 0.88rem; }
+    footer {
+      margin-top: 3.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    @media print {
+      body { max-width: none; padding: 0; background: #fff; color: #000; }
+      .stat-card, .finding, details, .mini-card { border: 1px solid #ccc; background: #fff; }
+      .vrow-pass, .vrow-fail, .vrow-warn { background: #fff; }
+      a[href]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #666; }
+      footer { color: #666; }
+    }
+  </style>
+</head>
+<body>
+<h1>STT 런타임 범주와 Nemotron 통합 검토</h1>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">22.19%</div>
+    <div class="stat-label">Nemotron 8-bit weighted CER</div>
+    <div class="stat-sub">sample/meeting 전체, 60초 chunk offline</div>
+  </div>
+  <div class="stat-card stat-card--info">
+    <div class="stat-number">0.023</div>
+    <div class="stat-label">Nemotron RTF</div>
+    <div class="stat-sub">실시간보다 약 44배 빠름</div>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <div class="stat-number">45.91%</div>
+    <div class="stat-label">WhisperKit turbo weighted CER</div>
+    <div class="stat-sub">같은 sample/meeting 집계</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">Summary</div>
+  <p>MLX, Core ML, whisper.cpp, WhisperKit은 같은 층위의 대체제가 아니다. Core ML과 MLX는 실행 런타임 계층이고, WhisperKit과 whisper.cpp는 Whisper 계열 모델을 제품에 붙이기 위한 라이브러리/SDK이며, Nemotron은 그 위에서 선택하는 ASR 모델 계열이다. 현재 실측 기준 Nemotron 8-bit는 정확도와 속도 모두 매력적이지만, 앱 기본값으로 승격하려면 Python sidecar 배포, Metal 권한, current VAD 5초/15초 chunk 재측정이라는 비용을 먼저 통과해야 한다.</p>
+</div>
+
+<h2>1. 범주부터 다시 나누기</h2>
+<p>헷갈리는 이유는 이름들이 모두 “음성 인식” 근처에 있지만 실제로는 계층이 다르기 때문이다. 아래처럼 나누면 의사결정이 선명해진다.</p>
+
+<svg class="flow-diagram" viewBox="0 0 900 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="STT stack layers">
+  <rect x="20" y="18" width="150" height="44" rx="6" class="flow-box-accent"/>
+  <text x="95" y="40" class="flow-text">앱 파이프라인</text>
+  <text x="95" y="78" class="flow-label">VAD, preview/final, 저장</text>
+  <line x1="170" y1="40" x2="210" y2="40" class="flow-arrow"/>
+  <polygon points="210,35 220,40 210,45" class="flow-arrowhead"/>
+  <rect x="220" y="18" width="150" height="44" rx="6" class="flow-box"/>
+  <text x="295" y="40" class="flow-text">STT SDK/엔진</text>
+  <text x="295" y="78" class="flow-label">WhisperKit, whisper.cpp</text>
+  <line x1="370" y1="40" x2="410" y2="40" class="flow-arrow"/>
+  <polygon points="410,35 420,40 410,45" class="flow-arrowhead"/>
+  <rect x="420" y="18" width="150" height="44" rx="6" class="flow-box-good"/>
+  <text x="495" y="40" class="flow-text">런타임</text>
+  <text x="495" y="78" class="flow-label">Core ML, MLX, ggml</text>
+  <line x1="570" y1="40" x2="610" y2="40" class="flow-arrow"/>
+  <polygon points="610,35 620,40 610,45" class="flow-arrowhead"/>
+  <rect x="620" y="18" width="150" height="44" rx="6" class="flow-box"/>
+  <text x="695" y="40" class="flow-text">모델</text>
+  <text x="695" y="78" class="flow-label">Whisper, Nemotron, Fun-ASR</text>
+  <line x1="770" y1="40" x2="810" y2="40" class="flow-arrow"/>
+  <polygon points="810,35 820,40 810,45" class="flow-arrowhead"/>
+  <rect x="820" y="18" width="60" height="44" rx="6" class="flow-box-risk"/>
+  <text x="850" y="40" class="flow-text">배포</text>
+  <text x="850" y="78" class="flow-label">권한/캐시</text>
+</svg>
+
+<table>
+  <thead>
+    <tr>
+      <th>이름</th>
+      <th>범주</th>
+      <th>무엇을 해주는가</th>
+      <th>우리 의사결정에서 의미</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>Core ML</code></td>
+      <td>Apple 모델 실행 런타임</td>
+      <td><code>.mlmodel</code>, <code>.mlmodelc</code> 모델을 CPU/GPU/Neural Engine에서 실행한다.</td>
+      <td>Swift/macOS 앱 배포에 가장 자연스럽다. 모델 포맷 변환과 Core ML 컴파일 비용이 있다.</td>
+    </tr>
+    <tr>
+      <td><code>MLX</code></td>
+      <td>Apple Silicon용 ML 배열/추론 프레임워크</td>
+      <td>unified memory, lazy evaluation, Metal 가속을 쓰는 NumPy 유사 프레임워크다.</td>
+      <td>Nemotron처럼 MLX 커뮤니티 모델을 빠르게 실험하기 좋다. 앱 배포 계층은 직접 설계해야 한다.</td>
+    </tr>
+    <tr>
+      <td><code>WhisperKit</code></td>
+      <td>Swift SDK + Whisper Core ML 실행기</td>
+      <td>Whisper 계열 Core ML 모델 다운로드, 로드, 전사 API를 제공한다.</td>
+      <td>앱 통합이 쉽고 fallback으로 좋다. MLX 모델을 직접 돌리는 도구는 아니다.</td>
+    </tr>
+    <tr>
+      <td><code>whisper.cpp</code></td>
+      <td>C/C++ Whisper 런타임</td>
+      <td>Whisper 모델을 ggml/GGUF 계열 포맷으로 실행하고 Metal/Core ML encoder 가속도 지원한다.</td>
+      <td>Python 없이 네이티브 통합하기 좋다. 단 Whisper 계열 안에서 움직인다.</td>
+    </tr>
+    <tr>
+      <td><code>Nemotron ASR</code></td>
+      <td>ASR 모델 계열</td>
+      <td>이번 실험에서는 <code>mlx-community/nemotron-3.5-asr-streaming-0.6b-8bit</code>를 MLX Audio로 실행했다.</td>
+      <td>실측 정확도/속도는 좋다. WhisperKit에 넣는 모델이 아니라 MLX sidecar로 붙이는 편이 현실적이다.</td>
+    </tr>
+    <tr>
+      <td><code>MLX sidecar</code></td>
+      <td>앱 통합 아키텍처</td>
+      <td>Swift 앱 옆에 Python/MLX worker를 한 번 띄워 chunk 요청을 보내고 JSON 결과를 받는다.</td>
+      <td>가장 빠른 Nemotron 통합 경로다. 배포와 프로세스 관리가 추가된다.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>2. 같은 말처럼 들리는 것들의 실제 차이</h2>
+
+<div class="grid-2">
+  <div class="mini-card">
+    <h3>Core ML vs MLX</h3>
+    <p><code>Core ML</code>은 Apple 플랫폼 앱 배포를 위한 모델 실행 런타임에 가깝다. 모델을 컴파일된 번들로 만들고 시스템 런타임이 실행한다.</p>
+    <p><code>MLX</code>는 Apple Silicon 연구/실험/추론을 위한 배열 프레임워크다. Python과 Swift API가 있지만, 특정 ASR 모델의 앱용 wrapper까지 자동 제공하는 것은 아니다.</p>
+  </div>
+  <div class="mini-card">
+    <h3>WhisperKit vs whisper.cpp</h3>
+    <p><code>WhisperKit</code>은 Swift + Core ML 중심이다. iOS/macOS 앱에 자연스럽지만 Core ML Whisper 포맷을 전제로 한다.</p>
+    <p><code>whisper.cpp</code>는 C/C++ 중심이다. Python 없이 붙이기 쉽고 Metal/Core ML 지원도 있지만, 기본적으로 Whisper 계열 모델 런타임이다.</p>
+  </div>
+  <div class="mini-card">
+    <h3>MLX sidecar vs Swift MLX 직접 통합</h3>
+    <p><code>MLX sidecar</code>는 이미 동작하는 Python wrapper를 앱 밖 프로세스로 쓰는 방법이다. 빠르게 검증할 수 있다.</p>
+    <p><code>Swift MLX 직접 통합</code>은 가능성은 있으나 Nemotron의 모델 로드, 전처리, generation wrapper를 Swift로 옮겨야 한다.</p>
+  </div>
+  <div class="mini-card">
+    <h3>모델명 vs 런타임명</h3>
+    <p><code>large-v3 turbo</code>, <code>Nemotron</code>, <code>Fun-ASR</code>는 모델 또는 모델 계열이다.</p>
+    <p><code>Core ML</code>, <code>MLX</code>, <code>ggml</code>, <code>ONNX Runtime</code>은 그 모델을 실행하는 런타임 또는 포맷 계층이다.</p>
+  </div>
+</div>
+
+<h2>3. 언급한 것 외에 고려할 만한 것들</h2>
+<table>
+  <thead>
+    <tr>
+      <th>후보</th>
+      <th>범주</th>
+      <th>장점</th>
+      <th>주의점</th>
+      <th>Minto 적합도</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>SpeechAnalyzer</code></td>
+      <td>Apple Speech framework</td>
+      <td>Apple 네이티브, 로컬 우선 가능성, 낮은 통합 배포 부담</td>
+      <td>macOS 26+ 중심, 현재 환경에서는 <code>ko-KR</code> unsupported로 차단</td>
+      <td>중장기 macOS 최신 버전용 후보</td>
+    </tr>
+    <tr>
+      <td><code>SFSpeechRecognizer</code></td>
+      <td>Apple Speech framework</td>
+      <td>기존 macOS에서도 사용 가능, on-device 옵션 존재</td>
+      <td>asset/Dictation/Siri 상태 의존, 장시간 chunk/restart/merge 설계 필요</td>
+      <td>보조 후보. 기본값 승격은 보수적</td>
+    </tr>
+    <tr>
+      <td><code>sherpa-onnx</code></td>
+      <td>ONNX 기반 ASR 런타임</td>
+      <td>빠름, CPU에서도 안정적, Python/C++ 경로 모두 가능</td>
+      <td>이번 전체 meeting CER는 Nemotron보다 낮음</td>
+      <td>저사양 fallback 또는 offline 경량 엔진 후보</td>
+    </tr>
+    <tr>
+      <td><code>MLX Swift Audio</code></td>
+      <td>Swift MLX 오디오 SDK</td>
+      <td>Swift에서 MLX 기반 STT wrapper를 제공하는 방향</td>
+      <td>문서상 Whisper/Fun-ASR 중심. Nemotron 지원은 별도 검증 필요</td>
+      <td>Python 제거 장기 후보</td>
+    </tr>
+    <tr>
+      <td><code>faster-whisper / CTranslate2</code></td>
+      <td>Python/C++ Whisper 런타임</td>
+      <td>서버/배치 환경에서 성숙, quantization 지원</td>
+      <td>Mac 앱 번들링과 GPU 경로가 Minto 목적에는 애매함</td>
+      <td>개발용 벤치마크 후보</td>
+    </tr>
+    <tr>
+      <td><code>Cloud STT</code></td>
+      <td>원격 API</td>
+      <td>실시간 streaming, diarization, 운영 안정성</td>
+      <td>비용/개인정보/네트워크 의존. 사용자의 무료/개인 OAuth 목표와 충돌</td>
+      <td>명시적 opt-in 외에는 낮음</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>4. 이번 실측 결과의 의미</h2>
+<p>아래 수치는 같은 <code>sample/meeting/raw</code> 7개 WAV와 공식 SMI 자막을 기준으로 한 집계다. 총 오디오는 약 36,740초, 즉 10.2시간이다.</p>
+
+<table class="verify-table">
+  <thead>
+    <tr>
+      <th>결과</th>
+      <th>엔진</th>
+      <th>Weighted CER</th>
+      <th>처리 시간 합계</th>
+      <th>해석</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">BEST</span></td>
+      <td><code>nemotron8</code></td>
+      <td>22.19%</td>
+      <td>832.4s</td>
+      <td>정확도 1위. RTF 0.023으로 실시간보다 충분히 빠름. 단 60초 chunk offline 결과다.</td>
+    </tr>
+    <tr class="vrow-warn">
+      <td><span class="tag tag-medium">FAST</span></td>
+      <td><code>sherpa64</code></td>
+      <td>31.39%</td>
+      <td>517.4s</td>
+      <td>속도는 가장 빠르지만 정확도에서 Nemotron보다 밀림.</td>
+    </tr>
+    <tr class="vrow-fail">
+      <td><span class="tag tag-fail">WEAK</span></td>
+      <td><code>whisperkit_turbo</code></td>
+      <td>45.91%</td>
+      <td>3324.8s</td>
+      <td>통합성은 좋지만 이번 meeting corpus에서는 정확도와 속도 모두 불리했다.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="finding finding--medium">
+  <div class="finding-header">
+    <span class="tag tag-medium">주의</span>
+    <span class="finding-title">Nemotron 결과는 아직 앱 실시간 chunk 결과가 아니다</span>
+  </div>
+  <div class="finding-location"><code>tmp/stt-safe-bench-20260607/results/nemotron8_results.json</code></div>
+  <p>현재 수치는 60초 chunk offline 실행이다. 앱의 실제 VAD는 첫 chunk 5초, 이후 최대 15초이며 preview도 별도 경로다. 모델 채택 결정 전에는 current VAD chunk 기준 CER, 첫 결과 latency, partial 수정 횟수를 다시 측정해야 한다.</p>
+</div>
+
+<h2>5. Nemotron 통합으로 얻는 장점</h2>
+
+<div class="finding finding--low">
+  <div class="finding-header">
+    <span class="tag tag-low">장점 1</span>
+    <span class="finding-title">한국어 회의 정확도 개선 가능성이 크다</span>
+  </div>
+  <p>전체 meeting corpus에서 Nemotron 8-bit weighted CER는 22.19%였다. 같은 집계의 WhisperKit turbo 45.91%, sherpa64 31.39%보다 낮다. 회의록 앱에서 가장 중요한 “나중에 고칠 말의 양”을 줄일 수 있다.</p>
+</div>
+
+<div class="finding finding--low">
+  <div class="finding-header">
+    <span class="tag tag-low">장점 2</span>
+    <span class="finding-title">Python sidecar여도 속도는 충분했다</span>
+  </div>
+  <p>10.2시간 오디오를 832.4초에 처리했다. Python이 병목이라기보다 MLX/Metal 추론이 주된 연산이다. worker를 매 chunk마다 새로 띄우지 않고 상주시킨다면 실시간 final 전사에는 속도 여유가 있다.</p>
+</div>
+
+<div class="finding finding--low">
+  <div class="finding-header">
+    <span class="tag tag-low">장점 3</span>
+    <span class="finding-title">Whisper 계열 밖 모델을 사용할 수 있다</span>
+  </div>
+  <p>WhisperKit과 whisper.cpp는 기본적으로 Whisper 계열에 강하다. Nemotron을 MLX sidecar로 붙이면 Whisper 구조에 묶이지 않고, 앞으로 한국어 회의에 더 좋은 MLX ASR 모델을 교체 실험할 수 있다.</p>
+</div>
+
+<div class="finding finding--low">
+  <div class="finding-header">
+    <span class="tag tag-low">장점 4</span>
+    <span class="finding-title">무료/로컬 우선 제품 방향과 맞다</span>
+  </div>
+  <p>사용자의 목표는 비싼 회의록 앱 대체, 완전 무료 또는 개인 OAuth 기반이다. Nemotron sidecar는 클라우드 STT 비용 없이 로컬 전사를 제공하므로 제품 철학과 맞다.</p>
+</div>
+
+<h2>6. Nemotron 통합의 비용과 리스크</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>관점</th>
+      <th>리스크</th>
+      <th>완화책</th>
+      <th>결정 전 검증</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>배포</td>
+      <td>Python, MLX, mlx-audio, 모델 파일을 앱과 함께 관리해야 한다.</td>
+      <td>sidecar를 별도 번들로 고정하고 버전/health check를 둔다.</td>
+      <td>clean Mac에서 설치, 실행, 모델 로드 테스트</td>
+    </tr>
+    <tr>
+      <td>권한/런타임</td>
+      <td>MLX는 Metal 접근이 필요하다. sandbox에서는 <code>No Metal device available</code>로 실패했다.</td>
+      <td>직접 배포 기준으로 권한 모델을 설계하고 실패 시 WhisperKit fallback을 둔다.</td>
+      <td>일반 사용자 실행 환경에서 Metal 접근 확인</td>
+    </tr>
+    <tr>
+      <td>메모리</td>
+      <td>모델 상주 worker가 메모리를 지속 점유한다. 이전 장시간 병렬 실행에서는 컴퓨터가 꺼졌다.</td>
+      <td>worker 1개, queue depth 1, 메모리 peak 계측, 자동 restart를 둔다.</td>
+      <td>1시간 이상 녹음 stress test</td>
+    </tr>
+    <tr>
+      <td>실시간 UX</td>
+      <td>60초 offline에서는 좋았지만 5초/15초 VAD chunk에서 정확도가 떨어질 수 있다.</td>
+      <td>1차는 final 전용으로 붙이고 preview는 기존 경로를 유지한다.</td>
+      <td>current VAD chunk CER, first final latency, partial 수정 횟수</td>
+    </tr>
+    <tr>
+      <td>장애 처리</td>
+      <td>worker hang/crash, JSON 깨짐, 요청 누락이 앱 UI를 멈출 수 있다.</td>
+      <td>request id, timeout, stderr capture, kill/restart, fallback 전사를 구현한다.</td>
+      <td>강제 kill, invalid audio, timeout 테스트</td>
+    </tr>
+    <tr>
+      <td>유지보수</td>
+      <td>Swift 앱과 Python ML stack을 동시에 관리해야 한다.</td>
+      <td><code>STTEngine</code> protocol로 엔진 경계를 좁히고 sidecar 내부를 교체 가능하게 둔다.</td>
+      <td>엔진별 동일 contract test</td>
+    </tr>
+    <tr>
+      <td>라이선스/모델 사용</td>
+      <td>모델과 종속 패키지의 라이선스/재배포 조건 확인이 필요하다.</td>
+      <td>앱 번들 전 모델 카드와 패키지 라이선스를 별도 검토한다.</td>
+      <td>라이선스 체크리스트 통과</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>7. 권장 통합안</h2>
+
+<svg class="flow-diagram" viewBox="0 0 900 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Recommended Nemotron sidecar integration">
+  <rect x="20" y="22" width="130" height="42" rx="6" class="flow-box"/>
+  <text x="85" y="43" class="flow-text">Microphone</text>
+  <line x1="150" y1="43" x2="185" y2="43" class="flow-arrow"/>
+  <polygon points="185,38 195,43 185,48" class="flow-arrowhead"/>
+  <rect x="195" y="22" width="120" height="42" rx="6" class="flow-box"/>
+  <text x="255" y="43" class="flow-text">VAD</text>
+  <text x="255" y="82" class="flow-label">5s/15s chunks</text>
+  <line x1="315" y1="43" x2="350" y2="43" class="flow-arrow"/>
+  <polygon points="350,38 360,43 350,48" class="flow-arrowhead"/>
+  <rect x="360" y="22" width="130" height="42" rx="6" class="flow-box-accent"/>
+  <text x="425" y="43" class="flow-text">STTEngine</text>
+  <line x1="490" y1="43" x2="525" y2="43" class="flow-arrow"/>
+  <polygon points="525,38 535,43 525,48" class="flow-arrowhead"/>
+  <rect x="535" y="12" width="145" height="42" rx="6" class="flow-box-good"/>
+  <text x="607" y="33" class="flow-text">Nemotron worker</text>
+  <text x="607" y="72" class="flow-label">Python + MLX + Metal</text>
+  <line x1="680" y1="33" x2="720" y2="33" class="flow-arrow"/>
+  <polygon points="720,28 730,33 720,38" class="flow-arrowhead"/>
+  <rect x="730" y="12" width="140" height="42" rx="6" class="flow-box"/>
+  <text x="800" y="33" class="flow-text">final text</text>
+  <line x1="490" y1="92" x2="525" y2="92" class="flow-arrow"/>
+  <polygon points="525,87 535,92 525,97" class="flow-arrowhead"/>
+  <rect x="535" y="72" width="145" height="42" rx="6" class="flow-box-risk"/>
+  <text x="607" y="93" class="flow-text">WhisperKit fallback</text>
+</svg>
+
+<div class="finding finding--medium">
+  <div class="finding-header">
+    <span class="tag tag-medium">권장</span>
+    <span class="finding-title">기본 교체가 아니라 실험 엔진으로 붙인다</span>
+  </div>
+  <p>먼저 <code>STTEngine</code> protocol을 만들고 기존 WhisperKit을 <code>WhisperKitSTTEngine</code>으로 감싼다. 그 다음 <code>NemotronSidecarSTTEngine</code>을 추가한다. 초기 릴리스에서는 final chunk 전용으로만 사용하고, preview는 기존 WhisperKit 또는 비활성화 상태로 둔다.</p>
+</div>
+
+<table class="verify-table">
+  <thead>
+    <tr>
+      <th>단계</th>
+      <th>작업</th>
+      <th>성공 기준</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">1</span></td>
+      <td><code>STTEngine</code> 경계 추가</td>
+      <td>기존 WhisperKit 동작이 바뀌지 않고 기존 테스트 통과</td>
+    </tr>
+    <tr class="vrow-pass">
+      <td><span class="tag tag-pass">2</span></td>
+      <td>Nemotron worker 상주 프로세스 구현</td>
+      <td>모델 1회 로드, chunk 요청/응답 id 매칭, timeout 처리</td>
+    </tr>
+    <tr class="vrow-warn">
+      <td><span class="tag tag-medium">3</span></td>
+      <td>current VAD chunk 기준 재측정</td>
+      <td>5초/15초 chunk에서 CER와 latency가 WhisperKit보다 유의미하게 우수</td>
+    </tr>
+    <tr class="vrow-warn">
+      <td><span class="tag tag-medium">4</span></td>
+      <td>stress test</td>
+      <td>1시간 이상 녹음, worker restart, 메모리 peak, fallback 경로 검증</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>8. 최종 판단</h2>
+
+<div class="finding finding--high">
+  <div class="finding-header">
+    <span class="tag tag-high">판단</span>
+    <span class="finding-title">Nemotron은 붙일 가치가 있지만, 앱 기본값 승격은 아직 이르다</span>
+  </div>
+  <p>정확도와 처리 속도는 충분히 매력적이다. 다만 현재 결과는 offline 60초 chunk이고, 통합 방식은 Python/MLX sidecar다. 제품 기본값으로 바꾸기 전에는 current VAD chunk benchmark와 장시간 안정성 검증이 필요하다.</p>
+</div>
+
+<div class="finding finding--low">
+  <div class="finding-header">
+    <span class="tag tag-low">추천 결론</span>
+    <span class="finding-title">WhisperKit은 안정 fallback, Nemotron은 고정확도 실험 엔진</span>
+  </div>
+  <p>WhisperKit은 Swift/Core ML 네이티브 통합 비용이 낮다는 장점이 있다. Nemotron은 정확도와 모델 확장성이 장점이다. 둘을 한쪽으로 단정하지 말고 <code>STTEngine</code> 경계 아래에서 선택 가능하게 만드는 것이 가장 검증 가능한 접근이다.</p>
+</div>
+
+<details>
+  <summary>Evidence: 실측 결과</summary>
+  <div class="details-body">
+    <pre><code>{
+  "sample_scope": "sample/meeting/raw 7 WAVs",
+  "audio_seconds": 36740,
+  "whisperkit_turbo": {
+    "weighted_cer": "45.91%",
+    "macro_cer": "45.41%",
+    "elapsed_seconds": 3324.8
+  },
+  "sherpa64": {
+    "weighted_cer": "31.39%",
+    "macro_cer": "29.40%",
+    "elapsed_seconds": 517.4
+  },
+  "nemotron8": {
+    "weighted_cer": "22.19%",
+    "macro_cer": "19.05%",
+    "elapsed_seconds": 832.4,
+    "rtf": 0.0227
+  }
+}</code></pre>
+    <p class="note">결과 파일: <code>tmp/stt-safe-bench-20260607/results/summary.json</code>, <code>tmp/stt-safe-bench-20260607/results/nemotron8_results.json</code></p>
+  </div>
+</details>
+
+<details>
+  <summary>Evidence: 문서 및 코드 근거</summary>
+  <div class="details-body">
+    <ul>
+      <li>WhisperKit 공식 문서: Core ML 포맷으로 생성한 Whisper 모델을 <code>WhisperKitConfig</code>로 로드한다.</li>
+      <li>whisper.cpp 공식 문서: Apple Silicon에서 NEON, Accelerate, Metal, Core ML encoder 가속을 지원한다.</li>
+      <li>MLX 공식 문서: Apple Silicon용 NumPy 유사 배열 프레임워크이며 unified memory와 lazy evaluation을 사용한다.</li>
+      <li>현재 PoC 코드: <code>mlx_audio.stt.load("mlx-community/nemotron-3.5-asr-streaming-0.6b-8bit")</code>와 <code>model.generate(...)</code>에 의존한다.</li>
+    </ul>
+  </div>
+</details>
+
+<details>
+  <summary>References</summary>
+  <div class="details-body">
+    <ul>
+      <li><a href="https://github.com/argmaxinc/argmax-oss-swift">Argmax Open-Source SDK / WhisperKit</a></li>
+      <li><a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a></li>
+      <li><a href="https://github.com/ml-explore/mlx">MLX</a></li>
+      <li><a href="https://github.com/ml-explore/mlx-swift">MLX Swift</a></li>
+      <li><a href="https://github.com/depasqualeorg/mlx-swift-audio">MLX Swift Audio</a></li>
+    </ul>
+  </div>
+</details>
+
+<footer>
+  <span>생성: 2026-06-08 00:55:59 KST</span>
+  <span>모델: GPT-5 Codex</span>
+  <span>유형: analysis</span>
+</footer>
+<script>
+  document.documentElement.dataset.reportReady = "true";
+</script>
+</body>
+</html>
