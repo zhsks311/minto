@@ -91,7 +91,8 @@ public final class MeetingSummaryRetryUseCase {
     /// sheet에서 선택한 로컬 draft 용어집을 주입할 때 사용하며, 빈 값은 저장하지 않는다.
     public func retry(record: MeetingRecord, glossary: String) async -> SummaryRetryResult {
         let segmentCount = record.transcript.count
-        Log.summary.info("summary retry start segmentCount=\(segmentCount, privacy: .public)")
+        let documentChars = record.document?.count ?? 0
+        Log.summary.info("summary retry start segmentCount=\(segmentCount, privacy: .public) documentChars=\(documentChars, privacy: .public)")
 
         let transcript = Self.buildTranscript(from: record.transcript)
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -104,7 +105,7 @@ public final class MeetingSummaryRetryUseCase {
             topic: record.topic,
             glossary: normalizedGlossary ?? "",
             runningSummary: "",
-            document: ""
+            document: record.document ?? ""
         )
 
         guard let newSummary = await summaryService.generateFinal(transcript: transcript, context: context) else {

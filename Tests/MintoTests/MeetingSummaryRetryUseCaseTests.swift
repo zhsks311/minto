@@ -53,13 +53,18 @@ private func makeSegments(texts: [String], startedAt: Date = Date(timeIntervalSi
     }
 }
 
-private func makePlainRecord(transcript: [Segment] = [], topic: String = "테스트 회의") -> MeetingRecord {
+private func makePlainRecord(
+    transcript: [Segment] = [],
+    topic: String = "테스트 회의",
+    document: String? = nil
+) -> MeetingRecord {
     MeetingRecord(
         title: "테스트",
         startedAt: Date(timeIntervalSince1970: 1000),
         durationSeconds: 60,
         topic: topic,
         summary: MeetingSummary.plain("LLM이 잘 안 됐어요"),
+        document: document,
         transcript: transcript
     )
 }
@@ -274,6 +279,27 @@ struct MeetingSummaryRetryUseCaseTests {
         #expect(generator.receivedContext?.topic == "스프린트 회고")
         #expect(generator.receivedContext?.glossary == "용어: 스프린트 회고")
         #expect(generator.receivedContext?.document == "")
+    }
+
+    @Test("retry 호출 시 저장된 document를 context에 전달한다")
+    func retryPassesStoredDocumentToContext() async {
+        let segments = makeSegments(texts: ["발언"])
+        let record = makePlainRecord(
+            transcript: segments,
+            topic: "스프린트 회고",
+            document: "사전 공유한 회의 자료"
+        )
+        let generator = StubRetryGenerator(result: makeStructuredSummary())
+        let useCase = MeetingSummaryRetryUseCase(
+            summaryService: generator,
+            store: StubRetryStore(),
+            glossaryStore: StubRetryCandidateIngester(),
+            glossaryResolver: { _ in "" }
+        )
+
+        _ = await useCase.retry(record: record)
+
+        #expect(generator.receivedContext?.document == "사전 공유한 회의 자료")
     }
 
     @Test("retry(record:glossary:)는 주입 glossary를 사용하고 성공 저장 시 snapshot을 갱신한다")

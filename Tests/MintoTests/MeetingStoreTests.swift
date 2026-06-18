@@ -56,6 +56,7 @@ struct MeetingStoreTests {
         record.schemaVersion = 2
         record.audioFileName = "meeting.wav"
         record.summaryGlossary = "Minto = 회의 기록 앱\nSwiftUI"
+        record.document = "회의 자료 본문"
         let data = try MeetingRecordCoding.makeEncoder().encode(record)
         let restored = try MeetingRecordCoding.makeDecoder().decode(MeetingRecord.self, from: data)
 
@@ -63,6 +64,7 @@ struct MeetingStoreTests {
         #expect(restored.schemaVersion == 2)
         #expect(restored.audioFileName == "meeting.wav")
         #expect(restored.summaryGlossary == "Minto = 회의 기록 앱\nSwiftUI")
+        #expect(restored.document == "회의 자료 본문")
     }
 
     @Test("summaryGlossary는 저장 라운드트립에서 보존된다")
@@ -212,6 +214,7 @@ struct MeetingStoreTests {
         #expect(loaded.topic == "")
         #expect(loaded.summary == MeetingSummary())
         #expect(loaded.summaryGlossary == nil)
+        #expect(loaded.document == nil)
         #expect(loaded.transcript == [])
         #expect(loaded.audioFileName == nil)
         #expect(store.corruptedCount == 0)
