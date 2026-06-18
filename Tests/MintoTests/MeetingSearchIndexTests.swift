@@ -4,7 +4,10 @@ import Testing
 
 @Suite("MeetingSearchIndex")
 struct MeetingSearchIndexTests {
-    private func sampleRecord(transcriptID: UUID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!) -> MeetingRecord {
+    private func sampleRecord(
+        transcriptID: UUID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+        document: String? = nil
+    ) -> MeetingRecord {
         let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
         return MeetingRecord(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
@@ -42,6 +45,7 @@ struct MeetingSearchIndexTests {
                 actionItems: [.init(task: "팀 적용 범위를 다시 검토한다.", owner: "민토", due: "다음 회의", time: "03:45")],
                 openQuestions: [.init(text: "엔티티 변경을 SQL 파일로 다시 만드는 과정이 번거로운가?", time: "02:32")]
             ),
+            document: document,
             transcript: [
                 Segment(
                     id: transcriptID,
@@ -68,6 +72,44 @@ struct MeetingSearchIndexTests {
         #expect(chunks.allSatisfy { $0.chunkingVersion == MeetingSearchIndex.chunkingVersion })
         #expect(chunks.contains { $0.sourcePath == "summary.sections[0]" })
         #expect(chunks.contains { $0.sourcePath.hasPrefix("transcript[") })
+    }
+
+    @Test("회의 자료가 있으면 document chunk를 만든다")
+    func buildsDocumentChunks() {
+        let chunks = MeetingSearchIndex.chunks(for: sampleRecord(document: "첨부 자료에만 있는 보안 검토 내용"))
+
+        #expect(chunks.contains { $0.kind == .document })
+    }
+
+    @Test("회의 자료가 nil이거나 공백이면 document chunk를 만들지 않는다")
+    func blankDocumentBuildsNoDocumentChunks() {
+        let nilChunks = MeetingSearchIndex.chunks(for: sampleRecord())
+            .filter { $0.kind == .document }
+        let blankChunks = MeetingSearchIndex.chunks(for: sampleRecord(document: " \n\n\t "))
+            .filter { $0.kind == .document }
+
+        #expect(nilChunks.isEmpty)
+        #expect(blankChunks.isEmpty)
+    }
+
+    @Test("회의 자료는 빈 줄 기준 문단 단위로 chunk를 만든다")
+    func documentSplitsIntoParagraphChunks() {
+        let chunks = MeetingSearchIndex.chunks(for: sampleRecord(document: "첫 문단 자료\n\n둘째 문단 자료"))
+            .filter { $0.kind == .document }
+
+        #expect(chunks.count == 2)
+        #expect(chunks.map(\.sourcePath) == ["document[0]", "document[1]"])
+        #expect(chunks.map(\.text) == ["첫 문단 자료", "둘째 문단 자료"])
+    }
+
+    @Test("CRLF 단일 줄바꿈은 같은 문단으로 묶고, CRLF 빈 줄에서만 문단을 나눈다")
+    func documentHandlesCRLFLineEndings() {
+        // "\r\n" 단일 줄바꿈으로 이어진 줄은 한 문단, "\r\n\r\n" 빈 줄에서만 분할돼야 한다.
+        let chunks = MeetingSearchIndex.chunks(for: sampleRecord(document: "첫 줄\r\n둘째 줄\r\n\r\n다음 문단"))
+            .filter { $0.kind == .document }
+
+        #expect(chunks.count == 2)
+        #expect(chunks.map(\.text) == ["첫 줄\n둘째 줄", "다음 문단"])
     }
 
     @Test("같은 회의를 다시 index해도 chunk id와 checksum이 안정적이다")
@@ -100,6 +142,16 @@ struct MeetingSearchIndexTests {
         #expect(results.first?.meetingID == record.id)
         #expect(results.contains { $0.chunk.kind == .section })
         #expect(results.first?.preview.contains("change-log-master.xml") == true)
+    }
+
+    @Test("회의 자료에만 있는 단어로 검색하면 해당 document chunk를 반환한다")
+    func searchFindsDocumentOnlyTerm() {
+        let record = sampleRecord(document: "외부 첨부 문서에 doconlytoken 항목이 있다.")
+        let index = MeetingSearchIndex(records: [record])
+
+        let results = index.search("doconlytoken", limit: 5)
+
+        #expect(results.contains { $0.meetingID == record.id && $0.chunk.kind == .document })
     }
 
     @Test("빈 검색어는 결과를 반환하지 않는다")

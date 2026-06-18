@@ -823,7 +823,7 @@ public struct MeetingLibraryView: View {
                 .background(LibraryPalette.elevated)
                 .clipShape(Capsule())
             // .all은 칩을 표시하지 않는다 — 전체 칩이 없어도 모두 선택 해제하면 .all로 돌아온다.
-            ForEach([SearchKindFilter.summary, .transcript, .topic], id: \.label) { filter in
+            ForEach([SearchKindFilter.summary, .transcript, .topic, .document], id: \.label) { filter in
                 let active = activeSearchFilter == filter
                 Button {
                     activeSearchFilter = active ? .all : filter
@@ -2554,11 +2554,13 @@ public struct MeetingLibraryView: View {
     ///   요약  → summary, section, decision, actionItem, openQuestion
     ///   전사  → transcript
     ///   주제  → topic, title, keywords
+    ///   회의 자료 → document
     private enum SearchKindFilter: CaseIterable {
         case all
         case summary
         case transcript
         case topic
+        case document
 
         var label: String {
             switch self {
@@ -2566,6 +2568,7 @@ public struct MeetingLibraryView: View {
             case .summary: return "요약"
             case .transcript: return "전사"
             case .topic: return "주제"
+            case .document: return MeetingSearchChunk.Kind.document.label
             }
         }
 
@@ -2576,6 +2579,7 @@ public struct MeetingLibraryView: View {
             case .summary: return [.summary, .section, .decision, .actionItem, .openQuestion]
             case .transcript: return [.transcript]
             case .topic: return [.topic, .title, .keywords]
+            case .document: return [.document]
             }
         }
 
