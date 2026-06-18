@@ -14,3 +14,17 @@ Resources/models/*.ggml
 *.xcodeproj/project.xcworkspace/xcuserdata/
 sample/
 tmp/
+
+# ── AI 코딩 도구 상태 (개인/런타임 — 커밋 제외) ──
+# .claude: 공유 스킬과 팀 설정만 추적, 개인 설정·상태는 제외
+.claude/*
+!.claude/skills/
+!.claude/settings.json
+# OMC / OMX / superpowers 오케스트레이션 상태
+.omc/
+.omx/
+.superpowers/
+# Codex 프로젝트 상태
+.codex/
+# 세션 이어쓰기 덤프
+*-this-session-is-being-continued-*.txt
