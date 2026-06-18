@@ -74,6 +74,7 @@ public struct MeetingLibraryView: View {
     @State private var showingDocumentRemovalConfirmation = false
     @State private var documentRemovalSavingID: UUID?
     @State private var documentRemovalError: (id: UUID, message: String)?
+    @State private var documentSectionExpanded = false
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
     @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -139,10 +140,18 @@ public struct MeetingLibraryView: View {
         .onChange(of: selectedID) { _, _ in
             cancelTranscriptEditing()
             cancelDocumentRemoval()
+            documentSectionExpanded = false
+            if let selectedRecord {
+                expandDocumentSectionIfCitationTarget(in: selectedRecord)
+            }
         }
         .onChange(of: detailTab) { _, _ in
             // 탭 전환도 편집 상태를 무효화한다 — "편집" 버튼으로만 진입(상태 누수 방지).
             cancelTranscriptEditing()
+            documentSectionExpanded = false
+            if detailTab == .summary, let selectedRecord {
+                expandDocumentSectionIfCitationTarget(in: selectedRecord)
+            }
         }
         .onChange(of: searchText) { _, _ in
             searchAnswerController.reset()
@@ -1325,9 +1334,15 @@ public struct MeetingLibraryView: View {
                 }
                 .background(LibraryPalette.background)
                 .onAppear {
+                    expandDocumentSectionIfCitationTarget(in: record)
                     scrollToCitationAnchor(in: record, proxy: proxy)
                 }
                 .onChange(of: searchAnswerCitationAnchor) { _, _ in
+                    // 요약 탭일 때만 펼친다 — 다른 탭에서 anchor가 바뀌어도, 요약 탭 전환 시
+                    // onChange(detailTab)가 펼침을 복원하므로 여기서 켤 필요가 없다(onChange(detailTab)와 대칭).
+                    if detailTab == .summary {
+                        expandDocumentSectionIfCitationTarget(in: record)
+                    }
                     scrollToCitationAnchor(in: record, proxy: proxy)
                 }
             }
@@ -1628,7 +1643,7 @@ public struct MeetingLibraryView: View {
                     .foregroundColor(.secondary)
 
                 // 관련 문서 탭은 Notion·Confluence 실시간 검색이라, 저장된 첨부 문서는 요약 탭의 로컬 자료로 분리한다.
-                DisclosureGroup {
+                DisclosureGroup(isExpanded: $documentSectionExpanded) {
                     Text(document)
                         .font(.system(size: detailBodyFontSize))
                         .lineSpacing(detailLineSpacing)
@@ -1649,8 +1664,15 @@ public struct MeetingLibraryView: View {
             }
             .padding(18)
             .background(LibraryPalette.elevated)
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        citationCardBorder(Self.documentAnchorID),
+                        lineWidth: isCitationHighlightTarget(Self.documentAnchorID) ? 1.5 : 1
+                    )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .id(Self.documentAnchorID)
         }
     }
 
@@ -2754,6 +2776,7 @@ public struct MeetingLibraryView: View {
     }
 
     private static let searchAnswerLeadAnchorID = "meeting-lead-summary"
+    private static let documentAnchorID = "meeting-document"
 
     private func outcomeAnchorID(_ group: String) -> String {
         "meeting-outcome-\(group)"
@@ -2782,6 +2805,9 @@ public struct MeetingLibraryView: View {
         if indexedSourcePath(path, prefix: "summary.openQuestions") != nil {
             return outcomeAnchorID("questions")
         }
+        if indexedSourcePath(path, prefix: "document") != nil {
+            return Self.documentAnchorID
+        }
         if let index = indexedSourcePath(path, prefix: "transcript") {
             return transcriptAnchorID(index)
         }
@@ -2807,6 +2833,13 @@ public struct MeetingLibraryView: View {
         RoundedRectangle(cornerRadius: 6)
             .fill(isCitationHighlightTarget(id) ? LibraryPalette.accentSoft : Color.clear)
             .padding(inset)
+    }
+
+    private func expandDocumentSectionIfCitationTarget(in record: MeetingRecord) {
+        guard let anchor = searchAnswerCitationAnchor,
+              anchor.meetingID == record.id,
+              citationScrollTargetID(anchor) == Self.documentAnchorID else { return }
+        documentSectionExpanded = true
     }
 
     private func scrollToCitationAnchor(in record: MeetingRecord, proxy: ScrollViewProxy) {

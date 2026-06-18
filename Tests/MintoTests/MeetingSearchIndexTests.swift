@@ -112,6 +112,43 @@ struct MeetingSearchIndexTests {
         #expect(chunks.map(\.text) == ["첫 줄\n둘째 줄", "다음 문단"])
     }
 
+    @Test("800자를 넘는 단일 회의 자료 문단은 연속 sourcePath의 작은 chunk로 나눈다")
+    func longDocumentParagraphSplitsIntoCappedChunks() {
+        let document = String(repeating: "가", count: 1_650)
+        let chunks = MeetingSearchIndex.chunks(for: sampleRecord(document: document))
+            .filter { $0.kind == .document }
+
+        #expect(chunks.count >= 2)
+        #expect(chunks.allSatisfy { $0.text.count <= 800 })
+        #expect(chunks.map(\.sourcePath) == chunks.indices.map { "document[\($0)]" })
+    }
+
+    @Test("회의 자료 길이 상한은 가능한 경우 단어 중간이 아니라 공백 경계에서 나눈다")
+    func longDocumentParagraphSplitsAtWhitespaceBoundary() {
+        let words = (0..<160).map { "word\($0)" }
+        let document = words.joined(separator: " ")
+        let chunks = MeetingSearchIndex.chunks(for: sampleRecord(document: document))
+            .filter { $0.kind == .document }
+
+        #expect(chunks.count >= 2)
+        #expect(chunks.allSatisfy { $0.text.count <= 800 })
+        // 공백 개수에 의존하지 않고 "단어가 중간에 쪼개지지 않고 순서가 보존되는지"를 직접 검증한다.
+        let rejoinedWords = chunks.flatMap { $0.text.split(separator: " ") }
+        #expect(rejoinedWords == words.map { Substring($0) })
+    }
+
+    @Test("800자 미만 회의 자료 문단은 기존처럼 단일 document chunk를 유지한다")
+    func shortDocumentParagraphKeepsSingleChunk() throws {
+        let document = "짧은 회의 자료 문단은 쪼개지 않아요."
+        let chunks = MeetingSearchIndex.chunks(for: sampleRecord(document: document))
+            .filter { $0.kind == .document }
+        let chunk = try #require(chunks.first)
+
+        #expect(chunks.count == 1)
+        #expect(chunk.sourcePath == "document[0]")
+        #expect(chunk.text == document)
+    }
+
     @Test("같은 회의를 다시 index해도 chunk id와 checksum이 안정적이다")
     func chunksAreDeterministic() {
         let first = MeetingSearchIndex.chunks(for: sampleRecord())
