@@ -53,7 +53,7 @@ public final class SummaryService: ObservableObject {
             newBatch: batch,
             document: meeting.document
         )
-        guard let summary = await dispatch(prompt, useCase: .incrementalSummary) else { return nil }
+        guard let summary = await dispatch(prompt, useCase: .incrementalSummary, documentChars: meeting.document.count) else { return nil }
         meeting.runningSummary = summary
         return summary
     }
@@ -89,7 +89,7 @@ public final class SummaryService: ObservableObject {
             document: context.document
         )
 
-        if let raw = await dispatch(prompt, useCase: .finalSummary) {
+        if let raw = await dispatch(prompt, useCase: .finalSummary, documentChars: context.document.count) {
             // JSON 파싱 시도 → 실패하면 raw를 평문 요약으로 감싼다(빈 화면 방지).
             let summary = Self.parseStructured(raw) ?? .plain(raw)
             return summary
@@ -116,7 +116,7 @@ public final class SummaryService: ObservableObject {
     }
 
     /// provider adapter dispatch. 실패·none·빈 응답이면 nil.
-    private func dispatch(_ prompt: (instructions: String, userContent: String), useCase: LLMUseCase) async -> String? {
+    private func dispatch(_ prompt: (instructions: String, userContent: String), useCase: LLMUseCase, documentChars: Int) async -> String? {
         guard let provider = LLMSummarySettingsService.shared.selectedTextProvider() else { return nil }
 
         activeGenerations += 1
@@ -130,7 +130,7 @@ public final class SummaryService: ObservableObject {
             ))
             let trimmed = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { return nil }
-            Log.summary.info("generation succeeded via \(provider.descriptor.id.rawValue, privacy: .public) useCase=\(useCase.rawValue, privacy: .public) outputChars=\(trimmed.count, privacy: .public)")
+            Log.summary.info("generation succeeded via \(provider.descriptor.id.rawValue, privacy: .public) useCase=\(useCase.rawValue, privacy: .public) documentChars=\(documentChars, privacy: .public) outputChars=\(trimmed.count, privacy: .public)")
             return trimmed
         } catch {
             Log.summary.error("generation failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")

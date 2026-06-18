@@ -108,7 +108,7 @@ public final class LLMCorrectionService: ObservableObject {
 
         guard let provider = selectedTextProvider(providerResolver: providerResolver) else { return nil }
 
-        Log.correction.info("correcting via \(provider.descriptor.id.rawValue, privacy: .public) inputChars=\(text.count, privacy: .public) contextChars=\(context.previousText.count, privacy: .public)")
+        Log.correction.info("correcting via \(provider.descriptor.id.rawValue, privacy: .public) inputChars=\(text.count, privacy: .public) contextChars=\(context.previousText.count, privacy: .public) documentChars=\(context.document.count, privacy: .public)")
         do {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: .correction,
@@ -159,7 +159,7 @@ public final class LLMCorrectionService: ObservableObject {
         guard let provider = selectedTextProvider(providerResolver: providerResolver) else { return nil }
 
         let maxTokens = 900 * texts.count
-        Log.correction.info("correctBatch via \(provider.descriptor.id.rawValue, privacy: .public) batchSize=\(texts.count, privacy: .public)")
+        Log.correction.info("correctBatch via \(provider.descriptor.id.rawValue, privacy: .public) batchSize=\(texts.count, privacy: .public) documentChars=\(context.document.count, privacy: .public)")
         do {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: .correction,
