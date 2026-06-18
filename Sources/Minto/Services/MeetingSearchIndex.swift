@@ -98,9 +98,10 @@ public struct MeetingSearchResult: Identifiable, Sendable, Equatable {
 
 public struct MeetingSearchIndex: Sendable, Equatable {
     public static let schemaVersion = 1
-    // v2: .document chunk kind 추가. 기존 사이드카(v1)는 isCompatible 불일치로 자동 무효화·재빌드돼,
-    // doc-persist 빌드에서 저장된 회의도 앱 재시작 시 document chunk를 포함해 재색인된다.
-    public static let chunkingVersion = 2
+    // v3: .document chunk에 800자 길이 상한을 추가한다. 빈 줄 없는 대형 문서가 단일 chunk로
+    // 검색·답변 문맥을 잠식하지 않도록 기존 사이드카(v2)는 isCompatible 불일치로 자동 무효화·재빌드된다.
+    public static let chunkingVersion = 3
+    private static let maxDocumentChunkCharacters = 800
 
     public let chunks: [MeetingSearchChunk]
 
@@ -148,7 +149,8 @@ public struct MeetingSearchIndex: Sendable, Equatable {
             )
         }
         if let document = record.document {
-            for (index, block) in paragraphBlocks(document).enumerated() {
+            let documentBlocks = paragraphBlocks(document).flatMap(Self.lengthCappedDocumentBlocks)
+            for (index, block) in documentBlocks.enumerated() {
                 builder.append(.document, sourcePath: "document[\(index)]", text: block)
             }
         }
@@ -278,6 +280,50 @@ public struct MeetingSearchIndex: Sendable, Equatable {
             blocks.append(lines.joined(separator: "\n"))
         }
         return blocks
+    }
+
+    private static func lengthCappedDocumentBlocks(_ block: String) -> [String] {
+        guard block.count > maxDocumentChunkCharacters else {
+            return [block]
+        }
+
+        var blocks: [String] = []
+        var remaining = block[...]
+
+        while remaining.count > maxDocumentChunkCharacters {
+            let limit = remaining.index(remaining.startIndex, offsetBy: maxDocumentChunkCharacters)
+            let split = lastWhitespaceIndex(in: remaining[..<limit]) ?? limit
+            let chunk = String(remaining[..<split]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !chunk.isEmpty {
+                blocks.append(chunk)
+            }
+
+            remaining = remaining[split...]
+            while let first = remaining.first, isWhitespace(first) {
+                remaining = remaining.dropFirst()
+            }
+        }
+
+        let tail = String(remaining).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty {
+            blocks.append(tail)
+        }
+        return blocks
+    }
+
+    private static func lastWhitespaceIndex(in text: Substring) -> String.Index? {
+        var index = text.endIndex
+        while index > text.startIndex {
+            index = text.index(before: index)
+            if isWhitespace(text[index]) {
+                return index
+            }
+        }
+        return nil
+    }
+
+    private static func isWhitespace(_ character: Character) -> Bool {
+        character.isWhitespace
     }
 }
 
