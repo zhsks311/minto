@@ -70,6 +70,10 @@ public struct MeetingLibraryView: View {
     @State private var transcriptEditSavingID: UUID?
     @State private var transcriptEditError: (id: UUID, message: String)?
     @State private var transcriptEditedHintID: UUID?
+    @State private var documentRemovalRecordID: UUID?
+    @State private var showingDocumentRemovalConfirmation = false
+    @State private var documentRemovalSavingID: UUID?
+    @State private var documentRemovalError: (id: UUID, message: String)?
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
     @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -134,6 +138,7 @@ public struct MeetingLibraryView: View {
         }
         .onChange(of: selectedID) { _, _ in
             cancelTranscriptEditing()
+            cancelDocumentRemoval()
         }
         .onChange(of: detailTab) { _, _ in
             // 탭 전환도 편집 상태를 무효화한다 — "편집" 버튼으로만 진입(상태 누수 방지).
@@ -228,6 +233,20 @@ public struct MeetingLibraryView: View {
             Text(confluence.isConfigured
                  ? "파일로 저장하거나 연결된 Confluence 공간에 새 페이지로 만들 수 있어요."
                  : "Confluence 내보내기는 설정의 검색 소스에서 Confluence를 연결한 뒤 사용할 수 있어요.")
+        }
+        .confirmationDialog(
+            "회의 자료를 제거할까요?",
+            isPresented: $showingDocumentRemovalConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("문서 제거", role: .destructive) {
+                confirmDocumentRemoval()
+            }
+            Button("취소", role: .cancel) {
+                documentRemovalRecordID = nil
+            }
+        } message: {
+            Text("로컬에 저장된 회의 자료만 제거돼요. 요약과 전사는 유지돼요.")
         }
         .sheet(isPresented: $showingConfluenceExport) {
             if let exportRecord {
@@ -1282,6 +1301,7 @@ public struct MeetingLibraryView: View {
                                 plainFallbackBanner(record)
                             }
                             leadSummary(record)
+                            storedDocumentSection(record)
                             meetingTableOfContents(record.summary.sections, scrollProxy: proxy)
                             meetingNotes(record.summary.sections)
                             meetingOutcomes(record.summary)
@@ -1571,6 +1591,67 @@ public struct MeetingLibraryView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .id(Self.searchAnswerLeadAnchorID)
+    }
+
+    @ViewBuilder
+    private func storedDocumentSection(_ record: MeetingRecord) -> some View {
+        // record.document는 init/decode 시점에 이미 normalizedDocument로 정규화돼 저장된다(뷰 재정규화 불필요).
+        if let document = record.document {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    sectionTitle("회의 자료", systemImage: "doc.text")
+                    Text("로컬 저장")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.08))
+                        .clipShape(Capsule())
+                    Spacer()
+                    if documentRemovalSavingID == record.id {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Button {
+                        requestDocumentRemoval(for: record)
+                    } label: {
+                        Label("문서 제거", systemImage: "trash")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(hasLiveMeeting || documentRemovalSavingID == record.id)
+                    .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 제거할 수 있어요." : "로컬에 저장된 회의 자료를 제거해요.")
+                }
+
+                Text("로컬에 저장된 회의 자료예요.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+
+                // 관련 문서 탭은 Notion·Confluence 실시간 검색이라, 저장된 첨부 문서는 요약 탭의 로컬 자료로 분리한다.
+                DisclosureGroup {
+                    Text(document)
+                        .font(.system(size: detailBodyFontSize))
+                        .lineSpacing(detailLineSpacing)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .padding(.top, 6)
+                } label: {
+                    Text("내용 보기 · \(document.count)자")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+
+                if let error = documentRemovalError, error.id == record.id {
+                    Text(error.message)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(18)
+            .background(LibraryPalette.elevated)
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     @ViewBuilder
@@ -3013,6 +3094,56 @@ public struct MeetingLibraryView: View {
     private func copyTranscript(_ record: MeetingRecord) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(record.transcript.map(\.text).joined(separator: "\n"), forType: .string)
+    }
+
+    /// 회의 선택이 바뀌면 이전 record에 묶인 제거 상태를 초기화한다(transcriptEdit*와 대칭).
+    /// 현재 제거는 동기 실행이라 잔류가 드물지만, 이후 async 전환 시 savingID 고착을 막는다.
+    private func cancelDocumentRemoval() {
+        documentRemovalSavingID = nil
+        documentRemovalError = nil
+    }
+
+    private func requestDocumentRemoval(for record: MeetingRecord) {
+        guard !hasLiveMeeting else {
+            return
+        }
+        documentRemovalError = nil
+        documentRemovalRecordID = record.id
+        showingDocumentRemovalConfirmation = true
+    }
+
+    private func confirmDocumentRemoval() {
+        guard let recordID = documentRemovalRecordID else {
+            return
+        }
+        documentRemovalRecordID = nil
+        showingDocumentRemovalConfirmation = false
+        removeStoredDocument(recordID)
+    }
+
+    private func removeStoredDocument(_ recordID: UUID) {
+        guard !hasLiveMeeting else {
+            documentRemovalError = (id: recordID, message: "진행 중인 회의를 종료한 뒤 제거할 수 있어요.")
+            return
+        }
+
+        let documentChars = store.meetings.first(where: { $0.id == recordID })?.document?.count ?? 0
+        documentRemovalSavingID = recordID
+        documentRemovalError = nil
+        Log.store.info("meeting document remove start documentChars=\(documentChars, privacy: .public)")
+
+        switch MeetingDocumentRemoval.removeDocument(recordID: recordID, in: store) {
+        case .success:
+            documentRemovalSavingID = nil
+            documentRemovalError = nil
+            Log.store.info("meeting document remove success documentChars=\(documentChars, privacy: .public)")
+        case .skippedEmpty, .failed:
+            // skippedEmpty는 전사·요약이 모두 비어야 발생하는데, 회의 자료 섹션은 document가 있을 때만 보이고
+            // 저장된 record는 이미 비어있지 않으므로 사실상 도달하지 않는다. 두 경우 모두 단일 재시도 안내로 통합한다.
+            documentRemovalSavingID = nil
+            documentRemovalError = (id: recordID, message: "회의 자료를 제거하지 못했어요. 다시 시도해 보세요.")
+            Log.store.error("meeting document remove failed documentChars=\(documentChars, privacy: .public)")
+        }
     }
 
     private func reSummaryHelpText(for record: MeetingRecord) -> String {

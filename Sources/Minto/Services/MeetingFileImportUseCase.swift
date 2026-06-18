@@ -308,7 +308,8 @@ public final class MeetingFileImportUseCase: ObservableObject {
                 fallbackTitle: "파일 회의록",
                 duration: extractionDuration,
                 startedAt: startedAt,
-                summaryGlossary: generatedSummary == nil ? nil : summaryContext.glossary
+                summaryGlossary: generatedSummary == nil ? nil : summaryContext.glossary,
+                document: summaryContext.document
             )
             if diarizeSpeakers {
                 try Task.checkCancellation()

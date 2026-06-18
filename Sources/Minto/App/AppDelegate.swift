@@ -64,6 +64,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 topic: MeetingContext.shared.topic,
                 duration: self.viewModel.recordingDuration,
                 summaryGlossary: summaryGlossary,
+                document: MeetingContext.shared.document,
                 audioFileName: self.viewModel.lastArchivedAudioFileName
             )
 
@@ -108,6 +109,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         topic: String,
         duration: TimeInterval,
         summaryGlossary: String? = nil,
+        document: String? = nil,
         audioFileName: String? = nil
     ) -> MeetingRecord {
         MeetingRecordFactory.makeRecord(
@@ -116,6 +118,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             topic: topic,
             duration: duration,
             summaryGlossary: summaryGlossary,
+            document: document,
             audioFileName: audioFileName
         )
     }
