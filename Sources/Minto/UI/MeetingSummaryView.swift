@@ -44,6 +44,7 @@ public struct MeetingResult: Sendable {
     public let metaText: String
     public let summary: MeetingSummary
     public let transcript: [TranscriptLine]
+    public let document: String?
 
     public struct TranscriptLine: Sendable, Identifiable {
         public let id = UUID()
@@ -58,8 +59,8 @@ public struct MeetingResult: Sendable {
         }
     }
 
-    public init(title: String, metaText: String, summary: MeetingSummary, transcript: [TranscriptLine]) {
-        self.title = title; self.metaText = metaText; self.summary = summary; self.transcript = transcript
+    public init(title: String, metaText: String, summary: MeetingSummary, transcript: [TranscriptLine], document: String? = nil) {
+        self.title = title; self.metaText = metaText; self.summary = summary; self.transcript = transcript; self.document = document
     }
 }
 
@@ -368,6 +369,6 @@ extension MeetingResult {
                 speaker: seg.speaker
             )
         }
-        return MeetingResult(title: record.title, metaText: record.subtitle, summary: record.summary, transcript: lines)
+        return MeetingResult(title: record.title, metaText: record.subtitle, summary: record.summary, transcript: lines, document: record.document)
     }
 }

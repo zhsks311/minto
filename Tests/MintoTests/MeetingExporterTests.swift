@@ -5,7 +5,7 @@ import Foundation
 @Suite("MeetingExporter Markdown")
 struct MeetingExporterTests {
 
-    private func sample() -> MeetingResult {
+    private func sample(document: String? = nil) -> MeetingResult {
         MeetingResult(
             title: "주간 회의",
             metaText: "6월 4일 · 12분 · 구간 2개",
@@ -19,7 +19,8 @@ struct MeetingExporterTests {
                 actionItems: [.init(task: "체크리스트 정리", owner: "지민", due: "목요일", time: "00:30")],
                 openQuestions: [.init(text: "롤백 기준은 추가 확인", time: "00:40")]
             ),
-            transcript: [.init(time: "00:00", text: "안녕하세요"), .init(time: "00:10", text: "시작합니다")]
+            transcript: [.init(time: "00:00", text: "안녕하세요"), .init(time: "00:10", text: "시작합니다")],
+            document: document
         )
     }
 
@@ -38,6 +39,51 @@ struct MeetingExporterTests {
         #expect(md.contains("## 전사"))
         #expect(md.contains("**[00:00]** 안녕하세요"))
         #expect(md.contains("**[00:10]** 시작합니다"))
+    }
+
+    @Test("markdown: 회의 자료가 있으면 요약 뒤, 전사 앞에 원문을 포함")
+    func markdownIncludesDocumentBetweenSummaryAndTranscript() throws {
+        let document = "회의 자료 원문\n\n- 마크다운 *표시* 유지"
+        let md = MeetingExporter.markdown(for: sample(document: document))
+
+        #expect(md.contains("## 회의 자료"))
+        #expect(md.contains(document))
+
+        let summaryRange = try #require(md.range(of: "핵심 요약 내용"))
+        let documentRange = try #require(md.range(of: "## 회의 자료"))
+        let transcriptRange = try #require(md.range(of: "## 전사"))
+
+        #expect(summaryRange.upperBound < documentRange.lowerBound)
+        #expect(documentRange.upperBound < transcriptRange.lowerBound)
+    }
+
+    @Test("markdown: 회의 자료가 nil이면 섹션을 생략")
+    func markdownOmitsNilDocument() {
+        let md = MeetingExporter.markdown(for: sample())
+
+        #expect(!md.contains("## 회의 자료"))
+    }
+
+    @Test("markdown: 회의 자료가 공백뿐이면 섹션을 생략")
+    func markdownOmitsWhitespaceOnlyDocument() {
+        let md = MeetingExporter.markdown(for: sample(document: " \n\n\t "))
+
+        #expect(!md.contains("## 회의 자료"))
+    }
+
+    @Test("MeetingResult.from: 저장된 회의 자료를 결과로 전달")
+    func meetingResultFromRecordCarriesDocument() {
+        let record = MeetingRecord(
+            title: "자료 회의",
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            durationSeconds: 60,
+            summary: MeetingSummary(leadAnswer: "요약"),
+            document: "첨부 문서 본문"
+        )
+
+        let result = MeetingResult.from(record)
+
+        #expect(result.document == "첨부 문서 본문")
     }
 
     @Test("markdown: speaker가 있으면 화자 라벨을 추가하고 없으면 기존 포맷을 유지")

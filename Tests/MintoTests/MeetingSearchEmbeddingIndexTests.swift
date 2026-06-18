@@ -38,6 +38,7 @@ struct MeetingSearchEmbeddingIndexTests {
             startedAt: startedAt,
             durationSeconds: 30,
             summary: MeetingSummary(leadAnswer: "liquibase와 flyway를 비교했다."),
+            document: "첨부 자료에는 migration playbook이 포함되어 있다.",
             transcript: [
                 Segment(
                     id: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!,
@@ -57,6 +58,7 @@ struct MeetingSearchEmbeddingIndexTests {
         #expect(embeddingIndex.embeddingKind == .lexicalHash)
         #expect(embeddingIndex.dimensions == 16)
         #expect(embeddingIndex.isConsistent)
+        #expect(searchIndex.chunks.contains { $0.kind == .document })
         #expect(embeddingIndex.records.count == searchIndex.chunks.count)
         #expect(embeddingIndex.records.allSatisfy { $0.meetingID == record.id })
     }

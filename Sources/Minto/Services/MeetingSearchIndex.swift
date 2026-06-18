@@ -10,6 +10,7 @@ public struct MeetingSearchChunk: Identifiable, Sendable, Equatable, Codable {
         case actionItem
         case openQuestion
         case transcript
+        case document
         case keywords
 
         public var label: String {
@@ -22,6 +23,7 @@ public struct MeetingSearchChunk: Identifiable, Sendable, Equatable, Codable {
             case .actionItem: return "할 일"
             case .openQuestion: return "질문"
             case .transcript: return "전사"
+            case .document: return "회의 자료"
             case .keywords: return "키워드"
             }
         }
@@ -34,7 +36,7 @@ public struct MeetingSearchChunk: Identifiable, Sendable, Equatable, Codable {
             case .decision, .actionItem, .openQuestion: return 2.5
             case .section: return 2
             case .keywords: return 1.5
-            case .transcript: return 1
+            case .transcript, .document: return 1
             }
         }
     }
@@ -96,7 +98,9 @@ public struct MeetingSearchResult: Identifiable, Sendable, Equatable {
 
 public struct MeetingSearchIndex: Sendable, Equatable {
     public static let schemaVersion = 1
-    public static let chunkingVersion = 1
+    // v2: .document chunk kind 추가. 기존 사이드카(v1)는 isCompatible 불일치로 자동 무효화·재빌드돼,
+    // doc-persist 빌드에서 저장된 회의도 앱 재시작 시 document chunk를 포함해 재색인된다.
+    public static let chunkingVersion = 2
 
     public let chunks: [MeetingSearchChunk]
 
@@ -142,6 +146,11 @@ public struct MeetingSearchIndex: Sendable, Equatable {
                 time: relativeTime(segment, in: record),
                 text: segment.text
             )
+        }
+        if let document = record.document {
+            for (index, block) in paragraphBlocks(document).enumerated() {
+                builder.append(.document, sourcePath: "document[\(index)]", text: block)
+            }
         }
         return builder.chunks
     }
@@ -242,6 +251,33 @@ public struct MeetingSearchIndex: Sendable, Equatable {
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private static func paragraphBlocks(_ text: String) -> [String] {
+        var blocks: [String] = []
+        var lines: [String] = []
+
+        // CRLF/CR을 LF로 먼저 정규화한다. .newlines로 직접 쪼개면 "\r\n"이 separator 둘로 처리돼
+        // ["a", "", "b"]가 되고, 빈 문단으로 오인해 CRLF 문서(Confluence 등)가 줄마다 과분할된다.
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        for line in normalized.components(separatedBy: "\n") {
+            if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if !lines.isEmpty {
+                    blocks.append(lines.joined(separator: "\n"))
+                    lines.removeAll()
+                }
+            } else {
+                lines.append(line)
+            }
+        }
+
+        if !lines.isEmpty {
+            blocks.append(lines.joined(separator: "\n"))
+        }
+        return blocks
     }
 }
 

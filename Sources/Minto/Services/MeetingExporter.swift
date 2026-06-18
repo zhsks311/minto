@@ -16,6 +16,12 @@ public enum MeetingExporter {
         if !summaryMd.isEmpty {
             out += summaryMd + "\n\n"
         }
+        if let document = result.document,
+           !document.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            out += "## 회의 자료\n\n"
+            out += document
+            out += "\n\n"
+        }
         if !result.transcript.isEmpty {
             out += "## 전사\n\n"
             out += result.transcript
