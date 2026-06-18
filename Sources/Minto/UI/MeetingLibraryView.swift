@@ -66,6 +66,10 @@ public struct MeetingLibraryView: View {
     @State private var speakerMergeTargets: [String: String] = [:]
     @State private var speakerEditError: (id: UUID, message: String)?
     @State private var speakerEnrollNotice: (id: UUID, message: String, isError: Bool)?
+    @State private var transcriptEditDraft: TranscriptEditDraft?
+    @State private var transcriptEditSavingID: UUID?
+    @State private var transcriptEditError: (id: UUID, message: String)?
+    @State private var transcriptEditedHintID: UUID?
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
     @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
@@ -127,6 +131,13 @@ public struct MeetingLibraryView: View {
             dismissSearchAnswerPresentation()
             rebuildSearchIndex()
             selectFirstAvailableIfNeeded()
+        }
+        .onChange(of: selectedID) { _, _ in
+            cancelTranscriptEditing()
+        }
+        .onChange(of: detailTab) { _, _ in
+            // 탭 전환도 편집 상태를 무효화한다 — "편집" 버튼으로만 진입(상태 누수 방지).
+            cancelTranscriptEditing()
         }
         .onChange(of: searchText) { _, _ in
             searchAnswerController.reset()
@@ -1223,9 +1234,23 @@ public struct MeetingLibraryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    @ViewBuilder
     private func meetingPreview(_ record: MeetingRecord) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
+        if detailTab == .transcript, let draftBinding = transcriptEditDraftBinding(for: record) {
+            TranscriptEditView(
+                draft: draftBinding,
+                isSaving: transcriptEditSavingID == record.id,
+                errorMessage: transcriptEditError?.id == record.id ? transcriptEditError?.message : nil,
+                timestampText: { segment in
+                    relativeTimestamp(segment, in: record, fallbackSegments: draftBinding.wrappedValue.originalSegments)
+                },
+                onCancel: {
+                    cancelTranscriptEditing()
+                },
+                onSave: {
+                    saveTranscriptEditing(for: record)
+                }
+            ) {
                 VStack(alignment: .leading, spacing: 18) {
                     previewHeader(record)
 
@@ -1236,33 +1261,55 @@ public struct MeetingLibraryView: View {
                     if isSearching {
                         whyThisResult(record)
                     }
-
-                    if detailTab == .summary {
-                        if record.summary.isPlainFallback {
-                            plainFallbackBanner(record)
-                        }
-                        leadSummary(record)
-                        meetingTableOfContents(record.summary.sections, scrollProxy: proxy)
-                        meetingNotes(record.summary.sections)
-                        meetingOutcomes(record.summary)
-                    } else if detailTab == .transcript {
-                        transcriptBlock(record.transcript, emptyText: "전사 내용이 없어요.", record: record)
-                    } else {
-                        relatedDocsSection(
-                            query: relatedSearchQuery(for: record),
-                            emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있어요."
-                        )
-                    }
                 }
-                .padding(28)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(LibraryPalette.background)
-            .onAppear {
-                scrollToCitationAnchor(in: record, proxy: proxy)
-            }
-            .onChange(of: searchAnswerCitationAnchor) { _, _ in
-                scrollToCitationAnchor(in: record, proxy: proxy)
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        previewHeader(record)
+
+                        if isSearching, hasSearchAnswerForCurrentQuery {
+                            backToSearchAnswerButton
+                        }
+
+                        if isSearching {
+                            whyThisResult(record)
+                        }
+
+                        if detailTab == .summary {
+                            if record.summary.isPlainFallback {
+                                plainFallbackBanner(record)
+                            }
+                            leadSummary(record)
+                            meetingTableOfContents(record.summary.sections, scrollProxy: proxy)
+                            meetingNotes(record.summary.sections)
+                            meetingOutcomes(record.summary)
+                        } else if detailTab == .transcript {
+                            transcriptBlock(
+                                record.transcript,
+                                emptyText: "전사 내용이 없어요.",
+                                record: record,
+                                onEdit: { beginTranscriptEditing(record) },
+                                editDisabled: hasLiveMeeting || record.transcript.isEmpty
+                            )
+                        } else {
+                            relatedDocsSection(
+                                query: relatedSearchQuery(for: record),
+                                emptyText: "이 회의의 요약과 전사로 관련 문서를 찾을 수 있어요."
+                            )
+                        }
+                    }
+                    .padding(28)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(LibraryPalette.background)
+                .onAppear {
+                    scrollToCitationAnchor(in: record, proxy: proxy)
+                }
+                .onChange(of: searchAnswerCitationAnchor) { _, _ in
+                    scrollToCitationAnchor(in: record, proxy: proxy)
+                }
             }
         }
     }
@@ -1313,6 +1360,12 @@ public struct MeetingLibraryView: View {
                 Text(retryMessage)
                     .font(.system(size: 12))
                     .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if transcriptEditedHintID == record.id {
+                Label("전사를 수정했어요 — 다시 요약하면 반영돼요.", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.green)
                     .fixedSize(horizontal: false, vertical: true)
             }
             detailTabs
@@ -1822,11 +1875,29 @@ public struct MeetingLibraryView: View {
     private func transcriptBlock(
         _ segments: [Segment],
         emptyText: String,
-        record: MeetingRecord? = nil
+        record: MeetingRecord? = nil,
+        onEdit: (() -> Void)? = nil,
+        editDisabled: Bool = false
     ) -> some View {
         let speakerLabels = SpeakerLabelEditing.labels(in: segments)
         return VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("전사", systemImage: "quote.bubble")
+            HStack(spacing: 8) {
+                sectionTitle("전사", systemImage: "quote.bubble")
+                Spacer()
+                if let onEdit {
+                    Button {
+                        onEdit()
+                    } label: {
+                        Label("편집", systemImage: "square.and.pencil")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(editDisabled)
+                    .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 편집할 수 있어요."
+                          : editDisabled ? "전사 내용이 없어요."
+                          : "전사 텍스트를 편집해요.")
+                }
+            }
             if let record, !speakerLabels.isEmpty {
                 speakerEditor(record: record, labels: speakerLabels)
             }
@@ -1866,6 +1937,81 @@ public struct MeetingLibraryView: View {
         .background(LibraryPalette.elevated)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func transcriptEditDraftBinding(for record: MeetingRecord) -> Binding<TranscriptEditDraft>? {
+        guard transcriptEditDraft?.recordID == record.id else {
+            return nil
+        }
+        return Binding(
+            get: {
+                transcriptEditDraft ?? TranscriptEditDraft(record: record)
+            },
+            set: {
+                transcriptEditDraft = $0
+            }
+        )
+    }
+
+    private func beginTranscriptEditing(_ record: MeetingRecord) {
+        guard !hasLiveMeeting, !record.transcript.isEmpty else {
+            return
+        }
+        let current = store.meetings.first(where: { $0.id == record.id }) ?? record
+        transcriptEditDraft = TranscriptEditDraft(record: current)
+        transcriptEditError = nil
+        transcriptEditSavingID = nil
+    }
+
+    private func cancelTranscriptEditing() {
+        transcriptEditDraft = nil
+        transcriptEditError = nil
+        transcriptEditSavingID = nil
+    }
+
+    private func saveTranscriptEditing(for record: MeetingRecord) {
+        guard let draft = transcriptEditDraft, draft.recordID == record.id else {
+            return
+        }
+        guard draft.hasChanges else {
+            cancelTranscriptEditing()
+            return
+        }
+
+        transcriptEditSavingID = record.id
+        transcriptEditError = nil
+
+        let changedTextCount = draft.changedTextCount
+        let removedSegmentCount = draft.removedSegmentCount
+        let finalSegmentCount = draft.editedSegments.count
+        Log.store.info("transcript edit save start segments=\(draft.originalSegments.count, privacy: .public) changedSegments=\(changedTextCount, privacy: .public) removedSegments=\(removedSegmentCount, privacy: .public)")
+
+        switch TranscriptEditing.save(draft, in: store) {
+        case .success:
+            transcriptEditDraft = nil
+            transcriptEditSavingID = nil
+            transcriptEditError = nil
+            showTranscriptEditedHint(for: record.id)
+            Log.store.info("transcript edit save success segments=\(finalSegmentCount, privacy: .public) changedSegments=\(changedTextCount, privacy: .public) removedSegments=\(removedSegmentCount, privacy: .public)")
+        case .skippedEmpty:
+            transcriptEditSavingID = nil
+            transcriptEditError = (id: record.id, message: "내용이 없어 저장할 수 없어요")
+            Log.store.error("transcript edit save skipped empty changedSegments=\(changedTextCount, privacy: .public) removedSegments=\(removedSegmentCount, privacy: .public)")
+        case .failed:
+            transcriptEditSavingID = nil
+            transcriptEditError = (id: record.id, message: "전사 수정을 저장하지 못했어요.")
+            Log.store.error("transcript edit save failed changedSegments=\(changedTextCount, privacy: .public) removedSegments=\(removedSegmentCount, privacy: .public)")
+        }
+    }
+
+    private func showTranscriptEditedHint(for recordID: UUID) {
+        transcriptEditedHintID = recordID
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            if transcriptEditedHintID == recordID {
+                transcriptEditedHintID = nil
+            }
+        }
     }
 
     private func segmentSpeakerReassignmentMenu(
