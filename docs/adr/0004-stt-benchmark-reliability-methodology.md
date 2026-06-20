@@ -104,10 +104,11 @@ Phase 0 신뢰성 진단(`docs/benchmark/2026-06-18-reliability-phase0-diagnosis
 
 **진행 중/완료 본체**:
 - ✅ **항목④ 4a+4b 완료** (`bfbc245`+`5123267`+`ddb4182`, 681 tests): 절대 35% 임계를 우열 판정에서 제거 → sanity 상한 0.70(`--sanity-cer-cap`)으로 강등 + 35% 판정/진단 두 의미 분리(진단용 0.35 보존) + deprecated alias 우선순위. critic Critical 1("모두 나쁜 안전망") 해결. 우열은 regression gate(상대 delta) 담당.
+- ✅ **항목③ engine_ranking 생성 완료** (`727695d`+`26a4ac0`, 684 tests): `build_stt_engine_lane_matrix.py`가 lanes를 weighted_cer 오름차순 순위화해 `engine_ranking` 출력("어느 엔진이 1등인가"). 엔진별 최저 cer dedup(엔진 단위 보장)·None/빈 engine_id 제외·동률 정렬. phantom 차원과 lane별 분리는 데이터 확인 후(② 이후). decision 판정 미연결(독립 출력).
 
 **남은 본체(스키마 ≠ 동작)**:
 - decision/regression 게이트가 phantom_rate·relative_improvement·engine_ranking을 **판정에 사용**하도록 연결 (현재 미사용)
-- 항목④ 4c~4e: relative_improvement/baseline_cer 채움 + decision 상대 delta 판정 + engine_ranking 생성 로직 — **baseline 엔진 결정(D2) + 반복측정(⑤) 의존**
+- 항목④ 4c~4e: relative_improvement/baseline_cer 채움 + decision 상대 delta 판정 — **baseline 엔진 결정(D2) + 반복측정(⑤) 의존**
 - 반복측정 실행 루프(1회→N회) + N 역산(D-N)
 - phantom ground-truth 데이터 확보(D-phantom-data) → phantom_rate 채움 → ranking에 phantom 차원 추가
 - 항목① decoding_parameters 채움: 엔진 전사(Swift 등)가 파라미터를 산출물에 노출하도록 보강 선결(현재 미노출)
