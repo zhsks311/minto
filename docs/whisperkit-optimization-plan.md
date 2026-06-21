@@ -123,6 +123,20 @@ T7 검증 중 발견한 **선재 phantom**(정회 −45dB → "감사합니다",
 - **판정: T1 종료**. 도메인 용어는 후처리 **LLM 교정 레이어**(`a29fa2f`, 회의 맥락)에 위임. 단 *인식 불가능하게 뭉개진 고유명사*는 prompt-priming만 살릴 수 있어 후처리가 완전 대체는 아님 — 전문용어 많은 회의에서 재검토 가치(그땐 비-turbo 모델로 차단 우회 시도).
 - production 무변경(promptText 배선 되돌림). 차단 재현 절차는 위 표로 보존.
 
+### T1 재개 (2026-06-22): 비-turbo large-v3에서 차단 우회 확인 → Phase 2 GREEN
+
+T1 종료 시 남긴 "비-turbo로 차단 우회 시도" 조건을 직접 검증(probe, 외교통일위 호르무즈/나무호 현안 32s 구간, WhisperKit 직접 API):
+
+| 모델 | promptTokens | 결과 |
+|------|------|------|
+| large-v3-turbo | 35토큰 | (기존) 전 창 빈 출력 100% CER |
+| **large-v3 (비-turbo)** | 0토큰(=프롬프트 없음) | **정상 전사**(빈 출력 아님). base 품질도 turbo보다 우수 |
+| **large-v3 (비-turbo)** | **35토큰** | **정상 전사 + 도메인 용어 교정**: "아랍에미레이트→아랍에미리트", "HMM 나무어→HMM 나무호" |
+
+- **확정**: `promptTokens` 빈 출력 차단은 **turbo 특정**이다. 비-turbo large-v3는 promptTokens를 정상 처리하고, **주입한 용어로 인식 결과를 STT 단계에서 교정**한다("나무어→나무호"는 후처리 LLM 교정이 살리기 어려운 인식 오류인데 prompt-priming이 인식 순간 바로잡음).
+- **함의**: STT 바이어싱(Phase 2)은 **비-turbo large-v3로 전환하면 실현 가능**. 단 (1) **지연 트레이드오프**(turbo 속도 이점 포기), (2) **할루시네이션 미측정**(설계 #1 위험 — 용어가 발화되지 않은 창에서 지어내는지 A/B 필요), (3) 라이브 롤링 prompt 오염 위험은 별도.
+- **다음**: 비-turbo 기준 STT 바이어싱 A/B(용어-수준 CER + 할루시네이션 + 지연)를 측정 게이트로 두고, 통과 시 플래그 뒤로 출시. 재현 probe: `Tests/MintoTests/ZZPhase2PromptProbe.swift`(throwaway, 미커밋) — RUN_PHASE2_PROBE=1 + PHASE2_MODEL.
+
 ### T4 결과: 채택 (suppressBlank=true), supressTokens·windowClipTime 기본 유지
 
 **SDK ground truth** (LogitsFilter.swift / TextDecoder.swift:1058):
