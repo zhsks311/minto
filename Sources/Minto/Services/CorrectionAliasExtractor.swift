@@ -50,12 +50,10 @@ public enum CorrectionAliasExtractor {
         let correctedIndex: Int
     }
 
-    private static let foldLocale = Locale(identifier: "en_US_POSIX")
-
     private static func tokenize(_ text: String) -> [Token] {
         text.split(whereSeparator: { $0.isWhitespace }).compactMap { part in
             let raw = String(part)
-            let comparable = comparableText(raw)
+            let comparable = DocumentTermExtractor.comparableText(raw)
             guard !comparable.isEmpty else { return nil }
             return Token(raw: raw, comparable: comparable)
         }
@@ -71,10 +69,10 @@ public enum CorrectionAliasExtractor {
 
         let alias = cleanedPhrase(rawTokens.map(\.raw))
         let canonical = cleanedPhrase(correctedTokens.map(\.raw))
-        guard isLongEnough(alias), isLongEnough(canonical) else { return }
+        guard DocumentTermExtractor.isLongEnough(alias), DocumentTermExtractor.isLongEnough(canonical) else { return }
         guard isAllowedPair(alias: alias, canonical: canonical, aliasTokenCount: rawTokens.count, canonicalTokenCount: correctedTokens.count) else { return }
 
-        let key = "\(comparableText(canonical))\u{1f}\(comparableText(alias))"
+        let key = "\(DocumentTermExtractor.comparableText(canonical))\u{1f}\(DocumentTermExtractor.comparableText(alias))"
         guard !seen.contains(key) else { return }
         seen.insert(key)
         results.append((canonical: canonical, alias: alias))
@@ -122,19 +120,10 @@ public enum CorrectionAliasExtractor {
 
     private static func cleanedPhrase(_ tokens: [String]) -> String {
         tokens
-            .map { trimPunctuationAndSymbols($0) }
+            .map { DocumentTermExtractor.trimPunctuationAndSymbols($0) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func comparableText(_ text: String) -> String {
-        removePunctuationSymbolsAndWhitespace(text)
-            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: foldLocale)
-    }
-
-    private static func isLongEnough(_ text: String) -> Bool {
-        removePunctuationSymbolsAndWhitespace(text).count >= 2
     }
 
     private static func isAllowedPair(alias: String, canonical: String, aliasTokenCount: Int, canonicalTokenCount: Int) -> Bool {
@@ -173,22 +162,7 @@ public enum CorrectionAliasExtractor {
         guard !aliasHasHangul, !canonicalHasHangul else { return false }
         guard aliasHasLatinOrDigit, canonicalHasLatinOrDigit else { return false }
         guard aliasTokenCount > 1 || canonicalTokenCount > 1 else { return false }
-        return comparableText(alias) == comparableText(canonical)
-    }
-
-    private static func trimPunctuationAndSymbols(_ text: String) -> String {
-        let trimSet = CharacterSet.whitespacesAndNewlines
-            .union(.punctuationCharacters)
-            .union(.symbols)
-        return text.trimmingCharacters(in: trimSet)
-    }
-
-    private static func removePunctuationSymbolsAndWhitespace(_ text: String) -> String {
-        String(text.unicodeScalars.filter { scalar in
-            !CharacterSet.punctuationCharacters.contains(scalar)
-                && !CharacterSet.symbols.contains(scalar)
-                && !CharacterSet.whitespacesAndNewlines.contains(scalar)
-        })
+        return DocumentTermExtractor.comparableText(alias) == DocumentTermExtractor.comparableText(canonical)
     }
 
     private static func containsHangul(_ text: String) -> Bool {

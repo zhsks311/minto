@@ -53,7 +53,6 @@ extension GlossaryStore: MeetingSummaryRetryCandidateIngesting {}
 /// 5. 저장 성공 후 GlossaryStore.ingestCandidates(from:) 호출 (id-diff 구독 우회)
 @MainActor
 public final class MeetingSummaryRetryUseCase {
-
     private let summaryService: any MeetingSummaryRetryGenerating
     private let store: any MeetingSummaryRetryStoring
     private let glossaryStore: any MeetingSummaryRetryCandidateIngesting
@@ -101,9 +100,13 @@ public final class MeetingSummaryRetryUseCase {
         }
 
         let normalizedGlossary = MeetingRecord.normalizedSummaryGlossary(glossary)
+        let document = record.document
+        let promptGlossary = await Task.detached(priority: .userInitiated) {
+            Self.promptGlossary(normalizedGlossary: normalizedGlossary, document: document)
+        }.value
         let context = SummaryGenerationContext(
             topic: record.topic,
-            glossary: normalizedGlossary ?? "",
+            glossary: promptGlossary,
             runningSummary: "",
             document: record.document ?? ""
         )
@@ -148,5 +151,17 @@ public final class MeetingSummaryRetryUseCase {
             let s = max(0, Int(seg.timestamp.timeIntervalSince(first.timestamp).rounded()))
             return String(format: "[%02d:%02d] %@", s / 60, s % 60, seg.text)
         }.joined(separator: "\n")
+    }
+
+    nonisolated private static func promptGlossary(normalizedGlossary: String?, document: String?) -> String {
+        let userGlossary = normalizedGlossary ?? ""
+        guard let document, !document.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return userGlossary
+        }
+        return DocumentTermExtractor.mergeGlossary(
+            userGlossary: userGlossary,
+            document: document,
+            limit: DocumentTermExtractor.defaultLimit
+        )
     }
 }

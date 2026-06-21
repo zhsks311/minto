@@ -123,6 +123,34 @@ T7 검증 중 발견한 **선재 phantom**(정회 −45dB → "감사합니다",
 - **판정: T1 종료**. 도메인 용어는 후처리 **LLM 교정 레이어**(`a29fa2f`, 회의 맥락)에 위임. 단 *인식 불가능하게 뭉개진 고유명사*는 prompt-priming만 살릴 수 있어 후처리가 완전 대체는 아님 — 전문용어 많은 회의에서 재검토 가치(그땐 비-turbo 모델로 차단 우회 시도).
 - production 무변경(promptText 배선 되돌림). 차단 재현 절차는 위 표로 보존.
 
+### T1 재개 (2026-06-22): 비-turbo large-v3에서 차단 우회 확인 → Phase 2 GREEN
+
+T1 종료 시 남긴 "비-turbo로 차단 우회 시도" 조건을 직접 검증(probe, 외교통일위 호르무즈/나무호 현안 32s 구간, WhisperKit 직접 API):
+
+| 모델 | promptTokens | 결과 |
+|------|------|------|
+| large-v3-turbo | 35토큰 | (기존) 전 창 빈 출력 100% CER |
+| **large-v3 (비-turbo)** | 0토큰(=프롬프트 없음) | **정상 전사**(빈 출력 아님). base 품질도 turbo보다 우수 |
+| **large-v3 (비-turbo)** | **35토큰** | **정상 전사 + 도메인 용어 교정**: "아랍에미레이트→아랍에미리트", "HMM 나무어→HMM 나무호" |
+
+- **확정**: `promptTokens` 빈 출력 차단은 **turbo 특정**이다. 비-turbo large-v3는 promptTokens를 정상 처리하고, **주입한 용어로 인식 결과를 STT 단계에서 교정**한다("나무어→나무호"는 후처리 LLM 교정이 살리기 어려운 인식 오류인데 prompt-priming이 인식 순간 바로잡음).
+- **함의**: STT 바이어싱(Phase 2)은 **비-turbo large-v3로 전환하면 실현 가능**. 단 (1) **지연 트레이드오프**(turbo 속도 이점 포기), (2) **할루시네이션 미측정**(설계 #1 위험 — 용어가 발화되지 않은 창에서 지어내는지 A/B 필요), (3) 라이브 롤링 prompt 오염 위험은 별도.
+- **다음**: 비-turbo 기준 STT 바이어싱 A/B(용어-수준 CER + 할루시네이션 + 지연)를 측정 게이트로 둠. 재현 probe: `Tests/MintoTests/ZZPhase2PromptProbe.swift`(throwaway, 미커밋).
+
+### T1 STT 바이어싱 A/B (2026-06-22, 외교통일위 현안 15창, 비-turbo): 측정 기반 기각
+
+probe(n=1, 8용어)의 성공을 `MeetingCorpusTests/sttBiasingCER`로 다중 창 검증. 측정 = 용어-수준 출현(promptHits−baseHits) + **할루시네이션**(창 reference에 없는 타깃 용어를 prompt 출력이 지어냄) + 지연.
+
+| 프롬프트 | promptHits−baseHits | 할루시(base→prompt) | global CER(base→prompt) | 지연(base→prompt) | per-window |
+|------|------|------|------|------|------|
+| 40용어/129토큰 | **−39** | — | 38%→**89%** | 4159→6861ms | 대부분 창 빈 출력(degenerate) |
+| 8용어/35토큰 | **−5** | 5→**16** | 38%→**60.6%(+22.6pp)** | 4043→10125ms(2.5배) | #003 빈 출력(30s loop) |
+
+- **확정(기각)**: promptTokens 바이어싱은 작은 프롬프트(8용어)에서도 **할루시네이션(16) > 복원**이라 순 CER이 +22.6pp 악화. 실제 복원 사례는 있으나(나무호 0→1, 위원회 4→8) **용어 미발화 창에서 그 용어를 지어내는 비용**(외교통일위원회 7회 삽입)이 이를 압도. 큰 프롬프트(40용어)는 대부분 창을 빈 출력으로 degenerate. 추가로 2.5배 지연 + turbo 포기.
+- **probe 함정**: n=1 단일 창("나무어→나무호") 성공은 일반화 불가 — 다중 창에서 할루시네이션 대가가 드러남. 설계의 "soft bias→안 들린 말 지어냄" 위험이 실측됨.
+- **판정: Phase 2 STT 바이어싱 종료(측정 기반)**. 도메인 용어는 LLM 교정 레이어 유지(항목 2: 교정-단계 주입은 marginal하나 무해). 향후 재개 시 logit-bias(WhisperKit roadmap 미구현)·Apple `SFSpeechLanguageModel`(macOS14+ko-KR 미검증) 같은 **다른 메커니즘**이 필요 — promptTokens 경로는 닫힘. 측정 하니스(`sttBiasingCER`)·근거는 보존.
+- 측정 테스트: `Tests/MintoTests/MeetingCorpusTests.swift` `sttBiasingCER`(RUN_STT_TESTS=1 RUN_STT_BIAS=1, MEETING_STT_PROMPT_TERMS로 프롬프트 캡, LLM 불필요). custom vocabulary 조사: `docs/reports/2026-06-22-research-custom-vocabulary-stt-biasing.html`.
+
 ### T4 결과: 채택 (suppressBlank=true), supressTokens·windowClipTime 기본 유지
 
 **SDK ground truth** (LogitsFilter.swift / TextDecoder.swift:1058):
