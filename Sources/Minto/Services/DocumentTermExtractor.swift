@@ -256,7 +256,7 @@ public enum DocumentTermExtractor {
         return head.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func trimPunctuationAndSymbols(_ text: String) -> String {
+    static func trimPunctuationAndSymbols(_ text: String) -> String {
         let trimSet = CharacterSet.whitespacesAndNewlines
             .union(.punctuationCharacters)
             .union(.symbols)
@@ -271,7 +271,7 @@ public enum DocumentTermExtractor {
             )
     }
 
-    private static func isLongEnough(_ text: String) -> Bool {
+    static func isLongEnough(_ text: String) -> Bool {
         removePunctuationSymbolsAndWhitespace(text).count >= 2
     }
 
