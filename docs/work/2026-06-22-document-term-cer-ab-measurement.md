@@ -28,6 +28,19 @@
 
 **결론**: 교정 단계에서 문서-용어 주입 이득은 이 corpus에서 **한계적**이다 — base 교정이 topic 맥락으로 대부분 처리하고, 주입은 가끔 놓친 고유명사를 추가 복원하는 정도. Phase 1a의 교정-단계 가치 주장은 이 결과로 냉정하게 보정된다. (참고: "HMM"은 자막이 "HM M"로 적어 reference에 verbatim 부재 → 측정 대상에서 제외.)
 
+### 측정 심화 (재정경제기획위원회_20260429, 공청회 구간)
+
+실행: `MEETING_WINDOW_OFFSET=2 MEETING_CORR_WINDOWS=30`(전략수출금융지원법안 공청회 — 진술인 소개+토론). fixture `sample/meeting/documents/재정경제기획위원회_20260429_agenda.txt`.
+
+| 지표 | 값 |
+|---|---|
+| onHits − offHits | **+2** (복원: 전략수출금융지원법안 off=0→on=1) |
+| global raw/OFF/ON CER | 33.1% / 32.1% / 31.9% |
+| global ON−OFF | **−0.2pp** (미세 개선) |
+| touch rate | OFF 5.0% / ON 4.9%, 할루시네이션·degenerate 없음 |
+
+**두 회의 종합 결론**: 교정-단계 문서-용어 주입은 **marginal하게 이롭고 무해**하다. base 교정이 놓친 도메인 고유명사(외교통일위 "나무호", 재정위 "전략수출금융지원법안")를 가끔 복원하며, global CER에 측정 가능한 비용이 없다(외교통일위 +0.6pp, 재정위 −0.2pp = 노이즈 범위). **STT 바이어싱(기각, 할루시네이션으로 CER +22.6pp)과 선명히 대비** — 같은 용어 주입이라도 교정 단계(LLM이 문맥 이해해 선택 적용)는 안전, 인식 단계(promptTokens 강제 prime)는 안 들린 곳에 지어내 위험. → **Phase 1a(교정 주입) 유지, Phase 2(STT 바이어싱) 기각**(상세 `docs/whisperkit-optimization-plan.md`).
+
 ## 테스트
 
 `Tests/MintoTests/MeetingCorpusTests.swift`의 `documentTermInjectionCER()`.
