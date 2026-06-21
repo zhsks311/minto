@@ -1,6 +1,8 @@
 import Testing
 @testable import MintoCore
+import Dispatch
 import Foundation
+@preconcurrency import WhisperKit
 
 /// 국회 영상회의록(실제 회의 음성 + 공식 SMI 자막)으로 전사 CER을 측정한다.
 ///
@@ -773,6 +775,307 @@ struct MeetingCorpusTests {
           global 델타는 비-verbatim 자막에서 용어 이득에 둔감하므로, 용어-수준 onHits−offHits를 주 신호로 본다.
           폴백 창은 corrected=raw라 델타에 0 기여 — 교정 효과가 아니라 측정 누락이다.
           문서 fixture는 agenda best-case 측정(upper-ish bound)이며 임의 문서 대표성이 아니다.
+
+        """)
+    }
+
+    /// WhisperKit 비-turbo large-v3에서 promptTokens 도메인 용어 주입의 STT 단계 순효과를 측정한다.
+    ///
+    /// 실행:
+    /// RUN_STT_TESTS=1 RUN_STT_BIAS=1 MEETING_WAV=외교통일위원회_20260520_full.wav MEETING_SMI=외교통일위원회_20260520_smi.json MEETING_DOCUMENT=sample/meeting/documents/외교통일위원회_20260520_agenda.txt swift test --filter MeetingCorpusTests/sttBiasingCER
+    @Test("WhisperKit STT promptTokens 용어 바이어싱 A/B (OFF vs ON)")
+    func sttBiasingCER() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_STT_BIAS"] == "1" else {
+            return
+        }
+
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: Self.audioURL.path),
+              fileManager.fileExists(atPath: Self.smiURL.path) else {
+            print("[STTBias] 자료 없음 — skip (\(Self.audioURL.lastPathComponent), \(Self.smiURL.lastPathComponent))")
+            return
+        }
+        guard let documentPath = ProcessInfo.processInfo.environment["MEETING_DOCUMENT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !documentPath.isEmpty else {
+            Issue.record("MEETING_DOCUMENT 미지정 — 문서 fixture 경로 필요")
+            return
+        }
+
+        let documentURL = documentPath.hasPrefix("/")
+            ? URL(fileURLWithPath: documentPath)
+            : URL(fileURLWithPath: fileManager.currentDirectoryPath).appendingPathComponent(documentPath)
+        guard fileManager.fileExists(atPath: documentURL.path) else {
+            Issue.record("MEETING_DOCUMENT 없음: \(documentPath)")
+            return
+        }
+        let document = try String(contentsOf: documentURL, encoding: .utf8)
+
+        let defaultModel = "openai_whisper-large-v3"
+        let defaultWindowOffset = 8
+        let defaultWindowCount = 20
+        let documentTermLimit = 40
+        let minimumPresentTermHits = 1
+        let nanosecondsPerMillisecond = 1_000_000.0
+        let previewCharacterLimit = 120
+        let model = ProcessInfo.processInfo.environment["PHASE2_MODEL"] ?? defaultModel
+        let windowOffset = ProcessInfo.processInfo.environment["MEETING_WINDOW_OFFSET"].flatMap(Int.init) ?? defaultWindowOffset
+        let windowCount = ProcessInfo.processInfo.environment["MEETING_STT_WINDOWS"].flatMap(Int.init) ?? defaultWindowCount
+        // promptTokens 바이어싱은 프롬프트 크기에 민감 — 큰 프롬프트(40용어/129토큰)는 비-turbo도
+        // 대부분 창에서 빈 출력으로 degenerate(측정 확인, prompt CER 89%). 측정은 전체 targetTerms로
+        // 하되, 실제 주입 프롬프트는 상위 N개(랭킹=고신뢰 ASCII 우선)로 캡한다.
+        let defaultPromptTermCount = 8
+        let promptTermCount = ProcessInfo.processInfo.environment["MEETING_STT_PROMPT_TERMS"].flatMap(Int.init) ?? defaultPromptTermCount
+        let targetTerms = DocumentTermExtractor.extract(
+            from: document,
+            existingTerms: [],
+            limit: documentTermLimit
+        )
+        let promptText = targetTerms.prefix(max(0, promptTermCount)).joined(separator: " ")
+
+        func normalizedForTermMatch(_ text: String) -> String {
+            text
+                .filter { !$0.isWhitespace }
+                .lowercased()
+        }
+
+        func nonOverlappingOccurrenceCount(of term: String, in text: String) -> Int {
+            let normalizedTerm = normalizedForTermMatch(term)
+            guard !normalizedTerm.isEmpty else {
+                return 0
+            }
+
+            let normalizedText = normalizedForTermMatch(text)
+            var count = 0
+            var searchStart = normalizedText.startIndex
+            while let range = normalizedText.range(
+                of: normalizedTerm,
+                range: searchStart..<normalizedText.endIndex
+            ) {
+                count += 1
+                searchStart = range.upperBound
+            }
+            return count
+        }
+
+        func cerRate(_ stats: (distance: Int, refLen: Int)) -> Double {
+            stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0
+        }
+
+        func stripWhisperSpecialTokens(_ text: String) -> String {
+            text
+                .replacingOccurrences(
+                    of: #"<\|[^|]*\|>"#,
+                    with: "",
+                    options: .regularExpression
+                )
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        print("""
+        [STTBias] 문서 용어 수: \(targetTerms.count)
+        [STTBias] 문서 용어: \(promptText)
+        """)
+
+        let pipe = try await WhisperKit(WhisperKitConfig(model: model))
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let windows = Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds)
+        let targetWindows = Array(windows.dropFirst(max(0, windowOffset)).prefix(max(0, windowCount)))
+        guard !targetWindows.isEmpty else {
+            Issue.record("병합된 창이 없습니다")
+            return
+        }
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+
+        func transcribe(audioArray: [Float], promptTokens: [Int]?) async throws -> (text: String, elapsedMilliseconds: Double) {
+            let options: DecodingOptions
+            if let promptTokens {
+                options = DecodingOptions(
+                    language: "ko",
+                    temperature: 0,
+                    usePrefillPrompt: true,
+                    promptTokens: promptTokens
+                )
+            } else {
+                options = DecodingOptions(
+                    language: "ko",
+                    temperature: 0,
+                    usePrefillPrompt: true
+                )
+            }
+
+            let started = DispatchTime.now().uptimeNanoseconds
+            let results = try await pipe.transcribe(audioArray: audioArray, decodeOptions: options)
+            let elapsedMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - started) / nanosecondsPerMillisecond
+            let text = results
+                .flatMap { result in result.segments.map { $0.text } }
+                .map(stripWhisperSpecialTokens)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            return (text, elapsedMilliseconds)
+        }
+
+        print("\n=== WhisperKit STT promptTokens 용어 바이어싱 A/B [\(model)] (window=\(Self.windowSeconds)s, window offset=\(windowOffset), \(targetWindows.count)/\(windows.count)창) ===")
+
+        var allRefTexts: [String] = []
+        var allBaseTexts: [String] = []
+        var allPromptTexts: [String] = []
+        var baseElapsedMilliseconds = 0.0
+        var promptElapsedMilliseconds = 0.0
+        var measuredWindowCount = 0
+        var promptTokens: [Int]?
+        var baseHallucinationHitsByTerm: [String: Int] = [:]
+        var promptHallucinationHitsByTerm: [String: Int] = [:]
+
+        for (index, window) in targetWindows.enumerated() {
+            let startSample = max(0, Int(window.start * Double(Self.sampleRate)))
+            let endSample = min(samples.count, Int(window.end * Double(Self.sampleRate)))
+            guard endSample > startSample else {
+                continue
+            }
+
+            let audioSlice = Array(samples[startSample..<endSample])
+            let base = try await transcribe(audioArray: audioSlice, promptTokens: nil)
+
+            if promptTokens == nil {
+                let tokenizer = pipe.tokenizer
+                let specialTokenBegin = tokenizer?.specialTokens.specialTokenBegin ?? Int.max
+                promptTokens = (tokenizer?.encode(text: " " + promptText) ?? [])
+                    .filter { $0 < specialTokenBegin }
+                if promptTokens?.isEmpty != false {
+                    print("[STTBias] promptTokens 비어 있음 — PROMPT 결과는 BASE와 동일할 수 있음")
+                } else {
+                    print("[STTBias] promptTokens count=\(promptTokens?.count ?? 0)")
+                }
+            }
+
+            let prompted = try await transcribe(audioArray: audioSlice, promptTokens: promptTokens)
+            allRefTexts.append(window.text)
+            allBaseTexts.append(base.text)
+            allPromptTexts.append(prompted.text)
+            baseElapsedMilliseconds += base.elapsedMilliseconds
+            promptElapsedMilliseconds += prompted.elapsedMilliseconds
+            measuredWindowCount += 1
+
+            for term in targetTerms {
+                guard nonOverlappingOccurrenceCount(of: term, in: window.text) == 0 else {
+                    continue
+                }
+                let baseHallucinationHits = nonOverlappingOccurrenceCount(of: term, in: base.text)
+                let promptHallucinationHits = nonOverlappingOccurrenceCount(of: term, in: prompted.text)
+                if baseHallucinationHits > 0 {
+                    baseHallucinationHitsByTerm[term, default: 0] += baseHallucinationHits
+                }
+                if promptHallucinationHits > 0 {
+                    promptHallucinationHitsByTerm[term, default: 0] += promptHallucinationHits
+                }
+            }
+
+            print(String(
+                format: "[STTBias] #%03d %6.1f–%6.1fs base=%.0fms prompt=%.0fms ref=%d base=%d prompt=%d",
+                index,
+                window.start,
+                window.end,
+                base.elapsedMilliseconds,
+                prompted.elapsedMilliseconds,
+                window.text.count,
+                base.text.count,
+                prompted.text.count
+            ))
+            if ProcessInfo.processInfo.environment["MEETING_DEBUG"] == "1" {
+                print("    REF   : \(window.text.prefix(previewCharacterLimit))")
+                print("    BASE  : \(base.text.prefix(previewCharacterLimit))")
+                print("    PROMPT: \(prompted.text.prefix(previewCharacterLimit))")
+            }
+        }
+
+        guard measuredWindowCount > 0 else {
+            Issue.record("측정된 창이 없습니다")
+            return
+        }
+
+        let allRefText = allRefTexts.joined(separator: " ")
+        let allBaseText = allBaseTexts.joined(separator: " ")
+        let allPromptText = allPromptTexts.joined(separator: " ")
+        let baseCER = cerRate(Self.cerStats(reference: allRefText, hypothesis: allBaseText))
+        let promptCER = cerRate(Self.cerStats(reference: allRefText, hypothesis: allPromptText))
+        let cerDeltaPP = (promptCER - baseCER) * 100
+        let refHits = Dictionary(uniqueKeysWithValues: targetTerms.map {
+            ($0, nonOverlappingOccurrenceCount(of: $0, in: allRefText))
+        })
+        let baseHits = Dictionary(uniqueKeysWithValues: targetTerms.map {
+            ($0, nonOverlappingOccurrenceCount(of: $0, in: allBaseText))
+        })
+        let promptHits = Dictionary(uniqueKeysWithValues: targetTerms.map {
+            ($0, nonOverlappingOccurrenceCount(of: $0, in: allPromptText))
+        })
+        let presentTargetTerms = targetTerms.filter {
+            (refHits[$0] ?? 0) >= minimumPresentTermHits
+        }
+        let refHitTotal = presentTargetTerms.reduce(0) { total, term in
+            total + (refHits[term] ?? 0)
+        }
+        let baseHitTotal = presentTargetTerms.reduce(0) { total, term in
+            total + (baseHits[term] ?? 0)
+        }
+        let promptHitTotal = presentTargetTerms.reduce(0) { total, term in
+            total + (promptHits[term] ?? 0)
+        }
+        let termHitDelta = promptHitTotal - baseHitTotal
+        let restoredTermLines = presentTargetTerms
+            .filter { (promptHits[$0] ?? 0) > (baseHits[$0] ?? 0) }
+            .map {
+                "[복원] \($0) ref=\(refHits[$0] ?? 0) base=\(baseHits[$0] ?? 0) prompt=\(promptHits[$0] ?? 0)"
+            }
+        let restoredTermBlock = restoredTermLines.isEmpty
+            ? "복원 용어          : 없음"
+            : restoredTermLines.joined(separator: "\n")
+        let hallucinatedTerms = targetTerms.filter {
+            (baseHallucinationHitsByTerm[$0] ?? 0) > 0 || (promptHallucinationHitsByTerm[$0] ?? 0) > 0
+        }
+        let hallucinationLines = hallucinatedTerms.map {
+            "[할루시] \($0) base=\(baseHallucinationHitsByTerm[$0] ?? 0) prompt=\(promptHallucinationHitsByTerm[$0] ?? 0)"
+        }
+        let hallucinationBlock = hallucinationLines.isEmpty
+            ? "할루시 용어        : 없음"
+            : hallucinationLines.joined(separator: "\n")
+        let baseHallucinationTotal = baseHallucinationHitsByTerm.values.reduce(0, +)
+        let promptHallucinationTotal = promptHallucinationHitsByTerm.values.reduce(0, +)
+        let termPresenceWarning = presentTargetTerms.isEmpty
+            ? "경고              : 이 구간에 타깃 용어 미등장 — 측정 무의미"
+            : "경고              : 없음"
+        let baseAverageMilliseconds = baseElapsedMilliseconds / Double(measuredWindowCount)
+        let promptAverageMilliseconds = promptElapsedMilliseconds / Double(measuredWindowCount)
+
+        print("""
+        ────────────────────────────────────────
+        창 수              : \(measuredWindowCount)
+        모델               : \(model)
+        promptTokens       : \(promptTokens?.count ?? 0)
+        ── 용어-수준 정확 철자 출현 수(주 신호) ──
+        타깃 용어 수        : \(targetTerms.count)
+        reference 등장 용어 : \(presentTargetTerms.count)/\(targetTerms.count)
+        Σ refHits          : \(refHitTotal)
+        Σ baseHits         : \(baseHitTotal)
+        Σ promptHits       : \(promptHitTotal)
+        promptHits−baseHits: \(termHitDelta) (양수=바이어싱이 용어 더 복원)
+        \(termPresenceWarning)
+        \(restoredTermBlock)
+        ── 할루시네이션(창 reference에 없는 타깃 용어 출력) ──
+        Σ base hallucination  : \(baseHallucinationTotal)
+        Σ prompt hallucination: \(promptHallucinationTotal)
+        \(hallucinationBlock)
+        ── 지연 ──
+        base total/avg ms  : \(String(format: "%.0f", baseElapsedMilliseconds)) / \(String(format: "%.0f", baseAverageMilliseconds))
+        prompt total/avg ms: \(String(format: "%.0f", promptElapsedMilliseconds)) / \(String(format: "%.0f", promptAverageMilliseconds))
+        ── global CER(참고) ──
+        global base CER    : \(String(format: "%.1f%%", baseCER * 100))
+        global prompt CER  : \(String(format: "%.1f%%", promptCER * 100))
+        델타(prompt-base)   : \(String(format: "%+.1fpp", cerDeltaPP)) (음수=CER 개선)
+        ========================================
+        해석: promptHits−baseHits를 주 신호로 본다. 할루시네이션 증가가 없는지와 지연 증가 폭을 함께 본다.
+          global CER은 비-verbatim 자막과 창 경계 드리프트에 둔감한 참고 지표다.
 
         """)
     }

@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STT 도메인 용어 바이어싱 — 선택지 조사 / minto2</title>
+  <style>
+    /* ── Google Fonts ── */
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500&family=Inter:wght@400;500;600&display=swap');
+
+    /* ── Token System ── */
+    :root {
+      --ground:   #0E1219;
+      --surface:  #141923;
+      --surface2: #1C2433;
+      --border:   #2A3447;
+      --text:     #E8EDF2;
+      --text-muted: #7A8FA6;
+      --text-dim:   #4A5E72;
+      --accent:   #3ECFB2;
+      --accent-dim: rgba(62,207,178,0.12);
+      --accent-border: rgba(62,207,178,0.3);
+      --warn:     #F5A623;
+      --warn-dim: rgba(245,166,35,0.12);
+      --warn-border: rgba(245,166,35,0.3);
+      --danger:   #E05C5C;
+      --danger-dim: rgba(224,92,92,0.10);
+      --ok:       #4AC17A;
+      --ok-dim:   rgba(74,193,122,0.10);
+
+      --font-mono: 'DM Mono', 'SF Mono', 'Fira Code', monospace;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
+
+      --radius: 6px;
+      --radius-sm: 3px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Base ── */
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--ground);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Layout Shell ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Side Rail ── */
+    .rail {
+      grid-row: 1 / 3;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      padding: 2rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      background: var(--surface);
+    }
+
+    .rail-brand {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+    }
+    .rail-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      margin-bottom: 2rem;
+      line-height: 1.4;
+    }
+
+    .rail-section {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.6rem;
+      margin-top: 1.2rem;
+    }
+    .rail-section:first-of-type { margin-top: 0; }
+
+    .rail nav a {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0.3rem 0.5rem;
+      border-radius: var(--radius-sm);
+      border-left: 2px solid transparent;
+      line-height: 1.4;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: 1px;
+    }
+    .rail nav a:hover {
+      color: var(--text);
+      border-left-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .rail-verdict {
+      margin-top: auto;
+      padding: 0.75rem;
+      border: 1px solid var(--accent-border);
+      border-radius: var(--radius);
+      background: var(--accent-dim);
+    }
+    .rail-verdict-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+    .rail-verdict-text {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* ── Main ── */
+    .main { padding: 0 0 5rem; }
+
+    /* ── Hero / Canvas Zone ── */
+    .hero {
+      position: relative;
+      height: 220px;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+    }
+    #token-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 1.75rem 2.5rem;
+      background: linear-gradient(to top, rgba(14,18,25,0.92) 40%, transparent);
+    }
+    .hero-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    .hero-h1 {
+      font-family: var(--font-body);
+      font-size: 1.65rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      color: var(--text);
+    }
+    .hero-meta {
+      margin-top: 0.6rem;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Content Sections ── */
+    .content {
+      padding: 0 2.5rem;
+    }
+
+    .section {
+      padding: 2.25rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .section:last-child { border-bottom: none; }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .section-index {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-family: var(--font-body);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .prose p { margin-bottom: 0.8rem; }
+    .prose p:last-child { margin-bottom: 0; }
+    .prose strong { color: var(--text); font-weight: 500; }
+    .prose a { color: var(--accent); text-decoration: none; font-family: var(--font-mono); font-size: 0.85em; }
+    .prose a:hover { text-decoration: underline; }
+
+    /* ── Subsections ── */
+    .subsection { margin-top: 1.5rem; }
+    .subsection-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-radius: var(--radius);
+      padding: 0.9rem 1rem;
+      margin: 1rem 0;
+      border-left: 3px solid;
+      font-size: 13px;
+    }
+    .callout-warn {
+      background: var(--warn-dim);
+      border-color: var(--warn);
+    }
+    .callout-ok {
+      background: var(--ok-dim);
+      border-color: var(--ok);
+    }
+    .callout-danger {
+      background: var(--danger-dim);
+      border-color: var(--danger);
+    }
+    .callout-info {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+    }
+    .callout-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+    }
+    .callout-warn .callout-label { color: var(--warn); }
+    .callout-ok .callout-label { color: var(--ok); }
+    .callout-danger .callout-label { color: var(--danger); }
+    .callout-info .callout-label { color: var(--accent); }
+
+    /* ── Code ── */
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      background: var(--surface2);
+      color: var(--accent);
+      padding: 0.1em 0.4em;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .code-block {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+      margin: 0.75rem 0;
+      overflow-x: auto;
+    }
+    .code-block pre {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.65;
+      white-space: pre;
+    }
+    .code-block pre .kw { color: #7FBFFF; }
+    .code-block pre .str { color: #B5E8A0; }
+    .code-block pre .cm { color: var(--text-dim); font-style: italic; }
+    .code-block pre .acc { color: var(--accent); }
+    .code-block pre .warn { color: var(--warn); }
+
+    /* ── The Big Comparison Table (verdict zone) ── */
+    .verdict-zone {
+      margin: 0 -2.5rem;
+      padding: 2.5rem 2.5rem;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .verdict-zone-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 1.25rem;
+    }
+    .verdict-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-bottom: 1.5rem;
+    }
+
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    .compare-table th {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .compare-table td {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid rgba(42,52,71,0.6);
+      vertical-align: top;
+      line-height: 1.5;
+    }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-table .row-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .compare-table .col-mechanism { width: 160px; }
+    .compare-table tr:hover td { background: rgba(62,207,178,0.04); }
+
+    /* Status indicators */
+    .chip {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.15em 0.5em;
+      border-radius: 2px;
+    }
+    .chip-ok   { background: var(--ok-dim);     color: var(--ok);     border: 1px solid rgba(74,193,122,0.3); }
+    .chip-warn { background: var(--warn-dim);   color: var(--warn);   border: 1px solid rgba(245,166,35,0.3); }
+    .chip-no   { background: var(--danger-dim); color: var(--danger); border: 1px solid rgba(224,92,92,0.3); }
+    .chip-partial { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* ── Score bar ── */
+    .score-row { display: flex; align-items: center; gap: 0.6rem; }
+    .score-bar-wrap { flex: 1; height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+    .score-bar { height: 100%; border-radius: 2px; }
+    .score-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); min-width: 2ch; text-align: right; }
+
+    /* ── Mechanism diagram ── */
+    .mechanism {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.2rem;
+      margin: 0.75rem 0;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.8;
+    }
+    .mechanism .step { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.25rem; }
+    .mechanism .step-num { color: var(--text-dim); flex-shrink: 0; }
+    .mechanism .step-text { color: var(--text); }
+    .mechanism .step-text em { color: var(--accent); font-style: normal; }
+    .mechanism .step-text s { color: var(--danger); text-decoration: line-through; }
+    .mechanism .arrow { color: var(--text-dim); padding-left: 1.5rem; margin-bottom: 0.1rem; }
+
+    /* ── Facts vs inferences ── */
+    .source-tag {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      padding: 0.1em 0.4em;
+      border-radius: 2px;
+      vertical-align: middle;
+      display: inline-block;
+      margin-left: 0.3em;
+    }
+    .tag-confirmed {
+      background: var(--ok-dim);
+      color: var(--ok);
+      border: 1px solid rgba(74,193,122,0.3);
+    }
+    .tag-inferred {
+      background: var(--warn-dim);
+      color: var(--warn);
+      border: 1px solid rgba(245,166,35,0.3);
+    }
+    .tag-unconfirmed {
+      background: var(--surface2);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Sources footer ── */
+    .sources {
+      padding: 1.5rem 0 0;
+    }
+    .sources-title {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+    .source-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .source-item {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .source-item a { color: var(--text-muted); text-decoration: none; }
+    .source-item a:hover { color: var(--accent); }
+    .source-num { color: var(--text-dim); margin-right: 0.5rem; }
+
+    /* ── Recommendation block ── */
+    .rec-block {
+      background: var(--surface2);
+      border: 1px solid var(--accent-border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.25rem;
+      margin-top: 1rem;
+    }
+    .rec-option {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.5rem 1rem;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .rec-option:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .rec-rank {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent);
+      font-weight: 500;
+      grid-column: 1;
+      grid-row: 1;
+      padding-top: 0.1em;
+    }
+    .rec-name {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 500;
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .rec-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      grid-column: 2;
+      grid-row: 2;
+      line-height: 1.55;
+    }
+    .rec-tags {
+      grid-column: 2;
+      grid-row: 3;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.3rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      .rail {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding: 1rem 1.25rem;
+      }
+      .rail nav { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+      .rail nav a { border-left: none; border-bottom: 2px solid transparent; padding: 0.25rem 0.5rem; }
+      .rail nav a:hover { border-left-color: transparent; border-bottom-color: var(--accent); }
+      .rail-verdict { display: none; }
+      .hero { height: 180px; }
+      .hero-h1 { font-size: 1.25rem; }
+      .content, .verdict-zone { padding: 0 1.25rem; }
+      .verdict-zone { margin: 0 -1.25rem; }
+    }
+
+    /* ── Motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+
+    /* ── Focus ── */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── Side Rail ── -->
+  <aside class="rail">
+    <div class="rail-brand">minto2 / research</div>
+    <div class="rail-title">STT 도메인 용어<br>바이어싱 조사</div>
+
+    <div class="rail-section">핵심 질문</div>
+    <nav>
+      <a href="#sec-terminology">용어 구분</a>
+      <a href="#sec-whisperkit">WhisperKit API</a>
+      <a href="#sec-turbo-issue">turbo 이슈</a>
+      <a href="#sec-apple-speech">Apple Speech</a>
+      <a href="#sec-speech-analyzer">SpeechAnalyzer</a>
+    </nav>
+
+    <div class="rail-section">결론</div>
+    <nav>
+      <a href="#sec-verdict">비교표</a>
+      <a href="#sec-recommendation">권고</a>
+      <a href="#sec-roadmap">구현 경로</a>
+      <a href="#sec-sources">출처</a>
+    </nav>
+
+    <div class="rail-verdict">
+      <div class="rail-verdict-label">현재 최선</div>
+      <div class="rail-verdict-text">promptTokens<br>+ 비-turbo large-v3<br><br>단기 실용 경로.<br>교정 레이어 병행.</div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main">
+
+    <!-- Hero with canvas animation -->
+    <div class="hero">
+      <canvas id="token-canvas"></canvas>
+      <div class="hero-overlay">
+        <div class="hero-eyebrow">Research · 2026-06-22 · minto2</div>
+        <h1 class="hero-h1">도메인 용어 전사 정확도:<br>custom vocabulary / biasing 선택지</h1>
+        <div class="hero-meta">WhisperKit · Apple Speech · SFSpeechRecognizer · SpeechAnalyzer</div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- 1. 용어 구분 -->
+      <section class="section" id="sec-terminology">
+        <div class="section-head">
+          <span class="section-index">01</span>
+          <h2 class="section-title">keyword spotting vs contextual biasing — 용어 구분</h2>
+        </div>
+        <div class="prose">
+          <p>이 둘은 서로 다른 파이프라인 단계를 가리킨다. 혼용하면 솔루션을 잘못 고르게 된다.</p>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Keyword Spotting (=wake-word detection)</div>
+          <div class="prose">
+            <p><strong>목적:</strong> "헤이 시리", "오케이 구글"처럼 <em>특정 단어가 발화됐는지 탐지</em>하는 별도 task. 전사(transcription)와 무관한 파이프라인이다. 경량 binary classifier로 구현되며, 결과는 "발화됨 / 발화 안 됨"이다. Picovoice Porcupine, Apple SpeechDetector 등이 이 역할을 한다.</p>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">Contextual Biasing (= vocabulary biasing / custom vocabulary)</div>
+          <div class="prose">
+            <p><strong>목적:</strong> 전사 모델이 <em>특정 단어를 더 잘 인식하도록</em> 디코딩 중 확률 분포를 조정하는 기법. "나무호", "쿠팡", "FluidAudio" 같은 도메인 고유명사의 전사 오류를 줄인다. minto2가 필요한 건 이것이다.</p>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-label">결론</div>
+          "keyword spotting" 기술을 용어 전사 정확도 개선에 쓸 수는 없다. 우리 목표는 <strong>contextual biasing</strong>이다. 이하 조사는 이 관점으로 진행한다.
+        </div>
+      </section>
+
+      <!-- 2. WhisperKit API -->
+      <section class="section" id="sec-whisperkit">
+        <div class="section-head">
+          <span class="section-index">02</span>
+          <h2 class="section-title">WhisperKit의 vocabulary / biasing API</h2>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">DecodingOptions — biasing 관련 필드 전수</div>
+          <div class="code-block">
+            <pre><span class="cm">// Sources/WhisperKit/Core/Configurations.swift (argmaxinc/argmax-oss-swift)</span>
+<span class="kw">public struct</span> <span class="acc">DecodingOptions</span>: Codable, Sendable {
+
+  <span class="cm">// ── 바이어싱 관련 ──────────────────────────────────────</span>
+  <span class="kw">var</span> promptTokens:  [Int]?   <span class="cm">// 이전 컨텍스트 프롬프트. prefill 토큰 앞에 삽입</span>
+  <span class="kw">var</span> prefixTokens:  [Int]?   <span class="cm">// 현재 발화 초기 프리픽스. prefill 토큰 뒤에 추가</span>
+  <span class="kw">var</span> suppressTokens: [Int]   <span class="cm">// 디코딩 중 억제할 토큰 ID 목록</span>
+  <span class="kw">var</span> suppressBlank:  Bool    <span class="cm">// 공백 토큰 억제 여부</span>
+
+  <span class="cm">// ── 품질 게이팅 (간접 영향) ────────────────────────────</span>
+  <span class="kw">var</span> logProbThreshold:          Float?  <span class="cm">// 평균 log-prob 하한 (기본 -1.0)</span>
+  <span class="kw">var</span> temperatureFallbackCount:  Int     <span class="cm">// fallback 온도 증가 횟수 (기본 5)</span>
+
+  <span class="cm">// ── 미지원 (로드맵에만 있음) ────────────────────────────</span>
+  <span class="cm">// logit bias / word boosting → Roadmap: "multi-token forward pass" 필요</span>
+}</pre>
+          </div>
+          <div class="callout callout-warn">
+            <div class="callout-label">공백 확인</div>
+            <strong>logit bias(단어별 확률 직접 조정)는 공개 API에 없다.</strong> WhisperKit Roadmap에 "multi-token TextDecoder forward pass"가 advanced feature로 기재돼 있으며 아직 구현 전이다.
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">promptTokens vs prefixTokens — 차이와 용도</div>
+
+          <div class="mechanism">
+            <div class="step"><span class="step-num">prompt</span><span class="step-text">이전 30초 컨텍스트 역할. Whisper가 <em>스타일·형식·용어</em>를 유지하도록 컨디셔닝. 토큰 시퀀스 앞에 삽입됨. 용어 바이어싱에 권장.</span></div>
+            <div class="arrow">└ 제약: 마지막 224 토큰만 유효. KV 캐시 무효화 → 첫 토큰 지연 소폭 증가.</div>
+            <div class="step" style="margin-top:0.75rem;"><span class="step-num">prefix</span><span class="step-text">현재 발화의 <em>부분 전사를 이어받을 때</em> 사용. 실시간 스트리밍 오버랩 구현 등에 활용. 도메인 용어 강제에는 부적합.</span></div>
+            <div class="arrow">└ 용어 바이어싱 목적으로는 설계된 필드가 아님.</div>
+          </div>
+
+          <div class="callout callout-ok">
+            <div class="callout-label">확인됨</div>
+            용어 바이어싱에는 <code>promptTokens</code>가 적합한 필드다. 사용 방법: 용어를 tokenizer로 인코딩 후 특수 토큰 필터링, <code>DecodingOptions(promptTokens:)</code>에 전달. 실측에서 "나무어→나무호" 교정 확인(비-turbo large-v3).
+          </div>
+
+          <div class="code-block">
+            <pre><span class="cm">// 용어 바이어싱 패턴 (검증됨 — 비-turbo large-v3)</span>
+<span class="kw">let</span> terms = [<span class="str">"FluidAudio"</span>, <span class="str">"나무호"</span>, <span class="str">"쿠팡"</span>]
+<span class="kw">let</span> promptText = terms.joined(separator: <span class="str">", "</span>)
+<span class="kw">let</span> allTokens = tokenizer.encode(text: promptText)
+<span class="kw">let</span> promptTokens = allTokens.filter { $0 &lt; tokenizer.specialTokens.specialTokenBegin }
+
+<span class="kw">var</span> options = DecodingOptions()
+options.promptTokens = promptTokens
+<span class="cm">// options.usePrefillPrompt = true  ← 기본값 유지</span></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. turbo 이슈 -->
+      <section class="section" id="sec-turbo-issue">
+        <div class="section-head">
+          <span class="section-index">03</span>
+          <h2 class="section-title">large-v3-turbo에서 promptTokens 빈 출력 이슈</h2>
+        </div>
+
+        <div class="prose">
+          <p>우리가 실측 확인한 현상 — turbo에서 promptTokens 사용 시 전사 결과가 empty — 이 GitHub에서도 동일하게 보고돼 있다. <span class="source-tag tag-confirmed">실측 확인</span></p>
+        </div>
+
+        <div class="mechanism">
+          <div class="step"><span class="step-num">Issue #372</span><span class="step-text">argmaxinc/WhisperKit(→ argmaxinc/argmax-oss-swift) 에 대한 미해결 버그 보고. large-v3 계열 모델에서 promptTokens 사용 시 빈 출력 반환. <em>PR #438</em>이 연결돼 있으나 수정 내용 미확인.</span></div>
+          <div class="arrow">└ 상태: Open (2025년 10월 보고, 2026년 6월 기준 미해결 확인)</div>
+        </div>
+
+        <div class="callout callout-danger">
+          <div class="callout-label">핵심 제약</div>
+          <strong>turbo에서 promptTokens가 깨지는 근본 원인은 공식 문서에서 밝혀지지 않았다.</strong> 가설: turbo는 decoder 레이어가 줄어 prompt conditioning pathway가 다르게 작동할 수 있음. <span class="source-tag tag-inferred">추정</span>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">prefixTokens는 turbo에서 동작하는가?</div>
+          <div class="prose">
+            <p>공식 문서 및 Issue #372 어디에도 <code>prefixTokens</code>가 turbo에서 정상 동작한다는 증거가 없다. <span class="source-tag tag-unconfirmed">미확인</span></p>
+            <p>또한 <code>prefixTokens</code>는 용어 바이어싱이 아닌 스트리밍 연속성 목적이므로, 기능적으로도 우리 용도와 맞지 않는다.</p>
+          </div>
+          <div class="callout callout-warn">
+            <div class="callout-label">현실적 선택</div>
+            turbo + 용어 바이어싱 조합은 현재 지원되지 않는다. <strong>비-turbo large-v3 + promptTokens</strong>가 현재 유일하게 동작이 확인된 WhisperKit 내 경로다. 속도 패널티가 존재하므로 교정 레이어 병행을 고려해야 한다.
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Apple Speech -->
+      <section class="section" id="sec-apple-speech">
+        <div class="section-head">
+          <span class="section-index">04</span>
+          <h2 class="section-title">Apple Speech 프레임워크의 custom vocabulary</h2>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">SFSpeechRecognizer + contextualStrings (구형, iOS 10+ / macOS 10.15+)</div>
+          <div class="prose">
+            <p><code>SFSpeechRecognitionRequest.contextualStrings</code>는 시스템 어휘에 없는 단어·구문 목록을 전달해 인식 확률을 높이는 lightweight biasing API다. <span class="source-tag tag-confirmed">공식 문서</span></p>
+          </div>
+          <div class="mechanism">
+            <div class="step"><span class="step-num">파라미터</span><span class="step-text"><code>[String]</code>. 각 항목은 짧은 구문(단어~구 수준).</span></div>
+            <div class="step"><span class="step-num">개수 한계</span><span class="step-text">공식 문서에 명시적 상한 없음. 실무 커뮤니티 기준 약 100개 이하. 초과 시 무시되거나 성능 저하. <span class="source-tag tag-inferred">추정</span></span></div>
+            <div class="step"><span class="step-num">온디바이스</span><span class="step-text"><code>requiresOnDeviceRecognition = true</code> 필수. 미설정 시 서버 경로 사용 → contextualStrings 미적용 위험.</span></div>
+            <div class="step"><span class="step-num">macOS</span><span class="step-text">macOS 10.15+ 지원. macOS 14에서 사용 가능. <span class="source-tag tag-confirmed">확인</span></span></div>
+            <div class="step"><span class="step-num">한국어</span><span class="step-text"><code>ko-KR</code> 로케일로 <code>SFSpeechRecognizer.supportedLocales()</code>에 포함돼 있으나, contextualStrings의 한국어 바이어싱 실효성은 <strong>공식 문서에서 확인되지 않음</strong>. <span class="source-tag tag-unconfirmed">미확인</span></span></div>
+            <div class="step"><span class="step-num">정확도</span><span class="step-text">Apple 내부 모델 기반. Whisper large-v3 대비 WER 열세(Apple 14.0% vs WhisperKit small.en 12.8%). 한국어 회의 도메인 비교치 없음. <span class="source-tag tag-inferred">추정</span></span></div>
+          </div>
+          <div class="callout callout-warn">
+            <div class="callout-label">중요 제약</div>
+            공식 문서에서 명시: <em>"contextualStrings는 완전한 custom vocabulary workflow의 대체제가 아니다."</em> 희귀 고유명사 강제에 제한적이며, Whisper의 prompt 방식보다 통제력이 낮다.
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">SFSpeechLanguageModel.Configuration — 더 강력한 custom vocabulary (iOS 17+ / macOS 14+)</div>
+          <div class="prose">
+            <p>WWDC23에서 발표된 신기능. 앱이 도메인별 학습 데이터(PhraseCount + 발음 기호)를 준비하면 <code>prepareCustomLanguageModel()</code>이 온디바이스에서 언어 모델을 파인튜닝한다. <span class="source-tag tag-confirmed">WWDC23 공식</span></p>
+          </div>
+          <div class="mechanism">
+            <div class="step"><span class="step-num">동작</span><span class="step-text">구문 샘플 + 발음 기호(X-SAMPA) → 파일로 내보내기 → 앱 에셋 배포 → <code>prepareCustomLanguageModel()</code> 호출(백그라운드 필수, 지연 큼) → 요청에 연결.</span></div>
+            <div class="step"><span class="step-num">macOS</span><span class="step-text">iOS 17+에서 도입. <strong>macOS 14 지원 여부는 공식 문서에서 명시되지 않음.</strong> <span class="source-tag tag-unconfirmed">미확인</span></span></div>
+            <div class="step"><span class="step-num">한국어</span><span class="step-text">로케일별로 지원 X-SAMPA 부분집합이 다르다고 명시. <strong>ko-KR 발음 기호 지원 여부 미확인.</strong> <span class="source-tag tag-unconfirmed">미확인</span></span></div>
+            <div class="step"><span class="step-num">제약</span><span class="step-text">온디바이스 강제(<code>requiresOnDeviceRecognition = true</code>). 단일 로케일 바인딩. 모델 준비 지연이 크다. 회의 도중 실시간 적용 불가.</span></div>
+          </div>
+          <div class="callout callout-danger">
+            <div class="callout-label">macOS / 한국어 미확인</div>
+            회의록 앱(macOS 14, 한국어) 관점에서 가장 중요한 두 조건 모두 공식 확인이 없다. 사용 전 Xcode에서 직접 API 가용성 확인이 필요하다.
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. SpeechAnalyzer -->
+      <section class="section" id="sec-speech-analyzer">
+        <div class="section-head">
+          <span class="section-index">05</span>
+          <h2 class="section-title">SpeechAnalyzer / SpeechTranscriber (WWDC25, macOS 26)</h2>
+        </div>
+
+        <div class="prose">
+          <p>Apple이 WWDC25에서 발표한 차세대 Speech 프레임워크. <code>SpeechTranscriber</code>(장문), <code>DictationTranscriber</code>(단문·받아쓰기), <code>SpeechDetector</code>(VAD) 세 모듈로 구성된다. <span class="source-tag tag-confirmed">WWDC25 공식</span></p>
+        </div>
+
+        <div class="mechanism">
+          <div class="step"><span class="step-num">플랫폼</span><span class="step-text"><strong>iOS 26, macOS Tahoe(macOS 26), tvOS 26</strong> 이상 필요. watchOS 미지원.</span></div>
+          <div class="step"><span class="step-num">온디바이스</span><span class="step-text">offline-first 설계. 앱 번들 크기 증가 없음. 모델 자동 업데이트.</span></div>
+          <div class="step"><span class="step-num">속도</span><span class="step-text">Argmax 비교에서 Apple SpeechAnalyzer 70 vs WhisperKit small.en 35 (speed factor). 약 2배 빠름. <span class="source-tag tag-confirmed">Argmax 공식 블로그</span></span></div>
+          <div class="step"><span class="step-num">정확도</span><span class="step-text">WER: Apple 14.0% vs WhisperKit small.en 12.8%. 한국어 회의 도메인 비교 없음.</span></div>
+          <div class="step"><span class="step-num">custom vocabulary</span><span class="step-text"><strong style="color:var(--danger);">미지원.</strong> SFSpeechRecognizer의 Custom Vocabulary가 SpeechAnalyzer에 없다고 복수 출처가 명시. "향후 추가 가능성"만 언급. <span class="source-tag tag-confirmed">Blake Crosley, Argmax 블로그</span></span></div>
+          <div class="step"><span class="step-num">한국어</span><span class="step-text">Anton Gubarenko 가이드의 지원 로케일 목록에서 <strong>ko-KR 미포함.</strong> Apple은 "10개 언어" 지원 표현. 공식 로케일 목록 비공개. <span class="source-tag tag-unconfirmed">미확인</span></span></div>
+        </div>
+
+        <div class="callout callout-danger">
+          <div class="callout-label">minto2 적용 불가 — 2가지 이유</div>
+          <strong>1.</strong> macOS 26 필요 → minto2 배포 타겟 macOS 14와 충돌. 현재 채택 불가.<br>
+          <strong>2.</strong> custom vocabulary 미지원 → 도메인 용어 바이어싱 목적 자체를 달성할 수 없다.
+        </div>
+      </section>
+
+    </div><!-- /content -->
+
+    <!-- ── Verdict Zone ── -->
+    <div class="verdict-zone" id="sec-verdict">
+      <div class="verdict-zone-label">연구 결론</div>
+      <div class="verdict-title">선택지 비교 — 우리 조건 기준 (macOS 14+, 한국어, 온디바이스, 속도, 바이어싱 실효성)</div>
+
+      <div style="overflow-x: auto;">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th class="col-mechanism">메커니즘</th>
+              <th>현재 채택 가능</th>
+              <th>온디바이스</th>
+              <th>한국어</th>
+              <th>macOS 14</th>
+              <th>바이어싱 실효성</th>
+              <th>속도 패널티</th>
+              <th>구현 복잡도</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-label">WhisperKit<br><code style="font-size:9px;">promptTokens</code><br><em style="font-size:9px;color:var(--text-dim);">비-turbo large-v3</em></td>
+              <td><span class="chip chip-ok">가능</span></td>
+              <td><span class="chip chip-ok">온디바이스</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td>
+                <div class="score-row">
+                  <div class="score-bar-wrap"><div class="score-bar" style="width:70%;background:var(--ok);"></div></div>
+                  <span class="score-label">70</span>
+                </div>
+                <span style="font-size:10px;color:var(--text-muted);">용어 교정 실측 확인</span>
+              </td>
+              <td><span class="chip chip-warn">높음</span><br><span style="font-size:10px;color:var(--text-muted);">turbo 대비 느림</span></td>
+              <td><span class="chip chip-ok">낮음</span></td>
+            </tr>
+            <tr>
+              <td class="row-label">WhisperKit<br><code style="font-size:9px;">promptTokens</code><br><em style="font-size:9px;color:var(--text-dim);">turbo</em></td>
+              <td><span class="chip chip-no">불가</span></td>
+              <td><span class="chip chip-ok">온디바이스</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td>
+                <div class="score-row">
+                  <div class="score-bar-wrap"><div class="score-bar" style="width:0%;background:var(--danger);"></div></div>
+                  <span class="score-label">0</span>
+                </div>
+                <span style="font-size:10px;color:var(--danger);">빈 출력 버그 (Issue #372)</span>
+              </td>
+              <td><span class="chip chip-ok">낮음</span></td>
+              <td><span class="chip chip-ok">낮음</span></td>
+            </tr>
+            <tr>
+              <td class="row-label">WhisperKit<br><code style="font-size:9px;">prefixTokens</code></td>
+              <td><span class="chip chip-warn">제한</span></td>
+              <td><span class="chip chip-ok">온디바이스</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td>
+                <div class="score-row">
+                  <div class="score-bar-wrap"><div class="score-bar" style="width:20%;background:var(--warn);"></div></div>
+                  <span class="score-label">20</span>
+                </div>
+                <span style="font-size:10px;color:var(--text-muted);">용도 불일치. 스트리밍용</span>
+              </td>
+              <td><span class="chip chip-ok">낮음</span></td>
+              <td><span class="chip chip-ok">낮음</span></td>
+            </tr>
+            <tr>
+              <td class="row-label">SFSpeechRecognizer<br><code style="font-size:9px;">contextualStrings</code></td>
+              <td><span class="chip chip-ok">가능</span></td>
+              <td><span class="chip chip-warn">설정 필요</span></td>
+              <td><span class="chip chip-partial">미확인</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td>
+                <div class="score-row">
+                  <div class="score-bar-wrap"><div class="score-bar" style="width:35%;background:var(--warn);"></div></div>
+                  <span class="score-label">35</span>
+                </div>
+                <span style="font-size:10px;color:var(--text-muted);">통제력 낮음. 약한 biasing</span>
+              </td>
+              <td><span class="chip chip-ok">없음</span></td>
+              <td><span class="chip chip-warn">중간</span><br><span style="font-size:10px;color:var(--text-muted);">엔진 교체 비용</span></td>
+            </tr>
+            <tr>
+              <td class="row-label">SFSpeechLanguageModel<br><code style="font-size:9px;">.Configuration</code><br><em style="font-size:9px;color:var(--text-dim);">Custom LM</em></td>
+              <td><span class="chip chip-partial">미확인</span></td>
+              <td><span class="chip chip-ok">온디바이스</span></td>
+              <td><span class="chip chip-partial">미확인</span></td>
+              <td><span class="chip chip-partial">미확인</span></td>
+              <td>
+                <div class="score-row">
+                  <div class="score-bar-wrap"><div class="score-bar" style="width:55%;background:var(--accent);"></div></div>
+                  <span class="score-label">55</span>
+                </div>
+                <span style="font-size:10px;color:var(--text-muted);">강력하나 준비 지연 큼</span>
+              </td>
+              <td><span class="chip chip-ok">없음</span></td>
+              <td><span class="chip chip-no">높음</span></td>
+            </tr>
+            <tr>
+              <td class="row-label">Apple SpeechAnalyzer<br><code style="font-size:9px;">SpeechTranscriber</code></td>
+              <td><span class="chip chip-no">불가</span></td>
+              <td><span class="chip chip-ok">온디바이스</span></td>
+              <td><span class="chip chip-partial">미확인</span></td>
+              <td><span class="chip chip-no">macOS 26 필요</span></td>
+              <td>
+                <div class="score-row">
+                  <div class="score-bar-wrap"><div class="score-bar" style="width:0%;background:var(--danger);"></div></div>
+                  <span class="score-label">0</span>
+                </div>
+                <span style="font-size:10px;color:var(--danger);">custom vocab 미지원</span>
+              </td>
+              <td><span class="chip chip-ok">없음</span></td>
+              <td><span class="chip chip-no">불가</span></td>
+            </tr>
+            <tr>
+              <td class="row-label">교정 레이어<br><em style="font-size:9px;color:var(--text-dim);">(LLM post-proc)</em></td>
+              <td><span class="chip chip-ok">가능</span></td>
+              <td><span class="chip chip-warn">LLM 위치 의존</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td><span class="chip chip-ok">지원</span></td>
+              <td>
+                <div class="score-row">
+                  <div class="score-bar-wrap"><div class="score-bar" style="width:65%;background:var(--ok);"></div></div>
+                  <span class="score-label">65</span>
+                </div>
+                <span style="font-size:10px;color:var(--text-muted);">용어집 활용. 이미 구현됨</span>
+              </td>
+              <td><span class="chip chip-warn">LLM 지연</span></td>
+              <td><span class="chip chip-ok">낮음</span><br><span style="font-size:10px;color:var(--text-muted);">이미 존재</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- /verdict-zone -->
+
+    <div class="content">
+
+      <!-- Recommendation -->
+      <section class="section" id="sec-recommendation">
+        <div class="section-head">
+          <span class="section-index">06</span>
+          <h2 class="section-title">권고 — 우리 스택에 적합한 경로</h2>
+        </div>
+
+        <div class="rec-block">
+          <div class="rec-option">
+            <div class="rec-rank">1순위</div>
+            <div class="rec-name">promptTokens (비-turbo large-v3) + 교정 레이어</div>
+            <div class="rec-desc">현재 유일하게 동작이 확인된 WhisperKit 내 biasing 경로. 비-turbo의 속도 패널티를 교정 레이어가 보완한다. 이미 두 컴포넌트가 존재하므로 통합 비용이 낮다. 용어집에서 상위 N개 용어를 추출해 promptTokens로 전달하는 파이프라인을 구성한다.</div>
+            <div class="rec-tags">
+              <span class="chip chip-ok">즉시 적용 가능</span>
+              <span class="chip chip-ok">macOS 14+</span>
+              <span class="chip chip-ok">한국어</span>
+              <span class="chip chip-warn">속도 패널티 있음</span>
+            </div>
+          </div>
+          <div class="rec-option">
+            <div class="rec-rank">2순위</div>
+            <div class="rec-name">교정 레이어 강화 (단독)</div>
+            <div class="rec-desc">STT 모델을 비-turbo로 전환하기 어려운 경우의 대안. 용어집 기반 LLM 교정이 이미 구현돼 있으므로 promptTokens 없이도 후처리만으로 도메인 용어 오류를 상당 부분 잡을 수 있다. 속도 이점을 유지한 채 정확도를 높이는 현실적 트레이드오프.</div>
+            <div class="rec-tags">
+              <span class="chip chip-ok">즉시 적용 가능</span>
+              <span class="chip chip-ok">turbo 유지</span>
+              <span class="chip chip-warn">biasing 아님 (교정)</span>
+            </div>
+          </div>
+          <div class="rec-option">
+            <div class="rec-rank">3순위</div>
+            <div class="rec-name">SFSpeechLanguageModel.Configuration 검증 (중장기)</div>
+            <div class="rec-desc">macOS 14 + ko-KR 지원 여부를 Xcode에서 직접 확인한 뒤, 유효하면 회의 시작 전 백그라운드 준비 파이프라인 구성을 검토한다. 준비 지연이 크므로 실시간 전사 중 동적 적용은 불가하다. WhisperKit을 대체하지 않고 병행 경로로만 고려한다.</div>
+            <div class="rec-tags">
+              <span class="chip chip-partial">macOS 14 미확인</span>
+              <span class="chip chip-partial">한국어 미확인</span>
+              <span class="chip chip-no">준비 지연 큼</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-warn">
+          <div class="callout-label">보류</div>
+          <strong>SpeechAnalyzer, turbo+promptTokens, prefixTokens를 용어 바이어싱에 쓰는 것</strong>은 각각 macOS 버전 불일치·알려진 버그·용도 불일치로 현재 권고하지 않는다.
+        </div>
+      </section>
+
+      <!-- Roadmap -->
+      <section class="section" id="sec-roadmap">
+        <div class="section-head">
+          <span class="section-index">07</span>
+          <h2 class="section-title">구현 경로 — 확인해야 할 것</h2>
+        </div>
+
+        <div class="mechanism">
+          <div class="step"><span class="step-num">즉시</span><span class="step-text"><em>비-turbo large-v3에서 promptTokens 파이프라인</em>을 현재 turbo 경로와 나란히 두고, 모델 선택과 promptTokens 여부를 설정으로 분리해 A/B 테스트 가능하게 구조화한다.</span></div>
+          <div class="step"><span class="step-num">단기</span><span class="step-text">용어집 상위 N개 추출 → 용어 빈도·희귀도 기반 정렬 → prompt 224 토큰 예산 내 최적 구성. 현재 용어집 추출 로직이 있으면 연결.</span></div>
+          <div class="step"><span class="step-num">검증</span><span class="step-text">WhisperKit Issue #438 PR을 추적해 turbo + promptTokens 수정이 병합되면 재테스트. turbo 복귀 판단 기준을 미리 정의해 둔다(속도 vs 정확도 임계치).</span></div>
+          <div class="step"><span class="step-num">중기</span><span class="step-text">SFSpeechLanguageModel.Configuration의 macOS 14 + ko-KR 가용성을 Xcode에서 API 존재 여부로 확인. 유효시 별도 ADR 작성 후 검토.</span></div>
+        </div>
+      </section>
+
+      <!-- Sources -->
+      <section class="section" id="sec-sources">
+        <div class="section-head">
+          <span class="section-index">08</span>
+          <h2 class="section-title">출처</h2>
+        </div>
+        <div class="sources">
+          <div class="source-list">
+            <div class="source-item"><span class="source-num">[1]</span><a href="https://github.com/argmaxinc/argmax-oss-swift/blob/main/argmax-oss-swift/Sources/WhisperKit/Core/Configurations.swift" target="_blank">argmaxinc/argmax-oss-swift — Configurations.swift (DecodingOptions 구조체)</a></div>
+            <div class="source-item"><span class="source-num">[2]</span><a href="https://github.com/argmaxinc/WhisperKit/issues/372" target="_blank">WhisperKit Issue #372 — promptTokens causes empty transcription (Open, 2025-10)</a></div>
+            <div class="source-item"><span class="source-num">[3]</span><a href="https://github.com/openai/whisper/discussions/117" target="_blank">openai/whisper Discussion #117 — prompt vs prefix in DecodingOptions</a></div>
+            <div class="source-item"><span class="source-num">[4]</span><a href="https://github.com/argmaxinc/argmax-oss-swift/wiki/Roadmap-&-Contribution-Guide" target="_blank">WhisperKit Roadmap — logit bias / multi-token forward pass 미구현 상태</a></div>
+            <div class="source-item"><span class="source-num">[5]</span><a href="https://developer.apple.com/documentation/speech/sfspeechrecognitionrequest/contextualstrings" target="_blank">Apple Developer Docs — contextualStrings (공식)</a></div>
+            <div class="source-item"><span class="source-num">[6]</span><a href="https://developer.apple.com/videos/play/wwdc2023/10101/" target="_blank">WWDC23 10101 — Customize on-device speech recognition (SFSpeechLanguageModel)</a></div>
+            <div class="source-item"><span class="source-num">[7]</span><a href="https://developer.apple.com/videos/play/wwdc2025/277/" target="_blank">WWDC25 277 — Bring advanced speech-to-text to your app with SpeechAnalyzer</a></div>
+            <div class="source-item"><span class="source-num">[8]</span><a href="https://www.argmaxinc.com/blog/apple-and-argmax" target="_blank">Argmax 블로그 — Apple SpeechAnalyzer vs WhisperKit 속도/정확도 비교</a></div>
+            <div class="source-item"><span class="source-num">[9]</span><a href="https://blakecrosley.com/blog/speech-framework-vs-sfspeechrecognizer" target="_blank">Blake Crosley — SpeechAnalyzer vs SFSpeechRecognizer (custom vocabulary 지원 비교)</a></div>
+            <div class="source-item"><span class="source-num">[10]</span><a href="https://antongubarenko.substack.com/p/ios-26-speechanalyzer-guide" target="_blank">Anton Gubarenko — iOS 26 SpeechAnalyzer Guide (지원 로케일 목록 포함)</a></div>
+            <div class="source-item"><span class="source-num">[11]</span><a href="https://github.com/OpenNMT/CTranslate2/pull/1789" target="_blank">CTranslate2 PR #1789 — Shallow contextual biasing for Whisper (logit bias)</a></div>
+            <div class="source-item"><span class="source-num">[12]</span><a href="https://arxiv.org/abs/2410.18363" target="_blank">arXiv 2410.18363 — Contextual Biasing for Domain-specific Custom Vocabulary (fine-tuning 없이)</a></div>
+          </div>
+        </div>
+
+        <div style="margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border);">
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);letter-spacing:0.08em;">
+            <span class="chip chip-ok" style="margin-right:0.4rem;">확인됨</span>공식 문서·실측 근거 있음&nbsp;&nbsp;&nbsp;
+            <span class="chip chip-warn" style="margin-right:0.4rem;">추정</span>공식 출처 없음, 커뮤니티 기반 또는 추론&nbsp;&nbsp;&nbsp;
+            <span class="chip chip-partial" style="margin-right:0.4rem;">미확인</span>공식 문서에서 명시 없음
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+  </main>
+</div>
+
+<script>
+/* ── Token Stream Canvas Animation ── */
+(function() {
+  const canvas = document.getElementById('token-canvas');
+  if (!canvas) return;
+
+  // Check reduced motion preference
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (prefersReduced) {
+    canvas.style.background = '#0E1219';
+    return;
+  }
+
+  const ctx = canvas.getContext('2d');
+  let w, h, raf;
+
+  function resize() {
+    w = canvas.width = canvas.offsetWidth;
+    h = canvas.height = canvas.offsetHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Token stream: simulates decoder beam tokens flowing left→right
+  const TERMS = [
+    'FluidAudio', '나무호', 'promptTokens', 'large-v3',
+    'DecodingOptions', 'WhisperKit', '쿠팡', 'contextual',
+    'biasing', 'prefixTokens', 'ko-KR', '회의록',
+    'vocab', 'beam', '전사', 'token'
+  ];
+
+  // Particles: each is a token flowing across a horizontal lane
+  const LANES = 8;
+  const particles = [];
+
+  function spawnParticle() {
+    const term = TERMS[Math.floor(Math.random() * TERMS.length)];
+    const lane = Math.floor(Math.random() * LANES);
+    const speed = 0.4 + Math.random() * 0.8;
+    const y = (lane + 0.5) * (h / LANES);
+    // Color: most are dim, occasionally accent-colored (the "biased" token)
+    const isBiased = Math.random() < 0.15;
+    return {
+      term,
+      x: -120,
+      y,
+      speed,
+      alpha: 0,
+      maxAlpha: isBiased ? 0.85 : (0.1 + Math.random() * 0.18),
+      color: isBiased ? '#3ECFB2' : '#7A8FA6',
+      fontSize: isBiased ? 11 : (9 + Math.random() * 2),
+      phase: 'fadein', // fadein | hold | fadeout
+      holdTime: 0,
+      maxHold: 60 + Math.random() * 120,
+      isBiased
+    };
+  }
+
+  // Seed initial particles
+  for (let i = 0; i < 24; i++) {
+    const p = spawnParticle();
+    p.x = Math.random() * w;
+    p.alpha = Math.random() * p.maxAlpha;
+    p.phase = 'hold';
+    particles.push(p);
+  }
+
+  // Grid lines (oscilloscope feel)
+  function drawGrid() {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(62,207,178,0.05)';
+    ctx.lineWidth = 0.5;
+    const cols = 16;
+    for (let i = 0; i <= cols; i++) {
+      const x = (i / cols) * w;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let i = 0; i < LANES; i++) {
+      const y = (i / LANES) * h;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Highlight "decoded" token with a glow pulse
+  function drawGlow(p) {
+    if (!p.isBiased) return;
+    const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 60);
+    grd.addColorStop(0, `rgba(62,207,178,${p.alpha * 0.15})`);
+    grd.addColorStop(1, 'rgba(62,207,178,0)');
+    ctx.save();
+    ctx.fillStyle = grd;
+    ctx.fillRect(p.x - 60, p.y - 60, 120, 120);
+    ctx.restore();
+  }
+
+  let lastSpawn = 0;
+
+  function tick(ts) {
+    raf = requestAnimationFrame(tick);
+
+    // Clear with fade trail
+    ctx.fillStyle = 'rgba(14,18,25,0.3)';
+    ctx.fillRect(0, 0, w, h);
+
+    drawGrid();
+
+    // Spawn
+    if (ts - lastSpawn > 180 && particles.length < 48) {
+      particles.push(spawnParticle());
+      lastSpawn = ts;
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+
+      // State machine
+      if (p.phase === 'fadein') {
+        p.alpha += 0.02;
+        p.x += p.speed;
+        if (p.alpha >= p.maxAlpha) { p.alpha = p.maxAlpha; p.phase = 'hold'; }
+      } else if (p.phase === 'hold') {
+        p.holdTime++;
+        p.x += p.speed * 0.3;
+        if (p.holdTime > p.maxHold) p.phase = 'fadeout';
+      } else {
+        p.alpha -= 0.015;
+        p.x += p.speed * 0.5;
+        if (p.alpha <= 0 || p.x > w + 140) {
+          particles.splice(i, 1);
+          continue;
+        }
+      }
+
+      drawGlow(p);
+
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.font = `${p.isBiased ? 500 : 400} ${p.fontSize}px 'DM Mono', monospace`;
+      ctx.fillStyle = p.color;
+      ctx.fillText(p.term, p.x, p.y + p.fontSize * 0.35);
+
+      // Biased tokens get a bracket decoration
+      if (p.isBiased) {
+        ctx.globalAlpha = p.alpha * 0.5;
+        ctx.fillStyle = '#3ECFB2';
+        const tw = ctx.measureText(p.term).width;
+        ctx.fillText('[', p.x - 10, p.y + p.fontSize * 0.35);
+        ctx.fillText(']', p.x + tw + 3, p.y + p.fontSize * 0.35);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  raf = requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
