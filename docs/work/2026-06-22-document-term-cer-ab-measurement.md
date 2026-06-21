@@ -6,6 +6,28 @@
 
 첨부 문서에서 정적 추출한 용어를 교정 프롬프트에 주입(ON)했을 때, 미주입(OFF) 대비 교정 후 CER이 개선되는지 종단 측정한다. Phase 1a(`feat(correction)` 3c60cf3)의 실효를 실제 LLM 교정으로 확인하는 단계.
 
+## 측정 결과 (2026-06-22, 외교통일위원회_20260520, 현안 구간)
+
+실행: `MEETING_WINDOW_OFFSET=8 MEETING_CORR_WINDOWS=40`(windows 8–48 ≈ 160–960s, 현안질의 — 호르무즈·나무호·아랍에미리트 등장 구간). 엔진 large-v3-turbo → Codex 교정. 주입 용어 24개.
+
+| 지표 | 값 |
+|---|---|
+| 타깃 용어 출현(reference) | Σ 62회 (24개 중 present) |
+| Σ offHits (미주입 교정) | 40 |
+| Σ onHits (주입 교정) | 41 |
+| **onHits − offHits (주 신호)** | **+1** |
+| 복원 사례 | 나무호 ref=2, off=0 → **on=1** |
+| global raw / OFF / ON CER | 47.6% / 46.9% / 47.6% |
+| global ON−OFF | +0.6pp (악화) |
+| touch rate | OFF 3.4% / ON 4.8% |
+
+**해석 — 효과는 실재하나 미미(marginal).**
+- 진짜 이득: "나무호"를 base 교정은 0회, 주입 교정은 1회 복원 — 문서 용어 주입이 도메인 고유명사를 살린 귀속 가능한 사례.
+- 그러나 +1 / 62회로 한계적이고, global CER은 오히려 +0.6pp 악화.
+- **왜 미미한가 (구조적)**: (1) base 교정이 이미 topic 맥락("외교통일위원회…현안질의")으로 도메인 용어 상당수를 고쳐 명시 주입의 한계 정보가 적다. (2) 비-verbatim 자막은 "올바른 철자" 이득을 보상 못 한다 — ON이 raw를 정답 표기로 고칠수록(touch 4.8%>3.4%) 패러프레이즈 자막과 멀어져 global CER이 오른다. 그래서 용어-수준 지표(나무호 복원)가 global보다 진실에 가깝다.
+
+**결론**: 교정 단계에서 문서-용어 주입 이득은 이 corpus에서 **한계적**이다 — base 교정이 topic 맥락으로 대부분 처리하고, 주입은 가끔 놓친 고유명사를 추가 복원하는 정도. Phase 1a의 교정-단계 가치 주장은 이 결과로 냉정하게 보정된다. (참고: "HMM"은 자막이 "HM M"로 적어 reference에 verbatim 부재 → 측정 대상에서 제외.)
+
 ## 테스트
 
 `Tests/MintoTests/MeetingCorpusTests.swift`의 `documentTermInjectionCER()`.

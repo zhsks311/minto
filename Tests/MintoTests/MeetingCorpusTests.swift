@@ -475,9 +475,12 @@ struct MeetingCorpusTests {
         let document = try String(contentsOf: documentURL, encoding: .utf8)
 
         let defaultCorrWindows = 20
+        let defaultWindowOffset = 0
+        let minimumPresentTermHits = 1
         let insertionRatio = 1.2
         let previewCharacterLimit = 120
         let corrWindows = ProcessInfo.processInfo.environment["MEETING_CORR_WINDOWS"].flatMap(Int.init) ?? defaultCorrWindows
+        let windowOffset = ProcessInfo.processInfo.environment["MEETING_WINDOW_OFFSET"].flatMap(Int.init) ?? defaultWindowOffset
         let topic = ProcessInfo.processInfo.environment["MEETING_TOPIC"]
             ?? "국회 외교통일위원회 전체회의 (외교안보 현안질의)"
         let baseGlossary = ProcessInfo.processInfo.environment["MEETING_GLOSSARY"]
@@ -488,12 +491,43 @@ struct MeetingCorpusTests {
             limit: DocumentTermExtractor.defaultLimit
         )
 
-        func glossaryLineCount(_ glossary: String) -> Int {
+        func glossaryLines(_ glossary: String) -> [String] {
             glossary
                 .split(whereSeparator: { $0.isNewline })
                 .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-                .count
+        }
+
+        func uniqueTermsPreservingOrder(_ terms: [String]) -> [String] {
+            var seen = Set<String>()
+            return terms.filter { term in
+                seen.insert(term).inserted
+            }
+        }
+
+        func normalizedForTermMatch(_ text: String) -> String {
+            text
+                .filter { !$0.isWhitespace }
+                .lowercased()
+        }
+
+        func nonOverlappingOccurrenceCount(of term: String, in text: String) -> Int {
+            let normalizedTerm = normalizedForTermMatch(term)
+            guard !normalizedTerm.isEmpty else {
+                return 0
+            }
+
+            let normalizedText = normalizedForTermMatch(text)
+            var count = 0
+            var searchStart = normalizedText.startIndex
+            while let range = normalizedText.range(
+                of: normalizedTerm,
+                range: searchStart..<normalizedText.endIndex
+            ) {
+                count += 1
+                searchStart = range.upperBound
+            }
+            return count
         }
 
         func cerRate(_ stats: (distance: Int, refLen: Int)) -> Double {
@@ -526,7 +560,10 @@ struct MeetingCorpusTests {
             return (true, isInsertion, rawLen, correctedLen, stats.distance)
         }
 
-        let injectedTermCount = max(0, glossaryLineCount(onGlossary) - glossaryLineCount(baseGlossary))
+        let baseGlossaryTermSet = Set(glossaryLines(baseGlossary))
+        let targetTerms = uniqueTermsPreservingOrder(glossaryLines(onGlossary))
+            .filter { !baseGlossaryTermSet.contains($0) }
+        let injectedTermCount = targetTerms.count
         print("""
         [DocCER] 문서 주입 용어 수: \(injectedTermCount)
         [DocCER] ON glossary:
@@ -535,7 +572,7 @@ struct MeetingCorpusTests {
 
         let captions = try Self.parseSMI(from: Self.smiURL)
         let windows = Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds)
-        let targetWindows = Array(windows.prefix(max(0, corrWindows)))
+        let targetWindows = Array(windows.dropFirst(max(0, windowOffset)).prefix(max(0, corrWindows)))
         guard !targetWindows.isEmpty else {
             Issue.record("병합된 창이 없습니다")
             return
@@ -549,7 +586,7 @@ struct MeetingCorpusTests {
         }
         let engineLabel = STTBenchmarkEngineSupport.displayName(for: service)
 
-        print("\n=== 문서 용어 주입 교정 CER A/B [\(engineLabel) → Codex] (window=\(Self.windowSeconds)s, \(targetWindows.count)/\(windows.count)창) ===")
+        print("\n=== 문서 용어 주입 교정 CER A/B [\(engineLabel) → Codex] (window=\(Self.windowSeconds)s, window offset=\(windowOffset), \(targetWindows.count)/\(windows.count)창) ===")
 
         var allRefText = ""
         var allRawText = ""
@@ -672,6 +709,39 @@ struct MeetingCorpusTests {
         let cleanOnOffDeltaPP = (onCleanCER - offCleanCER) * 100
         let touchOffRate = touchedOffRawLen > 0 ? Double(touchOffDistance) / Double(touchedOffRawLen) : 0
         let touchOnRate = touchedOnRawLen > 0 ? Double(touchOnDistance) / Double(touchedOnRawLen) : 0
+        let refHits = Dictionary(uniqueKeysWithValues: targetTerms.map {
+            ($0, nonOverlappingOccurrenceCount(of: $0, in: allRefText))
+        })
+        let offHits = Dictionary(uniqueKeysWithValues: targetTerms.map {
+            ($0, nonOverlappingOccurrenceCount(of: $0, in: allOffText))
+        })
+        let onHits = Dictionary(uniqueKeysWithValues: targetTerms.map {
+            ($0, nonOverlappingOccurrenceCount(of: $0, in: allOnText))
+        })
+        let presentTargetTerms = targetTerms.filter {
+            (refHits[$0] ?? 0) >= minimumPresentTermHits
+        }
+        let refHitTotal = presentTargetTerms.reduce(0) { total, term in
+            total + (refHits[term] ?? 0)
+        }
+        let offHitTotal = presentTargetTerms.reduce(0) { total, term in
+            total + (offHits[term] ?? 0)
+        }
+        let onHitTotal = presentTargetTerms.reduce(0) { total, term in
+            total + (onHits[term] ?? 0)
+        }
+        let termHitDelta = onHitTotal - offHitTotal
+        let termPresenceWarning = presentTargetTerms.isEmpty
+            ? "경고              : 이 구간에 타깃 용어 미등장 — 측정 무의미"
+            : "경고              : 없음"
+        let restoredTermLines = presentTargetTerms
+            .filter { (offHits[$0] ?? 0) == 0 && (onHits[$0] ?? 0) > 0 }
+            .map {
+                "[복원] \($0) ref=\(refHits[$0] ?? 0) off=\(offHits[$0] ?? 0) on=\(onHits[$0] ?? 0)"
+            }
+        let restoredTermBlock = restoredTermLines.isEmpty
+            ? "복원 용어          : 없음"
+            : restoredTermLines.joined(separator: "\n")
 
         print("""
         ────────────────────────────────────────
@@ -689,8 +759,18 @@ struct MeetingCorpusTests {
         clean 델타(ON-OFF) : \(String(format: "%+.1fpp", cleanOnOffDeltaPP)) (음수=문서 용어 주입 개선)
         OFF touch rate     : \(String(format: "%.1f%%", touchOffRate * 100)) (변경 창 \(touchedOffWindows), 폴백 \(fallbackOffCount), 추가 의심 \(insertionOffFlags))
         ON  touch rate     : \(String(format: "%.1f%%", touchOnRate * 100)) (변경 창 \(touchedOnWindows), 폴백 \(fallbackOnCount), 추가 의심 \(insertionOnFlags))
+        ── 용어-수준 정확 철자 출현 수 ──
+        타깃 용어 수        : \(targetTerms.count)
+        reference 등장 용어 : \(presentTargetTerms.count)/\(targetTerms.count)
+        Σ refHits          : \(refHitTotal)
+        Σ offHits          : \(offHitTotal)
+        Σ onHits           : \(onHitTotal)
+        onHits−offHits     : \(termHitDelta) (양수=ON이 더 많이 맞힘)
+        \(termPresenceWarning)
+        \(restoredTermBlock)
         ========================================
-        해석: on−off 델타가 문서 용어 주입의 substantive 기여이며, 절대 CER은 무시하고 공유-raw 델타만 신뢰.
+        해석: 절대 CER은 무시하고, global on−off 델타는 공유-raw 참고 지표로만 본다.
+          global 델타는 비-verbatim 자막에서 용어 이득에 둔감하므로, 용어-수준 onHits−offHits를 주 신호로 본다.
           폴백 창은 corrected=raw라 델타에 0 기여 — 교정 효과가 아니라 측정 누락이다.
           문서 fixture는 agenda best-case 측정(upper-ish bound)이며 임의 문서 대표성이 아니다.
 
