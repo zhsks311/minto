@@ -30,6 +30,65 @@ struct DocumentTermExtractorTests {
         #expect(!terms.contains("내용"))
     }
 
+    @Test("em-dash 뒤 한국어 용어를 추출한다")
+    func extractsKoreanTermsAfterEmDash() {
+        let terms = DocumentTermExtractor.extract(
+            from: "회의 개요 — 김석기 위원장과 박윤주 차관이 호르무즈 해협에서 나무호 피격을 논의",
+            existingTerms: [],
+            limit: 30
+        )
+
+        #expect(terms.contains("김석기"))
+        #expect(terms.contains("박윤주"))
+        #expect(terms.contains("호르무즈"))
+        #expect(terms.contains("나무호"))
+    }
+
+    @Test("en-dash 뒤 한국어 용어를 추출한다")
+    func extractsKoreanTermsAfterEnDash() {
+        let terms = DocumentTermExtractor.extract(
+            from: "회의 개요 – 김석기 위원장과 박윤주 차관이 호르무즈 해협에서 나무호 피격을 논의",
+            existingTerms: [],
+            limit: 30
+        )
+
+        #expect(terms.contains("김석기"))
+        #expect(terms.contains("박윤주"))
+        #expect(terms.contains("호르무즈"))
+        #expect(terms.contains("나무호"))
+    }
+
+    @Test("공백으로 둘러싸인 하이픈·불릿 뒤 한국어 용어를 추출한다")
+    func extractsKoreanTermsAfterHyphenAndBullets() {
+        let terms = DocumentTermExtractor.extract(
+            from: """
+            [회의 개요]
+            - 위원장: 김석기
+            - 간사: 김영배 위원, 김건 위원
+            - 현안: 호르무즈 해협에서 나무호 피격 사건
+            """,
+            existingTerms: [],
+            limit: 30
+        )
+
+        #expect(terms.contains("김석기"))
+        #expect(terms.contains("김영배"))
+        #expect(terms.contains("호르무즈"))
+        #expect(terms.contains("나무호"))
+    }
+
+    @Test("한국어 토큰화 정규화가 ASCII 하이픈 용어 추출을 깨지 않는다")
+    func preservesASCIIHyphenTermsDespiteKoreanNormalization() {
+        let terms = DocumentTermExtractor.extract(
+            from: "STT 엔진을 dry-run 으로 RFC-2616 검증",
+            limit: 10
+        )
+
+        #expect(terms.contains("STT"))
+        #expect(terms.contains("dry-run"))
+        #expect(terms.contains("RFC-2616"))
+    }
+
     @Test("빈도가 높은 용어를 앞에 두고 동률이면 첫 등장 순서를 유지한다")
     func ranksByFrequencyThenFirstAppearance() {
         let terms = DocumentTermExtractor.extract(

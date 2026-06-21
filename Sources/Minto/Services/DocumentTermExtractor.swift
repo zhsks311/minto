@@ -111,24 +111,25 @@ public enum DocumentTermExtractor {
         existingKeys: Set<String>,
         into candidates: inout [String: Candidate]
     ) {
+        let tokenizationInput = normalizedKoreanTokenizerInput(from: document)
         let supportsKoreanLexicalClass = NLTagger
             .availableTagSchemes(for: .word, language: .korean)
             .contains(.lexicalClass)
         let tokenizer = NLTokenizer(unit: .word)
-        tokenizer.string = document
+        tokenizer.string = tokenizationInput
 
         let tagger = NLTagger(tagSchemes: [.lexicalClass])
-        tagger.string = document
-        tagger.setLanguage(.korean, range: document.startIndex..<document.endIndex)
+        tagger.string = tokenizationInput
+        tagger.setLanguage(.korean, range: tokenizationInput.startIndex..<tokenizationInput.endIndex)
 
-        tokenizer.enumerateTokens(in: document.startIndex..<document.endIndex) { tokenRange, _ in
-            let token = String(document[tokenRange])
+        tokenizer.enumerateTokens(in: tokenizationInput.startIndex..<tokenizationInput.endIndex) { tokenRange, _ in
+            let token = String(tokenizationInput[tokenRange])
             guard containsHangul(token) else { return true }
             let (tag, _) = tagger.tag(at: tokenRange.lowerBound, unit: .word, scheme: .lexicalClass)
             guard tag == .noun || !supportsKoreanLexicalClass else { return true }
             guard let stem = normalizedKoreanTerm(token) else { return true }
 
-            let nsRange = NSRange(tokenRange, in: document)
+            let nsRange = NSRange(tokenRange, in: tokenizationInput)
             recordCandidate(
                 stem,
                 location: nsRange.location,
@@ -138,6 +139,33 @@ public enum DocumentTermExtractor {
             )
             return true
         }
+    }
+
+    /// 한국어 토큰화 입력 정규화.
+    ///
+    /// `NLTokenizer`의 한국어 enumeration은 공백으로 둘러싸인 dash·하이픈 같은 separator를
+    /// 만나면 그 지점에서 토큰 열거를 중단해 이후 문서 전체를 누락한다(측정으로 확인).
+    /// 그래서 단어문자(한글·영문·숫자·공백류) 외 모든 문자를 공백으로 1:1 치환한다
+    /// (길이 보존 → 토큰 NSRange offset·firstLocation 정합 유지).
+    /// ASCII 하이픈도 공백화하지만, dry-run·RFC-2616 같은 ASCII 용어는 원본 document를 쓰는
+    /// `collectASCIICandidates`(정규식)가 별도 추출하므로 영향이 없다.
+    private static func normalizedKoreanTokenizerInput(from document: String) -> String {
+        String(String.UnicodeScalarView(document.unicodeScalars.map { scalar in
+            isKoreanTokenizerWordScalar(scalar) ? scalar : " "
+        }))
+    }
+
+    private static func isKoreanTokenizerWordScalar(_ scalar: Unicode.Scalar) -> Bool {
+        if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+            return true
+        }
+        let value = scalar.value
+        return (0xAC00...0xD7A3).contains(value)   // 한글 음절
+            || (0x1100...0x11FF).contains(value)   // 한글 자모
+            || (0x3130...0x318F).contains(value)   // 한글 호환 자모
+            || (0x30...0x39).contains(value)       // 숫자
+            || (0x41...0x5A).contains(value)       // A–Z
+            || (0x61...0x7A).contains(value)       // a–z
     }
 
     private static func recordCandidate(
