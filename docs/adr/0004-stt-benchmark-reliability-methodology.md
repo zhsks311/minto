@@ -119,6 +119,7 @@ Phase 0 신뢰성 진단(`docs/benchmark/2026-06-18-reliability-phase0-diagnosis
 - ✅ **항목③ engine_ranking 생성 완료** (`727695d`+`26a4ac0`, 684 tests): `build_stt_engine_lane_matrix.py`가 lanes를 weighted_cer 오름차순 순위화해 `engine_ranking` 출력("어느 엔진이 1등인가"). 엔진별 최저 cer dedup(엔진 단위 보장)·None/빈 engine_id 제외·동률 정렬. phantom 차원과 lane별 분리는 데이터 확인 후(② 이후). decision 판정 미연결(독립 출력).
 
 - 🔶 **항목⑤ 반복측정 — 토대 함수 완료** (`205a09b`+`5a97c75`, 689 tests): `stt_repeat_statistics.summarize_repeat_cers()` 순수 집계(cer_mean/cer_std/cer_ci95, **t분포 기반** CI — 작은 N 정규근사 과소추정 방지). N=1 None(단일 측정 불신), N 미입력(순환논증 회피). **남음: N회 실행 루프(실측 재실행) + metric_summary/decision 연결.**
+- ✅ **C1 출력 루트 외부화 완료** (`a2d73c5`+`7ad3117`, 702 tests): 결과 저장 베이스 `/private/tmp` 하드코딩 → `stt_output_paths.stt_output_base()`(env `MINTO2_STT_OUTPUT_ROOT`, 미설정 시 `/private/tmp` 호환). 6파일+헬퍼. 리뷰 수정: 모듈 상수 import-시점 캡처 → **함수형 런타임 평가**(env 런타임 반영 확인), 테스트 sys.path. **디스크 정리 시 결과 소실 방지**(이번 사고 원인) + 머지 후 이식성. 빌드캐시(이미 env.get)·sherpa 설치/모델 경로는 별도(미변경, 주석).
 
 **남은 본체(스키마 ≠ 동작)**:
 - decision/regression 게이트가 phantom_rate·relative_improvement·engine_ranking·cer_std를 **판정에 사용**하도록 연결 (현재 미사용)
