@@ -48,7 +48,7 @@ public final class SummaryService: ObservableObject {
         let meeting = MeetingContext.shared
         let prompt = SummaryPrompt.buildIncremental(
             topic: meeting.topic,
-            glossary: meeting.glossary,
+            glossary: meeting.glossaryForPrompt,
             runningSummary: meeting.runningSummary,
             newBatch: batch,
             document: meeting.document
@@ -64,7 +64,7 @@ public final class SummaryService: ObservableObject {
         let meeting = MeetingContext.shared
         let context = SummaryGenerationContext(
             topic: meeting.topic,
-            glossary: meeting.glossary,
+            glossary: meeting.glossaryForPrompt,
             runningSummary: meeting.runningSummary,
             document: meeting.document
         )

@@ -331,6 +331,38 @@ struct MeetingSummaryRetryUseCaseTests {
         #expect(ingester.ingestedRecords.first?.summaryGlossary == "SwiftUI = UI 프레임워크\nMinto")
     }
 
+    @Test("retry는 문서 용어를 프롬프트에만 병합하고 snapshot에는 저장하지 않는다")
+    func retryMergesDocumentTermsOnlyForPrompt() async {
+        let segments = makeSegments(texts: ["발언"])
+        let record = makePlainRecord(
+            transcript: segments,
+            topic: "스프린트 회고",
+            document: "VAD dry-run 회의 내용"
+        )
+        let structured = makeStructuredSummary()
+        let generator = StubRetryGenerator(result: structured)
+        let store = StubRetryStore()
+        let ingester = StubRetryCandidateIngester()
+        let useCase = MeetingSummaryRetryUseCase(
+            summaryService: generator,
+            store: store,
+            glossaryStore: ingester
+        )
+
+        let result = await useCase.retry(record: record, glossary: "STT")
+
+        guard case .success(let updated) = result else {
+            Issue.record("성공 기대했지만 실패: \(result)")
+            return
+        }
+        #expect(generator.receivedContext?.glossary.contains("STT") == true)
+        #expect(generator.receivedContext?.glossary.contains("VAD") == true)
+        #expect(generator.receivedContext?.glossary.contains("dry-run") == true)
+        #expect(updated.summaryGlossary == "STT")
+        #expect(store.savedRecords.first?.summaryGlossary == "STT")
+        #expect(ingester.ingestedRecords.first?.summaryGlossary == "STT")
+    }
+
     @Test("retry(record:glossary:)는 빈 glossary를 nil snapshot으로 저장한다")
     func retryWithEmptyInjectedGlossaryClearsSnapshotOnSuccess() async {
         let segments = makeSegments(texts: ["발언"])

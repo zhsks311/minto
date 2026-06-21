@@ -125,8 +125,27 @@ ASCII/약어/숫자-하이픈은 정규식으로 **고정밀** 추출(전 단계
 - 문서를 요약 사실로 사용 — grounding 규칙 위반, 안 함.
 - 외부 형태소 분석기 의존 — Apple `NaturalLanguage`(기본 프레임워크)만.
 
+## Phase 1a 구현·측정 결과 (2026-06-21)
+
+구현 완료(`DocumentTermExtractor` 신규 + `MeetingContext.documentTerms`/`glossaryForPrompt` + 교정/요약/재요약 주입). 구현 세부는 `docs/work/2026-06-21-document-term-extractor-phase1a.md`.
+
+**측정으로 설계 가정 1건이 반증됨**: 이 macOS에서 `NLTagger.availableTagSchemes(for: .word, language: .korean)`에 `.lexicalClass`가 **없다**(POS 미지원). 문서의 "POS는 NER보다 안정적" 전제가 한국어엔 적용 안 됨 → POS 우회 fallback이 발동.
+
+1차 구현을 실제 한국어 회의 안건으로 측정한 결과(국회 corpus 아님, 합성 도메인 문서):
+- **조사 미분리**: `NLTokenizer(.word)`가 어절을 그대로 둬 "옵션화"/"옵션화를"이 별도 용어로 분리·빈도 쪼개짐. "로직을","장바구니에서","매핑과" 등 조사 포함 어절이 용어로 유입.
+- **용언 혼입**: "지원한다","변경해야","도입하면","한다" 등이 용어로 수집.
+- **distinctiveness 역행**: 빈도-only 랭킹이 1회 등장 고신뢰 ASCII("Liquibase","dry-run")를 cap 밖으로 매장.
+
+**채택한 보정**(2차, 측정 검증):
+- 한국어 토큰에 **조사 longest-match 제거(제거 후 ≥2자 가드) + 용언 어미 거부** 휴리스틱 적용 — POS 미지원 플랫폼의 대체 수단(POS 지원 시엔 noun 필터가 용언을 거름, 조사 제거는 양쪽 다 유효). 결정론적·단위테스트 커버.
+- **ASCII 고신뢰 tier 우선 랭킹**(isHighConfidence desc → count desc → 위치) — 희소 distinctive ASCII 용어가 cap 안에 먼저 들어감.
+- 측정 후: 용언·조사 파편 전량 제거, 옵션화/로직/매핑 stem 병합, Liquibase/dry-run 선두 생존 확인.
+
+**남은 한계**: 저distinctiveness 일반명사(영향·범위·구현·배경 등)는 여전히 잔존(유효 명사라 무해, cap 하위). 완전 제거는 **다른 회의 corpus 대조 TF-IDF**가 필요 — 보류(추출기를 MeetingStore와 결합하지 않기 위해). 조사/용언 목록 완전성은 휴리스틱이라 테스트로 방어.
+
+**미완료(heavier follow-up)**: 종단 LLM 교정 **CER A/B**(용어 주입 on/off, 국회 corpus + 실제 provider)는 별도. 이번엔 추출 정밀도/재현율(상류 결정요인)만 측정.
+
 ## 다음 세션 시작점
 
-1. **Phase 1a 먼저 구현** (Codex 위임 → opus+codex 크로스리뷰 → CER 측정). 가장 안전·측정가능.
-2. 1a 효과 확인 후 1b → 2(플래그+벤치마크) 순.
-3. 구현 전 이 문서의 (1)~(4)와 한국어 추출 방법을 그대로 따른다.
+1. **Phase 1a 구현·측정 완료**(위). 남은 것: (a) 헬퍼 중복 리팩터 별도 커밋, (b) 종단 CER A/B(국회 corpus), (c) 1b(요약 맥락 발췌) → 2(STT 바이어싱, 플래그+벤치마크).
+2. 1b·2는 이 문서의 (1)~(4)와 한국어 추출 방법을 그대로 따른다.

@@ -73,7 +73,7 @@ public final class LLMCorrectionService: ObservableObject {
             text: text,
             context: LLMCorrectionContext(
                 topic: meeting.topic,
-                glossary: meeting.glossary,
+                glossary: meeting.glossaryForPrompt,
                 previousText: context,
                 runningSummary: meeting.runningSummary,
                 document: meeting.document
