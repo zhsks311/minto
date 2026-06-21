@@ -219,9 +219,9 @@
     <div class="stat-sub">senko도 FluidAudio 변환분 사용</div>
   </div>
   <div class="stat-card">
-    <div class="stat-number sm">0.12.4</div>
-    <div class="stat-label">FluidAudio 핀 버전</div>
-    <div class="stat-sub">Package.swift <code>from:</code></div>
+    <div class="stat-number sm">0.15.2</div>
+    <div class="stat-label">FluidAudio 실제 버전</div>
+    <div class="stat-sub">Package.resolved (from:0.12.4는 하한선)</div>
   </div>
   <div class="stat-card stat-card--warning">
     <div class="stat-number">4</div>
@@ -232,7 +232,7 @@
 
 <div class="summary">
   <div class="summary-label">Summary</div>
-  <p><strong>"pyannote로 더 좋은 모델로 교체"는 우리에게 이미 절반 실현된 상태다.</strong> 코드 확인 결과 Minto2의 화자분리(FluidAudio offline)는 <strong>pyannote Community-1 모델</strong>(powerset segmentation + WeSpeaker 256d 임베딩 + VBx 클러스터링)을 CoreML로 변환한 것이다. senko조차 segmentation 모델 변환을 FluidAudio에서 가져다 썼다. 세 시스템은 경쟁이 아니라 <strong>공유 계보</strong>다.</p>
+  <p><strong>"pyannote로 더 좋은 모델로 교체"는 우리에게 이미 절반 실현된 상태다.</strong> 코드 확인 결과 Minto2의 화자분리(FluidAudio offline)는 <strong>pyannote Community-1 모델</strong>(powerset segmentation + WeSpeaker 256d 임베딩 + VBx 클러스터링)을 CoreML로 변환한 것이다. senko조차 segmentation 모델 변환을 FluidAudio에서 가져다 썼다. 세 시스템은 경쟁이 아니라 <strong>공유 계보</strong>다. <strong>(2026-06-21 갱신: VBx는 FluidAudio가 pyannote를 대체한 게 아니라 community-1의 VBx 설정을 그대로 mirror한 것 — config(threshold 0.6/Fa 0.07/Fb 0.8)이 동일함 확인. 또 임베딩 변별력은 병목이 아님이 측정으로 확인됨 → 병목은 counting/클러스터링.)</strong></p>
   <p>따라서 진짜 병목은 "모델 품질"이 아니라 ① 화자 수 자동추정의 불안정성(Phase 2에서 측정·증명, 클러스터링 문제) ② provider가 FluidAudio에 강결합돼 교체 자유도가 없는 구조다. 단기 ROI가 높은 순서: <strong>min/max 화자 배선 살리기 → FluidAudio 버전 bump → provider 주입 디커플링</strong>. senko 채택과 pyannote Python 포팅은 우리 문제(온디바이스 회의록)에 손해다.</p>
 </div>
 
@@ -275,7 +275,7 @@
   <text x="333" y="120" class="flow-text-sm">WeSpeaker (ResNet)</text>
   <line x1="408" y1="120" x2="436" y2="120" class="flow-arrow"/><polygon points="436,115 446,120 436,125" class="flow-arrowhead"/>
   <rect x="446" y="100" width="150" height="40" rx="6" class="flow-box"/>
-  <text x="521" y="120" class="flow-text-sm">Agglomerative</text>
+  <text x="521" y="120" class="flow-text-sm">VBx (comm-1)</text>
   <line x1="596" y1="120" x2="624" y2="120" class="flow-arrow"/><polygon points="624,115 634,120 624,125" class="flow-arrowhead"/>
   <rect x="634" y="100" width="176" height="40" rx="6" class="flow-box"/>
   <text x="722" y="120" class="flow-text-sm">th + num/min/max</text>
@@ -313,7 +313,7 @@
   <tbody>
     <tr><td>Segmentation</td><td class="col-ours">pyannote powerset (CoreML)</td><td>pyannote powerset (PyTorch)</td><td>pyannote seg-3.0 또는 Silero VAD</td></tr>
     <tr><td>Embedding</td><td class="col-ours">WeSpeaker 256d</td><td>WeSpeaker (ResNet)</td><td>CAM++ (3D-Speaker)</td></tr>
-    <tr><td>Clustering</td><td class="col-ours">VBx</td><td>Agglomerative</td><td>Spectral 또는 UMAP+HDBSCAN</td></tr>
+    <tr><td>Clustering</td><td class="col-ours">VBx</td><td>VBx (community-1 · 3.1은 Agglomerative)</td><td>Spectral 또는 UMAP+HDBSCAN</td></tr>
     <tr><td>화자 수</td><td class="col-ours">Fa/threshold + exactSpeakerCount</td><td>threshold + num/min/max_speakers</td><td>spectral(eigengap)/HDBSCAN(밀도)</td></tr>
     <tr><td>겹침 발화</td><td class="col-ours">powerset 가능하나 matcher가 단일화</td><td>powerset 명시 지원</td><td>미지원 (한 번에 1명)</td></tr>
     <tr><td>모델 교체</td><td class="col-ours">FluidAudio 레지스트리 URL 오버라이드</td><td>프레임워크가 컴포넌트 교체 내장</td><td>VAD만 교체</td></tr>
@@ -381,7 +381,7 @@
   <tbody>
     <tr><td>①</td><td>예상 인원 입력 → exactSpeakerCount (현행 유지)</td><td>—</td><td>—</td><td>—</td><td><span class="tag tag-pass">유지</span> Phase 2가 옳음을 증명</td></tr>
     <tr><td>②</td><td>min/max 화자 배선 살리기 (UI 한 칸 + 분기)</td><td>S</td><td>낮음</td><td>Codex</td><td><span class="tag tag-low">즉효</span> 이미 배선 존재</td></tr>
-    <tr><td>③</td><td>FluidAudio 0.12.4 → 최신 버전 bump</td><td>S</td><td>낮음</td><td>직접 조사</td><td><span class="tag tag-low">고ROI</span> embeddingModelID로 de-risk됨</td></tr>
+    <tr><td>③</td><td>FluidAudio 버전 추적 (이미 0.15.2)</td><td>S</td><td>낮음</td><td>직접 조사</td><td><span class="tag tag-info">저ROI</span> 이미 최신권 — 신규 릴리스만 추적(2026-06-21 정정)</td></tr>
     <tr><td>④</td><td>provider <code>any</code> 주입 디커플링 + 테스트 격리</td><td>M</td><td>중간</td><td>Codex</td><td><span class="tag tag-medium">조건부</span> 둘째 provider 계획 시</td></tr>
     <tr><td>⑤</td><td>겹침 발화 라벨 보존</td><td>M</td><td>중간</td><td>Codex</td><td><span class="tag tag-info">후순위</span> 체감 한계적</td></tr>
     <tr><td>✕</td><td>senko 채택 / pyannote Python 포팅 / Fa·th 추가 튜닝</td><td>L</td><td>높음</td><td>—</td><td><span class="tag tag-fail">하지 말 것</span></td></tr>
@@ -400,7 +400,7 @@
   <li><strong>provider 강결합</strong>: <code>assignSpeakersIfNeeded()</code>가 concrete 타입 직접 선언 → <code>any SpeakerDiarizationProvider</code> + 외부 주입 필요(방향 ④).</li>
   <li><strong><code>diarizeWithSegmentsAndEmbeddings()</code>가 internal</strong>: 모듈 외부·테스트 접근 불가 → 임베딩 추출 단위테스트 격리 불가(④에서 함께 해소).</li>
   <li><strong>실시간 경로 미지원</strong>: 녹음(<code>TranscriptionViewModel</code>)은 <code>ChannelSpeakerLabeler</code>(채널 기반)만 사용. 라이브 화자분리는 별도 파이프라인 설계 필요.</li>
-  <li><strong>버전 표기 불일치</strong>: 메모리는 0.15.2, Package.swift는 <code>from: "0.12.4"</code> → <code>Package.resolved</code>로 실제 해소 버전 확인 후 ③ 진행.</li>
+  <li><strong>버전 확인됨(2026-06-21)</strong>: 실제 사용은 <code>0.15.2</code>(Package.resolved). <code>from: "0.12.4"</code>는 하한선일 뿐. 이미 최신권이라 ③ 버전 bump ROI는 낮음.</li>
 </ol>
 
 <details>
