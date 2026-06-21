@@ -121,8 +121,10 @@ Phase 0 신뢰성 진단(`docs/benchmark/2026-06-18-reliability-phase0-diagnosis
 - 🔶 **항목⑤ 반복측정 — 토대 함수 완료** (`205a09b`+`5a97c75`, 689 tests): `stt_repeat_statistics.summarize_repeat_cers()` 순수 집계(cer_mean/cer_std/cer_ci95, **t분포 기반** CI — 작은 N 정규근사 과소추정 방지). N=1 None(단일 측정 불신), N 미입력(순환논증 회피). **남음: N회 실행 루프(실측 재실행) + metric_summary/decision 연결.**
 - ✅ **C1 출력 루트 외부화 완료** (`a2d73c5`+`7ad3117`, 702 tests): 결과 저장 베이스 `/private/tmp` 하드코딩 → `stt_output_paths.stt_output_base()`(env `MINTO2_STT_OUTPUT_ROOT`, 미설정 시 `/private/tmp` 호환). 6파일+헬퍼. 리뷰 수정: 모듈 상수 import-시점 캡처 → **함수형 런타임 평가**(env 런타임 반영 확인), 테스트 sys.path. **디스크 정리 시 결과 소실 방지**(이번 사고 원인) + 머지 후 이식성. 빌드캐시(이미 env.get)·sherpa 설치/모델 경로는 별도(미변경, 주석).
 
+- ✅ **배선 1단계: lane matrix ↔ verdict 연결 완료** (`f8a89c5`, 704 tests): 고립됐던 `stt_engine_verdict.rank_with_ties`를 `build_stt_engine_lane_matrix.build_engine_ranking`이 호출 → CI 있으면 무승부(tie_group), 없으면 단순 순위(호환). lane이 metric의 `cer_ci95_half_width` 전달. **측정 집계 → 순위·무승부 판정이 자동 연결됨**(통합 테스트로 입증). decision 게이트 채택 판정 연결은 후속(baseline 의존).
+
 **남은 본체(스키마 ≠ 동작)**:
-- decision/regression 게이트가 phantom_rate·relative_improvement·engine_ranking·cer_std를 **판정에 사용**하도록 연결 (현재 미사용)
+- decision/regression 게이트가 engine_ranking(무승부)·relative_improvement·phantom_rate·cer_std를 **채택 판정에 사용**하도록 연결 (lane matrix까지는 연결됨, decision은 미사용)
 - 항목⑤ 실행 루프(1회→N회) + 집계 함수 호출 + N 기본값(D-N) — 실측 재실행 의존
 - 항목④ 4c~4e: relative_improvement/baseline_cer 채움 + decision 상대 delta 판정 — **baseline 엔진 결정(D2) + 반복측정 CI 의존**
 - 반복측정 실행 루프(1회→N회) + N 역산(D-N)
