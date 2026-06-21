@@ -430,6 +430,273 @@ struct MeetingCorpusTests {
         """)
     }
 
+    /// 첨부 문서에서 추출한 용어를 교정 프롬프트에 주입했을 때의 순기여를 측정한다.
+    ///
+    /// 신뢰성의 전제는 `correctionContributionCER()`와 같다. 창마다 STT는 한 번만 실행하고,
+    /// 그 raw를 OFF(기본 용어집)와 ON(문서 용어 주입 + 참고 문서) 양쪽 교정에 재사용한다.
+    /// 그래서 STT 비결정성·자막 비verbatim 바닥은 shared-raw 델타에서 상쇄된다.
+    ///
+    /// 문서는 fixture(agenda)에서 유래한다. 해당 용어가 실제 등장하는 best-case 측정
+    /// (upper-ish bound)이며, 임의 문서 대표성으로 해석하면 안 된다.
+    ///
+    /// 실행:
+    /// RUN_STT_TESTS=1 RUN_DOC_CER=1 MEETING_WAV=sample/meeting/raw/외교통일위원회_20260520_full.wav MEETING_SMI=sample/meeting/raw/외교통일위원회_20260520_smi.json MEETING_DOCUMENT=sample/meeting/documents/외교통일위원회_20260520_agenda.txt swift test -c release --filter MeetingCorpusTests/documentTermInjectionCER
+    @Test("문서 용어 주입 교정 CER A/B (OFF vs ON)")
+    func documentTermInjectionCER() async throws {
+        guard ProcessInfo.processInfo.environment["RUN_STT_TESTS"] == "1",
+              ProcessInfo.processInfo.environment["RUN_DOC_CER"] == "1" else {
+            return
+        }
+
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: Self.audioURL.path),
+              fileManager.fileExists(atPath: Self.smiURL.path) else {
+            print("[Meeting] 자료 없음 — skip")
+            return
+        }
+        guard CodexOAuthService.shared.isLoggedIn else {
+            Issue.record("Codex 미로그인 — 앱에서 먼저 로그인 필요")
+            return
+        }
+        guard let documentPath = ProcessInfo.processInfo.environment["MEETING_DOCUMENT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !documentPath.isEmpty else {
+            Issue.record("MEETING_DOCUMENT 미지정 — 문서 fixture 경로 필요")
+            return
+        }
+
+        let documentURL = documentPath.hasPrefix("/")
+            ? URL(fileURLWithPath: documentPath)
+            : URL(fileURLWithPath: fileManager.currentDirectoryPath).appendingPathComponent(documentPath)
+        guard fileManager.fileExists(atPath: documentURL.path) else {
+            Issue.record("MEETING_DOCUMENT 미지정 — 문서 fixture 경로 필요")
+            return
+        }
+        let document = try String(contentsOf: documentURL, encoding: .utf8)
+
+        let defaultCorrWindows = 20
+        let insertionRatio = 1.2
+        let previewCharacterLimit = 120
+        let corrWindows = ProcessInfo.processInfo.environment["MEETING_CORR_WINDOWS"].flatMap(Int.init) ?? defaultCorrWindows
+        let topic = ProcessInfo.processInfo.environment["MEETING_TOPIC"]
+            ?? "국회 외교통일위원회 전체회의 (외교안보 현안질의)"
+        let baseGlossary = ProcessInfo.processInfo.environment["MEETING_GLOSSARY"]
+            ?? "위원장\n간사\n의사일정\n안건\n청원\n현안질의"
+        let onGlossary = DocumentTermExtractor.mergeGlossary(
+            userGlossary: baseGlossary,
+            document: document,
+            limit: DocumentTermExtractor.defaultLimit
+        )
+
+        func glossaryLineCount(_ glossary: String) -> Int {
+            glossary
+                .split(whereSeparator: { $0.isNewline })
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .count
+        }
+
+        func cerRate(_ stats: (distance: Int, refLen: Int)) -> Double {
+            stats.refLen > 0 ? Double(stats.distance) / Double(stats.refLen) : 0
+        }
+
+        func updateTouch(
+            raw: String,
+            corrected: String,
+            touchedWindows: inout Int,
+            touchDistance: inout Int,
+            touchedRawLen: inout Int,
+            insertionFlags: inout Int
+        ) -> (changed: Bool, insertion: Bool, rawLen: Int, correctedLen: Int, editDistance: Int) {
+            let rawLen = Self.strippedCount(raw)
+            let correctedLen = Self.strippedCount(corrected)
+            guard corrected != raw else {
+                return (false, false, rawLen, correctedLen, 0)
+            }
+
+            let stats = Self.cerStats(reference: raw, hypothesis: corrected)
+            touchedWindows += 1
+            touchDistance += stats.distance
+            touchedRawLen += stats.refLen
+
+            let isInsertion = rawLen > 0 && Double(correctedLen) > Double(rawLen) * insertionRatio
+            if isInsertion {
+                insertionFlags += 1
+            }
+            return (true, isInsertion, rawLen, correctedLen, stats.distance)
+        }
+
+        let injectedTermCount = max(0, glossaryLineCount(onGlossary) - glossaryLineCount(baseGlossary))
+        print("""
+        [DocCER] 문서 주입 용어 수: \(injectedTermCount)
+        [DocCER] ON glossary:
+        \(onGlossary)
+        """)
+
+        let captions = try Self.parseSMI(from: Self.smiURL)
+        let windows = Self.mergeIntoWindows(captions, windowSeconds: Self.windowSeconds)
+        let targetWindows = Array(windows.prefix(max(0, corrWindows)))
+        guard !targetWindows.isEmpty else {
+            Issue.record("병합된 창이 없습니다")
+            return
+        }
+
+        let samples = try Self.readWAVSamples(from: Self.audioURL)
+        let service = try await STTBenchmarkEngineSupport.loadService()
+        guard case .loaded = service.modelState else {
+            Issue.record("엔진 로드 실패: \(service.modelState)")
+            return
+        }
+        let engineLabel = STTBenchmarkEngineSupport.displayName(for: service)
+
+        print("\n=== 문서 용어 주입 교정 CER A/B [\(engineLabel) → Codex] (window=\(Self.windowSeconds)s, \(targetWindows.count)/\(windows.count)창) ===")
+
+        var allRefText = ""
+        var allRawText = ""
+        var allOffText = ""
+        var allOnText = ""
+        var allOffCleanText = ""
+        var allOnCleanText = ""
+        var nonEmptyWindows = 0
+        var touchedOffWindows = 0
+        var touchedOnWindows = 0
+        var touchOffDistance = 0
+        var touchOnDistance = 0
+        var touchedOffRawLen = 0
+        var touchedOnRawLen = 0
+        var fallbackOffCount = 0
+        var fallbackOnCount = 0
+        var insertionOffFlags = 0
+        var insertionOnFlags = 0
+        var prevRaw = ""
+
+        for (index, window) in targetWindows.enumerated() {
+            let startSample = max(0, Int(window.start * Double(Self.sampleRate)))
+            let endSample = min(samples.count, Int(window.end * Double(Self.sampleRate)))
+            guard endSample > startSample else {
+                continue
+            }
+
+            let raw = try await service.transcribe(pcmSamples: Array(samples[startSample..<endSample])).segment.text
+            var correctedOff = raw
+            var correctedOn = raw
+            var offInsertion = false
+            var onInsertion = false
+
+            if !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                nonEmptyWindows += 1
+
+                let promptOff = CorrectionPrompt.build(
+                    topic: topic,
+                    glossary: baseGlossary,
+                    context: prevRaw,
+                    text: raw
+                )
+                do {
+                    correctedOff = try await CodexOAuthService.shared.correct(
+                        instructions: promptOff.instructions,
+                        userContent: promptOff.userContent
+                    )
+                } catch {
+                    fallbackOffCount += 1
+                    correctedOff = raw
+                    print("[DocCER][OFF] #\(index) 교정 실패(폴백): \(error.localizedDescription)")
+                }
+
+                let promptOn = CorrectionPrompt.build(
+                    topic: topic,
+                    glossary: onGlossary,
+                    context: prevRaw,
+                    text: raw,
+                    document: document
+                )
+                do {
+                    correctedOn = try await CodexOAuthService.shared.correct(
+                        instructions: promptOn.instructions,
+                        userContent: promptOn.userContent
+                    )
+                } catch {
+                    fallbackOnCount += 1
+                    correctedOn = raw
+                    print("[DocCER][ON] #\(index) 교정 실패(폴백): \(error.localizedDescription)")
+                }
+
+                let offTouch = updateTouch(
+                    raw: raw,
+                    corrected: correctedOff,
+                    touchedWindows: &touchedOffWindows,
+                    touchDistance: &touchOffDistance,
+                    touchedRawLen: &touchedOffRawLen,
+                    insertionFlags: &insertionOffFlags
+                )
+                let onTouch = updateTouch(
+                    raw: raw,
+                    corrected: correctedOn,
+                    touchedWindows: &touchedOnWindows,
+                    touchDistance: &touchOnDistance,
+                    touchedRawLen: &touchedOnRawLen,
+                    insertionFlags: &insertionOnFlags
+                )
+                offInsertion = offTouch.insertion
+                onInsertion = onTouch.insertion
+
+                if offTouch.changed {
+                    print("[DocCER][OFF] #\(index) (raw \(offTouch.rawLen)→off \(offTouch.correctedLen)자, 편집 \(offTouch.editDistance))\(offTouch.insertion ? " 추가의심" : "")")
+                    print("    RAW: \(raw.prefix(previewCharacterLimit))")
+                    print("    OFF: \(correctedOff.prefix(previewCharacterLimit))")
+                }
+                if onTouch.changed {
+                    print("[DocCER][ON] #\(index) (raw \(onTouch.rawLen)→on \(onTouch.correctedLen)자, 편집 \(onTouch.editDistance))\(onTouch.insertion ? " 추가의심" : "")")
+                    print("    RAW: \(raw.prefix(previewCharacterLimit))")
+                    print("    ON : \(correctedOn.prefix(previewCharacterLimit))")
+                }
+            }
+
+            allRefText += window.text + " "
+            allRawText += raw + " "
+            allOffText += correctedOff + " "
+            allOnText += correctedOn + " "
+            allOffCleanText += (offInsertion ? raw : correctedOff) + " "
+            allOnCleanText += (onInsertion ? raw : correctedOn) + " "
+            prevRaw = raw
+        }
+
+        let rawCER = cerRate(Self.cerStats(reference: allRefText, hypothesis: allRawText))
+        let offCER = cerRate(Self.cerStats(reference: allRefText, hypothesis: allOffText))
+        let onCER = cerRate(Self.cerStats(reference: allRefText, hypothesis: allOnText))
+        let offCleanCER = cerRate(Self.cerStats(reference: allRefText, hypothesis: allOffCleanText))
+        let onCleanCER = cerRate(Self.cerStats(reference: allRefText, hypothesis: allOnCleanText))
+        let onOffDeltaPP = (onCER - offCER) * 100
+        let offRawDeltaPP = (offCER - rawCER) * 100
+        let onRawDeltaPP = (onCER - rawCER) * 100
+        let cleanOnOffDeltaPP = (onCleanCER - offCleanCER) * 100
+        let touchOffRate = touchedOffRawLen > 0 ? Double(touchOffDistance) / Double(touchedOffRawLen) : 0
+        let touchOnRate = touchedOnRawLen > 0 ? Double(touchOnDistance) / Double(touchedOnRawLen) : 0
+
+        print("""
+        ────────────────────────────────────────
+        창 수              : \(targetWindows.count) (비어있지 않은 raw \(nonEmptyWindows))
+        문서 주입 용어 수  : \(injectedTermCount)
+        global raw CER     : \(String(format: "%.1f%%", rawCER * 100))
+        global OFF CER     : \(String(format: "%.1f%%", offCER * 100))
+        global ON  CER     : \(String(format: "%.1f%%", onCER * 100))
+        델타(ON-OFF)       : \(String(format: "%+.1fpp", onOffDeltaPP)) (음수=문서 용어 주입 개선)
+        델타(OFF-raw)      : \(String(format: "%+.1fpp", offRawDeltaPP)) (음수=기본 교정 개선)
+        델타(ON-raw)       : \(String(format: "%+.1fpp", onRawDeltaPP)) (음수=문서 주입 포함 교정 개선)
+        ── 날조 탈오염(추가 의심 창을 raw로 되돌림) ──
+        clean OFF CER      : \(String(format: "%.1f%%", offCleanCER * 100))
+        clean ON  CER      : \(String(format: "%.1f%%", onCleanCER * 100))
+        clean 델타(ON-OFF) : \(String(format: "%+.1fpp", cleanOnOffDeltaPP)) (음수=문서 용어 주입 개선)
+        OFF touch rate     : \(String(format: "%.1f%%", touchOffRate * 100)) (변경 창 \(touchedOffWindows), 폴백 \(fallbackOffCount), 추가 의심 \(insertionOffFlags))
+        ON  touch rate     : \(String(format: "%.1f%%", touchOnRate * 100)) (변경 창 \(touchedOnWindows), 폴백 \(fallbackOnCount), 추가 의심 \(insertionOnFlags))
+        ========================================
+        해석: on−off 델타가 문서 용어 주입의 substantive 기여이며, 절대 CER은 무시하고 공유-raw 델타만 신뢰.
+          폴백 창은 corrected=raw라 델타에 0 기여 — 교정 효과가 아니라 측정 누락이다.
+          문서 fixture는 agenda best-case 측정(upper-ish bound)이며 임의 문서 대표성이 아니다.
+
+        """)
+    }
+
     /// 공백·문장부호 제거 후 글자 수(insertion 판정용).
     private static func strippedCount(_ text: String) -> Int {
         text.filter { !$0.isWhitespace && !$0.isPunctuation }.count
