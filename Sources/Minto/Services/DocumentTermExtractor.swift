@@ -21,6 +21,7 @@ public enum DocumentTermExtractor {
         pattern: asciiPattern,
         options: [.allowCommentsAndWhitespace]
     )
+    private static let foldLocale = Locale(identifier: "en_US_POSIX")
 
     // NaturalLanguage가 한국어 POS를 지원하지 않는 플랫폼에서 용언/조사 유입을 줄이는 휴리스틱이다.
     private static let koreanVerbEndings = [
@@ -191,7 +192,7 @@ public enum DocumentTermExtractor {
         return stem
     }
 
-    private static func existingComparableKeys(from terms: [String]) -> Set<String> {
+    static func existingComparableKeys(from terms: [String]) -> Set<String> {
         var keys = Set<String>()
         for term in terms {
             let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -209,14 +210,14 @@ public enum DocumentTermExtractor {
         }
     }
 
-    private static func glossaryLines(from glossary: String) -> [String] {
+    static func glossaryLines(from glossary: String) -> [String] {
         glossary
             .split(whereSeparator: { $0.isNewline })
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
 
-    private static func glossaryTermHead(_ line: String) -> String {
+    static func glossaryTermHead(_ line: String) -> String {
         let separators = ["=", ":", "："]
         var head = line
         for separator in separators {
@@ -234,11 +235,11 @@ public enum DocumentTermExtractor {
         return text.trimmingCharacters(in: trimSet)
     }
 
-    private static func comparableText(_ text: String) -> String {
+    static func comparableText(_ text: String) -> String {
         removePunctuationSymbolsAndWhitespace(text)
             .folding(
                 options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
-                locale: Locale(identifier: "en_US_POSIX")
+                locale: foldLocale
             )
     }
 
@@ -251,7 +252,7 @@ public enum DocumentTermExtractor {
         return koreanStopwords.contains(key) || englishStopwords.contains(key)
     }
 
-    private static func removePunctuationSymbolsAndWhitespace(_ text: String) -> String {
+    static func removePunctuationSymbolsAndWhitespace(_ text: String) -> String {
         String(text.unicodeScalars.filter { scalar in
             !CharacterSet.punctuationCharacters.contains(scalar)
                 && !CharacterSet.symbols.contains(scalar)

@@ -43,17 +43,14 @@ public final class MeetingContext: ObservableObject {
     public var glossaryForPrompt: String {
         guard !documentTerms.isEmpty else { return glossary }
 
-        let userLines = Self.glossaryLines(from: glossary)
-        var existingKeys = Set<String>()
-        for line in userLines {
-            Self.insertComparableKeys(for: line, into: &existingKeys)
-        }
+        let userLines = DocumentTermExtractor.glossaryLines(from: glossary)
+        var existingKeys = DocumentTermExtractor.existingComparableKeys(from: userLines)
 
         var mergedLines = userLines
         for term in documentTerms {
             let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
-            let key = Self.comparableText(trimmed)
+            let key = DocumentTermExtractor.comparableText(trimmed)
             guard !key.isEmpty, !existingKeys.contains(key) else { continue }
             existingKeys.insert(key)
             mergedLines.append(trimmed)
@@ -78,7 +75,7 @@ public final class MeetingContext: ObservableObject {
         let documentSnapshot = document
         guard !documentSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        let existingTerms = Self.glossaryLines(from: glossary)
+        let existingTerms = DocumentTermExtractor.glossaryLines(from: glossary)
         let extractionID = UUID()
         let limit = DocumentTermExtractor.defaultLimit
         documentTermExtractionID = extractionID
@@ -106,51 +103,5 @@ public final class MeetingContext: ObservableObject {
         documentTermExtractionID = nil
         runningSummary = ""
         finalSummary = nil
-    }
-
-    private static func glossaryLines(from glossary: String) -> [String] {
-        glossary
-            .split(whereSeparator: { $0.isNewline })
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-
-    private static func insertComparableKeys(for line: String, into keys: inout Set<String>) {
-        insertComparableKey(line, into: &keys)
-        insertComparableKey(glossaryTermHead(line), into: &keys)
-    }
-
-    private static func insertComparableKey(_ term: String, into keys: inout Set<String>) {
-        let key = comparableText(term)
-        if !key.isEmpty {
-            keys.insert(key)
-        }
-    }
-
-    private static func glossaryTermHead(_ line: String) -> String {
-        let separators = ["=", ":", "："]
-        var head = line
-        for separator in separators {
-            if let range = head.range(of: separator) {
-                head = String(head[..<range.lowerBound])
-            }
-        }
-        return head.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func comparableText(_ text: String) -> String {
-        removePunctuationSymbolsAndWhitespace(text)
-            .folding(
-                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
-                locale: Locale(identifier: "en_US_POSIX")
-            )
-    }
-
-    private static func removePunctuationSymbolsAndWhitespace(_ text: String) -> String {
-        String(text.unicodeScalars.filter { scalar in
-            !CharacterSet.punctuationCharacters.contains(scalar)
-                && !CharacterSet.symbols.contains(scalar)
-                && !CharacterSet.whitespacesAndNewlines.contains(scalar)
-        })
     }
 }
