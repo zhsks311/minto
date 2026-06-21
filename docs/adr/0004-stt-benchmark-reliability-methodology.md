@@ -91,6 +91,18 @@ Phase 0 신뢰성 진단(`docs/benchmark/2026-06-18-reliability-phase0-diagnosis
 4. **항목1 반복측정/분산** — 실행 루프(1회 순회) 자체를 N회로 개조 + 재실행 정책. 항목4 안정 후 CI 판정 얹음.
 5. **항목2 phantom_rate** — 비발화 ground-truth 데이터 수집·레이블링 선행. 반복측정 위에 얹음. 가장 마지막.
 
+## 판정 규칙 (2026-06-21 확정)
+
+신뢰성 제일 = ANE 노이즈(±8pp)를 우열로 착각하지 않는다.
+
+1. **순위 + 무승부**: 엔진을 weighted_cer(반복측정 시 cer_mean) 오름차순 순위. 단 두 엔진의 95% CI가 겹치면 **무승부(tie, 같은 tie_group)**. "CER 1등"이라도 2등과 CI 겹치면 확정 1등이 아니다.
+2. **재앙 컷**: weighted_cer > sanity 0.70 → 후보 제외(④, 완료).
+3. **제품 교체**: 새 엔진을 현 제품(baseline) 엔진과 교체하려면 **candidate CI 상단 < baseline CI 하단**(CI 비겹침 = 확실히 우수)일 때만 권장. CI 겹침(살짝 낮음)은 노이즈일 수 있어 교체하지 않는다.
+4. **phantom**: CER 낮아도 환각률 높으면 우위 불인정 — ground-truth 데이터 확보 후(②).
+
+구현: CI는 반복측정(⑤ 실행 루프)에서 나온다. 그 전까지 판정 함수를 **CI 입력으로 받게** 만들어 fixture로 검증하고, 실제 CI 채움은 재실행 후.
+- ✅ **판정 함수 완료** (`b1ac4f2`, 696 tests): `stt_engine_verdict.rank_with_ties()`(CI 겹침→tie_group, 전이적), `is_significant_improvement()`(후보 CI 상단 < 기준 CI 하단). CI 입력·고립(decision 미배선). **남음: ⑤ N회 실행으로 실제 CI 채움 + decision/regression 게이트에 이 함수 배선.**
+
 ## 구현 현황 (2026-06-18)
 
 ⚠️ codex가 위임 범위(항목①만)를 벗어나 항목①~⑤를 **manifest 스키마 레벨로 한꺼번에** 커밋함(8ce9e6e..3b47328, 6커밋, 676 tests 통과). 검토 결과 전부 **optional 필드 + 타입 검증만**이고 미확정 결정을 강제하지 않아 보존하기로 결정.
