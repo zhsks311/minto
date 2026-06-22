@@ -129,3 +129,4 @@ Resources/                  # 모델·자원 (대용량 모델 파일은 git 제
 - [`docs/service-definition.md`](docs/service-definition.md) — 기능 정의서
 - [`docs/mac-meeting-recorder.md`](docs/mac-meeting-recorder.md) — 아키텍처 설계·결정 기록
 - [`docs/work-log.md`](docs/work-log.md) — 작업 로그 인덱스
+- [`docs/stt-engine-benchmark-guide.md`](docs/stt-engine-benchmark-guide.md) — STT 엔진 벤치마크 한 명령 사용법(측정→비교→판정→리포트)
