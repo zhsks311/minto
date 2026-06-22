@@ -4,7 +4,7 @@
 
 > **이 프레임워크는 `tools/stt-benchmark/` 자체 완결형 모듈로 있다**(앱 Swift와 분리, 순수 Python). 최신 사용법·구조는 [`tools/stt-benchmark/README.md`](../tools/stt-benchmark/README.md)가 정본이다. 이 문서는 개념(판정 규칙·신뢰성)을 함께 설명한다.
 >
-> 신뢰성 설계의 근거(왜 반복측정·신뢰구간·sanity 상한인가)는 [ADR 0004](adr/0004-stt-benchmark-reliability-methodology.md).
+> 신뢰성 설계의 근거(왜 반복측정·신뢰구간·sanity 상한인가)는 [ADR 0004](adr/0004-stt-benchmark-reliability-methodology.md). 용어가 생소하면 [용어집](stt-benchmark-glossary.md)부터.
 
 ## 한 줄 요약
 
