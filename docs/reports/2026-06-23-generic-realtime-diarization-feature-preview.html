@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>실시간 화자분리 — 기능 설계 프리뷰</title>
+<style>
+  :root{
+    --bg:#fff;--surface:#f6f8fa;--border:#d0d7de;--text:#1f2328;--text-muted:#656d76;--accent:#0969da;--code-bg:#f6f8fa;
+    --c-critical:#cf222e;--c-critical-bg:#fff0ee;--c-critical-border:#ff818266;
+    --c-high:#9a6700;--c-high-bg:#fff8c5;--c-high-border:#f1e05a99;
+    --c-medium:#0550ae;--c-medium-bg:#ddf4ff;--c-medium-border:#79c0ff99;
+    --c-low:#116329;--c-low-bg:#dafbe1;--c-low-border:#56d36499;
+    --pass-bg:#f0fdf4;--pass-border:#bbf7d0;--fail-bg:#fff0ee;--fail-border:#fecaca;
+    --me:#0969da;--s2:#9a6700;--s3:#116329;
+    --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;
+    --font-mono:'SF Mono','Fira Code',Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--text-muted:#8b949e;--accent:#58a6ff;--code-bg:#161b22;
+    --c-critical:#ff7b72;--c-critical-bg:#2d0f0f;--c-critical-border:#ff7b7266;
+    --c-high:#e3b341;--c-high-bg:#2d1f04;--c-high-border:#e3b34166;
+    --c-medium:#79c0ff;--c-medium-bg:#051d4d;--c-medium-border:#79c0ff66;
+    --c-low:#56d364;--c-low-bg:#0a2d19;--c-low-border:#56d36466;
+    --pass-bg:#0a2d19;--pass-border:#56d36444;--fail-bg:#2d0f0f;--fail-border:#ff7b7244;
+    --me:#58a6ff;--s2:#e3b341;--s3:#56d364;
+  }}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-body);background:var(--bg);color:var(--text);font-size:15px;line-height:1.65;max-width:900px;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+  h1{font-size:1.6rem;font-weight:700;letter-spacing:-.01em}
+  h2{font-size:1.1rem;font-weight:600;margin:2.5rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--border)}
+  p{margin-bottom:.75rem}ul{padding-left:1.5rem;margin-bottom:.75rem}li{margin-bottom:.3rem}
+  a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+  .summary{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:1.1rem 1.4rem;margin:1.25rem 0 2rem}
+  .summary-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:.4rem}
+  .summary p:last-child{margin-bottom:0}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:.75rem;margin:1.25rem 0 2rem}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;display:flex;flex-direction:column;gap:.25rem}
+  .stat-card--info{background:var(--c-medium-bg);border-color:var(--c-medium-border)}
+  .stat-card--success{background:var(--pass-bg);border-color:var(--pass-border)}
+  .stat-card--warning{background:var(--c-high-bg);border-color:var(--c-high-border)}
+  .stat-number{font-size:1.5rem;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+  .stat-number.sm{font-size:1.05rem}
+  .stat-card--info .stat-number{color:var(--c-medium)}.stat-card--success .stat-number{color:var(--c-low)}.stat-card--warning .stat-number{color:var(--c-high)}
+  .stat-label{font-size:.8rem;color:var(--text-muted);font-weight:500}.stat-sub{font-size:.74rem;color:var(--text-muted);margin-top:.1rem}
+  .finding{border:1px solid var(--border);border-left-width:3px;border-radius:6px;padding:.9rem 1.1rem;margin:.65rem 0;border-left-color:var(--accent);background:var(--surface)}
+  .finding-header{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.35rem}
+  .finding-title{font-weight:600;font-size:.95rem}
+  .finding p{margin-bottom:0;font-size:.9rem}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:1.4rem;height:1.4rem;border-radius:50%;background:var(--accent);color:#fff;font-size:.78rem;font-weight:700;flex-shrink:0}
+  table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.9rem;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  th{text-align:left;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);background:var(--surface);border-bottom:2px solid var(--border);padding:.5rem .9rem}
+  td{padding:.55rem .9rem;vertical-align:middle;border-top:1px solid var(--border)}
+  .vrow-pass{background:var(--pass-bg)}.vrow-pend{background:var(--c-high-bg)}
+  .tag{display:inline-block;font-size:.72rem;font-weight:700;padding:.1rem .45rem;border-radius:4px;font-family:var(--font-mono)}
+  .tag-pass{background:var(--pass-bg);color:var(--c-low)}.tag-pend{background:var(--c-high-bg);color:var(--c-high)}
+  code{font-family:var(--font-mono);font-size:.85em;background:var(--code-bg);padding:.12em .35em;border-radius:4px;border:1px solid var(--border)}
+  details{border:1px solid var(--border);border-radius:6px;margin:.6rem 0}
+  details>summary{padding:.65rem 1rem;cursor:pointer;font-weight:500;font-size:.92rem;background:var(--surface);list-style:none;display:flex;align-items:center;gap:.5rem}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary::before{content:'▶';font-size:.65rem;color:var(--text-muted)}
+  details[open]>summary::before{content:'▼'}
+  .details-body{padding:1rem 1.25rem}
+  /* ── 목업 ── */
+  .mock-wrap{display:flex;gap:1rem;flex-wrap:wrap;margin:1.1rem 0}
+  .mock{flex:1;min-width:260px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg)}
+  .mock-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:.5rem .8rem;font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:.4rem}
+  .dotred{width:9px;height:9px;border-radius:50%;background:var(--c-critical);display:inline-block}
+  .mock-body{padding:.8rem;display:flex;flex-direction:column;gap:.6rem}
+  .line{font-size:.86rem}
+  .who{font-weight:700;font-size:.8rem;display:inline-block;padding:.05rem .4rem;border-radius:4px;margin-bottom:.15rem}
+  .who-me{color:var(--me);background:color-mix(in srgb,var(--me) 14%,transparent)}
+  .who-s2{color:var(--s2);background:color-mix(in srgb,var(--s2) 16%,transparent)}
+  .who-s3{color:var(--s3);background:color-mix(in srgb,var(--s3) 16%,transparent)}
+  .prov{font-size:.66rem;color:var(--text-muted);font-family:var(--font-mono);border:1px dashed var(--border);border-radius:3px;padding:0 .25rem;margin-left:.3rem}
+  .said{color:var(--text)}
+  .mock-cap{font-size:.74rem;color:var(--text-muted);text-align:center;padding:.3rem .5rem .6rem}
+  .fig{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.1rem 1rem .5rem;margin:1.1rem 0}
+  .fig svg{width:100%;height:auto;display:block;overflow:visible}
+  .fig-cap{font-size:.76rem;color:var(--text-muted);text-align:center;margin-top:.5rem}
+  .box{fill:var(--surface);stroke:var(--border);stroke-width:1.5}
+  .box-warn{fill:var(--c-high-bg);stroke:var(--c-high-border);stroke-width:1.5}
+  .box-ok{fill:var(--c-low-bg);stroke:var(--c-low-border);stroke-width:1.5}
+  .t{font-family:var(--font-body);font-size:12px;font-weight:700;fill:var(--text);text-anchor:middle}
+  .ts{font-family:var(--font-body);font-size:10px;fill:var(--text-muted);text-anchor:middle}
+  .arr{stroke:var(--text-muted);stroke-width:2}.arrh{fill:var(--text-muted)}
+  footer{margin-top:3.5rem;padding-top:1rem;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:.78rem;color:var(--text-muted);display:flex;gap:1.5rem;flex-wrap:wrap}
+  @media print{body{max-width:none;padding:0;background:#fff;color:#000}.stat-card,.fig,.mock,.finding{border:1px solid #ccc}a[href]::after{content:" ("attr(href)")";font-size:.8em;color:#666}}
+</style>
+</head>
+<body>
+
+<h1>실시간 화자분리 — 기능 설계 프리뷰</h1>
+<p style="color:var(--text-muted);font-size:.9rem">회의 중 "지금 누가 말하는지"를 실시간으로 보여주고, 저장할 때 정확히 확정하는 기능.</p>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--success"><div class="stat-number sm">구현 직전</div><div class="stat-label">현재 단계</div><div class="stat-sub">설계·검토·feasibility 완료</div></div>
+  <div class="stat-card stat-card--info"><div class="stat-number sm">0.1초 / ≤10명</div><div class="stat-label">라이브 표시</div><div class="stat-sub">LS-EEND, CPU</div></div>
+  <div class="stat-card"><div class="stat-number sm">DER 12%</div><div class="stat-label">저장본 정확도</div><div class="stat-sub">VBx 최종 확정</div></div>
+  <div class="stat-card stat-card--success"><div class="stat-number">55~64×</div><div class="stat-label">M3 Pro 여유</div><div class="stat-sub">실측 PASS</div></div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">한눈에</div>
+  <p>회의를 녹음하는 동안 <strong>"나 / 화자 2 / 화자 3"처럼 누가 말하는지 실시간으로 라벨</strong>을 보여주고(빠른 AI·임시), 회의가 끝나 저장할 때 <strong>더 정확한 AI로 처음부터 다시 정리해 라벨을 확정</strong>한다(느리지만 정확). "내 마이크 = 나"는 항상 알고 시작하며, 사용자가 직접 고친 라벨은 보존한다. 문제가 생기면 기존 "나/상대" 라벨로 조용히 후퇴한다. <strong>설계·전문가 검토·M3 Pro 성능 확인까지 끝나 구현 직전 상태.</strong></p>
+</div>
+
+<h2>1. 사용자가 보는 것</h2>
+<div class="mock-wrap">
+  <div class="mock">
+    <div class="mock-bar"><span class="dotred"></span> 녹음 중 — 실시간 (임시)</div>
+    <div class="mock-body">
+      <div class="line"><span class="who who-me">나</span><br><span class="said">오늘 안건은 출시 일정입니다.</span></div>
+      <div class="line"><span class="who who-s2">화자 2</span><span class="prov">임시</span><br><span class="said">네, 다음 주까지 가능할까요?</span></div>
+      <div class="line"><span class="who who-s3">화자 3</span><span class="prov">임시</span><br><span class="said">QA 일정이 빠듯합니다.</span></div>
+    </div>
+    <div class="mock-cap">빠르게(0.1초) 갱신 · 라벨은 임시라 조금 흔들릴 수 있음</div>
+  </div>
+  <div class="mock">
+    <div class="mock-bar" style="color:var(--c-low)">✓ 저장 후 — 확정</div>
+    <div class="mock-body">
+      <div class="line"><span class="who who-me">나</span><br><span class="said">오늘 안건은 출시 일정입니다.</span></div>
+      <div class="line"><span class="who who-s2">김부장</span><br><span class="said">네, 다음 주까지 가능할까요?</span></div>
+      <div class="line"><span class="who who-s3">이대리</span><br><span class="said">QA 일정이 빠듯합니다.</span></div>
+    </div>
+    <div class="mock-cap">정확하게 다시 정리 + 등록된 사람은 실명으로</div>
+  </div>
+</div>
+<p style="font-size:.85rem;color:var(--text-muted)">※ 목업은 동작 개념도이며 실제 UI 디자인은 별도(재조정 화면은 Pencil 설계 예정).</p>
+
+<h2>2. 어떻게 동작하나</h2>
+<div class="fig">
+  <svg viewBox="0 0 820 132" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="동작 흐름">
+    <rect x="12" y="46" width="150" height="44" rx="8" class="box-warn"/><text x="87" y="64" class="t">녹음 중</text><text x="87" y="80" class="ts">라이브 AI → 임시 라벨</text>
+    <line x1="162" y1="68" x2="202" y2="68" class="arr"/><polygon points="202,62 214,68 202,74" class="arrh"/>
+    <rect x="216" y="46" width="160" height="44" rx="8" class="box"/><text x="296" y="64" class="t">녹음 종료·저장</text><text x="296" y="80" class="ts">정확 AI(VBx) 재실행</text>
+    <line x1="376" y1="68" x2="416" y2="68" class="arr"/><polygon points="416,62 428,68 416,74" class="arrh"/>
+    <rect x="430" y="46" width="170" height="44" rx="8" class="box"/><text x="515" y="64" class="t">재조정</text><text x="515" y="80" class="ts">임시→확정 라벨 교체</text>
+    <line x1="600" y1="68" x2="640" y2="68" class="arr"/><polygon points="640,62 652,68 640,74" class="arrh"/>
+    <rect x="654" y="46" width="154" height="44" rx="8" class="box-ok"/><text x="731" y="64" class="t">정확한 회의록</text><text x="731" y="80" class="ts">실명·확정</text>
+    <text x="410" y="22" class="ts">"나" 마이크 + (장차)등록 보이스프린트 = 앵커로 라이브·최종 모두 도움 ⚓</text>
+    <line x1="410" y1="28" x2="410" y2="44" class="arr" stroke-dasharray="3 2"/>
+  </svg>
+  <div class="fig-cap">라이브(빠름·임시) → 저장 시 정확 AI로 재정리 → 확정. 같은 일을 두 번 해 "실시간"과 "정확" 둘 다 잡는다.</div>
+</div>
+
+<h2>3. 핵심 동작 5가지</h2>
+<div class="finding"><div class="finding-header"><span class="num">1</span><span class="finding-title">실시간 임시 라벨</span></div><p>녹음 중 0.1초마다 "지금 누가 말하나"를 추측해 화면에 표시(최대 10명). 빠른 대신 라벨이 조금 흔들릴 수 있고, 그건 저장 시 고쳐진다.</p></div>
+<div class="finding"><div class="finding-header"><span class="num">2</span><span class="finding-title">앵커 — 아는 사람 먼저 고정 ⚓</span></div><p>"내 마이크 = 나"는 100% 알고 시작. (이후 단계) 전에 등록한 사람은 목소리 지문으로 자동 인식. 맨바닥 추측보다 정확.</p></div>
+<div class="finding"><div class="finding-header"><span class="num">3</span><span class="finding-title">저장 시 정확하게 확정</span></div><p>회의가 끝나면 녹음 전체를 정확한 AI(VBx)로 다시 분석해 최종 라벨로 자동 교체. 저장된 회의록은 DER 12% 수준 정확도.</p></div>
+<div class="finding"><div class="finding-header"><span class="num">4</span><span class="finding-title">사용자 편집 보존</span></div><p>녹음 중 사용자가 직접 고친 화자 라벨은 저장 시 재정리가 <strong>덮어쓰지 않는다</strong>. 사람의 수정이 항상 우선.</p></div>
+<div class="finding"><div class="finding-header"><span class="num">5</span><span class="finding-title">문제 시 자동 후퇴 (fail-soft)</span></div><p>라이브 화자분리가 에러·과부하면 앱이 알아서 기존 "나/상대" 채널 라벨로 강등. 녹음·받아쓰기는 절대 안 멈춘다.</p></div>
+
+<h2>4. 확정된 것 vs 남은 것</h2>
+<table>
+  <thead><tr><th>항목</th><th>상태</th><th>근거</th></tr></thead>
+  <tbody>
+    <tr class="vrow-pass"><td>설계(앵커드 하이브리드)</td><td><span class="tag tag-pass">완료</span></td><td>ADR 0005</td></tr>
+    <tr class="vrow-pass"><td>전문가 다중관점 검토</td><td><span class="tag tag-pass">통과</span></td><td>architect + critic 반영</td></tr>
+    <tr class="vrow-pass"><td>M3 Pro 성능(컴퓨트)</td><td><span class="tag tag-pass">PASS</span></td><td>LS-EEND CPU 55~64× 실측</td></tr>
+    <tr class="vrow-pend"><td>구현</td><td><span class="tag tag-pend">대기</span></td><td>provider·UseCase·재조정·fail-soft</td></tr>
+    <tr class="vrow-pend"><td>잔여 스모크</td><td><span class="tag tag-pend">구현 시</span></td><td>스트리밍 RTFx·동시 구동·장시간 발열</td></tr>
+    <tr class="vrow-pend"><td>재조정 UX 디자인</td><td><span class="tag tag-pend">필수</span></td><td>Pencil 설계 예정</td></tr>
+  </tbody>
+</table>
+
+<h2>5. 솔직한 열린 질문</h2>
+<p>기술적 "고장" 위험은 낮습니다(성능 실측 통과, 문제 시 자동 후퇴). 진짜 판단 포인트는 <strong>"라이브의 임시 라벨이 (한국어에서) 보여줄 만큼 쓸 만한가"</strong>입니다 — 라이브 AI는 부정확할 수 있고(정확도는 저장본이 책임짐), 너무 흔들리면 라이브는 "나/상대"만 보여주는 가벼운 모드로 둘 수도 있습니다. 큰 구현 전에 <strong>짧은 라이브 스모크(실제로 띄워 라벨 흔들림 확인)</strong>로 가늠하는 게 합리적입니다.</p>
+
+<details>
+  <summary>참고 문서 / 근거</summary>
+  <div class="details-body">
+    <ul>
+      <li><code>docs/adr/0005-realtime-diarization-anchored-hybrid.md</code> — 설계 결정(리뷰 반영)</li>
+      <li><code>docs/reports/2026-06-22-analysis-realtime-diarization-design.html</code> — 쉬운 말 설명 + 용어 사전</li>
+      <li><code>docs/benchmark/2026-06-22-m3pro-lseend-feasibility-spike.md</code> — M3 Pro 55~64× 실측</li>
+      <li><code>docs/work/2026-06-22-diarization-investigation-summary.md</code> — 전체 조사 종합</li>
+      <li>핵심 결정: 오프라인=VBx+사용자인원 확정 / 라이브=앵커드 하이브리드 / feature flag는 보류(문제 시 추가), 자동 fail-soft는 유지</li>
+    </ul>
+  </div>
+</details>
+
+<footer><span>생성: 2026-06-23</span><span>모델: Claude Opus 4.8</span><span>유형: generic (기능 설계 프리뷰)</span><span>브랜치: feat/diarization-clustering</span></footer>
+</body>
+</html>
