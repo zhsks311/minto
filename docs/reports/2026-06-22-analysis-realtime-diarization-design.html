@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>실시간 화자분리 설계 — 앵커드 하이브리드 (M3 Pro)</title>
+<style>
+  :root{
+    --bg:#fff;--surface:#f6f8fa;--border:#d0d7de;--text:#1f2328;--text-muted:#656d76;--accent:#0969da;--code-bg:#f6f8fa;
+    --c-critical:#cf222e;--c-critical-bg:#fff0ee;--c-critical-border:#ff818266;
+    --c-high:#9a6700;--c-high-bg:#fff8c5;--c-high-border:#f1e05a99;
+    --c-medium:#0550ae;--c-medium-bg:#ddf4ff;--c-medium-border:#79c0ff99;
+    --c-low:#116329;--c-low-bg:#dafbe1;--c-low-border:#56d36499;
+    --pass-bg:#f0fdf4;--pass-border:#bbf7d0;
+    --mic:#0969da;--sys:#cf222e;--anchor:#116329;
+    --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;
+    --font-mono:'SF Mono','Fira Code',Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--text-muted:#8b949e;--accent:#58a6ff;--code-bg:#161b22;
+    --c-critical:#ff7b72;--c-critical-bg:#2d0f0f;--c-critical-border:#ff7b7266;
+    --c-high:#e3b341;--c-high-bg:#2d1f04;--c-high-border:#e3b34166;
+    --c-medium:#79c0ff;--c-medium-bg:#051d4d;--c-medium-border:#79c0ff66;
+    --c-low:#56d364;--c-low-bg:#0a2d19;--c-low-border:#56d36466;
+    --pass-bg:#0a2d19;--pass-border:#56d36444;--mic:#58a6ff;--sys:#ff7b72;--anchor:#56d364;
+  }}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-body);background:var(--bg);color:var(--text);font-size:15px;line-height:1.65;max-width:900px;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+  h1{font-size:1.6rem;font-weight:700;letter-spacing:-.01em}
+  h2{font-size:1.15rem;font-weight:600;margin:2.5rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--border)}
+  h3{font-size:1rem;font-weight:600;margin:1.5rem 0 .5rem}
+  p{margin-bottom:.75rem}ul,ol{padding-left:1.5rem;margin-bottom:.75rem}li{margin-bottom:.35rem}
+  a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+  .summary{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:1.1rem 1.4rem;margin:1.25rem 0 2rem}
+  .summary-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:.4rem}
+  .summary p:last-child{margin-bottom:0}
+  .plain{background:var(--c-low-bg);border:1px solid var(--c-low-border);border-left:3px solid var(--c-low);border-radius:6px;padding:.85rem 1.1rem;margin:.85rem 0 1.25rem;font-size:.93rem}
+  .plain-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--c-low);margin-bottom:.3rem}
+  .plain p:last-child{margin-bottom:0}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin:1.25rem 0 2rem}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;display:flex;flex-direction:column;gap:.25rem}
+  .stat-card--info{background:var(--c-medium-bg);border-color:var(--c-medium-border)}
+  .stat-card--success{background:var(--pass-bg);border-color:var(--pass-border)}
+  .stat-card--warning{background:var(--c-high-bg);border-color:var(--c-high-border)}
+  .stat-number{font-size:1.5rem;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+  .stat-number.sm{font-size:1.05rem}
+  .stat-card--info .stat-number{color:var(--c-medium)}.stat-card--success .stat-number{color:var(--c-low)}.stat-card--warning .stat-number{color:var(--c-high)}
+  .stat-label{font-size:.8rem;color:var(--text-muted);font-weight:500}.stat-sub{font-size:.74rem;color:var(--text-muted);margin-top:.1rem}
+  table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.88rem}
+  th{text-align:left;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);padding:.45rem .6rem}
+  td{padding:.5rem .6rem;border-bottom:1px solid var(--border);vertical-align:top}tr:last-child td{border-bottom:none}
+  .col-hi{background:var(--c-medium-bg)}th.col-hi{background:var(--c-medium-bg)}
+  code{font-family:var(--font-mono);font-size:.85em;background:var(--code-bg);padding:.12em .35em;border-radius:4px;border:1px solid var(--border)}
+  .fig{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1rem .6rem;margin:1.25rem 0}
+  .fig svg{width:100%;height:auto;display:block;overflow:visible}
+  .fig-cap{font-size:.78rem;color:var(--text-muted);text-align:center;margin-top:.6rem}
+  .box{fill:var(--surface);stroke:var(--border);stroke-width:1.5}
+  .box-mic{fill:var(--c-medium-bg);stroke:var(--c-medium-border);stroke-width:1.5}
+  .box-sys{fill:var(--c-critical-bg);stroke:var(--c-critical-border);stroke-width:1.5}
+  .box-anchor{fill:var(--c-low-bg);stroke:var(--c-low-border);stroke-width:1.5}
+  .box-warn{fill:var(--c-high-bg);stroke:var(--c-high-border);stroke-width:1.5}
+  .t-title{font-family:var(--font-body);font-size:12.5px;font-weight:700;fill:var(--text);text-anchor:middle}
+  .t-sm{font-family:var(--font-body);font-size:10.5px;fill:var(--text-muted);text-anchor:middle}
+  .arr{stroke:var(--text-muted);stroke-width:2}.arrh{fill:var(--text-muted)}
+  .gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.7rem;margin:1rem 0}
+  .gterm{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.8rem 1rem}
+  .gterm .term{font-weight:700;font-size:.92rem;margin-bottom:.25rem}
+  .gterm .term .en{color:var(--text-muted);font-weight:400;font-family:var(--font-mono);font-size:.78rem}
+  .gterm p{font-size:.86rem;margin:0;color:var(--text)}
+  details{border:1px solid var(--border);border-radius:6px;margin:.6rem 0}
+  details>summary{padding:.65rem 1rem;cursor:pointer;font-weight:500;font-size:.92rem;background:var(--surface);list-style:none;display:flex;align-items:center;gap:.5rem}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary::before{content:'▶';font-size:.65rem;color:var(--text-muted)}
+  details[open]>summary::before{content:'▼'}
+  .details-body{padding:1rem 1.25rem}
+  footer{margin-top:3.5rem;padding-top:1rem;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:.78rem;color:var(--text-muted);display:flex;gap:1.5rem;flex-wrap:wrap}
+  @media print{body{max-width:none;padding:0;background:#fff;color:#000}.stat-card,.fig,.plain,.gterm{border:1px solid #ccc;background:#f9f9f9}a[href]::after{content:" ("attr(href)")";font-size:.8em;color:#666}}
+</style>
+</head>
+<body>
+
+<h1>실시간 화자분리 설계 — "앵커드 하이브리드"</h1>
+<p style="color:var(--text-muted);font-size:.9rem">회의 중 "누가 말하는지"를 실시간으로 보여주되, M3 Pro 맥북에서 돌아가고 최대한 정확하게.</p>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--success"><div class="stat-number sm">앵커드 하이브리드</div><div class="stat-label">고른 방법</div><div class="stat-sub">라이브 + 저장 시 정밀 + 아는 사람 고정</div></div>
+  <div class="stat-card stat-card--info"><div class="stat-number">2-pass</div><div class="stat-label">두 번 처리</div><div class="stat-sub">실시간(빠름) → 저장 시(정확)</div></div>
+  <div class="stat-card"><div class="stat-number sm">ANE + CPU</div><div class="stat-label">연산 분담</div><div class="stat-sub">받아쓰기=ANE, 화자분리=CPU</div></div>
+  <div class="stat-card stat-card--warning"><div class="stat-number sm">ADR 필요</div><div class="stat-label">구현 전 절차</div><div class="stat-sub">공유 추상화+실행모델 변경</div></div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">한 줄 요약</div>
+  <p><strong>회의 중에는 빠른 AI(LS-EEND)로 "지금 누가 말하나"를 실시간 표시하고, 회의가 끝나 저장할 때는 더 정확한 AI(VBx)로 다시 한 번 정리해 라벨을 확정한다. 그리고 "내 목소리(마이크)"와 "전에 등록해 둔 사람들(보이스프린트)"을 <em>닻(anchor)</em>으로 미리 알고 시작해서, 맨바닥에서 추측하는 것보다 훨씬 정확하게 만든다.</strong> 받아쓰기는 ANE 칩, 화자분리는 CPU로 나눠 돌려 M3 Pro에서도 끊김 없이 돌아간다.</p>
+</div>
+
+<h2>1. 그래서 무슨 문제를 푸는 거예요?</h2>
+
+<p><strong>화자분리(diarization)</strong>는 회의 녹음에서 "<strong>누가 언제 말했는지</strong>"를 알아내는 일입니다. 받아쓰기(STT)가 "<em>무슨 말</em>을 했나"를 풀면, 화자분리는 "<em>누가</em> 했나"를 풀어요. 둘을 합치면 "철수: 안녕하세요 / 영희: 네 반가워요" 같은 회의록이 됩니다.</p>
+
+<div class="plain">
+  <div class="plain-label">12살도 이해하는 비유</div>
+  <p>녹음을 들으면서 목소리마다 <strong>색깔 스티커</strong>를 붙인다고 생각해 보세요. 철수 말엔 파란 스티커, 영희 말엔 빨간 스티커. 그런데 (1) 처음엔 누가 누군지 모르고, (2) 비슷한 목소리는 헷갈리고, (3) <strong>회의가 끝나기 전에</strong> 실시간으로 붙여야 하면 더 어렵습니다. 우리가 풀려는 게 바로 이 "실시간으로, 정확하게 스티커 붙이기"입니다.</p>
+</div>
+
+<h3>왜 "실시간"이 특히 어렵나요?</h3>
+<p>연구가 분명히 말합니다: <strong>"실시간(스트리밍) 화자분리와 나중에 처리(오프라인)의 정확도 차이는, 받아쓰기에서의 차이보다 훨씬 크다."</strong> 즉 실시간은 미래(앞으로 무슨 말이 나올지)를 못 보고 지금까지만 보고 정해야 해서 본질적으로 부정확합니다. 그래서 "실시간만" 고집하면 정확도를 크게 잃습니다.</p>
+
+<div class="plain">
+  <div class="plain-label">비유</div>
+  <p><strong>생중계 vs 녹화 편집</strong>과 같아요. 생중계(실시간)는 즉시 보여주지만 실수가 있고, 녹화 후 편집(오프라인)은 처음부터 끝까지 다 보고 고칠 수 있어 깔끔합니다. 우리는 <strong>둘 다</strong> 하기로 했어요 — 생중계로 일단 보여주고, 끝나면 편집본으로 바꿔치기.</p>
+</div>
+
+<h2>2. 고른 방법 — "앵커드 하이브리드"</h2>
+
+<p>이름이 어렵지만 세 조각입니다: <strong>① 실시간 패스</strong>(빠른 AI) + <strong>② 최종 패스</strong>(정확한 AI, 저장 때) + <strong>③ 앵커</strong>(아는 사람 미리 알기). 그림으로 보면:</p>
+
+<div class="fig">
+  <svg viewBox="0 0 840 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="앵커드 하이브리드 흐름">
+    <text x="420" y="16" class="t-title">녹음 중 (실시간)</text>
+    <!-- audio sources -->
+    <rect x="15" y="40" width="120" height="38" rx="7" class="box-mic"/><text x="75" y="55" class="t-sm">🎙 내 마이크</text><text x="75" y="69" class="t-sm">= "나"(아는 사람)</text>
+    <rect x="15" y="92" width="120" height="38" rx="7" class="box-sys"/><text x="75" y="107" class="t-sm">🔊 시스템 소리</text><text x="75" y="121" class="t-sm">= 상대편들</text>
+    <!-- arrows to two engines -->
+    <line x1="135" y1="59" x2="175" y2="50" class="arr"/><polygon points="175,45 186,50 174,56" class="arrh"/>
+    <line x1="135" y1="111" x2="175" y2="120" class="arr"/><polygon points="175,114 186,120 174,125" class="arrh"/>
+    <!-- STT -->
+    <rect x="188" y="32" width="150" height="40" rx="7" class="box"/><text x="263" y="48" class="t-title">받아쓰기(STT)</text><text x="263" y="63" class="t-sm">ANE 칩 · WhisperKit</text>
+    <!-- live diar -->
+    <rect x="188" y="98" width="150" height="40" rx="7" class="box-warn"/><text x="263" y="114" class="t-title">실시간 화자분리</text><text x="263" y="129" class="t-sm">CPU · LS-EEND(≤10명)</text>
+    <!-- anchor feeding -->
+    <rect x="188" y="156" width="150" height="34" rx="7" class="box-anchor"/><text x="263" y="170" class="t-sm">⚓ 앵커: "나" + 등록된</text><text x="263" y="183" class="t-sm">보이스프린트</text>
+    <line x1="263" y1="156" x2="263" y2="140" class="arr"/><polygon points="258,142 263,132 268,142" class="arrh"/>
+    <!-- merge to live labels -->
+    <line x1="338" y1="52" x2="380" y2="80" class="arr"/><polygon points="376,76 386,84 373,85" class="arrh"/>
+    <line x1="338" y1="118" x2="380" y2="92" class="arr"/><polygon points="373,87 386,88 376,96" class="arrh"/>
+    <rect x="388" y="64" width="150" height="44" rx="7" class="box"/><text x="463" y="82" class="t-title">시간 맞춰 합치기</text><text x="463" y="97" class="t-sm">말 ↔ 화자 (임시 라벨)</text>
+    <line x1="538" y1="86" x2="578" y2="86" class="arr"/><polygon points="578,80 590,86 578,92" class="arrh"/>
+    <rect x="592" y="62" width="150" height="48" rx="7" class="box-warn"/><text x="667" y="80" class="t-title">📱 화면 실시간 표시</text><text x="667" y="96" class="t-sm">"화자 2: ..." (임시)</text>
+
+    <!-- divider -->
+    <line x1="15" y1="222" x2="825" y2="222" stroke="var(--border)" stroke-width="1" stroke-dasharray="5 4"/>
+    <text x="420" y="240" class="t-title">녹음 종료 → 저장 시 (정확하게 다시)</text>
+    <rect x="120" y="255" width="150" height="38" rx="7" class="box"/><text x="195" y="270" class="t-sm">💾 저장된 오디오</text><text x="195" y="284" class="t-sm">(아카이브 파일)</text>
+    <line x1="270" y1="274" x2="308" y2="274" class="arr"/><polygon points="308,268 320,274 308,280" class="arrh"/>
+    <rect x="322" y="255" width="160" height="38" rx="7" class="box-anchor"/><text x="402" y="270" class="t-title">정밀 화자분리 VBx</text><text x="402" y="284" class="t-sm">+ 앵커 + 예상인원</text>
+    <line x1="482" y1="274" x2="520" y2="274" class="arr"/><polygon points="520,268 532,274 520,280" class="arrh"/>
+    <rect x="535" y="255" width="180" height="38" rx="7" class="box"/><text x="625" y="270" class="t-title">최종 라벨로 교체 + 실명</text><text x="625" y="284" class="t-sm">임시→확정 (재조정)</text>
+  </svg>
+  <div class="fig-cap">위: 녹음 중 빠른 실시간 처리(임시 라벨). 아래: 저장할 때 정확한 VBx로 다시 정리해 확정. "나"와 등록 화자는 ⚓앵커로 양쪽에 도움.</div>
+</div>
+
+<h3>① 실시간 패스 — 빠른 AI (LS-EEND, CPU에서)</h3>
+<p>녹음하는 동안 <strong>LS-EEND</strong>라는 가벼운 AI가 100밀리초(0.1초)마다 "지금 누가 말하나"를 추측해 화면에 <strong>임시 라벨</strong>을 띄웁니다. 최대 10명까지 구분할 수 있어 사람이 많은 회의도 커버합니다.</p>
+
+<h3>③ 앵커 — "아는 사람"을 미리 알고 시작하기 ⚓ (이게 핵심!)</h3>
+<div class="plain">
+  <div class="plain-label">왜 이게 비밀 무기인가</div>
+  <p>보통 화자분리는 <strong>아무것도 모르는 상태</strong>에서 "이 목소리들 중 몇 명이고 누가 누구지?"를 맨바닥부터 추측합니다. 그런데 우리는 <strong>이미 아는 사람이 있어요</strong>: (1) <strong>내 마이크 소리는 100% "나"</strong>입니다(따로 들어오니까), (2) <strong>전에 등록해 둔 사람들(보이스프린트)</strong>의 목소리 지문이 있습니다. 이 둘을 <strong>닻(anchor)</strong>으로 박아두면, AI는 "나머지 모르는 사람만" 추측하면 되니 훨씬 정확합니다. 마치 <strong>퍼즐의 모서리 조각 몇 개를 미리 맞춰놓고 시작하는 것</strong>과 같아요. 이걸 학계에선 <strong>Target-Speaker VAD</strong>라 부르고 2024년 최신 정확도 향상 기법입니다.</p>
+</div>
+
+<h3>② 최종 패스 — 정확한 AI (VBx, 저장할 때)</h3>
+<p>회의가 끝나 저장하는 순간, 저장된 오디오 <strong>전체</strong>를 더 정확한 <strong>VBx</strong>로 처음부터 끝까지 다시 분석합니다(미래까지 다 볼 수 있으니 더 정확). 그리고 앵커(아는 사람)와 사용자가 입력한 예상 인원으로 한 번 더 도와줍니다. 그 결과로 <strong>실시간에 띄웠던 임시 라벨을 확정 라벨로 바꿔치기</strong>합니다 — 이걸 <strong>재조정(reconciliation)</strong>이라 해요.</p>
+
+<div class="plain">
+  <div class="plain-label">왜 굳이 두 번 하나요?</div>
+  <p>연구가 확인해 줬습니다 — 정확한 VBx는 <strong>실시간으로는 못 씁니다</strong>("VBx를 온라인에 쓰면 성능이 크게 떨어진다"). 그래서 실시간엔 빠른 LS-EEND, 저장 땐 정확한 VBx로 <strong>역할을 나누는</strong> 게 정답입니다. 실제 시스템들도 "온라인으로 대충 → 끝나면 다시 정리(resegmentation)"라는 2단계로 오프라인급 정확도에 근접합니다.</p>
+</div>
+
+<h2>3. M3 Pro 맥북에서 정말 돌아가요?</h2>
+<p>네 — 단, <strong>일을 나눠</strong> 줘야 합니다. 맥북 칩에는 일 잘하는 부서가 여러 개 있어요: <strong>ANE</strong>(AI 전용), <strong>CPU</strong>(범용), GPU. 핵심은 받아쓰기와 화자분리가 <strong>같은 부서(ANE)를 동시에 차지하지 않게</strong> 하는 것입니다.</p>
+
+<div class="fig">
+  <svg viewBox="0 0 720 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="연산 분담">
+    <rect x="20" y="30" width="200" height="44" rx="8" class="box-mic"/><text x="120" y="48" class="t-title">받아쓰기(STT)</text><text x="120" y="64" class="t-sm">→ ANE 칩 (AI 전용)</text>
+    <rect x="20" y="86" width="200" height="44" rx="8" class="box-warn"/><text x="120" y="104" class="t-title">실시간 화자분리</text><text x="120" y="120" class="t-sm">→ CPU (LS-EEND 가벼움)</text>
+    <text x="300" y="64" class="t-sm" style="text-anchor:start">녹음 중엔 ANE·CPU가</text>
+    <text x="300" y="80" class="t-sm" style="text-anchor:start">서로 안 부딪힘 → 끊김 없음</text>
+    <rect x="480" y="58" width="220" height="44" rx="8" class="box-anchor"/><text x="590" y="76" class="t-title">정밀 VBx</text><text x="590" y="92" class="t-sm">→ 녹음 끝난 "뒤"에만 실행</text>
+  </svg>
+  <div class="fig-cap">받아쓰기는 ANE, 실시간 화자분리는 CPU로 분리 → 녹음 중 경합 없음. 무거운 VBx는 녹음이 끝난 뒤에만 돌아 라이브에 부담 0.</div>
+</div>
+
+<p>근거: FluidAudio는 애플 칩에서 1시간 오디오를 수십 초에 처리(M1에서 60배속)하고, LS-EEND는 "M4 MAX CPU만으로도 ANE급 속도"라고 문서가 밝힙니다. M3 Pro는 그 사이라 충분히 가능합니다. 무거운 VBx는 <strong>녹음 중이 아니라 저장 시점</strong>에만 돌아서 실시간 부담이 아예 없습니다.</p>
+
+<div class="plain">
+  <div class="plain-label">솔직한 단서</div>
+  <p>"가능하다"는 문서·벤치마크 기반 추정입니다. <strong>M3 Pro에서 받아쓰기+화자분리를 동시에 돌렸을 때 실제 속도(RTFx)와 발열·배터리는 직접 측정해 확인</strong>해야 합니다(다음 단계). 또 LS-EEND를 CPU로 돌릴 때 정확도/속도가 ANE와 같은지도 검증 대상입니다.</p>
+</div>
+
+<h2>4. 왜 이게 "최대한 정확"한가요? — 3가지 정확도 장치</h2>
+<table>
+  <thead><tr><th>장치</th><th>쉽게</th><th>근거</th></tr></thead>
+  <tbody>
+    <tr><td><strong>2번 처리(하이브리드)</strong></td><td>생중계로 보여주고, 끝나면 편집본으로 교체</td><td>오프라인이 스트리밍보다 정확(VBx DER 12% vs LS-EEND 25.7%)</td></tr>
+    <tr><td><strong>앵커(아는 사람 고정)</strong></td><td>퍼즐 모서리 먼저 맞추기 — "나"+등록 화자를 닻으로</td><td>Target-Speaker VAD = 2024 SOTA 정확도 기법</td></tr>
+    <tr><td><strong>예상 인원 입력</strong></td><td>"오늘 4명이야"라고 알려주면 AI가 안 헤맴</td><td>우리 측정: exactSpeakerCount가 가장 견고한 레버</td></tr>
+  </tbody>
+</table>
+
+<h2>5. 핵심 용어 사전 📖</h2>
+<div class="gloss">
+  <div class="gterm"><div class="term">화자분리 <span class="en">diarization</span></div><p>녹음에서 "누가 언제 말했는지" 목소리마다 이름표를 붙이는 일. (받아쓰기 = "무슨 말", 화자분리 = "누가")</p></div>
+  <div class="gterm"><div class="term">받아쓰기 <span class="en">STT</span></div><p>Speech-to-Text. 말소리를 글자로 바꾸는 것. 우리는 WhisperKit을 씀.</p></div>
+  <div class="gterm"><div class="term">스트리밍 / 온라인 <span class="en">streaming</span></div><p>녹음하는 <strong>중에</strong> 실시간으로 처리. 빠르지만 미래를 못 봐서 덜 정확. (생중계)</p></div>
+  <div class="gterm"><div class="term">오프라인 / 배치 <span class="en">offline</span></div><p>녹음이 <strong>다 끝난 뒤</strong> 전체를 한 번에 처리. 느리지만 정확. (녹화 편집)</p></div>
+  <div class="gterm"><div class="term">하이브리드 2-pass <span class="en">hybrid</span></div><p>실시간(빠름) + 저장 시(정확)를 <strong>둘 다</strong> 쓰는 방식. 우리가 고른 길.</p></div>
+  <div class="gterm"><div class="term">LS-EEND</div><p>가벼운 실시간 화자분리 AI. 최대 10명, 0.1초마다 갱신. CPU로도 돌아감. 우리 라이브 엔진.</p></div>
+  <div class="gterm"><div class="term">Sortformer</div><p>또 다른 실시간 AI. 4명까지지만 "누가 누구인지"를 안 흔들리게 잘 유지. (지금은 인원 제한 때문에 보류, 라이브 등록용 후보)</p></div>
+  <div class="gterm"><div class="term">VBx</div><p>가장 정확한 오프라인 화자분리(묶기) 방법. 실시간엔 못 쓰고, 저장 시 최종 정리에 사용.</p></div>
+  <div class="gterm"><div class="term">앵커 / 타깃 화자 <span class="en">anchor / TS-VAD</span></div><p>이미 아는 사람의 목소리를 미리 알고 시작해 정확도를 높이는 기법. 우리는 "내 마이크"와 "등록 화자"를 닻으로 씀.</p></div>
+  <div class="gterm"><div class="term">보이스프린트 <span class="en">voiceprint</span></div><p>한 사람의 목소리를 256개 숫자로 만든 "목소리 지문". 등록해두면 다음 회의에서 그 사람을 알아봄. (우리가 만든 기능)</p></div>
+  <div class="gterm"><div class="term">재조정 <span class="en">reconciliation</span></div><p>실시간에 붙인 임시 라벨을, 저장 시 정확히 계산한 최종 라벨로 바꿔치기하는 과정.</p></div>
+  <div class="gterm"><div class="term">채널 <span class="en">channel</span></div><p>소리가 들어오는 통로. 우리는 마이크(=나)와 시스템 소리(=상대)를 따로 받음. 그래서 "나"는 항상 알 수 있음.</p></div>
+  <div class="gterm"><div class="term">ANE</div><p>Apple Neural Engine. 맥북 칩 안의 AI 전용 부서. 받아쓰기를 여기서 돌림.</p></div>
+  <div class="gterm"><div class="term">DER</div><p>Diarization Error Rate. 화자분리가 얼마나 틀렸는지(%). 낮을수록 좋음. VBx 12% vs LS-EEND 25.7%.</p></div>
+  <div class="gterm"><div class="term">RTFx</div><p>실시간 대비 처리 속도. 60x면 1시간 오디오를 1분에 처리. 1보다 크면 실시간 가능.</p></div>
+  <div class="gterm"><div class="term">화자 수 / exactSpeakerCount</div><p>회의 인원. 사용자가 "4명"이라고 알려주면 AI가 안 헤맴 — 우리가 찾은 가장 강력한 정확도 레버.</p></div>
+</div>
+
+<h2>6. 다음 단계 & 따로 적어둔 것</h2>
+<ul>
+  <li><strong>ADR 작성</strong>(구현 전 필수): 공유 추상화(스트리밍 diarizer provider) 추가 + 실행 모델 변경 → CLAUDE.md 규정상 다중관점 리뷰 통과.</li>
+  <li><strong>M3 Pro 실측</strong>: 받아쓰기+LS-EEND 동시 실행 시 RTFx·발열·배터리, LS-EEND CPU 정확도.</li>
+  <li><strong>재조정 UX</strong>: 임시→확정 라벨이 바뀔 때 사용자가 혼란 없게 보여주는 방법.</li>
+</ul>
+<details>
+  <summary>나중에 볼 다른 트랙 (사용자 요청으로 기록)</summary>
+  <div class="details-body">
+    <p><strong>트랙 B — 오프라인 정확도 더 끌어올리기</strong>: 이미 VBx로 충분히 좋아(DER 12%) 한계효용 작음. 임베딩 교체(ERes2NetV2 등)는 측정상 비병목이라 보류.</p>
+    <p><strong>트랙 C — 회의 간 화자 기억(보이스프린트 확장)</strong>: 등록 화자를 여러 회의에 걸쳐 자동 인식. 위 "앵커"와 직접 연결됨 — 앵커드 하이브리드를 만들면 이 트랙도 같이 강해짐. 크로스세션 정확도 측정이 선행 과제.</p>
+  </div>
+</details>
+
+<details>
+  <summary>근거 / 출처 (연구 검색)</summary>
+  <div class="details-body">
+    <ul>
+      <li>Streaming Sortformer (Interspeech 2025, arXiv 2507.18446) — 실시간 ≤4명, 4+에서 오프라인 능가하기도</li>
+      <li>LS-EEND (arXiv 2410.06670) — 온라인 attractor, 유연한 화자 수</li>
+      <li>Target-Speaker VAD: MIMO-TSVAD (arXiv 2401.08052), PET-TSVAD (Microsoft ICASSP 2024), Online Neural Diarization w/ Target Speaker Tracking (IEEE 2024)</li>
+      <li>2-pass 재조정: online clustering + Bayesian resegmentation (Springer 2023) — 오프라인급 정확도+저지연. "VBx는 온라인 부적합" 확증</li>
+      <li>온디바이스: FluidAudio(애플 ANE), speech-swift(MLX+CoreML) — M3급 동시 ASR+diarization 실현 사례</li>
+      <li>우리 자체 측정: VBx DER 12% vs LS-EEND 25.7%(AMI), 임베딩 worst-pair margin 양수, exactSpeakerCount 견고</li>
+    </ul>
+  </div>
+</details>
+
+<footer>
+  <span>생성: 2026-06-22</span><span>모델: Claude Opus 4.8</span><span>유형: analysis</span><span>브랜치: feat/diarization-clustering</span>
+</footer>
+</body>
+</html>
