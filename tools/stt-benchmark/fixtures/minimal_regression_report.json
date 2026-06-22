@@ -1,0 +1,39 @@
+{
+  "manifest_type": "regression_report",
+  "schema_version": 1,
+  "reference_version": "seed-smi-2026-06-12",
+  "candidate_run_id": "candidate-run",
+  "baseline_run_id": "baseline-run",
+  "regression_state": "passed",
+  "improvement_signal": "unknown",
+  "eligible_for_default_gate": true,
+  "blocking_gates": [],
+  "reasons": [
+    "candidate is within regression thresholds"
+  ],
+  "next_actions": [
+    "Use this regression report as default-change evidence."
+  ],
+  "thresholds": {
+    "weighted_cer_regression_pp": 2.0,
+    "empty_final_count_delta": 0.0,
+    "timeout_count_delta": 0.0,
+    "crash_count_delta": 0.0,
+    "sidecar_unavailable_count_delta": 0.0,
+    "permission_asset_failure_count_delta": 0.0
+  },
+  "deltas": {
+    "weighted_cer_pp": 0.0,
+    "empty_final_count": 0.0,
+    "timeout_count": 0.0,
+    "crash_count": 0.0,
+    "sidecar_unavailable_count": 0.0,
+    "permission_asset_failure_count": 0.0
+  },
+  "evidence_paths": [
+    "/tmp/candidate_benchmark.json",
+    "/tmp/candidate_metric.json",
+    "/tmp/baseline_benchmark.json",
+    "/tmp/baseline_metric.json"
+  ]
+}

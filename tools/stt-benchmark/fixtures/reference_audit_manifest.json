@@ -1,0 +1,92 @@
+{
+  "manifest_type": "reference_manifest",
+  "schema_version": 1,
+  "reference_version": "official-reference-audit-fixture-v1",
+  "split": "gold",
+  "review_status": "reviewed",
+  "source_smi_sha256": "aggregate-source-smi-fixture",
+  "reference_text_sha256": "aggregate-reference-text-fixture",
+  "reference_quality_issue_count": 1,
+  "sample_count": 3,
+  "split_counts": {
+    "dev": 1,
+    "gold": 1,
+    "stress": 1
+  },
+  "references": [
+    {
+      "sample_id": "meeting-gold-001",
+      "audio_path": "sample/meeting/raw/meeting-gold-001.wav",
+      "source_smi_path": "sample/meeting/raw/meeting-gold-001.smi",
+      "source_smi_sha256": "source-smi-gold-001",
+      "reference_text_path": "docs/fixtures/stt-benchmark/reference/meeting-gold-001.txt",
+      "reference_text_sha256": "reference-text-gold-001",
+      "split": "gold",
+      "review_status": "reviewed",
+      "reviewer": "fixture-reviewer",
+      "reviewed_at": "2026-06-12T00:00:00+09:00",
+      "duration_seconds": 120.0,
+      "domain": "meeting",
+      "speaker_density": "medium",
+      "noise_level": "low",
+      "difficulty_tags": [
+        "domain_terms"
+      ],
+      "known_issue_ranges": [],
+      "exclusion_reason": "",
+      "reference_quality_issue": false
+    },
+    {
+      "sample_id": "meeting-dev-001",
+      "audio_path": "sample/meeting/raw/meeting-dev-001.wav",
+      "source_smi_path": "sample/meeting/raw/meeting-dev-001.smi",
+      "source_smi_sha256": "source-smi-dev-001",
+      "reference_text_path": "docs/fixtures/stt-benchmark/reference/meeting-dev-001.txt",
+      "reference_text_sha256": "reference-text-dev-001",
+      "split": "dev",
+      "review_status": "unreviewed",
+      "reviewer": "",
+      "reviewed_at": "",
+      "duration_seconds": 90.0,
+      "domain": "meeting",
+      "speaker_density": "low",
+      "noise_level": "medium",
+      "difficulty_tags": [
+        "long_silence"
+      ],
+      "known_issue_ranges": [],
+      "exclusion_reason": "",
+      "reference_quality_issue": false
+    },
+    {
+      "sample_id": "meeting-stress-001",
+      "audio_path": "sample/meeting/raw/meeting-stress-001.wav",
+      "source_smi_path": "sample/meeting/raw/meeting-stress-001.smi",
+      "source_smi_sha256": "source-smi-stress-001",
+      "reference_text_path": "docs/fixtures/stt-benchmark/reference/meeting-stress-001.txt",
+      "reference_text_sha256": "reference-text-stress-001",
+      "split": "stress",
+      "review_status": "excluded",
+      "reviewer": "",
+      "reviewed_at": "",
+      "duration_seconds": 60.0,
+      "domain": "meeting",
+      "speaker_density": "high",
+      "noise_level": "high",
+      "difficulty_tags": [
+        "poor_reference",
+        "overlap"
+      ],
+      "known_issue_ranges": [
+        {
+          "start_seconds": 12.0,
+          "end_seconds": 18.4,
+          "issue_type": "smi_reference_mismatch",
+          "note": "source SMI caption does not match the audible phrase"
+        }
+      ],
+      "exclusion_reason": "source SMI mismatch; keep as stress evidence only",
+      "reference_quality_issue": true
+    }
+  ]
+}

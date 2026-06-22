@@ -1,0 +1,18 @@
+{
+  "manifest_type": "manual_review_manifest",
+  "schema_version": 1,
+  "complete": true,
+  "selected_count": 9,
+  "reviewed_count": 9,
+  "usable_review_count": 9,
+  "manual_followup_count": 0,
+  "classification_counts": {
+    "boundary_shift": 5,
+    "smi_reference_matches_audio": 2,
+    "smi_reference_mismatch": 2
+  },
+  "next_bucket_counts": {
+    "boundary_slicing_issue": 5
+  },
+  "review_issue_counts": {}
+}

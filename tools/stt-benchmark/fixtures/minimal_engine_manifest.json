@@ -1,0 +1,15 @@
+{
+  "manifest_type": "engine_manifest",
+  "schema_version": 1,
+  "engine_id": "speech_analyzer",
+  "model_id": "apple_speech_analyzer_ko_KR",
+  "runtime": "apple_speech",
+  "supports_offline": true,
+  "supports_streaming": false,
+  "requires_network": false,
+  "requires_sidecar": false,
+  "requires_os_version": "macOS 26",
+  "requires_user_permission": true,
+  "health_status": "ready",
+  "failure_modes": []
+}

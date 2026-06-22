@@ -1,0 +1,88 @@
+{
+  "manifest_type": "decision_manifest",
+  "schema_version": 1,
+  "decision_state": "experimental_flag_only",
+  "default_change": "not_allowed",
+  "reasons": [
+    "full-duration weighted CER passed at 0.3070",
+    "residual boundary_slicing_issue remains: 5"
+  ],
+  "next_actions": [
+    "Run product-path validation before default changes."
+  ],
+  "blocking_gates": [
+    "product_path_missing",
+    "boundary_slicing_issue"
+  ],
+  "eligible_for_default": false,
+  "eligible_for_experimental_flag": true,
+  "eligible_for_fallback": false,
+  "eligible_for_sidecar_candidate": false,
+  "evidence_paths": [
+    "/private/tmp/minto2-stt-gap30-pad05-product-scope-decision-current/stt_product_scope_decision.json"
+  ],
+  "benchmark_run_manifest": {
+    "schema_version": 1,
+    "run_id": "seed-speech-analyzer-gap30-pad05",
+    "created_at": "2026-06-12T00:00:00+09:00",
+    "benchmark_kind": "offline_final",
+    "product_path": false,
+    "engine_id": "speech_analyzer",
+    "engine_label": "Apple SpeechAnalyzer",
+    "model_id": "apple_speech_analyzer_ko_KR",
+    "model_version": "macOS 26 SpeechAnalyzer",
+    "model_hash": "",
+    "runtime": "apple_speech",
+    "os_version": "macOS 26",
+    "hardware": "apple_silicon",
+    "reference_version": "seed-smi-2026-06-12",
+    "sample_set": "meeting-all7",
+    "input_contract": {
+      "sample_rate_hz": 16000,
+      "channels": 1,
+      "format": "wav"
+    },
+    "runner_contract": {
+      "window_sec": 30.0,
+      "max_gap_sec": 3.0,
+      "audio_pad_sec": 0.5
+    },
+    "output_paths": [
+      "/private/tmp/minto2-stt-boundary-slicing-gap30-pad05-full-all7-current/benchmark/summary.csv"
+    ]
+  },
+  "metric_summary": {
+    "sample_count": 7,
+    "weighted_cer": 0.3069935450775873,
+    "macro_cer": 0.2627186363456805,
+    "empty_final_count": 8,
+    "timeout_count": 0,
+    "crash_count": 0
+  },
+  "manual_review_manifest": {
+    "complete": true,
+    "selected_count": 9,
+    "reviewed_count": 9,
+    "usable_review_count": 9,
+    "manual_followup_count": 0,
+    "classification_counts": {
+      "boundary_shift": 5,
+      "smi_reference_matches_audio": 2,
+      "smi_reference_mismatch": 2
+    },
+    "next_bucket_counts": {
+      "boundary_slicing_issue": 5,
+      "engine_common_hard_audio": 2
+    },
+    "review_issue_counts": {}
+  },
+  "reference_manifest": {
+    "schema_version": 1,
+    "reference_version": "seed-smi-2026-06-12",
+    "split": "dev",
+    "review_status": "reviewed",
+    "source_smi_sha256": "seed",
+    "reference_text_sha256": "seed",
+    "reference_quality_issue_count": 0
+  }
+}

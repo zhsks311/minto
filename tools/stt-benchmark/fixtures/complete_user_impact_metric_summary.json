@@ -1,0 +1,23 @@
+{
+  "manifest_type": "metric_summary",
+  "schema_version": 1,
+  "sample_count": 7,
+  "weighted_cer": 0.3069935450775873,
+  "macro_cer": 0.2627186363456805,
+  "empty_final_count": 0,
+  "timeout_count": 0,
+  "crash_count": 0,
+  "user_impact_metric_complete": true,
+  "user_impact_metrics": {
+    "cold_start_seconds": 1.2,
+    "empty_visible_transcript_count": 0,
+    "final_transcript_delay_seconds": 0.8,
+    "peak_memory_mb": 512.0,
+    "permission_asset_failure_count": 0,
+    "preview_revision_count": 3,
+    "sidecar_startup_failure_count": 0,
+    "time_to_first_visible_text_seconds": 0.4,
+    "unstable_partial_ratio": 0.1,
+    "user_visible_fallback_event_count": 0
+  }
+}

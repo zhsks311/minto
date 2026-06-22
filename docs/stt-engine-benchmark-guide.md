@@ -2,21 +2,26 @@
 
 새 STT 엔진을 후보로 넣었을 때, **한 명령으로 측정 → 비교 → 채택 판정 → 리포트**까지 돌리는 방법.
 
-> 신뢰성 설계의 근거(왜 반복측정·신뢰구간·sanity 상한인가)는 [ADR 0004](adr/0004-stt-benchmark-reliability-methodology.md)를 본다. 이 문서는 "어떻게 돌리나"만 다룬다.
+> **이 프레임워크는 `tools/stt-benchmark/` 자체 완결형 모듈로 있다**(앱 Swift와 분리, 순수 Python). 최신 사용법·구조는 [`tools/stt-benchmark/README.md`](../tools/stt-benchmark/README.md)가 정본이다. 이 문서는 개념(판정 규칙·신뢰성)을 함께 설명한다.
+>
+> 신뢰성 설계의 근거(왜 반복측정·신뢰구간·sanity 상한인가)는 [ADR 0004](adr/0004-stt-benchmark-reliability-methodology.md).
 
 ## 한 줄 요약
 
 ```bash
-python3 scripts/run_stt_official_benchmark.py \
+cd tools/stt-benchmark && python3 lib/run_stt_official_benchmark.py \
   --engines whisper_accurate,speech_analyzer \
   --baseline-engine whisper_accurate \
   --reference-version seed-smi-2026-06-12 \
-  --reference-manifest docs/fixtures/stt-benchmark/minimal_reference_manifest.json \
-  --manual-review-manifest docs/fixtures/stt-benchmark/minimal_manual_review_manifest.json \
+  --reference-manifest fixtures/minimal_reference_manifest.json \
+  --manual-review-manifest fixtures/minimal_manual_review_manifest.json \
+  --transcribe-cmd "python3 /path/to/run_meeting_stt_pipeline.py" \
   --raw-dir <샘플 오디오 디렉터리> \
   --repeats 5 \
   --output-root <결과 저장 위치>
 ```
+
+> 실제 STT 전사는 앱의 Swift 엔진에서 일어난다. 모듈은 전사기를 `--transcribe-cmd`로 주입받는다(생략 시 분석 전용 — 미리 만든 전사 산출물 필요). 상세는 모듈 README.
 
 - `--engines`: 측정·순위 매길 엔진 목록(쉼표 구분). 예: `whisper_accurate`, `speech_analyzer`, `sf_speech_on_device`, `nemotron`, `sherpa`.
 - `--baseline-engine`: **현 제품 엔진**(교체 판정의 비교 기준).
