@@ -68,8 +68,9 @@ Minto는 "회의에 도움이 되는 정보를 실시간 제공"하는 라이브
 - exactSpeakerCount 입력 UX는 파일 임포트 것 재사용.
 
 ## Rollback
-- **현재 보장**: 신경망 라이브 패스를 만들지 않으면 기존 채널 라벨 동작 그대로(회귀 없음). 즉 미구현 상태가 안전 기준선.
-- **구현 시 필수**: feature flag(`AppSettings`/`UserDefaults`, 현재 코드에 없음 — 구현 시 신설)를 `LiveSpeakerAssignmentUseCase`가 확인해 끄면 `ChannelSpeakerLabeler` 경로로 fallback. 이 flag·fallback을 신경망 패스와 **함께** 구현한다(나중에 끼우지 않음).
+- **현재 보장**: 신경망 라이브 패스를 만들지 않으면 기존 채널 라벨 동작 그대로(회귀 없음).
+- **자동 fail-soft(구현 시 포함)**: 라이브 diarization이 throw·과부하·에러면 catch해 `ChannelSpeakerLabeler` 경로로 자동 강등 — 녹음·STT 불영향. 이건 flag가 아니라 프로젝트 fail-soft 원칙에 따른 기본 에러 처리라 유지한다.
+- **명시적 feature flag(수동/빌드 토글)는 보류 (2026-06-22 사용자 결정)**: 위험 평가상 고장 확률 낮음(M3 스파이크 PASS, 주 위험은 라벨 부정확=하이브리드 설계로 흡수) → YAGNI. **실제 문제(발열·배터리·UX 불만 등) 발생 시 추가.** 트레이드오프: flag 추가 전까지 "새 배포 없이 끄기"는 자동 fail-soft 범위로 한정(개발자가 임의로 차단하려면 빌드 필요). critic은 "기능과 함께 구현"을 권고했으나, 낮은 위험을 근거로 보류를 선택함.
 
 ## Verification (임계값 — 스파이크 후 확정)
 - **M3 Pro 스파이크**: ✅ **컴퓨트 헤드룸 PASS(2026-06-22)** — LS-EEND CPU 단독 RTFx **55~64×**(M3 Pro, batch 모드). STT는 이미 ANE 실시간 동작 + LS-EEND는 다른 유닛(CPU) 55× 여유 → 동시 실시간 가능(높은 확신). LS-EEND CPU 정확도 = 측정값(기본 `.cpuOnly`). **구현 verification으로 이월된 잔여(블로커 아님)**: ① 스트리밍 모드 RTFx(측정은 batch), ② 실제 STT+LS-EEND 동시 구동, ③ 장시간(1~2h) 발열·배터리(STT 단독 대비 +30% 이내 목표), ④ UI 프레임 드롭 없음.
