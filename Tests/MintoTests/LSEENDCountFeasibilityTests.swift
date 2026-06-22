@@ -23,6 +23,8 @@ struct LSEENDCountFeasibilityTests {
         let samples = try AudioConverter().resampleAudioFile(wavURL)
         try #require(!samples.isEmpty, "AudioConverter가 빈 샘플을 반환했습니다 — WAV 파일이 유효한지 확인")
         let diarizer = try await LSEENDDiarizer(variant: variant)
+        let audioSeconds = Double(samples.count) / 16_000.0
+        let procStart = CFAbsoluteTimeGetCurrent()
         let timeline = try diarizer.processComplete(
             samples,
             // AudioConverter() 기본 타깃이 16kHz mono → sourceSampleRate도 16k로 일치
@@ -31,12 +33,17 @@ struct LSEENDCountFeasibilityTests {
             finalizeOnCompletion: true,
             progressCallback: nil
         )
+        let procElapsed = CFAbsoluteTimeGetCurrent() - procStart
+        let rtfx = procElapsed > 0 ? audioSeconds / procElapsed : 0
 
         let activeSpeakers = timeline.speakers.values.filter { !$0.finalizedSegments.isEmpty }
         let totalSegments = activeSpeakers.reduce(0) { $0 + $1.finalizedSegments.count }
         // 평가 러너는 측정값을 눈으로 봐야 하므로 stdout에도 찍는다(Log는 통합 로깅이라 캡처가 안 됨).
         // print 금지 규칙은 제품 Sources 대상이고, 이 게이트 테스트는 측정 출력이 목적이다.
-        print("[LSEEND-POC] variant=\(variantName) detectedSpeakers=\(activeSpeakers.count) totalSegments=\(totalSegments)")
+        print(String(
+            format: "[LSEEND-POC] variant=%@ detectedSpeakers=%d totalSegments=%d audioSec=%.1f procSec=%.2f rtfx=%.1f",
+            variantName, activeSpeakers.count, totalSegments, audioSeconds, procElapsed, rtfx
+        ))
         #expect(totalSegments > 0, "LS-EEND 결과 segment가 있어야 합니다")
     }
 

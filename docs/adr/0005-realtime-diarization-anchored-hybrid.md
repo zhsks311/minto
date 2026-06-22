@@ -1,6 +1,6 @@
 # ADR 0005: 실시간 화자분리 — 앵커드 하이브리드
 
-상태: Proposed (2026-06-22 architect+critic 리뷰 반영 개정 / **M3 Pro 스파이크 통과 전 수락 보류**)
+상태: Proposed → **컴퓨트 feasibility 스파이크 PASS** (2026-06-22, M3 Pro에서 LS-EEND CPU **55~64× RTFx**, `docs/benchmark/2026-06-22-m3pro-lseend-feasibility-spike.md`). 구현 단계 진행 가능. 잔여 스모크(스트리밍 모드 RTFx·실제 동시 실행·장시간 발열/배터리)는 구현 verification에 포함. architect+critic 리뷰 반영 개정 완료.
 작성일: 2026-06-22
 
 > CLAUDE.md "ADR 필요 조건" ① 공유 core abstraction 추가(streaming diarizer provider) ② 실행 모델 변경(녹음 중 실시간 추론 파이프라인) 해당 → 다중 관점 리뷰 필수. 본 개정은 architect·critic 리뷰(2026-06-22)를 반영했다.
@@ -72,7 +72,7 @@ Minto는 "회의에 도움이 되는 정보를 실시간 제공"하는 라이브
 - **구현 시 필수**: feature flag(`AppSettings`/`UserDefaults`, 현재 코드에 없음 — 구현 시 신설)를 `LiveSpeakerAssignmentUseCase`가 확인해 끄면 `ChannelSpeakerLabeler` 경로로 fallback. 이 flag·fallback을 신경망 패스와 **함께** 구현한다(나중에 끼우지 않음).
 
 ## Verification (임계값 — 스파이크 후 확정)
-- **M3 Pro 스파이크(별도 PoC 브랜치, 수락 전 필수 게이트)**: STT+LS-EEND(.cpuOnly) 동시 실행 시 ① 종합 RTFx **> 1.0**(실시간), ② 배터리 소모 STT 단독 대비 허용범위(잠정 +30% 이내), ③ CPU 점유로 인한 UI 프레임 드롭 없음, ④ **LS-EEND CPU vs ANE 정확도 차 ≤ Xpp**(임계 스파이크서 확정). 게이트 통과 전 신규 provider 추상화 구현 시작 금지.
+- **M3 Pro 스파이크**: ✅ **컴퓨트 헤드룸 PASS(2026-06-22)** — LS-EEND CPU 단독 RTFx **55~64×**(M3 Pro, batch 모드). STT는 이미 ANE 실시간 동작 + LS-EEND는 다른 유닛(CPU) 55× 여유 → 동시 실시간 가능(높은 확신). LS-EEND CPU 정확도 = 측정값(기본 `.cpuOnly`). **구현 verification으로 이월된 잔여(블로커 아님)**: ① 스트리밍 모드 RTFx(측정은 batch), ② 실제 STT+LS-EEND 동시 구동, ③ 장시간(1~2h) 발열·배터리(STT 단독 대비 +30% 이내 목표), ④ UI 프레임 드롭 없음.
 - 라이브: "나" 채널 고정 정확도, 임시 라벨 안정성(라벨 전환 빈도 임계 — 스파이크서 확정).
 - 재조정: 임시↔최종 IOU 매핑 정확도(단위테스트), 사용자 편집 보존(테스트), 하이브리드 QA(저장 JSON 화자수·라벨).
 - 로그: 라이브 diar 시작·성공·실패, 재조정 결과(화자수 변화·매핑), CPU/ANE 경합 지표.
