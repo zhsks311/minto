@@ -118,18 +118,19 @@ Phase 0 신뢰성 진단(`docs/benchmark/2026-06-18-reliability-phase0-diagnosis
 - ✅ **항목④ 4a+4b 완료** (`bfbc245`+`5123267`+`ddb4182`, 681 tests): 절대 35% 임계를 우열 판정에서 제거 → sanity 상한 0.70(`--sanity-cer-cap`)으로 강등 + 35% 판정/진단 두 의미 분리(진단용 0.35 보존) + deprecated alias 우선순위. critic Critical 1("모두 나쁜 안전망") 해결. 우열은 regression gate(상대 delta) 담당.
 - ✅ **항목③ engine_ranking 생성 완료** (`727695d`+`26a4ac0`, 684 tests): `build_stt_engine_lane_matrix.py`가 lanes를 weighted_cer 오름차순 순위화해 `engine_ranking` 출력("어느 엔진이 1등인가"). 엔진별 최저 cer dedup(엔진 단위 보장)·None/빈 engine_id 제외·동률 정렬. phantom 차원과 lane별 분리는 데이터 확인 후(② 이후). decision 판정 미연결(독립 출력).
 
-- 🔶 **항목⑤ 반복측정 — 토대 함수 완료** (`205a09b`+`5a97c75`, 689 tests): `stt_repeat_statistics.summarize_repeat_cers()` 순수 집계(cer_mean/cer_std/cer_ci95, **t분포 기반** CI — 작은 N 정규근사 과소추정 방지). N=1 None(단일 측정 불신), N 미입력(순환논증 회피). **남음: N회 실행 루프(실측 재실행) + metric_summary/decision 연결.**
+- 🔶 **항목⑤ 반복측정 — 토대 함수 완료** (`205a09b`+`5a97c75`, 689 tests): `stt_repeat_statistics.summarize_repeat_cers()` 순수 집계(cer_mean/cer_std/cer_ci95, **t분포 기반** CI — 작은 N 정규근사 과소추정 방지). N=1 None(단일 측정 불신), N 미입력(순환논증 회피). **남음: N회 실행 루프(실측 재실행).**
+- ✅ **항목⑤ CI 집계 단계 완료** (`aggregate_stt_repeat_metric.py`, 732 tests): N개 metric_summary를 읽어 weighted_cer을 `summarize_repeat_cers`로 집계, 대표 metric에 `weighted_cer=cer_mean` + `cer_ci95_half_width` 주입 → regression/decision의 CI 판정 입력을 채운다. placeholder/실패 런(PLACEHOLDER_CER=1.0) 제외(평균 오염 방지), 측정 0개면 placeholder 보존·CI 미부착, CI/std가 [0,1] 초과면(N=2 고분산) clamp 금지·필드 제거(보수적 강등, `ci_suppressed_reason`/`std_suppressed_reason` 기록).
 - ✅ **C1 출력 루트 외부화 완료** (`a2d73c5`+`7ad3117`, 702 tests): 결과 저장 베이스 `/private/tmp` 하드코딩 → `stt_output_paths.stt_output_base()`(env `MINTO2_STT_OUTPUT_ROOT`, 미설정 시 `/private/tmp` 호환). 6파일+헬퍼. 리뷰 수정: 모듈 상수 import-시점 캡처 → **함수형 런타임 평가**(env 런타임 반영 확인), 테스트 sys.path. **디스크 정리 시 결과 소실 방지**(이번 사고 원인) + 머지 후 이식성. 빌드캐시(이미 env.get)·sherpa 설치/모델 경로는 별도(미변경, 주석).
 
 - ✅ **배선 1단계: lane matrix ↔ verdict 연결 완료** (`f8a89c5`, 704 tests): 고립됐던 `stt_engine_verdict.rank_with_ties`를 `build_stt_engine_lane_matrix.build_engine_ranking`이 호출 → CI 있으면 무승부(tie_group), 없으면 단순 순위(호환). lane이 metric의 `cer_ci95_half_width` 전달. **측정 집계 → 순위·무승부 판정이 자동 연결됨**(통합 테스트로 입증). decision 게이트 채택 판정 연결은 후속(baseline 의존).
 
 - ✅ **A 배선: decision 채택 판정 완료** (regression `improvement_signal` 생성 + decision 채택, 710 tests): regression gate가 candidate/baseline CI로 `significant_improvement`/`significant_regression`/`tie`/`unknown_ci` 산출 → decision이 `significant_improvement`=`default_allowed`(교체 승인), `tie`=`experimental_flag_only`(실험만, default 유지), `significant_regression`=`rejected`(거부, 채택·실험 모두 불가), `unknown_ci`/`unknown`=기존 2pp fallback(D-a2). **사용자 "확실히 나을 때만 교체" 규칙이 게이트에 강제됨.** baseline=product_path 엔진(D-a3).
 
+- ✅ **B 원클릭 통합 진입점 완료** (`run_stt_official_benchmark.py`, 732 tests): 새 엔진을 한 명령으로 측정→비교→판정→리포트. 단계 (1)엔진별 N회 전사 →(2)번들 변환 →(3)CI 집계(항목⑤) →(4)lane matrix →(5)regression →(6)decision →(7)리포트. **순수 command 빌더 + 주입 가능 invoke** 구조로 엔진 실제 구동 없이 배선·순서·멱등성을 fixture로 검증(엔진 구동은 실측 환경). D-b1(`.py` 오케스트레이터)·D-b2(출력 존재 시 skip=재개)·D-b3(N 잠정 5). **product_path 기본 on**: adoption run이므로 pipeline·convert 모두 전 엔진에 `--product-path` → candidate가 decision `product_path=true` 요구 충족(default_allowed 도달) + benchmark_kind 통일로 regression 비교가능(`not_comparable` 회피). `--no-product-path`는 비교/랭킹 전용(decision은 experimental까지, 이종 엔진 not_comparable 가능). alias 적용 시 bundle의 canonical engine_id로 매칭(`canonical_engine`).
+
 **남은 본체(스키마 ≠ 동작)**:
 - phantom_rate를 decision 판정에 반영(② 데이터 선결)
-- B 원클릭 통합 진입점(데이터→엔진 N회 실행→비교→판정→리포트)
-- 반복측정 N회 실행 루프(실측) — 이게 채워야 CI 판정이 단일런 fallback에서 격상됨
-- 항목⑤ 실행 루프(1회→N회) + 집계 함수 호출 + N 기본값(D-N) — 실측 재실행 의존
+- 반복측정 N회 실행 루프(실측 엔진 구동) — 이게 채워야 CI 판정이 단일런 fallback에서 격상됨(코드 구조는 B 오케스트레이터가 소유, 실측만 남음)
 - 항목④ 4c~4e: relative_improvement/baseline_cer 채움 + decision 상대 delta 판정 — **baseline 엔진 결정(D2) + 반복측정 CI 의존**
 - 반복측정 실행 루프(1회→N회) + N 역산(D-N)
 - phantom ground-truth 데이터 확보(D-phantom-data) → phantom_rate 채움 → ranking에 phantom 차원 추가

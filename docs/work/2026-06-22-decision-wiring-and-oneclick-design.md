@@ -62,3 +62,18 @@ A(CI 기반 채택)는 CI가 있어야 작동하고, CI는 B의 "N회 반복 실
 ## 검증 (설계 확정 후)
 - A: fixture로 "후보가 baseline보다 CI 비겹침이면 교체 권장, 겹치면 유지" 통합 테스트.
 - B: 작은 fixture/dry-run으로 단계 연결 e2e(엔진 실제 구동 없이 산출물 흐름).
+
+## 구현 완료 (2026-06-22)
+A·B 모두 구현됨(코드는 `experiment/official-stt-benchmark-framework` 워크트리, 732 tests). 상세는 ADR 0004 "구현 현황".
+
+- **A**: regression `improvement_signal` 생성 + decision 채택 판정 배선(완료).
+- **B-CI 집계(항목⑤)**: `scripts/aggregate_stt_repeat_metric.py` — N개 metric_summary → CI 주입.
+- **B-통합 래퍼**: `scripts/run_stt_official_benchmark.py` — 측정→비교→판정→리포트 한 명령. 순수 command 빌더 + 주입 가능 invoke로 엔진 없이 배선 검증.
+
+### 구현 중 추가된 결정 (code-reviewer 리뷰 반영)
+- **D-b4 product_path 기본 on(전 엔진)**: 원래 설계엔 없던 결정. decision gate는 *판정 대상(candidate)* benchmark가 `product_path=true`여야 `default_allowed`가 가능하고, regression gate는 candidate/baseline의 `benchmark_kind`가 같아야 비교한다(convert는 엔진별로 kind를 다르게 추론). 따라서 adoption run에선 pipeline·convert 모두 **전 엔진**에 `--product-path`를 적용해 candidate 채택 가능성과 이종 엔진 비교가능성을 동시에 확보한다. 비교/랭킹만 필요하면 `--no-product-path`(decision은 experimental까지, 이종 엔진 not_comparable 가능).
+- **D-b5 멱등성=출력 파일 존재**: 각 단계는 산출물이 있으면 skip(재개). 집계 단계는 skip 판단을 bundle 읽기보다 먼저 해, 번들이 정리/손상돼도 재개가 막히지 않게 한다.
+
+### 남은 것
+- 반복측정 N회 **실측**(엔진 실제 구동, 사용자 환경) — 코드 구조는 B가 소유, CI 수치만 실측 후 채워짐.
+- D-b3 N=5는 잠정. 첫 N회 실측으로 목표 CI에서 역산(ADR D-N).
