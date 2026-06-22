@@ -123,8 +123,12 @@ Phase 0 신뢰성 진단(`docs/benchmark/2026-06-18-reliability-phase0-diagnosis
 
 - ✅ **배선 1단계: lane matrix ↔ verdict 연결 완료** (`f8a89c5`, 704 tests): 고립됐던 `stt_engine_verdict.rank_with_ties`를 `build_stt_engine_lane_matrix.build_engine_ranking`이 호출 → CI 있으면 무승부(tie_group), 없으면 단순 순위(호환). lane이 metric의 `cer_ci95_half_width` 전달. **측정 집계 → 순위·무승부 판정이 자동 연결됨**(통합 테스트로 입증). decision 게이트 채택 판정 연결은 후속(baseline 의존).
 
+- ✅ **A 배선: decision 채택 판정 완료** (regression `improvement_signal` 생성 + decision 채택, 710 tests): regression gate가 candidate/baseline CI로 `significant_improvement`/`significant_regression`/`tie`/`unknown_ci` 산출 → decision이 `significant_improvement`=`default_allowed`(교체 승인), `tie`=`experimental_flag_only`(실험만, default 유지), `significant_regression`=`rejected`(거부, 채택·실험 모두 불가), `unknown_ci`/`unknown`=기존 2pp fallback(D-a2). **사용자 "확실히 나을 때만 교체" 규칙이 게이트에 강제됨.** baseline=product_path 엔진(D-a3).
+
 **남은 본체(스키마 ≠ 동작)**:
-- decision/regression 게이트가 engine_ranking(무승부)·relative_improvement·phantom_rate·cer_std를 **채택 판정에 사용**하도록 연결 (lane matrix까지는 연결됨, decision은 미사용)
+- phantom_rate를 decision 판정에 반영(② 데이터 선결)
+- B 원클릭 통합 진입점(데이터→엔진 N회 실행→비교→판정→리포트)
+- 반복측정 N회 실행 루프(실측) — 이게 채워야 CI 판정이 단일런 fallback에서 격상됨
 - 항목⑤ 실행 루프(1회→N회) + 집계 함수 호출 + N 기본값(D-N) — 실측 재실행 의존
 - 항목④ 4c~4e: relative_improvement/baseline_cer 채움 + decision 상대 delta 판정 — **baseline 엔진 결정(D2) + 반복측정 CI 의존**
 - 반복측정 실행 루프(1회→N회) + N 역산(D-N)
