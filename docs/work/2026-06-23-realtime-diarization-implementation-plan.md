@@ -81,11 +81,14 @@
 **단위테스트 가능분**: mock diarizer + mock 보이스프린트로 오케스트레이션(매핑·편집 보존·실명) 검증. **실기기 QA(Phase 6)**: 실제 VBx 모델로 아카이브 오디오 재조정 정확도.
 **유의**: 저장 schema(speakerEmbeddings)·공유 파이프라인을 건드리므로 critic 리뷰 필수(ADR 0005 범위 내 — 신규 ADR 불요로 판단, 리뷰에서 재확인).
 
-**⚠️ 착수 전 미해결 결정(설계 패스 필요 — Codex dispatch 전에 확정)**:
-저장 재조정의 라벨 SOURCE를 둘 중 무엇으로 할지가 정확성에 영향:
-- (A) **VBx `assignSpeakers`로 segment별 새 배정**(시간겹침) + 편집된 segment만 보존. 단순·직관. 이 경우 `LiveDiarizationReconciler.mapLabels`(4a)는 **불필요**.
-- (B) **`LiveDiarizationReconciler.mapLabels`로 라이브 라벨 ID↔VBx ID 매핑**해 라이브에서 본 라벨 식별자의 연속성 유지 후 `resolveFinalLabels`로 편집 보존.
-- **현 상태**: 4a(`LiveDiarizationReconciler`)는 Phase 3(`TranscriptSpeakerMatcher` 사용)에도 4b 초안(A)에도 **아직 미연결**. 4a의 진짜 자리가 "라이브 표시 중 LS-EEND 갱신 간 라벨 ID 연속성"(Phase 3 보강)인지 "저장 재조정"(B)인지 먼저 정해야 한다. **결정 전까지 4b 구현 보류**(잘못 고르면 라벨 정체성/검색·요약 영향). 이 결정은 다음 세션 설계 패스 또는 사용자 판단으로.
+**✅ 라벨 SOURCE 결정(2026-06-24 사용자): (B) `LiveDiarizationReconciler.mapLabels` 연속성**
+저장 재조정은 4a를 사용한다:
+1. 아카이브 오디오에 offline VBx(`diarizeWithSegmentsAndEmbeddings`) 실행 → VBx segments + embeddings.
+2. 라이브 누적 화자 세그먼트(라이브 라벨) ↔ VBx 세그먼트(VBx 라벨)를 `LiveDiarizationReconciler.mapLabels(live:final:)`로 **IOU 매핑**(라이브에서 사용자가 본 라벨 식별자의 연속성 유지).
+3. transcript 각 segment에 `resolveFinalLabels(transcript: [(liveLabel, edited)], labelMap:)` 적용 — `editedSpeakerSegmentIds`로 **편집 보존**, 미편집은 VBx 라벨로 치환.
+4. VBx embeddings → `VoiceprintMatching.centroids`/`identifySpeakers`로 **실명**(import과 동일 블록·θ=0.65). 앵커("나" 구간)→VBx 제약(exactSpeakerCount).
+- 따라서 **4a(LiveDiarizationReconciler)의 자리 = 저장 재조정**으로 확정. (라이브 표시 중 라벨은 Phase 3가 `TranscriptSpeakerMatcher`로 처리 — 4a는 라이브엔 미사용.)
+- 단위테스트: mock diarizer(segments+embeddings) + mock 보이스프린트로 매핑·편집보존·실명 검증. 실 VBx 정확도는 Phase 6 실기기 QA.
 
 ## Phase 5 — 자동 fail-soft (코드=Codex)
 - 라이브 diarization throw/과부하/에러 → catch → 채널 라벨(`ChannelSpeakerLabeler`) 경로로 강등, `Log.diarization.error`. 녹음·STT 불영향 단위테스트.
