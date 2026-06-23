@@ -3,6 +3,8 @@ import Testing
 import AppKit
 import CoreText
 import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 @testable import MintoCore
 
 @Suite("FileDocumentExtractor")
@@ -44,6 +46,69 @@ struct FileDocumentExtractorTests {
             CTFrameDraw(frame, ctx)
         }
         ctx.endPDFPage()
+        ctx.closePDF()
+        return url
+    }
+
+    /// 흰 배경에 검은 텍스트를 렌더한 비트맵 CGImage(스캔/촬영 문서의 깨끗한 버전 모사).
+    private func renderTextToCGImage(_ text: String, fontSize: CGFloat = 32) -> CGImage {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize),
+            .foregroundColor: NSColor.black
+        ]
+        let attributed = NSAttributedString(string: text, attributes: attributes)
+        let lineCount = text.split(whereSeparator: { $0.isNewline }).count
+        let width = 1100
+        let height = max(300, lineCount * Int(fontSize * 1.9) + 100)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            fatalError("bitmap context 생성 실패")
+        }
+        ctx.setFillColor(NSColor.white.cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let framesetter = CTFramesetterCreateWithAttributedString(attributed as CFAttributedString)
+        let textRect = CGRect(x: 50, y: 50, width: width - 100, height: height - 100)
+        let path = CGPath(rect: textRect, transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
+        CTFrameDraw(frame, ctx)
+        guard let image = ctx.makeImage() else {
+            fatalError("CGImage 생성 실패")
+        }
+        return image
+    }
+
+    /// 텍스트를 그린 이미지 파일(PNG)을 만든다 — OCR 경로 검증용.
+    private func writeTextImage(_ text: String) -> URL {
+        let image = renderTextToCGImage(text)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("doc-extract-\(UUID().uuidString).png")
+        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            fatalError("image destination 생성 실패")
+        }
+        CGImageDestinationAddImage(dest, image, nil)
+        guard CGImageDestinationFinalize(dest) else {
+            fatalError("PNG 쓰기 실패")
+        }
+        return url
+    }
+
+    /// 텍스트를 "이미지로 그린" PDF(선택 가능한 텍스트 없음 = 스캔본 모사). OCR fallback 경로 검증용.
+    private func makeImageOnlyPDF(_ text: String, pages: Int = 1) -> URL {
+        let image = renderTextToCGImage(text)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("doc-extract-scan-\(UUID().uuidString).pdf")
+        var mediaBox = CGRect(x: 0, y: 0, width: CGFloat(image.width), height: CGFloat(image.height))
+        guard let ctx = CGContext(url as CFURL, mediaBox: &mediaBox, nil) else {
+            fatalError("PDF context 생성 실패")
+        }
+        for _ in 0..<pages {
+            ctx.beginPDFPage(nil)
+            ctx.draw(image, in: mediaBox)
+            ctx.endPDFPage()
+        }
         ctx.closePDF()
         return url
     }
@@ -202,6 +267,63 @@ struct FileDocumentExtractorTests {
     @Test("손상된 PDF 는 readFailed 로 분류한다")
     func corruptPDFFailsAsReadFailed() async throws {
         let url = try writeTempFile(ext: "pdf", data: Data("not a real pdf".utf8))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = await FileDocumentExtractor.extract(from: url)
+
+        #expect(result == .failure(.readFailed))
+    }
+
+    @Test("이미지 파일을 OCR 로 추출한다")
+    func extractsTextFromImage() async throws {
+        let url = writeTextImage("Minto 회의 안건 검토")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = await FileDocumentExtractor.extract(from: url)
+
+        guard case let .success(document) = result else {
+            Issue.record("기대: success, 실제: \(result)")
+            return
+        }
+        #expect(document.text.contains("Minto"))
+        #expect(document.text.contains("회의"))
+        #expect(document.sourceKind == .file)
+    }
+
+    @Test("텍스트 없는 스캔 PDF 는 OCR fallback 으로 추출한다")
+    func scannedPDFRecoveredByOCR() async throws {
+        let url = makeImageOnlyPDF("Minto 스캔 문서 추출")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = await FileDocumentExtractor.extract(from: url)
+
+        guard case let .success(document) = result else {
+            Issue.record("기대: success(OCR fallback), 실제: \(result)")
+            return
+        }
+        #expect(document.text.contains("Minto"))
+        #expect(document.text.contains("스캔"))
+    }
+
+    @Test("OCR 페이지 상한을 넘는 스캔 PDF 는 상한까지만 처리한다")
+    func ocrPageCapLimitsPages() async throws {
+        let url = makeImageOnlyPDF("Minto 페이지 상한 테스트", pages: 3)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = await FileDocumentExtractor.extract(from: url, ocrPageCap: 1)
+
+        guard case let .success(document) = result else {
+            Issue.record("기대: success, 실제: \(result)")
+            return
+        }
+        // 같은 텍스트가 3장 → 상한 1장만 처리하면 "Minto" 가 정확히 1회.
+        let occurrences = document.text.components(separatedBy: "Minto").count - 1
+        #expect(occurrences == 1)
+    }
+
+    @Test("손상된 이미지는 readFailed 로 분류한다")
+    func corruptImageFailsAsReadFailed() async throws {
+        let url = try writeTempFile(ext: "png", data: Data("not a real png".utf8))
         defer { try? FileManager.default.removeItem(at: url) }
 
         let result = await FileDocumentExtractor.extract(from: url)
