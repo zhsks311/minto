@@ -18,6 +18,15 @@ public protocol SpeakerDiarizationProvider: Sendable {
     func diarize(audioFileURL: URL) async throws -> [DiarizedSpeakerSegment]
 }
 
+public protocol SegmentEmbeddingDiarizing: Sendable {
+    func diarizeWithSegmentsAndEmbeddings(
+        audioFileURL: URL
+    ) async throws -> (
+        segments: [DiarizedSpeakerSegment],
+        embeddings: [(speakerId: String, embedding: [Float])]
+    )
+}
+
 public struct FluidAudioOfflineDiarizationProvider: SpeakerDiarizationProvider {
     /// FluidAudio Embedding.mlmodelc(256차원) 좌표공간 식별자.
     /// 임베딩 모델 교체 시 값을 bump해 기존 보이스프린트를 매칭에서 제외하고 재등록을 유도한다.
@@ -74,11 +83,11 @@ public struct FluidAudioOfflineDiarizationProvider: SpeakerDiarizationProvider {
         return segments
     }
 
-    /// 같은 모듈의 MeetingFileImportUseCase만 쓰는 임포트 전용 경로다.
-    /// process()가 실제 ML 모델과 오디오를 요구해 기존 diarize처럼 단위테스트로 격리 검증할 수 없으므로 공개 API로 넓히지 않는다.
+    /// import와 저장 finalize가 쓰는 segment+embedding 경로다.
+    /// process()가 실제 ML 모델과 오디오를 요구해 기존 diarize처럼 단위테스트로 격리 검증할 수 없으므로 호출부는 프로토콜로 격리한다.
     /// exposeChunkEmbeddings=true는 chunk 임베딩을 추가로 노출할 뿐 segments의 speakerId 클러스터링 결과를 바꾸지 않는다고 가정한다.
     /// FluidAudio 업그레이드 시 이 가정을 재확인해야 한다. 깨지면 centroid가 다른 화자에 붙는 silent regression이 된다.
-    func diarizeWithSegmentsAndEmbeddings(
+    public func diarizeWithSegmentsAndEmbeddings(
         audioFileURL: URL
     ) async throws -> (
         segments: [DiarizedSpeakerSegment],
@@ -112,3 +121,5 @@ public struct FluidAudioOfflineDiarizationProvider: SpeakerDiarizationProvider {
         return (segments: segments, embeddings: embeddings)
     }
 }
+
+extension FluidAudioOfflineDiarizationProvider: SegmentEmbeddingDiarizing {}
