@@ -25,6 +25,10 @@ public struct MeetingSetupView: View {
     @State private var confluenceStatus: String?
     @State private var confluenceStatusTone: ConfluenceContextStatusTone = .neutral
     @State private var isSearchingConfluence = false
+    @State private var attachedFiles: [AttachedDocument] = []
+    @State private var isImportingFiles = false
+    @State private var ingestingFileCount = 0
+    @State private var documentAttachError: String?
 
     private let onStart: (String, String, String, AudioInputMode) -> Void
     private let onCancel: () -> Void
@@ -68,6 +72,13 @@ public struct MeetingSetupView: View {
             glossaryContextEditor
 
             documentContextEditor
+
+            if ingestingFileCount > 0 {
+                Text("처리 중인 첨부 \(ingestingFileCount)개는 제외돼요.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
 
             HStack {
                 Spacer()
@@ -234,9 +245,9 @@ public struct MeetingSetupView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 12)
-                    Text("Confluence 문맥 조회")
+                    Text("참고 문서")
                         .font(.subheadline.weight(.medium))
-                    Text(confluenceBadgeText)
+                    Text(documentBadgeText)
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
@@ -251,19 +262,12 @@ public struct MeetingSetupView: View {
 
             if showDocument {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: confluence.isConfigured ? "link.circle.fill" : "exclamationmark.circle")
-                            .font(.caption)
-                            .foregroundColor(confluence.isConfigured ? .green : .secondary)
-                        Text(confluence.isConfigured
-                             ? "설정 > 검색 소스의 Confluence 연결을 사용해요."
-                             : "설정 > 검색 소스에서 Confluence를 연결하면 사용할 수 있어요.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
+                    fileAttachSection
 
-                    Text("회의 주제나 안건으로 Confluence를 조회해 전사 교정과 요약에 참고해요.")
-                        .font(.caption2)
+                    Divider().padding(.vertical, 2)
+
+                    Text("직접 입력")
+                        .font(.caption.weight(.medium))
                         .foregroundColor(.secondary)
 
                     TextEditor(text: $document)
@@ -273,6 +277,17 @@ public struct MeetingSetupView: View {
                             RoundedRectangle(cornerRadius: 6)
                                 .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
                         )
+
+                    Divider().padding(.vertical, 2)
+
+                    HStack(spacing: 6) {
+                        Text("Confluence")
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(.secondary)
+                        Image(systemName: confluence.isConfigured ? "link.circle.fill" : "exclamationmark.circle")
+                            .font(.caption2)
+                            .foregroundColor(confluence.isConfigured ? .green : .secondary)
+                    }
 
                     HStack(spacing: 8) {
                         Button {
@@ -322,21 +337,124 @@ public struct MeetingSetupView: View {
                             }
                         }
                     }
+
+                    cloudBoundaryNote
                 }
                 .padding(.leading, 18)
             }
         }
+        .fileImporter(
+            isPresented: $isImportingFiles,
+            allowedContentTypes: FileDocumentExtractor.supportedContentTypes,
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                Task { await ingestFiles(urls) }
+            case .failure(let error):
+                documentAttachError = error.localizedDescription
+            }
+        }
+    }
+
+    /// 파일 첨부 진입 + 첨부 목록 + 처리중/오류 상태.
+    private var fileAttachSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Button {
+                    isImportingFiles = true
+                } label: {
+                    Label("파일 추가", systemImage: "doc.badge.plus")
+                }
+                Text("PDF · 이미지 · 텍스트(md/txt)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            if attachedFiles.isEmpty && ingestingFileCount == 0 {
+                Text("회의 안건·자료를 추가하면 교정과 요약에 참고해요.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            ForEach(attachedFiles) { attached in
+                attachmentRow(attached)
+            }
+
+            if ingestingFileCount > 0 {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("문서에서 글자 읽는 중 \(ingestingFileCount)개")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let documentAttachError {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                    Text(documentAttachError)
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+            }
+        }
+    }
+
+    private func attachmentRow(_ attached: AttachedDocument) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.text")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(attached.sourceLabel ?? attached.title)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                Text("완료 · \(attached.text.count)자")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button {
+                attachedFiles.removeAll { $0.id == attached.id }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("첨부 제거")
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.07))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    /// 클라우드 전송 경계: 데이터 흐름을 설명하는 단일 안내 지점.
+    private var cloudBoundaryNote: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "lock.shield")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text("파일·OCR 처리는 이 기기에서 이뤄져요. 교정·요약을 켜면 문서 내용이 클라우드 AI로 전송될 수 있어요.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(.top, 4)
+    }
+
+    private var documentBadgeText: String {
+        let count = attachedFiles.count + confluenceDocuments.count
+        if count > 0 { return "\(count)개" }
+        return "선택"
     }
 
     private var canSearchConfluence: Bool {
         confluence.isConfigured
             && !confluenceQuery.isEmpty
             && !isSearchingConfluence
-    }
-
-    private var confluenceBadgeText: String {
-        if !confluenceDocuments.isEmpty { return "\(confluenceDocuments.count)개 선택" }
-        return confluence.isConfigured ? "연결됨" : "설정 필요"
     }
 
     private var confluenceStatusColor: Color {
@@ -407,11 +525,33 @@ public struct MeetingSetupView: View {
     }
 
     private var combinedDocument: String {
+        // 결합 순서: 직접 입력 → 첨부 파일 → Confluence. 처리 완료된 첨부만 포함한다(pending 제외).
         let manual = document.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fileBlocks = attachedFiles.map { $0.text }
         let confluenceBlock = ConfluenceService.contextBlock(from: confluenceDocuments)
-        return [manual, confluenceBlock]
+        return ([manual] + fileBlocks + [confluenceBlock])
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .joined(separator: "\n\n")
+    }
+
+    /// 파일 첨부 수집. 성공분만 목록에 추가(id 중복 제외)하고 실패는 안내로 남긴다(fail-soft).
+    @MainActor
+    private func ingestFiles(_ urls: [URL]) async {
+        guard !urls.isEmpty else { return }
+        documentAttachError = nil
+        ingestingFileCount += urls.count
+        Log.importer.info("document attach start count=\(urls.count, privacy: .public)")
+        defer { ingestingFileCount = max(0, ingestingFileCount - urls.count) }
+
+        let result = await DocumentIngestionUseCase().ingest(urls: urls)
+        for attached in result.documents where !attachedFiles.contains(where: { $0.id == attached.id }) {
+            attachedFiles.append(attached)
+            Log.importer.info("document attach ok sourceKind=\(String(describing: attached.sourceKind), privacy: .public) chars=\(attached.text.count, privacy: .public)")
+        }
+        if let failure = result.failures.first {
+            documentAttachError = failure.reason.errorDescription
+            Log.importer.error("document attach failed reason=\(String(describing: failure.reason), privacy: .public)")
+        }
     }
 
     private func fetchConfluenceContext() async {
