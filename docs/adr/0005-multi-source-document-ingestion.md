@@ -85,6 +85,7 @@ DocumentTermExtractor / 교정 / 요약 (변경 없음)
    - md/txt: Foundation `String(contentsOf:encoding:)`(UTF-8 우선, 실패 시 fallback).
    - pdf: PDFKit `PDFDocument(url:)?.string`. 빈 결과(스캔본/CJK 매핑 누락)는 `.emptyContent`로 구분 → **OCR fallback**(아래)으로 넘어감.
    - **이미지 파일·OCR**: 이미지(png/jpg/heic/tiff 등) 및 텍스트 없는 PDF는 Vision `VNRecognizeTextRequest`(`recognitionLanguages = ["ko-KR","en-US"]`, on-device)로 OCR. 경로: 이미지→`CGImage`→Vision; PDF→`PDFPage.thumbnail`/렌더→`CGImage`→Vision. Vision은 백그라운드 큐에서 실행(프리징 무관). **OCR 페이지 상한**(잠정 30p)으로 지연을 bound하고, 초과/지연 시 진행률·취소 + 부분 결과 fail-soft. OCR 결과가 비면 `.emptyContent`.
+     - 근거: Vision ko-KR 프로브(`Tests/MintoTests/VisionOCRProbeTests.swift`, `RUN_OCR_PROBE=1`, 2026-06-23) — 한국어 회의록 합성 이미지(숫자·이름·영문 혼용) **CER 0.000**(20/28/40pt 전부), 지연 첫 호출 ~852ms(모델 로드) 이후 233~248ms, 5장 연속 장당 평균 ~319ms. → ko-KR 지원·정확도·지연 모두 실용 → Phase 2 진행 확정. 페이지 상한 30p ≈ 9~10초(진행률 UI 필수). 단 합성(깨끗) 기준이라 실제 스캔본(기울기·노이즈·저DPI)은 CER 상승 — 오인식 안내 유지.
    - `supportedDocumentContentTypes: [UTType]` 단일 출처(md/txt/pdf + 이미지 UTType). 기존 `FileAudioExtractor.supportedContentTypes` 패턴.
    - **다중 선택**: `FileDocumentExtractor`는 단일 URL→`DocumentIngestionResult`를 다루고, 복수 파일은 use-case/UI가 `[AttachedDocument]`로 모은다(2단계 cap: 개당 + 합산).
    - **동시성(실측으로 확정)**: **백그라운드 추출을 채택한다.** `PDFDocument`는 `Task.detached(.userInitiated)` 클로저 안에서 생성·`.string` 접근까지 끝내고 **반환값은 `String`(Sendable)만** 경계를 넘긴다(PDFDocument 인스턴스는 actor 경계 밖으로 내보내지 않음). `@MainActor` 제약은 두지 않는다.

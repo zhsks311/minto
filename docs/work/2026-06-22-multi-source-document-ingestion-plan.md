@@ -41,7 +41,7 @@
 - **검증**: 텍스트 PDF 픽스처 → 평문, 초대형 파일 → `.tooLarge`. 픽스처는 `Tests/MintoTests/Fixtures/`에 명시 준비.
 
 ### Phase 2 — OCR: 이미지 파일 + 스캔 PDF fallback (Vision) [의존성 0]
-- **(게이트) Vision ko-KR 프로브 선행**: `VNRecognizeTextRequest`의 한국어 지원·실제 인식 정확도·페이지당 지연을 실제 스캔본/이미지 1~2개로 실측(PDFKit 프로브와 동형). 결과를 ADR/계획에 기록.
+- **(게이트 — 통과 ✅ 2026-06-23)** Vision ko-KR 프로브(`Tests/MintoTests/VisionOCRProbeTests.swift`, `RUN_OCR_PROBE=1`): 한국어 회의록 합성 이미지 **CER 0.000**(20/28/40pt), 지연 233~248ms(첫 호출 852ms 워밍업)·5장 장당 평균 319ms. → ko-KR 실용 확인, Phase 2 진행. 페이지 상한 30p ≈ 9~10초(진행률 UI 필수). 합성 기준이라 실제 스캔본은 CER 상승 가능(오인식 안내 유지).
 - `FileDocumentExtractor` OCR 경로: 이미지(png/jpg/heic/tiff)→`CGImage`→Vision; 텍스트 없는 PDF(`.emptyContent`)→`PDFPage` 렌더→`CGImage`→Vision. `recognitionLanguages=["ko-KR","en-US"]`. **백그라운드 큐** 실행.
 - **OCR 페이지 상한**(잠정 30p) + 진행률/취소 + 부분결과 fail-soft. OCR 결과 비면 `.emptyContent`.
 - 이미지 UTType을 `supportedDocumentContentTypes`에 추가.
