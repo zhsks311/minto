@@ -112,3 +112,58 @@ private final class ChunkCounter: @unchecked Sendable {
         }
     }
 }
+
+@Suite("Silero 모델 번들 완전성")
+struct SileroModelBundleCompletenessTests {
+    private func bundleURL(in modelDirectory: URL) -> URL {
+        modelDirectory
+            .appendingPathComponent("Models", isDirectory: true)
+            .appendingPathComponent("silero-vad", isDirectory: true)
+            .appendingPathComponent("silero-vad-unified-256ms-v6.0.0.mlmodelc", isDirectory: true)
+    }
+
+    private func makeConfiguration(modelDirectory: URL) throws -> SileroVADProcessor.Configuration {
+        try #require(SileroVADProcessor.Configuration(environment: ["MINTO_FLUIDAUDIO_MODEL_DIR": modelDirectory.path]))
+    }
+
+    @Test(".mlmodelc 디렉터리만 있고 coremldata.bin이 없으면 미준비로 본다(부분 다운로드)")
+    func directoryWithoutCoremldataIsNotReady() throws {
+        let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("minto-vad-test-\(UUID().uuidString)", isDirectory: true)
+        let bundle = bundleURL(in: tempRoot)
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let configuration = try makeConfiguration(modelDirectory: tempRoot)
+        #expect(configuration.hasLocalModelBundle == false)
+    }
+
+    @Test("coremldata.bin이 0바이트면 미준비로 본다(손상)")
+    func emptyCoremldataIsNotReady() throws {
+        let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("minto-vad-test-\(UUID().uuidString)", isDirectory: true)
+        let bundle = bundleURL(in: tempRoot)
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: bundle.appendingPathComponent("coremldata.bin").path, contents: Data())
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let configuration = try makeConfiguration(modelDirectory: tempRoot)
+        #expect(configuration.hasLocalModelBundle == false)
+    }
+
+    @Test("coremldata.bin이 비어있지 않게 존재하면 준비됨으로 본다")
+    func nonEmptyCoremldataIsReady() throws {
+        let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("minto-vad-test-\(UUID().uuidString)", isDirectory: true)
+        let bundle = bundleURL(in: tempRoot)
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: bundle.appendingPathComponent("coremldata.bin").path,
+            contents: Data([0x01, 0x02, 0x03])
+        )
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let configuration = try makeConfiguration(modelDirectory: tempRoot)
+        #expect(configuration.hasLocalModelBundle == true)
+    }
+}
