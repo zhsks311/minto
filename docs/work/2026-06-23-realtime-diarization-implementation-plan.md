@@ -63,13 +63,23 @@
 **Files:** Create `Sources/Minto/Services/LiveSpeakerAssignmentUseCase.swift`, Test 동.
 **Interfaces:** actor. 오디오 청크 수신 → StreamingProvider 호출 → transcript segment와 시간 바인딩(기존 `TranscriptSpeakerMatcher` 재사용) → **라벨만 @MainActor로 publish**(AsyncStream/콜백). "나" 채널 prior 적용. `TranscriptionViewModel.onBuffer`에서 직접 호출 안 함 — UseCase에 오디오 전달.
 
-## Phase 3 — UI 라이브 라벨 표시 (코드=Codex)
-**Files:** Modify `Sources/Minto/ViewModels/TranscriptionViewModel.swift`, 라이브 transcript 뷰.
-- UseCase 결과 구독 → 임시 라벨 표시(Task 0c UX 반영). 상태: empty/실시간/저장중/확정/fail-soft.
+## Phase 3 — 라이브 라벨 ViewModel 통합 (코드=Codex) ✅ eb2e2d0
+**Files:** Modified `Sources/Minto/ViewModels/TranscriptionViewModel.swift`, `TranscriptionState.swift`; Test `TranscriptionViewModelLiveSpeakerTests.swift`.
+- [x] `LiveSpeakerAssignmentUseCase` **선택적 주입(기본 nil=현행 무변경)**. onBuffer→actor ingest, `TranscriptSpeakerMatcher` 바인딩, 편집 추적 `editedSpeakerSegmentIds`(D1), fail-soft. 5 tests + 전체 673 green.
+- 미완(다음 단계): UI 렌더(0c D5 화자칩 색/아이콘) — `TranscriptionOverlayView`. 실기기 QA(기능 ON 백프레셔)는 Phase 6.
 
-## Phase 4 — 저장 시 재조정 (App, 코드=Codex)
-**Files:** Modify `MeetingFileImportUseCase`/저장 경로 또는 신규 `LiveDiarizationReconciler.swift`.
-- `stopRecordingAndDrain`(아카이브 finish) 이후, 저장 직전: 아카이브 믹스에 offline VBx 실행 → Task 0b IOU 매핑으로 재조정 → 보이스프린트 실명(`VoiceprintMatching.identifySpeakers` 재사용) → 사용자 편집 보존. `isFinalizingMeeting` 대기 UI. 앵커("나" 구간)를 VBx 제약으로 전달.
+## Phase 4b — 저장 시 재조정 (App, 코드=Codex) — 설계 확정
+**Files:** 신규 `Sources/Minto/Services/LiveDiarizationFinalizeUseCase.swift` + Test. AppDelegate 저장 경로 1줄 통합.
+
+**설계 결정(추가형, DRY는 블록 재사용으로)**: import 파이프라인을 추출/수정하지 **않는다**(다른 트랙·주변 리팩터링 위험). 대신 **이미 공개된 재사용 블록을 조합**하는 새 UseCase를 만든다:
+- `SpeakerDiarizationProvider.diarize(audioFileURL:)`(프로토콜 — **mock 주입으로 단위테스트**) / 실구현 `FluidAudioOfflineDiarizationProvider.diarizeWithSegmentsAndEmbeddings`
+- `LiveDiarizationReconciler.mapLabels`/`resolveFinalLabels`(Phase 4a) — 라이브 라벨↔VBx 라벨 IOU 매핑 + 편집 보존
+- `TranscriptSpeakerMatcher.assignSpeakers`, `DiarizationSpeakerLabeling.makeLabelMap`, `VoiceprintMatching.centroids`/`identifySpeakers`(import과 동일 블록 — 라이브/오프라인/import 라벨 의미론 일치)
+- 중복은 조합 글루(~30줄)뿐. 둘이 동일해지면 그때 추출(YAGNI).
+
+**통합점**: `AppDelegate`(녹음 종료 핸들러, 현재 50–80행) — `stopRecordingAndDrain` 후 `committedSegments`를 가져오기 **직전**에 UseCase 호출. 입력: 아카이브 오디오(`viewModel.lastArchivedAudioFileName`), 라이브 `committedSegments`, `viewModel.editedSpeakerSegmentIds`, 등록 보이스프린트. 출력: 재조정·실명된 segments + speakerEmbeddings. `isFinalizingMeeting` 대기 UI(기존). 앵커("나" 구간)→VBx 제약(exactSpeakerCount 등).
+**단위테스트 가능분**: mock diarizer + mock 보이스프린트로 오케스트레이션(매핑·편집 보존·실명) 검증. **실기기 QA(Phase 6)**: 실제 VBx 모델로 아카이브 오디오 재조정 정확도.
+**유의**: 저장 schema(speakerEmbeddings)·공유 파이프라인을 건드리므로 critic 리뷰 필수(ADR 0005 범위 내 — 신규 ADR 불요로 판단, 리뷰에서 재확인).
 
 ## Phase 5 — 자동 fail-soft (코드=Codex)
 - 라이브 diarization throw/과부하/에러 → catch → 채널 라벨(`ChannelSpeakerLabeler`) 경로로 강등, `Log.diarization.error`. 녹음·STT 불영향 단위테스트.
