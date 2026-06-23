@@ -45,10 +45,10 @@
 - [ ] 앵커("나" 구간) → VBx 제약 전달 방식 확정(min/max·numSpeakers·known-segment 중 무엇).
 - [ ] 산출물: `docs/work/reconciliation-algorithm-spec.md`.
 
-### Task 0c: 재조정 UX 설계 (Pencil — CLAUDE.md 3+상태 필수)
-- [ ] 상태: 녹음 중(임시 라벨) / 저장 중(확정 진행) / 저장 후(확정·실명) / 편집됨(보존) / fail-soft(채널 라벨).
-- [ ] "임시→확정 라벨 변경"을 불신 없이 보여주는 화면(예: "정리 중…" → 부드러운 전환, 변경 표시).
-- [ ] `.pen` + export → `Resources/designs/`.
+### Task 0c: 재조정 UX 설계 (Pencil — CLAUDE.md 3+상태 필수) ✅
+- [x] 상태: 녹음 중(임시 라벨) / 저장 중(확정 진행) / 저장 후(확정·실명) / 편집됨(보존) / fail-soft(채널 라벨). → `designs/minto-redesign.pen` 프레임 `0c-1`~`0c-5`.
+- [x] "임시→확정 라벨 변경"을 불신 없이 보여주는 화면: 예고(라이브 hint)·설명(변경 배너+되돌리기)·보호(편집 라벨 고정) 3장치. shimmer로 확정 진행 표현.
+- [x] `.pen` + export → `Resources/designs/2026-06-24-rtdiar-reconcile-{1..5}-*.png`. 상태↔표현 매핑·카피·색 체계는 [reconciliation-ux-spec.md](reconciliation-ux-spec.md).
 
 **Phase 0 게이트**: 0a·0b·0c 완료 후 critic 리뷰 → 통과 시 Phase 1 착수. (이 시점에 본 계획의 Phase 1~ 상세 TDD 단계를 확정 API/알고리즘으로 채운다.)
 
