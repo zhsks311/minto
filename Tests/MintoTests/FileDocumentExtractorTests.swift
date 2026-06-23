@@ -1,5 +1,8 @@
 import Foundation
 import Testing
+import AppKit
+import CoreText
+import CoreGraphics
 @testable import MintoCore
 
 @Suite("FileDocumentExtractor")
@@ -18,6 +21,31 @@ struct FileDocumentExtractorTests {
         encoding: String.Encoding = .utf8
     ) throws -> URL {
         try writeTempFile(ext: ext, data: content.data(using: encoding)!)
+    }
+
+    /// 합성 텍스트 PDF 를 만든다. `text == nil` 이면 텍스트 없는 빈 페이지(스캔본 모사).
+    private func makePDF(text: String?) -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("doc-extract-\(UUID().uuidString).pdf")
+        var mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
+        guard let ctx = CGContext(url as CFURL, mediaBox: &mediaBox, nil) else {
+            fatalError("PDF context 생성 실패")
+        }
+        ctx.beginPDFPage(nil)
+        if let text {
+            let attr = NSAttributedString(string: text, attributes: [
+                .font: NSFont.systemFont(ofSize: 12),
+                .foregroundColor: NSColor.black
+            ])
+            let framesetter = CTFramesetterCreateWithAttributedString(attr as CFAttributedString)
+            let textRect = mediaBox.insetBy(dx: 40, dy: 40)
+            let path = CGPath(rect: textRect, transform: nil)
+            let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
+            CTFrameDraw(frame, ctx)
+        }
+        ctx.endPDFPage()
+        ctx.closePDF()
+        return url
     }
 
     @Test("UTF-8 마크다운 파일을 평문으로 추출한다")
@@ -142,5 +170,42 @@ struct FileDocumentExtractorTests {
             return
         }
         #expect(document.text == content)
+    }
+
+    @Test("텍스트 PDF 를 평문으로 추출한다")
+    func extractsTextFromPDF() async throws {
+        let url = makePDF(text: "Minto 회의 안건 추출 테스트 본문")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = await FileDocumentExtractor.extract(from: url)
+
+        guard case let .success(document) = result else {
+            Issue.record("기대: success, 실제: \(result)")
+            return
+        }
+        #expect(document.text.contains("Minto"))
+        #expect(document.text.contains("추출"))
+        #expect(document.sourceKind == .file)
+        #expect(document.sourceLabel == url.lastPathComponent)
+    }
+
+    @Test("텍스트 없는 PDF(스캔본)는 emptyContent 로 분류한다 — Phase 2 OCR fallback 대상")
+    func scannedPDFFailsAsEmptyContent() async throws {
+        let url = makePDF(text: nil)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = await FileDocumentExtractor.extract(from: url)
+
+        #expect(result == .failure(.emptyContent))
+    }
+
+    @Test("손상된 PDF 는 readFailed 로 분류한다")
+    func corruptPDFFailsAsReadFailed() async throws {
+        let url = try writeTempFile(ext: "pdf", data: Data("not a real pdf".utf8))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = await FileDocumentExtractor.extract(from: url)
+
+        #expect(result == .failure(.readFailed))
     }
 }

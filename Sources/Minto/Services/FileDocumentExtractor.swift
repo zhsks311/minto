@@ -1,10 +1,11 @@
 import Foundation
 import UniformTypeIdentifiers
 import CryptoKit
+import PDFKit
 
 /// 로컬 파일을 평문 `AttachedDocument`로 추출하는 Infra 어댑터.
 ///
-/// Phase 0: md/txt(Foundation 텍스트 읽기). Phase 1에서 PDF 텍스트(PDFKit, 백그라운드),
+/// Phase 0: md/txt(Foundation 텍스트 읽기). Phase 1: PDF 텍스트(PDFKit, 백그라운드).
 /// Phase 2에서 이미지·스캔 PDF(Vision OCR) 경로를 추가한다.
 /// 저수준 추출기는 로깅하지 않는다 — 시작/성공/실패 로깅은 호출하는 UseCase(Phase 3)가 담당한다.
 ///
@@ -12,11 +13,11 @@ import CryptoKit
 public enum FileDocumentExtractor {
 
     /// 첨부 파일로 허용하는 UTType 목록의 단일 출처.
-    /// Phase 0: 평문 텍스트(markdown 은 `public.plain-text` 에 conform). Phase 1/2 에서 pdf·이미지 추가.
-    public static let supportedContentTypes: [UTType] = [.plainText]
+    /// Phase 0: 평문 텍스트(markdown 은 `public.plain-text` 에 conform). Phase 1: pdf 추가. Phase 2 에서 이미지 추가.
+    public static let supportedContentTypes: [UTType] = [.plainText, .pdf]
 
     /// contentType 으로 판별되지 않을 때(확장자 기반 fallback)의 허용 확장자.
-    public static let supportedExtensions: Set<String> = ["txt", "md", "markdown", "text"]
+    public static let supportedExtensions: Set<String> = ["txt", "md", "markdown", "text", "pdf"]
 
     /// 파일 크기 sanity 가드(바이트). prompt budget 이 아니라 비정상 입력 방어용.
     public static let defaultMaxFileBytes = 50 * 1024 * 1024
@@ -40,7 +41,7 @@ public enum FileDocumentExtractor {
         maxFileBytes: Int = defaultMaxFileBytes,
         characterCap: Int = defaultCharacterCap
     ) async -> DocumentIngestionResult {
-        guard isSupported(url) else {
+        guard let kind = fileKind(url) else {
             return .failure(.unsupportedFormat)
         }
 
@@ -48,10 +49,20 @@ public enum FileDocumentExtractor {
             return .failure(.tooLarge)
         }
 
-        guard let raw = readText(url) else {
+        let rawText: String?
+        switch kind {
+        case .text:
+            rawText = readText(url)
+        case .pdf:
+            rawText = await extractPDFText(url)
+        }
+
+        // nil = 파일 자체를 열거나 읽지 못함(손상 등). 빈 문자열은 readFailed 가 아니라 emptyContent 로 분기한다.
+        guard let raw = rawText else {
             return .failure(.readFailed)
         }
 
+        // 텍스트 없는 스캔 PDF 는 여기서 .emptyContent → Phase 2 OCR fallback 대상.
         guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .failure(.emptyContent)
         }
@@ -77,11 +88,46 @@ public enum FileDocumentExtractor {
 
     /// 지원 형식 여부. contentType 우선, 없으면 확장자 fallback.
     public static func isSupported(_ url: URL) -> Bool {
-        if let type = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType,
-           supportedContentTypes.contains(where: { type.conforms(to: $0) }) {
-            return true
+        fileKind(url) != nil
+    }
+
+    /// 추출 경로 분류. 텍스트 읽기와 PDF 추출은 서로 다른 처리라 미리 가른다.
+    private enum FileKind {
+        case text
+        case pdf
+    }
+
+    private static func fileKind(_ url: URL) -> FileKind? {
+        if let type = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType {
+            if type.conforms(to: .pdf) {
+                return .pdf
+            }
+            if type.conforms(to: .plainText) {
+                return .text
+            }
         }
-        return supportedExtensions.contains(url.pathExtension.lowercased())
+        switch url.pathExtension.lowercased() {
+        case "pdf":
+            return .pdf
+        case "txt", "md", "markdown", "text":
+            return .text
+        default:
+            return nil
+        }
+    }
+
+    /// PDFKit 텍스트 추출. `PDFDocument` 은 Sendable 이 아니라 detached task 안에 가두고 `String` 만 경계를 넘긴다.
+    /// 백그라운드 안전성은 `PDFKitBackgroundProbeTests` 로 확인됨(MainActor 제약·페이지 상한 불필요).
+    /// 반환: 문서를 못 엶 → nil(readFailed), 열었지만 텍스트 없음(스캔본) → ""(emptyContent → Phase 2 OCR).
+    private static func extractPDFText(_ url: URL) async -> String? {
+        await Task.detached(priority: .userInitiated) {
+            // 문서를 못 엶 → nil(readFailed). 열렸으면 텍스트가 없어도 "" 를 돌려
+            // emptyContent(스캔본 → OCR) 로 분기시킨다. nil 로 흘리면 readFailed 와 섞인다.
+            guard let document = PDFDocument(url: url) else {
+                return nil
+            }
+            return document.string ?? ""
+        }.value
     }
 
     private static func fileByteSize(_ url: URL) -> Int? {
