@@ -136,9 +136,22 @@ public final class SileroVADProcessor: @unchecked Sendable {
         }
 
         var hasLocalModelBundle: Bool {
-            Self.modelBundleCandidates(in: modelDirectory).contains { url in
-                FileManager.default.fileExists(atPath: url.path)
+            Self.modelBundleCandidates(in: modelDirectory).contains { bundle in
+                Self.isCompleteModelBundle(bundle)
             }
+        }
+
+        /// .mlmodelc 디렉터리만 있고 내용이 불완전한(부분/손상 다운로드) 경우를 "준비됨"으로
+        /// 오판하지 않는다. 디렉터리 존재만 보면, coremldata.bin이 빠진 번들도 ready로 잡혀
+        /// 재다운로드를 건너뛰고 런타임에 Silero 로드가 실패→Energy로 폴백한다(전사 과다컷).
+        /// CoreML 로드의 필수 파일인 coremldata.bin이 비어있지 않게 존재할 때만 완전한 번들로 본다.
+        static func isCompleteModelBundle(_ bundle: URL) -> Bool {
+            let coremldata = bundle.appendingPathComponent("coremldata.bin")
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: coremldata.path),
+                  let size = attributes[.size] as? Int, size > 0 else {
+                return false
+            }
+            return true
         }
 
         var segmentationConfig: VadSegmentationConfig {
