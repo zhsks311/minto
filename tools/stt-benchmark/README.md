@@ -30,24 +30,30 @@ cd tools/stt-benchmark && python3 -m pytest tests/ -q
 
 ## 한 명령 실행
 
+repo 루트에서(전사 러너가 이 repo `scripts/`에 있다):
+
 ```bash
-python3 lib/run_stt_official_benchmark.py \
+python3 tools/stt-benchmark/lib/run_stt_official_benchmark.py \
   --engines whisper_accurate,speech_analyzer \
   --baseline-engine whisper_accurate \
   --reference-version seed-smi-2026-06-12 \
-  --reference-manifest fixtures/minimal_reference_manifest.json \
-  --manual-review-manifest fixtures/minimal_manual_review_manifest.json \
-  --transcribe-cmd "python3 /path/to/run_meeting_stt_pipeline.py" \
-  --raw-dir <오디오 디렉터리> \
+  --reference-manifest tools/stt-benchmark/fixtures/minimal_reference_manifest.json \
+  --manual-review-manifest tools/stt-benchmark/fixtures/minimal_manual_review_manifest.json \
+  --transcribe-cmd "python3 $(pwd)/scripts/run_meeting_stt_pipeline.py" \
+  --raw-dir "$(pwd)/sample/meeting/raw" \
+  --samples 본회의_20260428 \
   --repeats 5 \
-  --output-root <결과 위치>
+  --output-root /tmp/stt-bench-run
 ```
+
+> 실측 확인됨(2026-06-23, main): 위 명령이 한 번에 전사→비교→판정→리포트까지 수행한다.
+> `--samples`를 빼면 raw-dir의 전체 코퍼스, `--repeats`를 늘리면 신뢰구간이 좁아진다.
 
 ### 전사 경계 — `--transcribe-cmd`
 
 실제 STT 전사는 앱의 Swift 엔진에서 일어나므로, 모듈은 전사를 **외부 러너로 주입**받는다:
 
-- **`--transcribe-cmd` 지정**: 오케스트레이터가 그 명령에 `--engines`/`--output-root`와 옵션 플래그를 붙여 호출한다. 러너는 `<output-root>/transcribe/<engine>/rep<k>/pipeline_manifest.json`을 써야 한다(앱의 `run_meeting_stt_pipeline.py`가 이 규약을 따른다). → 한 명령 end-to-end.
+- **`--transcribe-cmd` 지정**: 오케스트레이터가 그 명령에 `--engines`/`--output-root`와 옵션 플래그를 붙여 호출한다. 러너는 `<output-root>/transcribe/<engine>/rep<k>/pipeline_manifest.json`을 써야 한다. 이 repo의 `scripts/run_meeting_stt_pipeline.py`가 이 규약을 따른다(실제 STT는 앱 Swift 엔진 호출). → 한 명령 end-to-end.
 - **생략(분석 전용)**: 전사를 건너뛰고 미리 만든 pipeline manifest를 입력으로 받아 비교·판정만 한다. 없으면 명확한 오류로 중단한다.
 
 ## 7단계
