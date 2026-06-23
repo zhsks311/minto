@@ -70,7 +70,43 @@
 - 상태는 empty/loading(저장중)/success(저장후)/edited/disabled(fail-soft 안내)를 모두 가진다
   (CLAUDE.md UI 검증 게이트).
 
+## Phase 3 선행 결정 (게이트 critic 리뷰 반영, 2026-06-24)
+
+게이트 리뷰(critic, REVISE)가 Phase 3 착수 전 결정이 필요하다고 지적한 항목의 확정 답.
+
+### D1 (blocker 해소) — 사용자 편집 여부는 영속하지 않는 라이브 세션 상태다
+- **`Segment` 모델을 바꾸지 않는다**(`Meeting.swift:15` — `speaker: String?`, Codable. 필드 추가 시 저장 스키마·하위호환 부담).
+- 편집 여부는 **재조정(저장 시 1회)에서만** 소비되고 저장 후엔 라벨이 최종 문자열로 확정돼 "편집이었는지" 기억할 필요가 없다(재조정 재실행 없음).
+- 따라서 **ViewModel/UseCase 레이어에 `editedSpeakerSegmentIds: Set<Segment.ID>`**(라이브 중 사용자가 화자를 직접 지정/변경한 segment id)를 들고 있다가, 저장 시 `LiveDiarizationReconciler.resolveFinalLabels`의 `(liveLabel, edited)` 튜플을 `edited = editedSpeakerSegmentIds.contains(segment.id)`로 채운다. 비영속(메모리).
+- 라벨 단위 rename(`SpeakerLabelEditing.replacingSpeaker`)은 해당 라벨의 모든 segment id를, 단일 reassign(`reassignSegment`)은 그 segment id만 set에 넣는다.
+
+### D2 — "되돌리기"의 범위
+- 되돌리기 = **사용자가 라이브에서 본 임시 라벨로 복귀**(예: `김재휘` → `화자 1`). VBx raw ID(`화자 3` 등)로 되돌리지 않는다 — 사용자가 본 적 없는 표기라 혼란.
+- 구현: 재조정 매핑(`mapLabels`)·실명 치환 결과를 폐기하고 라이브 임시 라벨(`liveLabel`)을 그대로 표시. `editedSpeakerSegmentIds`로 보호된 라벨(예: `박팀장`)은 **애초에 자동 변경 대상이 아니므로 되돌리기에 영향받지 않는다**.
+- 단위 = **배너에 표시된 변경 전체 일괄**. 부분 되돌리기는 v1 범위 밖(개별 라벨 재편집으로 대체 가능).
+
+### D3 — 저장 중(화면 2) 앱 종료·충돌
+- **저장은 VBx 재조정이 끝난 뒤 1회만** `MeetingRecord`를 기록한다. 재조정 전 충돌 시 회의는 **미저장**(부분 저장 금지) → 기존 `MeetingSaveRecovery` 복구 경로 대상.
+- `isFinalizingMeeting`은 비영속이라 재시작 시 false로 초기화되는 게 정상(중간 상태가 디스크에 남지 않음).
+
+### D4 — 라이브 diar 정상인데 화자가 없거나 1명
+- **발화/화자 0 = 화자 칩 없이 전사 텍스트만**(기존 `pendingRow`/`committedRow` 방식 그대로). fail-soft(화면 5) 아님.
+- **화자 1명 = 변경 배너 없이 화면 3**(혼자 말한 회의). 매칭되면 실명, 아니면 `화자 1`.
+- **보이스프린트 0 등록 = 화면 3에서 모든 화자 회색 `화자 N`**(파랑 실명 칩 없음). 헤더는 `정리 완료` 유지, 변경 배너 없음.
+
+### D5 — pending 줄 임시 화자 칩 (Minor 5)
+- `committedRow`와 **동일 규칙**(`SpeakerLabel.normalized`, 10pt semibold secondary, `maxWidth: 64`). 단 텍스트와 함께 dim 처리(인식 중).
+- LS-EEND `tentative` segment의 화자 = pending 줄에 표시, `finalized` = committed 줄. (`lseend-streaming-api-notes.md`)
+
+### D6 — 변경 배너 / 칩 강조 수명 (Minor 6·7)
+- 변경 배너: **저장 직후 그 화면 세션에서 1회 표시**. 앱 재시작·다른 회의 전환 시 사라짐. 비영속(UserDefaults 미저장).
+- 연파랑(`#DBEAFE`) 칩 강조: 동일하게 비영속. 다음 진입(앱 재시작/회의 전환) 시 일반 파랑 텍스트.
+
+### D7 — fail-soft 헤더 카피 (Skeptic 노트 반영)
+- 화면 5 헤더를 `정리 완료`(녹색 체크)에서 **`마이크 기준으로 저장됐어요`**(중립)로 바꾼다. 기능 저하 상태에 "정리 완료"는 과장 — 정직한 중립 표현. 녹음·전사·요약 성공 사실은 hint로 유지.
+
 ## 산출물
 
 - `designs/minto-redesign.pen` 프레임 `0c-1`~`0c-5` (원본, 메인 워크트리)
 - `Resources/designs/2026-06-24-rtdiar-reconcile-{1..5}-*.png` (export 스냅샷, 이 브랜치)
+- 게이트 critic 리뷰: REVISE → 위 D1~D7로 해소(D1 blocker 포함). D2~D7은 Phase 3 구현 중 PR 코멘트 수준.
