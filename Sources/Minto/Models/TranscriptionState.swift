@@ -74,6 +74,11 @@ public struct TranscriptionState: Sendable {
         )
     }
 
+    /// ViewModel이 전사 텍스트는 유지한 채 표시 메타데이터(speaker)를 갱신할 때 내부 상태도 동기화한다.
+    mutating func replaceCommittedSegments(_ segments: [Segment]) {
+        committedSegments = segments
+    }
+
     private func isSimilar(_ a: String, _ b: String) -> Bool {
         guard !a.isEmpty, !b.isEmpty else { return false }
         let norm: (String) -> String = {
