@@ -1,5 +1,6 @@
 import Foundation
 import MCP
+import os
 
 /// Notion 공식 MCP 서버(https://mcp.notion.com/mcp)에 OAuth 2.1로 연결해
 /// 전사 키워드로 Notion 페이지를 검색하는 서비스.
@@ -129,6 +130,67 @@ public final class NotionMCPService: ObservableObject {
             FileHandle.standardError.write(Data("[NotionMCP] 검색 오류(type=\(typeName))\n".utf8))
             return []
         }
+    }
+
+    /// Notion 페이지 URL → 평문 `AttachedDocument`. 기존 검색용 MCP 연결을 그대로 재사용한다(새 토큰·UI 없음).
+    /// 비대화형: 토큰 만료·갱신 실패 시 브라우저를 띄우지 않고 `.needsReconnect`로 분류한다.
+    /// URL·토큰·본문은 로그에 남기지 않는다(글자 수만).
+    public func fetchPageDocument(url: String) async -> DocumentIngestionResult {
+        switch connectionState {
+        case .disconnected:
+            return .failure(.notConnected)
+        case .needsReconnect:
+            return .failure(.needsReconnect)
+        case .connected:
+            break
+        }
+
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .failure(.fetchFailed)
+        }
+
+        Log.oauth.info("notion fetch start")
+        do {
+            // 검색과 동일하게 비대화형 연결(토큰만으로 붙고, 대화형 인증 필요 시 조용히 실패).
+            let client = try await makeConnectedClient(interactive: false)
+            defer { Task { await client.disconnect() } }
+
+            let fetched = await Self.fetchText(for: trimmed, client: client)
+            guard let fetched, !fetched.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                Log.oauth.error("notion fetch empty")
+                return .failure(.emptyContent)
+            }
+
+            let title = Self.notionTitle(from: fetched)
+            Log.oauth.info("notion fetch ok chars=\(fetched.count, privacy: .public)")
+            return .success(AttachedDocument(
+                id: trimmed,
+                title: title,
+                text: fetched,
+                sourceKind: .notion,
+                sourceLabel: title
+            ))
+        } catch {
+            handleConnectionFailure(error)
+            let needsReconnect = connectionState == .needsReconnect || Self.isAuthorizationFailure(error)
+            Log.oauth.error("notion fetch failed needsReconnect=\(needsReconnect, privacy: .public) type=\(String(describing: type(of: error)), privacy: .public)")
+            return .failure(needsReconnect ? .needsReconnect : .fetchFailed)
+        }
+    }
+
+    /// 가져온 본문의 첫 비어있지 않은 줄을 제목으로 쓴다(마크다운 heading 마커 제거, 80자 cap). 없으면 기본값.
+    nonisolated static func notionTitle(from text: String) -> String {
+        let firstLine = text
+            .split(whereSeparator: { $0.isNewline })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first(where: { !$0.isEmpty })
+        guard let firstLine else {
+            return "Notion 문서"
+        }
+        let cleaned = String(firstLine.drop(while: { $0 == "#" || $0 == " " }))
+        let title = cleaned.isEmpty ? firstLine : cleaned
+        return title.count > 80 ? String(title.prefix(80)) : title
     }
 
     func refreshConnectionStateFromStorage() {
