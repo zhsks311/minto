@@ -191,9 +191,80 @@ struct TranscriptionViewModelLiveSpeakerTests {
         viewModel.clearTranscript()
     }
 
+    @Test("라이브 provider 실패 후 mixed 입력은 채널 라벨로 자동 강등된다")
+    func providerFailureRestoresChannelLabelsForMixedInput() async throws {
+        let provider = LiveSpeakerMockStreamingProvider(
+            processResponses: [
+                [diarizedSegment("speaker-a", start: 0.0, end: 2.0)],
+            ],
+            processFailureCall: 2
+        )
+        let useCase = LiveSpeakerAssignmentUseCase(provider: provider)
+        let audioSource = LiveSpeakerChannelStubAudioSource(
+            channels: [
+                (start: 0.0, end: 1.0, channel: .microphone),
+                (start: 1.0, end: 3.0, channel: .systemAudio),
+            ]
+        )
+        let viewModel = makeViewModel(
+            resultTexts: ["첫 발화", "둘째 발화", "셋째 발화"],
+            audioSource: audioSource,
+            liveSpeakerAssignment: useCase
+        )
+
+        viewModel.startNewRecordingSession(inputMode: .mixed)
+        audioSource.emit(samples: samples(count: 16_000))
+        #expect(await waitUntil {
+            let snapshot = await provider.snapshot()
+            return snapshot.processCallCount == 1
+        })
+
+        viewModel.enqueueChunk(audioChunk(start: 0.0, end: 1.0))
+        viewModel.enqueueChunk(audioChunk(start: 1.0, end: 2.0))
+        #expect(await waitUntil {
+            viewModel.committedSegments.count == 2
+                && viewModel.committedSegments.allSatisfy { $0.speaker == "화자 1" }
+        })
+
+        let editedSegment = try #require(viewModel.committedSegments.last)
+        viewModel.reassignLiveSpeaker(segmentId: editedSegment.id, to: "고정 라벨")
+
+        audioSource.emit(samples: samples(count: 16_000))
+        #expect(await waitUntil {
+            let snapshot = await provider.snapshot()
+            return snapshot.processCallCount == 2
+                && viewModel.committedSegments.first?.speaker == kSpeakerSelfLabel
+        })
+
+        #expect(viewModel.committedSegments.map(\.speaker) == [kSpeakerSelfLabel, "고정 라벨"])
+        #expect(viewModel.errorMessage == nil)
+        #expect(viewModel.allText == "첫 발화\n둘째 발화")
+
+        viewModel.enqueueChunk(audioChunk(start: 2.0, end: 3.0))
+        #expect(await waitUntil {
+            viewModel.committedSegments.count == 3
+                && viewModel.committedSegments.last?.speaker == kSpeakerOtherLabel
+        })
+
+        #expect(viewModel.committedSegments.map(\.speaker) == [
+            kSpeakerSelfLabel,
+            "고정 라벨",
+            kSpeakerOtherLabel,
+        ])
+        #expect(viewModel.allText == "첫 발화\n둘째 발화\n셋째 발화")
+
+        await viewModel.stopRecordingAndDrain()
+        #expect(viewModel.committedSegments.map(\.speaker) == [
+            kSpeakerSelfLabel,
+            "고정 라벨",
+            kSpeakerOtherLabel,
+        ])
+        viewModel.clearTranscript()
+    }
+
     private func makeViewModel(
         resultTexts: [String],
-        audioSource: LiveSpeakerStubAudioSource = LiveSpeakerStubAudioSource(),
+        audioSource: any AudioSourceProtocol = LiveSpeakerStubAudioSource(),
         liveSpeakerAssignment: LiveSpeakerAssignmentUseCase? = nil
     ) -> TranscriptionViewModel {
         TranscriptionViewModel(
@@ -264,6 +335,37 @@ private final class LiveSpeakerStubAudioSource: AudioSourceProtocol {
     }
 }
 
+private final class LiveSpeakerChannelStubAudioSource: AudioSourceProtocol, RecordingChannelActivityProviding {
+    var onBuffer: (@Sendable ([Float]) -> Void)?
+    var onError: (@Sendable (AudioSourceError) -> Void)?
+    var onLevel: (@Sendable (Float) -> Void)?
+    var availableDevices: [AudioDevice] = []
+
+    private let channels: [(start: Double, end: Double, channel: MixedAudioInputSource)]
+
+    init(channels: [(start: Double, end: Double, channel: MixedAudioInputSource)]) {
+        self.channels = channels
+    }
+
+    func start() throws {}
+
+    func stop() {}
+
+    func selectDevice(_ device: AudioDevice) throws {}
+
+    func emit(samples: [Float]) {
+        onBuffer?(samples)
+    }
+
+    func dominantChannel(startSeconds: Double, endSeconds: Double) -> MixedAudioInputSource? {
+        channels.first {
+            startSeconds >= $0.start && endSeconds <= $0.end
+        }?.channel
+    }
+
+    func resetChannelActivity() {}
+}
+
 private final class LiveSpeakerStubVoiceActivityDetector: VoiceActivityDetector, @unchecked Sendable {
     var onChunk: (@Sendable (AudioChunk) -> Void)?
     var onPreviewChunk: (@Sendable (AudioChunk) -> Void)?
@@ -281,6 +383,7 @@ private actor LiveSpeakerMockStreamingProvider: StreamingSpeakerDiarizationProvi
     private var processResponses: [[DiarizedSpeakerSegment]]
     private let finishResponse: [DiarizedSpeakerSegment]
     private let failure: LiveSpeakerMockProviderFailure?
+    private let processFailureCall: Int?
     private var startPreEnrolledCounts: [Int] = []
     private var processCallCount = 0
     private var finishCallCount = 0
@@ -288,11 +391,13 @@ private actor LiveSpeakerMockStreamingProvider: StreamingSpeakerDiarizationProvi
     init(
         processResponses: [[DiarizedSpeakerSegment]] = [],
         finishResponse: [DiarizedSpeakerSegment] = [],
-        failure: LiveSpeakerMockProviderFailure? = nil
+        failure: LiveSpeakerMockProviderFailure? = nil,
+        processFailureCall: Int? = nil
     ) {
         self.processResponses = processResponses
         self.finishResponse = finishResponse
         self.failure = failure
+        self.processFailureCall = processFailureCall
     }
 
     func start(preEnrolled: [Voiceprint]) async throws {
@@ -307,7 +412,7 @@ private actor LiveSpeakerMockStreamingProvider: StreamingSpeakerDiarizationProvi
         sourceSampleRate: Double
     ) async throws -> [DiarizedSpeakerSegment] {
         processCallCount += 1
-        if failure == .process {
+        if failure == .process || processFailureCall == processCallCount {
             throw LiveSpeakerMockProviderError.failed
         }
         guard !processResponses.isEmpty else {

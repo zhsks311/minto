@@ -691,7 +691,7 @@ public final class TranscriptionViewModel: ObservableObject {
         } catch {
             liveSpeakerAssignmentActive = false
             liveDiarizedSegments = []
-            applyLiveSpeakerLabels([])
+            restoreChannelLabelsAfterDiarizationFailure()
             Log.diarization.error(
                 "live speaker assignment vm failed operation=ingest samples=\(samples.count, privacy: .public) segments=\(self.committedSegments.count, privacy: .public)"
             )
@@ -704,6 +704,11 @@ public final class TranscriptionViewModel: ObservableObject {
         await liveSpeakerStartTask?.value
         liveSpeakerStartTask = nil
         guard liveSpeakerAssignmentStarted else {
+            return
+        }
+        guard liveSpeakerAssignmentActive else {
+            liveSpeakerAssignmentStarted = false
+            liveDiarizedSegments = []
             return
         }
 
@@ -726,8 +731,44 @@ public final class TranscriptionViewModel: ObservableObject {
     }
 
     private func applyCurrentLiveSpeakerLabels() {
-        guard liveSpeakerAssignment != nil else { return }
+        guard liveSpeakerAssignment != nil, liveSpeakerAssignmentActive else { return }
         applyLiveSpeakerLabels(liveDiarizedSegments)
+    }
+
+    private func restoreChannelLabelsAfterDiarizationFailure() {
+        let timelineStart = transcriptTimelineStartDate
+        let relabeledSegments = committedSegments.map { segment in
+            guard !editedSpeakerSegmentIds.contains(segment.id) else {
+                return segment
+            }
+
+            let startSeconds: Double?
+            let endSeconds: Double?
+            if let timelineStart {
+                let start = segment.timestamp.timeIntervalSince(timelineStart)
+                startSeconds = start
+                endSeconds = start + segment.duration
+            } else {
+                startSeconds = nil
+                endSeconds = nil
+            }
+
+            var updated = segment
+            updated.speaker = SpeakerLabel.normalized(
+                channelSpeakerLabeler.speaker(
+                    inputMode: recordingInputMode,
+                    activityProvider: channelActivityProvider,
+                    startSeconds: startSeconds,
+                    endSeconds: endSeconds
+                )
+            )
+            return updated
+        }
+
+        replaceCommittedSegments(relabeledSegments)
+        Log.diarization.info(
+            "live diarization degraded to channel labels segments=\(self.committedSegments.count, privacy: .public)"
+        )
     }
 
     private func applyLiveSpeakerLabels(_ diarizedSegments: [DiarizedSpeakerSegment]) {
