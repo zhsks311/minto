@@ -38,6 +38,32 @@ Every `sample/meeting/raw/*_full.wav` file with a matching SMI reference was mea
 
 SpeechAnalyzer had the lowest CER on all seven samples. The expanded batch strengthens the current decision rather than changing it.
 
+## 외부 참고 벤치마크 — 한국어 콜센터 ASR (mz-moonzoo)
+
+출처: https://mz-moonzoo.tistory.com/133
+
+> **주의: 우리 "Measured candidates" 표와 같은 줄에 합치지 말 것.** 측정 데이터셋·정규화·파인튜닝 여부가 모두 달라 CER 숫자가 직접 비교되지 않는다. 아래는 *콜센터 도메인에서 모델 계열별 경향*을 참고하기 위한 외부 데이터다.
+
+| 모델 | 파라미터 | 구분 | CER |
+| --- | --- | --- | ---: |
+| Qwen3-ASR-1.7B | 1.7B | Base | `22.72%` |
+| Qwen3-ASR-0.6B | 0.6B | Base | `26.49%` |
+| Faster-whisper-large-v3-turbo | large-v3-turbo | Base | `27.70%` |
+| Qwen3-ASR-1.7B | 1.7B | Fine-tuned | `7.41%` |
+| Faster-whisper-large-v3-turbo | large-v3-turbo | Fine-tuned | `11.53%` |
+
+측정 조건(우리와 다른 점):
+
+- **데이터셋**: 실제 콜센터 상담 녹취 약 10,000건(겹치는 발화·배경 노이즈 포함). 우리는 회의 WAV 120초 윈도우.
+- **레퍼런스 정규화**: 숫자/영어를 한글로 변환(예: `123` → `일이삼`), 한글 발음 표준화 수동 전사. 우리 SMI 레퍼런스와 정규화 규칙이 달라 CER 절대값 비교 불가.
+- **메트릭**: CER만. **추론 속도(RTF) 미측정**(GPU 리소스 경쟁). 우리 표의 RTF/latency에 해당하는 값 없음.
+- **파인튜닝 포함**: Base와 Fine-tuned를 함께 보고. 우리 후보는 모두 파인튜닝 없는 off-the-shelf.
+
+참고 포인트:
+
+- `Faster-whisper-large-v3-turbo`는 우리가 쓰는 WhisperKit `openai_whisper-large-v3-v20240930_turbo`와 **같은 large-v3-turbo 계열**이다. 콜센터 도메인 base CER `27.70%`는 우리 회의 도메인 weighted CER `31.4%`와 자릿수가 비슷하나, 위 정규화 차이로 직접 비교는 금물.
+- **Qwen3-ASR**(1.7B/0.6B)는 우리가 측정한 적 없는 신규 후보다. Base에서도 large-v3-turbo보다 낮은 CER를 보였고, 파인튜닝 시 `7.41%`까지 개선 — 향후 한국어 도메인 후보로 검토할 가치가 있으나, on-device(CoreML/MLX) 변환 가능성과 RTF는 미확인이다.
+
 ## Notes
 
 - These current numbers are from `sample/meeting/raw/본회의_20260508_full.wav` and its SMI reference. Older rows used `haengan_20260526_full.wav`.

@@ -147,6 +147,7 @@ Minto2는 macOS 회의 기록 앱이다.
 - benchmark 결과: `docs/benchmark/`
 - ADR: `docs/adr/`
 - 기능 정의: `docs/service-definition.md`
+- 기술 선택지/후보 비교(살아있는 레지스트리, 날짜 없는 파일명): `docs/stt-candidate-registry.md` 등. 시각화 스냅샷은 `docs/reports/`에 날짜 포함.
 - Pencil 결과물: `Resources/designs/`
 
 ## 로컬 빌드·실행·서명 (dev.sh)
