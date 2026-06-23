@@ -13,6 +13,7 @@ private enum ConfluenceContextStatusTone {
 public struct MeetingSetupView: View {
     @ObservedObject private var confluence = ConfluenceService.shared
     @ObservedObject private var glossaryStore = GlossaryStore.shared
+    @ObservedObject private var notion = NotionMCPService.shared
     @State private var topic: String = ""
     @State private var glossary: String = ""
     @State private var document: String = ""
@@ -29,6 +30,7 @@ public struct MeetingSetupView: View {
     @State private var isImportingFiles = false
     @State private var ingestingFileCount = 0
     @State private var documentAttachError: String?
+    @State private var notionURLInput: String = ""
 
     private let onStart: (String, String, String, AudioInputMode) -> Void
     private let onCancel: () -> Void
@@ -371,6 +373,24 @@ public struct MeetingSetupView: View {
                     .foregroundColor(.secondary)
             }
 
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("Notion 페이지 링크 붙여넣기", text: $notionURLInput)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(!notion.isConnected)
+                    .onSubmit { Task { await ingestNotionPage() } }
+                Button("가져오기") { Task { await ingestNotionPage() } }
+                    .disabled(!notion.isConnected || notionURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if !notion.isConnected {
+                Text("설정에서 Notion을 연결하면 페이지를 가져올 수 있어요.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
             if attachedFiles.isEmpty && ingestingFileCount == 0 {
                 Text("회의 안건·자료를 추가하면 교정과 요약에 참고해요.")
                     .font(.caption2)
@@ -405,7 +425,7 @@ public struct MeetingSetupView: View {
 
     private func attachmentRow(_ attached: AttachedDocument) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "doc.text")
+            Image(systemName: attachmentIcon(for: attached.sourceKind))
                 .font(.caption)
                 .foregroundColor(.secondary)
             VStack(alignment: .leading, spacing: 1) {
@@ -430,6 +450,19 @@ public struct MeetingSetupView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.secondary.opacity(0.07))
         .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func attachmentIcon(for sourceKind: SourceKind) -> String {
+        switch sourceKind {
+        case .notion:
+            return "link"
+        case .confluence:
+            return "doc.richtext"
+        case .manual:
+            return "square.and.pencil"
+        case .file:
+            return "doc.text"
+        }
     }
 
     /// 클라우드 전송 경계: 데이터 흐름을 설명하는 단일 안내 지점.
@@ -551,6 +584,30 @@ public struct MeetingSetupView: View {
         if let failure = result.failures.first {
             documentAttachError = failure.reason.errorDescription
             Log.importer.error("document attach failed reason=\(String(describing: failure.reason), privacy: .public)")
+        }
+    }
+
+    /// Notion 페이지 링크 수집. 기존 Notion 연결을 재사용하고, 성공 시 첨부 목록에 추가한다(fail-soft).
+    @MainActor
+    private func ingestNotionPage() async {
+        let url = notionURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+        documentAttachError = nil
+        ingestingFileCount += 1
+        Log.importer.info("notion attach start")
+        defer { ingestingFileCount = max(0, ingestingFileCount - 1) }
+
+        let result = await notion.fetchPageDocument(url: url)
+        switch result {
+        case .success(let attached):
+            if !attachedFiles.contains(where: { $0.id == attached.id }) {
+                attachedFiles.append(attached)
+                Log.importer.info("notion attach ok chars=\(attached.text.count, privacy: .public)")
+            }
+            notionURLInput = ""
+        case .failure(let reason):
+            documentAttachError = reason.errorDescription
+            Log.importer.error("notion attach failed reason=\(String(describing: reason), privacy: .public)")
         }
     }
 
