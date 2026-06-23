@@ -2,7 +2,7 @@
 
 날짜: 2026-06-24
 
-근거 ADR: `docs/adr/0005-multi-source-document-ingestion.md` (Accepted)
+근거 ADR: `docs/adr/0006-multi-source-document-ingestion.md` (Accepted)
 계획: `docs/work/2026-06-22-multi-source-document-ingestion-plan.md`
 브랜치: `feat/document-multi-source`
 

@@ -4,7 +4,7 @@
 개정: 2026-06-22 (다중 관점 리뷰 1차 반영)
 브랜치: `feat/document-multi-source`
 워크트리: `/Users/d66hjkxwt9/Idea/private/minto2-wt-document-sources`
-근거 ADR: `docs/adr/0005-multi-source-document-ingestion.md`
+근거 ADR: `docs/adr/0006-multi-source-document-ingestion.md`
 
 ## 목표
 
@@ -15,7 +15,7 @@
 
 ## 선행 게이트
 
-- ADR 0005가 다중 관점 리뷰 1차를 통과(blocker C1 해소)했다. 잔여 합의(텍스트 cap·파일 크기 상한 수치) 후 **구현 착수 직전 ADR을 Accepted로 전환**한다.
+- ADR 0006이 다중 관점 리뷰 1차를 통과(blocker C1 해소)했다. 잔여 합의(텍스트 cap·파일 크기 상한 수치) 후 **구현 착수 직전 ADR을 Accepted로 전환**한다.
 - 리뷰 미해결 항목이 남으면 코드 변경 없음.
 
 ## 아키텍처 요약
