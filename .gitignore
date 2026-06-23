@@ -12,6 +12,8 @@ Resources/models/*.bin
 Resources/models/*.ggml
 # Xcode project (if generated)
 *.xcodeproj/project.xcworkspace/xcuserdata/
+# JetBrains IDE (개인 설정 — 커밋 제외)
+.idea/
 sample/
 tmp/
 

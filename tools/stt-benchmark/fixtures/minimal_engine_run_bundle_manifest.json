@@ -1,0 +1,14 @@
+{
+  "manifest_type": "engine_run_bundle_manifest",
+  "schema_version": 1,
+  "reference_version": "seed-smi-2026-06-12",
+  "bundle_count": 1,
+  "runs": [
+    {
+      "engine_id": "speech_analyzer",
+      "benchmark_run_manifest": "minimal_benchmark_run_manifest.json",
+      "metric_summary": "minimal_metric_summary.json",
+      "engine_manifest": "minimal_engine_manifest.json"
+    }
+  ]
+}

@@ -139,6 +139,11 @@ struct VoiceActivityDetectorFactoryPreferenceTests {
             .appendingPathComponent("silero-vad", isDirectory: true)
             .appendingPathComponent(SileroVADProcessor.Configuration.modelFileName, isDirectory: true)
         try FileManager.default.createDirectory(at: modelBundle, withIntermediateDirectories: true)
+        // 완전한 번들로 인식되려면 coremldata.bin(비어있지 않음)이 있어야 한다(부분 다운로드 방어).
+        FileManager.default.createFile(
+            atPath: modelBundle.appendingPathComponent("coremldata.bin").path,
+            contents: Data([0x01])
+        )
         return modelRoot
     }
 }

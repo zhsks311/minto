@@ -1,0 +1,10 @@
+{
+  "manifest_type": "reference_manifest",
+  "schema_version": 1,
+  "reference_version": "seed-smi-2026-06-12",
+  "split": "dev",
+  "review_status": "reviewed",
+  "source_smi_sha256": "seed",
+  "reference_text_sha256": "seed",
+  "reference_quality_issue_count": 0
+}

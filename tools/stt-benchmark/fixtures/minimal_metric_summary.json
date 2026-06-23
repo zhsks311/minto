@@ -1,0 +1,11 @@
+{
+  "manifest_type": "metric_summary",
+  "schema_version": 1,
+  "sample_count": 7,
+  "weighted_cer": 0.3069935450775873,
+  "macro_cer": 0.2627186363456805,
+  "empty_final_count": 8,
+  "timeout_count": 0,
+  "crash_count": 0,
+  "user_impact_metric_complete": false
+}
