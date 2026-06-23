@@ -81,6 +81,12 @@
 **단위테스트 가능분**: mock diarizer + mock 보이스프린트로 오케스트레이션(매핑·편집 보존·실명) 검증. **실기기 QA(Phase 6)**: 실제 VBx 모델로 아카이브 오디오 재조정 정확도.
 **유의**: 저장 schema(speakerEmbeddings)·공유 파이프라인을 건드리므로 critic 리뷰 필수(ADR 0005 범위 내 — 신규 ADR 불요로 판단, 리뷰에서 재확인).
 
+**⚠️ 착수 전 미해결 결정(설계 패스 필요 — Codex dispatch 전에 확정)**:
+저장 재조정의 라벨 SOURCE를 둘 중 무엇으로 할지가 정확성에 영향:
+- (A) **VBx `assignSpeakers`로 segment별 새 배정**(시간겹침) + 편집된 segment만 보존. 단순·직관. 이 경우 `LiveDiarizationReconciler.mapLabels`(4a)는 **불필요**.
+- (B) **`LiveDiarizationReconciler.mapLabels`로 라이브 라벨 ID↔VBx ID 매핑**해 라이브에서 본 라벨 식별자의 연속성 유지 후 `resolveFinalLabels`로 편집 보존.
+- **현 상태**: 4a(`LiveDiarizationReconciler`)는 Phase 3(`TranscriptSpeakerMatcher` 사용)에도 4b 초안(A)에도 **아직 미연결**. 4a의 진짜 자리가 "라이브 표시 중 LS-EEND 갱신 간 라벨 ID 연속성"(Phase 3 보강)인지 "저장 재조정"(B)인지 먼저 정해야 한다. **결정 전까지 4b 구현 보류**(잘못 고르면 라벨 정체성/검색·요약 영향). 이 결정은 다음 세션 설계 패스 또는 사용자 판단으로.
+
 ## Phase 5 — 자동 fail-soft (코드=Codex)
 - 라이브 diarization throw/과부하/에러 → catch → 채널 라벨(`ChannelSpeakerLabeler`) 경로로 강등, `Log.diarization.error`. 녹음·STT 불영향 단위테스트.
 
