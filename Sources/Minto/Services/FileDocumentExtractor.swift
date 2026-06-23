@@ -219,10 +219,15 @@ public enum FileDocumentExtractor {
         return context.makeImage()
     }
 
-    /// Vision on-device 텍스트 인식(ko-KR + en-US). 인식 실패/없음 → "".
+    /// Vision on-device 텍스트 인식. 인식 실패/없음 → "".
+    ///
+    /// 언어는 `automaticallyDetectsLanguage`로 자동 감지한다 — 명시 `recognitionLanguages` 목록은
+    /// 혼합 스크립트(한글+한자/일본어)에서 효과가 없었고(프로브 mixed CER 0.771 고정), 자동 감지만
+    /// 이를 개선(0.771→0.286)하면서 **한글 정확도는 그대로 유지(CER 0.000)**했다. 목록 유지보수도 불필요.
+    /// 근거: `VisionOCRProbeTests`(languageSetComparison), 2026-06-24.
     private static func recognizeText(_ image: CGImage) -> String {
         let request = VNRecognizeTextRequest()
-        request.recognitionLanguages = ["ko-KR", "en-US"]
+        request.automaticallyDetectsLanguage = true
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
 

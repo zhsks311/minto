@@ -67,9 +67,14 @@ struct VisionOCRProbeTests {
         return image
     }
 
-    private static func recognize(_ image: CGImage) throws -> (text: String, ms: Double) {
+    /// languages == nil 이면 automaticallyDetectsLanguage 사용(명시 목록 무시).
+    private static func recognize(_ image: CGImage, languages: [String]? = ["ko-KR", "en-US"]) throws -> (text: String, ms: Double) {
         let request = VNRecognizeTextRequest()
-        request.recognitionLanguages = ["ko-KR", "en-US"]
+        if let languages {
+            request.recognitionLanguages = languages
+        } else {
+            request.automaticallyDetectsLanguage = true
+        }
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
 
@@ -139,5 +144,46 @@ struct VisionOCRProbeTests {
         let totalMs = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000.0
         print("[OCR-PROBE] \(pageCount)장 연속 총=\(String(format: "%.1f", totalMs))ms, "
             + "장당평균=\(String(format: "%.1f", totalMs / Double(pageCount)))ms")
+    }
+
+    /// 한글 회의록 + 한자·일본어 섞인 샘플 — recognitionLanguages 후보들. 정답 기준 CER 비교.
+    private static let mixedSample = """
+    회의 결과 確認
+    김민환 金玟煥 배혜정 裵惠貞
+    プロジェクト 進捗 ミント
+    予算 検討 完了
+    """
+
+    @Test("recognitionLanguages 세트별 CER·지연 비교 (한글 회귀 + 한자·일어 이득)")
+    func languageSetComparison() throws {
+        guard Self.enabled else { return }
+
+        // (a) 이 기기에서 Vision 이 실제 지원하는 언어
+        if let supported = try? VNRecognizeTextRequest.supportedRecognitionLanguages(
+            for: .accurate, revision: VNRecognizeTextRequestRevision3
+        ) {
+            print("[OCR-PROBE] supported(.accurate,rev3): \(supported.joined(separator: ", "))")
+        }
+
+        let configs: [(label: String, langs: [String]?)] = [
+            ("ko",                 ["ko-KR"]),
+            ("ko+en",              ["ko-KR", "en-US"]),
+            ("ko+en+ja",           ["ko-KR", "en-US", "ja-JP"]),
+            ("ko+en+ja+zhHans+zhHant", ["ko-KR", "en-US", "ja-JP", "zh-Hans", "zh-Hant"]),
+            ("auto",               nil)
+        ]
+
+        for (name, sample) in [("korean", Self.sample), ("mixed", Self.mixedSample)] {
+            let image = Self.renderTextImage(sample, fontSize: 30)
+            print("[OCR-PROBE] === \(name) sample ===")
+            for config in configs {
+                guard let (text, ms) = try? Self.recognize(image, languages: config.langs) else {
+                    print("[OCR-PROBE]   \(config.label): 인식 실패(미지원 언어?)")
+                    continue
+                }
+                let errorRate = Self.cer(truth: sample, hypothesis: text)
+                print("[OCR-PROBE]   \(config.label): CER=\(String(format: "%.3f", errorRate)) 지연=\(String(format: "%.0f", ms))ms")
+            }
+        }
     }
 }
