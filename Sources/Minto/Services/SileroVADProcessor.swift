@@ -351,7 +351,11 @@ private actor SileroVADCore {
                     activeStartSample = event.sampleIndex
                 }
             case .speechEnd:
-                if let start = activeStartSample {
+                // 긴 발화는 위 while 루프가 강제 청크로 끊으며 activeStartSample을 앞(end)으로
+                // 민다. 그 뒤 speechEnd가 그 start보다 이전 sampleIndex로 오면 start..<event는
+                // lowerBound > upperBound가 되어 크래시한다. 그 구간은 이미 청크로 방출됐으므로
+                // 유효한 발화가 없다 → range를 만들지 않는다(오디오 손실 없음).
+                if let start = activeStartSample, event.sampleIndex > start {
                     pendingFinalRange = start..<event.sampleIndex
                 }
                 activeStartSample = nil
