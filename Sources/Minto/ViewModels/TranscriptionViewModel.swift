@@ -64,6 +64,14 @@ public final class TranscriptionViewModel: ObservableObject {
     private let channelSpeakerLabeler = ChannelSpeakerLabeler()
     private var channelActivityProvider: (any RecordingChannelActivityProviding)?
     private var recordingInputMode: AudioInputMode = .microphone
+    private let liveSpeakerAssignment: LiveSpeakerAssignmentUseCase?
+    private let transcriptSpeakerMatcher = TranscriptSpeakerMatcher()
+    private var liveSpeakerStartTask: Task<Void, Never>?
+    private var liveSpeakerAssignmentStarted = false
+    private var liveSpeakerAssignmentActive = false
+    private var liveDiarizedSegments: [DiarizedSpeakerSegment] = []
+    private var liveSpeakerSessionGeneration = 0
+    private(set) var editedSpeakerSegmentIds: Set<Segment.ID> = []
     /// nil이면 오디오 보존 안 함(테스트 기본). 프로덕션 convenience init이 factory를 공급한다.
     private let audioArchiverFactory: (@MainActor () -> RecordingAudioArchiver)?
     private var audioArchiver: RecordingAudioArchiver?
@@ -117,6 +125,7 @@ public final class TranscriptionViewModel: ObservableObject {
         emptyFinalRepairPolicy: EmptyFinalRepairPolicy? = nil,
         audioSourceFactory: (@MainActor (AudioInputMode) -> any AudioSourceProtocol)? = nil,
         vadProcessorFactory: (@MainActor (any VoiceActivityDetector) -> any VoiceActivityDetector)? = nil,
+        liveSpeakerAssignment: LiveSpeakerAssignmentUseCase? = nil,
         audioArchiverFactory: (@MainActor () -> RecordingAudioArchiver)? = nil
     ) {
         let initialAudioSource = audioSource
@@ -126,6 +135,7 @@ public final class TranscriptionViewModel: ObservableObject {
         self.audioSourceFactory = audioSourceFactory ?? { _ in initialAudioSource }
         self.vadProcessor = vadProcessor
         self.vadProcessorFactory = vadProcessorFactory
+        self.liveSpeakerAssignment = liveSpeakerAssignment
         self.audioArchiverFactory = audioArchiverFactory
         self.injectedEmptyFinalRepairPolicy = emptyFinalRepairPolicy
         self.audioSampleBuffer = TranscriptionAudioSampleBuffer(
@@ -232,6 +242,7 @@ public final class TranscriptionViewModel: ObservableObject {
         isFinalizingMeeting = false
         audioSampleBuffer.reset()
         recordingInputMode = audioInputMode
+        prepareLiveSpeakerAssignmentForRecording()
         channelActivityProvider = audioSource as? RecordingChannelActivityProviding
         // 녹음 생명주기 소유자인 VM이 직전 녹음의 stale 타임라인을 명시적으로 비운다.
         // (MixedAudioSource.start()도 방어적으로 초기화하지만, 여기서 먼저 끊는다.)
@@ -277,6 +288,7 @@ public final class TranscriptionViewModel: ObservableObject {
                         guard !Task.isCancelled else { return }
                         let positioned = self.positionedResult(result, for: chunk)
                         self.pendingSegment = positioned.segment.text.isEmpty ? nil : positioned.segment
+                        self.applyCurrentLiveSpeakerLabels()
                     } catch { /* preview 실패는 무시 */ }
                 }
             }
@@ -285,9 +297,11 @@ public final class TranscriptionViewModel: ObservableObject {
         // AudioSource → VADProcessor + 레벨 미터
         audioSource.onBuffer = { [weak self] samples in
             Task { @MainActor [weak self] in
-                self?.audioSampleBuffer.append(samples)
-                self?.audioArchiver?.append(samples: samples)
-                self?.vadProcessor.process(samples: samples)
+                guard let self else { return }
+                self.audioSampleBuffer.append(samples)
+                self.audioArchiver?.append(samples: samples)
+                self.vadProcessor.process(samples: samples)
+                await self.ingestLiveSpeakerBuffer(samples)
             }
         }
         audioSource.onLevel = { [weak self] level in
@@ -325,6 +339,7 @@ public final class TranscriptionViewModel: ObservableObject {
                     pendingSegment = nil
                     state.advanceWindow(newResult: result)
                     committedSegments = state.committedSegments
+                    applyCurrentLiveSpeakerLabels()
 
                     // 창 단위 배치 교정: 원본은 즉시 표시하고, 누적 길이가 window에
                     // 도달하면 그 구간들을 한 번에 교정해 하나의 문단으로 병합한다.
@@ -348,6 +363,7 @@ public final class TranscriptionViewModel: ObservableObject {
         do {
             try audioSource.start()
             isRecording = true
+            startLiveSpeakerAssignmentIfNeeded()
             let engineID = sttService.speechEngineID.rawValue
             Log.app.notice("recording started engine=\(engineID, privacy: .public)")
             startTimer()
@@ -406,6 +422,7 @@ public final class TranscriptionViewModel: ObservableObject {
 
         chunkContinuation?.finish()
         await transcriptionTask?.value
+        await finishLiveSpeakerAssignmentIfNeeded()
 
         // 마지막 창(window 미달분)도 교정·병합되도록 flush
         flushCorrectionBatch()
@@ -419,6 +436,8 @@ public final class TranscriptionViewModel: ObservableObject {
         state = TranscriptionState()
         pendingCorrectionIds = []
         pendingCorrectionDuration = 0
+        editedSpeakerSegmentIds = []
+        resetLiveSpeakerAssignmentState()
         // 이전 세션의 교정·요약 Task가 새 세션 상태에 새지 않도록 취소.
         correctionTask?.cancel()
         correctionTask = nil
@@ -454,6 +473,7 @@ public final class TranscriptionViewModel: ObservableObject {
                !corrected.isEmpty {
                 self.state.replaceRange(ids: ids, correctedText: corrected)
                 self.committedSegments = self.state.committedSegments
+                self.applyCurrentLiveSpeakerLabels()
                 summaryBatch = corrected
             } else {
                 summaryBatch = original
@@ -563,6 +583,202 @@ public final class TranscriptionViewModel: ObservableObject {
 
     public func enqueueChunk(_ chunk: AudioChunk) {
         chunkContinuation?.yield(chunk)
+    }
+
+    public func reassignLiveSpeaker(segmentId: Segment.ID, to label: String) {
+        let updatedSegments = SpeakerLabelEditing.reassignSegment(
+            id: segmentId,
+            to: label,
+            in: committedSegments
+        )
+        guard updatedSegments != committedSegments else { return }
+
+        replaceCommittedSegments(updatedSegments)
+        editedSpeakerSegmentIds.insert(segmentId)
+    }
+
+    public func renameLiveSpeaker(from source: String, to target: String) {
+        guard let sourceLabel = SpeakerLabel.normalized(source),
+              SpeakerLabel.normalized(target) != nil else {
+            return
+        }
+
+        let editedIds = committedSegments
+            .filter { SpeakerLabel.normalized($0.speaker) == sourceLabel }
+            .map(\.id)
+        guard !editedIds.isEmpty else { return }
+
+        let updatedSegments = SpeakerLabelEditing.replacingSpeaker(
+            source,
+            with: target,
+            in: committedSegments
+        )
+        guard updatedSegments != committedSegments else { return }
+
+        replaceCommittedSegments(updatedSegments)
+        editedSpeakerSegmentIds.formUnion(editedIds)
+    }
+
+    private func prepareLiveSpeakerAssignmentForRecording() {
+        guard liveSpeakerAssignment != nil else { return }
+
+        liveSpeakerStartTask?.cancel()
+        liveSpeakerStartTask = nil
+        liveSpeakerAssignmentStarted = false
+        liveSpeakerAssignmentActive = false
+        liveDiarizedSegments = []
+        liveSpeakerSessionGeneration += 1
+    }
+
+    private func resetLiveSpeakerAssignmentState() {
+        liveSpeakerStartTask?.cancel()
+        liveSpeakerStartTask = nil
+        liveSpeakerAssignmentStarted = false
+        liveSpeakerAssignmentActive = false
+        liveDiarizedSegments = []
+        liveSpeakerSessionGeneration += 1
+    }
+
+    private func startLiveSpeakerAssignmentIfNeeded() {
+        guard let liveSpeakerAssignment,
+              liveSpeakerStartTask == nil,
+              !liveSpeakerAssignmentStarted else {
+            return
+        }
+
+        let generation = liveSpeakerSessionGeneration
+        Log.diarization.info(
+            "live speaker assignment vm start preEnrolled=\(0, privacy: .public) segments=\(self.committedSegments.count, privacy: .public)"
+        )
+        liveSpeakerStartTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await liveSpeakerAssignment.start(preEnrolled: [])
+                guard !Task.isCancelled, self.liveSpeakerSessionGeneration == generation else {
+                    return
+                }
+                self.liveSpeakerAssignmentStarted = true
+                self.liveSpeakerAssignmentActive = true
+            } catch {
+                guard !Task.isCancelled, self.liveSpeakerSessionGeneration == generation else {
+                    return
+                }
+                self.liveSpeakerAssignmentStarted = false
+                self.liveSpeakerAssignmentActive = false
+                Log.diarization.error(
+                    "live speaker assignment vm failed operation=start preEnrolled=\(0, privacy: .public) segments=\(self.committedSegments.count, privacy: .public)"
+                )
+            }
+        }
+    }
+
+    private func ingestLiveSpeakerBuffer(_ samples: [Float]) async {
+        guard let liveSpeakerAssignment else { return }
+
+        startLiveSpeakerAssignmentIfNeeded()
+        await liveSpeakerStartTask?.value
+        guard liveSpeakerAssignmentStarted, liveSpeakerAssignmentActive else {
+            return
+        }
+
+        do {
+            let diarizedSegments = try await liveSpeakerAssignment.ingest(
+                samples: samples,
+                sourceSampleRate: STTAudioUtilities.sampleRate
+            )
+            liveDiarizedSegments = diarizedSegments
+            applyLiveSpeakerLabels(diarizedSegments)
+        } catch {
+            liveSpeakerAssignmentActive = false
+            liveDiarizedSegments = []
+            applyLiveSpeakerLabels([])
+            Log.diarization.error(
+                "live speaker assignment vm failed operation=ingest samples=\(samples.count, privacy: .public) segments=\(self.committedSegments.count, privacy: .public)"
+            )
+        }
+    }
+
+    private func finishLiveSpeakerAssignmentIfNeeded() async {
+        guard let liveSpeakerAssignment else { return }
+
+        await liveSpeakerStartTask?.value
+        liveSpeakerStartTask = nil
+        guard liveSpeakerAssignmentStarted else {
+            return
+        }
+
+        defer {
+            liveSpeakerAssignmentStarted = false
+            liveSpeakerAssignmentActive = false
+        }
+
+        do {
+            let diarizedSegments = try await liveSpeakerAssignment.finish()
+            liveDiarizedSegments = diarizedSegments
+            applyLiveSpeakerLabels(diarizedSegments)
+        } catch {
+            liveDiarizedSegments = []
+            applyLiveSpeakerLabels([])
+            Log.diarization.error(
+                "live speaker assignment vm failed operation=finish segments=\(self.committedSegments.count, privacy: .public)"
+            )
+        }
+    }
+
+    private func applyCurrentLiveSpeakerLabels() {
+        guard liveSpeakerAssignment != nil else { return }
+        applyLiveSpeakerLabels(liveDiarizedSegments)
+    }
+
+    private func applyLiveSpeakerLabels(_ diarizedSegments: [DiarizedSpeakerSegment]) {
+        guard liveSpeakerAssignment != nil else { return }
+        guard !committedSegments.isEmpty || pendingSegment != nil else { return }
+        guard let meetingStart = transcriptTimelineStartDate
+            ?? committedSegments.first?.timestamp
+            ?? pendingSegment?.timestamp else {
+            return
+        }
+
+        var transcript = committedSegments
+        let pendingId = pendingSegment?.id
+        if let pendingSegment {
+            transcript.append(pendingSegment)
+        }
+
+        let matchedSegments = transcriptSpeakerMatcher.assignSpeakers(
+            diarizedSegments: diarizedSegments,
+            transcript: transcript,
+            meetingStart: meetingStart
+        )
+        var matchedById: [Segment.ID: Segment] = [:]
+        for matched in matchedSegments {
+            matchedById[matched.id] = matched
+        }
+
+        let labeledCommitted = committedSegments.map { segment in
+            guard !editedSpeakerSegmentIds.contains(segment.id),
+                  let matched = matchedById[segment.id] else {
+                return segment
+            }
+
+            var updated = segment
+            updated.speaker = SpeakerLabel.normalized(matched.speaker)
+            return updated
+        }
+        replaceCommittedSegments(labeledCommitted)
+
+        if let pendingId,
+           let pending = pendingSegment,
+           let matched = matchedById[pendingId] {
+            var updated = pending
+            updated.speaker = SpeakerLabel.normalized(matched.speaker)
+            pendingSegment = updated
+        }
+    }
+
+    private func replaceCommittedSegments(_ segments: [Segment]) {
+        state.replaceCommittedSegments(segments)
+        committedSegments = segments
     }
 
     private func waitForMainQueueTurn() async {
