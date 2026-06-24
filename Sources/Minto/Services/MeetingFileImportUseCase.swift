@@ -247,7 +247,6 @@ public final class MeetingFileImportUseCase: ObservableObject {
                         startedAt: startedAt,
                         topic: topicText,
                         glossary: glossary,
-                        document: document,
                         shouldCorrect: shouldCorrect,
                         pipeline: correctionPipeline
                     )
@@ -472,7 +471,6 @@ public final class MeetingFileImportUseCase: ObservableObject {
         startedAt: Date,
         topic: String,
         glossary: String,
-        document: String,
         shouldCorrect: Bool,
         pipeline: ImportCorrectionPipeline
     ) async throws {
@@ -495,8 +493,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             topic: topic,
             glossary: glossary,
             previousText: pipeline.contextSnapshot(),
-            runningSummary: "",
-            document: document
+            runningSummary: ""
         )
         let segment = Segment(
             id: rawResult.segment.id,

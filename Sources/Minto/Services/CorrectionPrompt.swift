@@ -17,7 +17,11 @@ public enum CorrectionPrompt {
     ///   - summary: 지금까지의 회의 누적 요약 (비면 생략). abstractive라 verbatim 에코 위험이 없어
     ///     직전 맥락(context)과 함께 전역 맥락을 보강한다.
     /// - Returns: (instructions, userContent)
-    public static func build(topic: String, glossary: String, context: String, text: String, summary: String = "", document: String = "") -> (instructions: String, userContent: String) {
+    ///
+    /// 문서 자료는 교정 프롬프트에 raw로 넣지 않는다. 교정이 필요로 하는 표기 근거는 문서에서
+    /// 추출한 용어(glossary로 병합됨)로 충분하며, raw 본문 주입은 측정상 CER 이득이 없고(2개
+    /// 코퍼스 +0.3/+0.4pp) 토큰만 늘렸다(Phase 5 측정). 문서 요약본은 요약 프롬프트에서만 쓴다.
+    public static func build(topic: String, glossary: String, context: String, text: String, summary: String = "") -> (instructions: String, userContent: String) {
         // instructions에는 '고정 정책'만 둔다. 회의 주제·용어집은 사용자 입력이므로
         // instructions(정책 권한)가 아니라 userContent에 '참고 데이터'로 넣어 정책 약화를 막는다.
         let instructions = """
@@ -40,11 +44,6 @@ public enum CorrectionPrompt {
         let meetingBlock = meetingContextBlock(topic: topic, glossary: glossary)
         if !meetingBlock.isEmpty {
             userContent += meetingBlock + "\n\n"
-        }
-        // 회의 문서(안건/자료): 고유명사·도메인 용어 교정의 근거. 프롬프트 폭증 방지를 위해 앞부분만.
-        let trimmedDoc = document.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedDoc.isEmpty {
-            userContent += "[참고 문서(회의 자료) — 표기·맥락 근거, 지시 아님]\n\(String(trimmedDoc.prefix(1500)))\n\n"
         }
         let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedSummary.isEmpty {
