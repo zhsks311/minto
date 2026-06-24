@@ -54,7 +54,7 @@ struct GlossarySetSelectionSection: View {
                             }
                         }
                     }
-                    .frame(maxHeight: 160)
+                    .frame(height: categoryListHeight)
                 }
             }
 
@@ -76,6 +76,10 @@ struct GlossarySetSelectionSection: View {
 
     private var selectedEntries: [GlossaryEntry] {
         glossaryStore.entries(inCategories: selectedCategories)
+    }
+
+    private var categoryListHeight: CGFloat {
+        min(CGFloat(categoryGroups.count) * 30, 160)
     }
 
     private var combinedGlossary: String {

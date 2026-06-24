@@ -270,8 +270,9 @@ struct ClaudeCodeCLIProviderTests {
         }
 
         #expect(resolvedPath == "/custom/npm/bin/claude")
-        #expect(Array(checkedPaths.prefix(3)) == [
+        #expect(Array(checkedPaths.prefix(4)) == [
             "\(NSHomeDirectory())/.claude/local/claude",
+            "\(NSHomeDirectory())/.local/bin/claude",
             "/opt/homebrew/bin/claude",
             "/usr/local/bin/claude"
         ])

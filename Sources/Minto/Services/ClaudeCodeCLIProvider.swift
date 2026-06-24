@@ -210,6 +210,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     private static let anthropicAPIKeyEnvironmentName = "ANTHROPIC_API_KEY"
     private static let workingDirectoryName = "claude-cli-cwd"
     private static let localInstallCLIPath = "~/.claude/local/claude"
+    private static let localBinCLIPath = "~/.local/bin/claude"
     private static let homebrewCLIPath = "/opt/homebrew/bin/claude"
     private static let intelHomebrewCLIPath = "/usr/local/bin/claude"
     private static let systemCLIPath = "/usr/bin/claude"
@@ -381,6 +382,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
 
         var candidates = [
             normalizedCLIPath(localInstallCLIPath),
+            normalizedCLIPath(localBinCLIPath),
             homebrewCLIPath,
             intelHomebrewCLIPath
         ]
