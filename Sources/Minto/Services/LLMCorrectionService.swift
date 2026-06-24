@@ -6,20 +6,17 @@ public struct LLMCorrectionContext: Sendable, Equatable {
     public let glossary: String
     public let previousText: String
     public let runningSummary: String
-    public let document: String
 
     public init(
         topic: String = "",
         glossary: String = "",
         previousText: String = "",
-        runningSummary: String = "",
-        document: String = ""
+        runningSummary: String = ""
     ) {
         self.topic = topic
         self.glossary = glossary
         self.previousText = previousText
         self.runningSummary = runningSummary
-        self.document = document
     }
 }
 
@@ -75,8 +72,7 @@ public final class LLMCorrectionService: ObservableObject {
                 topic: meeting.topic,
                 glossary: meeting.glossaryForPrompt,
                 previousText: context,
-                runningSummary: meeting.runningSummary,
-                document: meeting.document
+                runningSummary: meeting.runningSummary
             )
         )
     }
@@ -102,13 +98,12 @@ public final class LLMCorrectionService: ObservableObject {
             glossary: context.glossary,
             context: context.previousText,
             text: text,
-            summary: context.runningSummary,
-            document: context.document
+            summary: context.runningSummary
         )
 
         guard let provider = selectedTextProvider(providerResolver: providerResolver) else { return nil }
 
-        Log.correction.info("correcting via \(provider.descriptor.id.rawValue, privacy: .public) inputChars=\(text.count, privacy: .public) contextChars=\(context.previousText.count, privacy: .public) documentChars=\(context.document.count, privacy: .public)")
+        Log.correction.info("correcting via \(provider.descriptor.id.rawValue, privacy: .public) inputChars=\(text.count, privacy: .public) contextChars=\(context.previousText.count, privacy: .public)")
         do {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: .correction,
@@ -152,14 +147,13 @@ public final class LLMCorrectionService: ObservableObject {
             topic: context.topic,
             glossary: context.glossary,
             context: context.previousText,
-            summary: context.runningSummary,
-            document: context.document
+            summary: context.runningSummary
         )
 
         guard let provider = selectedTextProvider(providerResolver: providerResolver) else { return nil }
 
         let maxTokens = 900 * texts.count
-        Log.correction.info("correctBatch via \(provider.descriptor.id.rawValue, privacy: .public) batchSize=\(texts.count, privacy: .public) documentChars=\(context.document.count, privacy: .public)")
+        Log.correction.info("correctBatch via \(provider.descriptor.id.rawValue, privacy: .public) batchSize=\(texts.count, privacy: .public)")
         do {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: .correction,

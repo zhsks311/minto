@@ -193,6 +193,7 @@ DocumentTermExtractor / 교정 / 요약 (변경 없음)
 ## ADR 상태 전환
 
 - `Accepted`(2026-06-23). 다중 관점 리뷰 1차 반영(blocker C1 해소) + 범위 확정(OCR·다중선택) + PDFKit 백그라운드 실측 + Pencil UX 게이트 통과(`Resources/designs/2026-06-23-document-attach-flow.pen/.png`)로 착수 조건 충족. 남은 잠정 수치(텍스트 cap·파일 크기 상한 50MB·OCR 페이지 상한 30p·요약본 길이)는 **구현 중 실측으로 확정**하는 튜닝 파라미터이며 착수 blocker 아님. 구현 완료는 작업 로그로 기록(상태를 "구현 완료"로 오용하지 않음).
+- 구현 기록(이 ADR의 결정을 실제 코드로 옮긴 작업): 수집·UI Phase 0~4 = `docs/work-log/2026-06-24-25-multi-source-document-ingestion-phase0-4.md`(main 머지 `17d7019`). 문서 표현 분리 Phase 5(교정 terms-only)·6(요약 doc-summary) = `docs/work-log/2026-06-24-26-document-prompt-representation-phase5-6.md`(브랜치 `feat/document-prompt-representation`). 잠정 수치 중 요약본 길이는 ~1000자(5~10 불릿)로 확정.
 
 ## 다중 관점 리뷰 기록
 

@@ -212,11 +212,49 @@ struct MeetingFileImportUseCaseTests {
         #expect(correction.calls.map(\.text) == ["raw text"])
         #expect(correction.calls.first?.context.topic == "파일 회의")
         #expect(correction.calls.first?.context.glossary == "Minto")
-        #expect(correction.calls.first?.context.document == "사후 처리 자료")
+        // Phase 5: 문서 raw 본문은 교정 context에 주입하지 않고(LLMCorrectionContext에 필드 자체가 없다),
+        // 레코드 경로로만 보존된다. "교정에 안 흐른다"를 record.document 적극 단언으로 고정한다.
+        #expect(record.document == "사후 처리 자료")
         #expect(record.transcript.map(\.text) == ["corrected text"])
         #expect(record.summaryGlossary == "Minto")
         #expect(summary.receivedTranscript == "[00:00] corrected text")
         #expect(store.savedRecords.first?.summaryGlossary == "Minto")
+    }
+
+    @Test("파일 import는 문서 요약본을 1회 생성해 최종 요약 context에 싣는다 (Phase 6)")
+    func importGeneratesAndInjectsDocumentSummary() async throws {
+        resetImportStateForTest()
+        defer { resetImportStateForTest() }
+
+        let startedAt = Date(timeIntervalSince1970: 2_500)
+        let extractor = StubFileExtractor(samples: [Float](repeating: 0.2, count: 16_000), durationSeconds: 1)
+        let stt = StubFileImportSTT(texts: ["raw text"])
+        let correction = StubFileImportCorrection(responses: ["corrected text"])
+        let summary = StubFileImportSummary(summary: MeetingSummary(leadAnswer: "정리"))
+        summary.documentSummaryResult = "- 핵심 안건: 공청회"
+        let store = StubFileImportStore()
+        let useCase = MeetingFileImportUseCase(
+            extractor: extractor,
+            sttService: stt,
+            correctionService: correction,
+            summaryService: summary,
+            store: store,
+            chunkSeconds: 30,
+            now: { startedAt }
+        )
+
+        _ = try await useCase.importFile(
+            URL(fileURLWithPath: "/tmp/doc-summary.wav"),
+            topic: "파일 회의",
+            glossary: "Minto",
+            document: "긴 원문 자료",
+            shouldCorrect: true
+        )
+
+        // 문서가 doc-summary 생성기로 전달되고, 생성된 요약본이 최종 요약 context에 실린다.
+        #expect(summary.receivedDocumentForSummary == "긴 원문 자료")
+        #expect(summary.receivedContext?.documentSummary == "- 핵심 안건: 공청회")
+        #expect(summary.receivedContext?.document == "긴 원문 자료")
     }
 
     @Test("파일 import 교정은 전사와 겹쳐 돌고 요약 전에 모두 반영된다")
@@ -738,6 +776,8 @@ private final class StubFileImportSummary: MeetingFileImportSummaryGenerating {
     var receivedContext: SummaryGenerationContext?
     var observedStages: [MeetingFileImportStage] = []
     var stageProbe: (@MainActor () -> MeetingFileImportStage)?
+    var documentSummaryResult: String?
+    var receivedDocumentForSummary: String?
     private let summary: MeetingSummary?
 
     init(summary: MeetingSummary? = nil) {
@@ -751,6 +791,11 @@ private final class StubFileImportSummary: MeetingFileImportSummaryGenerating {
         receivedTranscript = transcript
         receivedContext = context
         return summary
+    }
+
+    func generateDocumentSummary(document: String) async -> String? {
+        receivedDocumentForSummary = document
+        return documentSummaryResult
     }
 }
 

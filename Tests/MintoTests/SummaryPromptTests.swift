@@ -93,4 +93,94 @@ struct SummaryPromptTests {
         #expect(p.userContent.contains("상임위"))
         #expect(p.userContent.contains("마지막 발언"))
     }
+
+    // MARK: - Phase 6: 문서 요약본 폴백 사슬 (요약본 → excerpt → 없음)
+
+    @Test("incremental: 문서 요약본이 있으면 요약본을 주입하고 excerpt(원문)는 쓰지 않는다")
+    func incrementalUsesDocumentSummaryOverExcerpt() {
+        let p = SummaryPrompt.buildIncremental(
+            topic: "",
+            glossary: "",
+            runningSummary: "",
+            newBatch: "본문",
+            document: "원문 본문 전체 — 발췌되면 안 되는 긴 원문 텍스트",
+            documentSummary: "- 핵심 안건: 전략수출금융지원법안\n- 진술인 3인"
+        )
+        #expect(p.userContent.contains("참고 문서 요약"))
+        #expect(p.userContent.contains("전략수출금융지원법안"))
+        // 요약본이 있으면 raw 원문 발췌 블록은 나오지 않는다.
+        #expect(!p.userContent.contains("참고 문서(회의 자료)"))
+        #expect(!p.userContent.contains("발췌되면 안 되는"))
+    }
+
+    @Test("incremental: 요약본이 비면 document에서 excerpt 폴백")
+    func incrementalFallsBackToExcerpt() {
+        let p = SummaryPrompt.buildIncremental(
+            topic: "",
+            glossary: "",
+            runningSummary: "",
+            newBatch: "본문",
+            document: "동의어와 도메인 용어를 검색 문맥에 반영한다.",
+            documentSummary: ""
+        )
+        #expect(p.userContent.contains("참고 문서(회의 자료)"))
+        #expect(p.userContent.contains("동의어와 도메인 용어"))
+        #expect(!p.userContent.contains("참고 문서 요약"))
+    }
+
+    @Test("incremental: document·요약본 모두 비면 문서 블록 없음")
+    func incrementalNoDocumentBlock() {
+        let p = SummaryPrompt.buildIncremental(
+            topic: "",
+            glossary: "",
+            runningSummary: "",
+            newBatch: "본문",
+            document: "",
+            documentSummary: ""
+        )
+        #expect(!p.userContent.contains("참고 문서"))
+    }
+
+    @Test("final: 문서 요약본이 있으면 요약본을 주입하고 excerpt는 쓰지 않는다")
+    func finalUsesDocumentSummaryOverExcerpt() {
+        let p = SummaryPrompt.buildFinal(
+            topic: "",
+            glossary: "",
+            transcript: "[00:00] 시작",
+            document: "원문 본문 전체 — 발췌되면 안 되는 긴 원문",
+            documentSummary: "- 핵심 안건: 공청회"
+        )
+        #expect(p.userContent.contains("참고 문서 요약"))
+        #expect(p.userContent.contains("공청회"))
+        #expect(!p.userContent.contains("참고 문서(회의 자료)"))
+        #expect(!p.userContent.contains("발췌되면 안 되는"))
+    }
+}
+
+/// DocumentSummaryPrompt 순수 빌더 단위 테스트.
+@Suite("DocumentSummaryPrompt 빌더")
+struct DocumentSummaryPromptTests {
+
+    @Test("문서가 있으면 instructions(요약 정책)와 userContent(문서)를 반환한다")
+    func buildsPrompt() {
+        let p = DocumentSummaryPrompt.build(document: "전략수출금융지원법안 공청회 안건")
+        #expect(p.instructions.contains("참고 맥락"))
+        #expect(p.instructions.contains("날조 금지"))
+        #expect(p.userContent.contains("전략수출금융지원법안 공청회 안건"))
+    }
+
+    @Test("빈 문서는 빈 쌍을 반환한다")
+    func emptyDocumentReturnsEmpty() {
+        let p = DocumentSummaryPrompt.build(document: "   \n  ")
+        #expect(p.instructions.isEmpty)
+        #expect(p.userContent.isEmpty)
+    }
+
+    @Test("문서가 상한을 넘으면 뒷부분을 생략하고 표시한다")
+    func capsLongDocument() {
+        let long = String(repeating: "가", count: DocumentSummaryPrompt.maxDocumentCharacters + 500)
+        let p = DocumentSummaryPrompt.build(document: long)
+        #expect(p.userContent.contains("이후 문서 생략"))
+        #expect(p.userContent.count < long.count + 100)
+    }
 }
