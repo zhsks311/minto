@@ -4,7 +4,9 @@ import Foundation
 
 public protocol StreamingSpeakerDiarizationProvider: Sendable {
     func start(preEnrolled: [Voiceprint]) async throws
+    /// Returns the provider's current timeline snapshot when new diarization output is available.
     func process(samples: [Float], sourceSampleRate: Double) async throws -> [DiarizedSpeakerSegment]
+    /// Returns the finalized full timeline snapshot.
     func finish() async throws -> [DiarizedSpeakerSegment]
 }
 
@@ -63,13 +65,13 @@ public actor FluidAudioLSEENDStreamingProvider: StreamingSpeakerDiarizationProvi
         }
 
         do {
-            guard let update = try diarizer.process(
+            guard let _ = try diarizer.process(
                 samples: samples,
                 sourceSampleRate: sourceSampleRate
             ) else {
                 return []
             }
-            return Self.toDiarizedSegments(update)
+            return currentTimelineSnapshot()
         } catch {
             logFailure(
                 operation: "process",
@@ -87,15 +89,8 @@ public actor FluidAudioLSEENDStreamingProvider: StreamingSpeakerDiarizationProvi
         )
 
         do {
-            let pendingTentativeSegments = diarizer.timeline.speakers.values
-                .flatMap { $0.tentativeSegments }
-                .sorted()
-            let update = try diarizer.finalizeSession()
-            let segments = if let update {
-                Self.toDiarizedSegments(update)
-            } else {
-                Self.toDiarizedSegments(pendingTentativeSegments)
-            }
+            _ = try diarizer.finalizeSession()
+            let segments = currentTimelineSnapshot()
             Log.diarization.info(
                 "streaming diarization finish complete provider=\(self.identifier, privacy: .public) segments=\(segments.count, privacy: .public)"
             )
@@ -111,13 +106,20 @@ public actor FluidAudioLSEENDStreamingProvider: StreamingSpeakerDiarizationProvi
     }
 
     private static func toDiarizedSegments(_ segments: [DiarizerSegment]) -> [DiarizedSpeakerSegment] {
-        segments.map { segment in
+        segments.sorted().map { segment in
             DiarizedSpeakerSegment(
                 speakerId: segment.speakerLabel,
                 startSeconds: Double(segment.startTime),
                 endSeconds: Double(segment.endTime)
             )
         }
+    }
+
+    private func currentTimelineSnapshot() -> [DiarizedSpeakerSegment] {
+        let segments = diarizer.timeline.speakers.values.flatMap { speaker in
+            speaker.finalizedSegments + speaker.tentativeSegments
+        }
+        return Self.toDiarizedSegments(segments)
     }
 
     private func logFailure(

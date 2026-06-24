@@ -42,6 +42,50 @@ struct TranscriptionViewModelLiveSpeakerTests {
         viewModel.clearTranscript()
     }
 
+    @Test("다화자 라이브 스냅샷은 committed segment를 서로 다른 라벨로 갱신한다")
+    func assignsMultipleLiveSpeakerLabelsFromSnapshot() async throws {
+        let provider = LiveSpeakerMockStreamingProvider(
+            processResponses: [
+                [diarizedSegment("speaker-a", start: 0.0, end: 2.0)],
+                [
+                    diarizedSegment("speaker-a", start: 0.0, end: 1.0),
+                    diarizedSegment("speaker-b", start: 1.0, end: 2.0),
+                ],
+            ]
+        )
+        let useCase = LiveSpeakerAssignmentUseCase(provider: provider)
+        let audioSource = LiveSpeakerStubAudioSource()
+        let viewModel = makeViewModel(
+            resultTexts: ["첫 발화", "둘째 발화"],
+            audioSource: audioSource,
+            liveSpeakerAssignment: useCase
+        )
+
+        viewModel.startRecording()
+        audioSource.emit(samples: samples(count: 16_000))
+        #expect(await waitUntil {
+            let snapshot = await provider.snapshot()
+            return snapshot.processCallCount == 1
+        })
+
+        viewModel.enqueueChunk(audioChunk(start: 0.0, end: 1.0))
+        viewModel.enqueueChunk(audioChunk(start: 1.0, end: 2.0))
+        #expect(await waitUntil {
+            viewModel.committedSegments.count == 2
+                && viewModel.committedSegments.allSatisfy { $0.speaker == "화자 1" }
+        })
+
+        audioSource.emit(samples: samples(count: 16_000))
+        #expect(await waitUntil {
+            let snapshot = await provider.snapshot()
+            return snapshot.processCallCount == 2
+                && viewModel.committedSegments.map(\.speaker) == ["화자 1", "화자 2"]
+        })
+
+        await viewModel.stopRecordingAndDrain()
+        viewModel.clearTranscript()
+    }
+
     @Test("수동 reassign한 segment는 이후 라이브 바인딩이 덮어쓰지 않는다")
     func reassignProtectsSegmentFromLaterLiveBinding() async throws {
         let provider = LiveSpeakerMockStreamingProvider(
