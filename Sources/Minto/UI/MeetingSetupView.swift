@@ -29,7 +29,9 @@ public struct MeetingSetupView: View {
     @State private var attachedFiles: [AttachedDocument] = []
     @State private var isImportingFiles = false
     @State private var ingestingFileCount = 0
-    @State private var documentAttachError: String?
+    @State private var fileAttachError: String?
+    @State private var notionAttachError: String?
+    @State private var confluenceAttachError: String?
     @State private var notionURLInput: String = ""
     @State private var confluenceURLInput: String = ""
 
@@ -277,10 +279,13 @@ public struct MeetingSetupView: View {
                         title: "파일 첨부",
                         detail: "PDF · 이미지 · 텍스트(md, txt). 이미지 파일과 글자 없는 스캔본 PDF는 자동으로 글자를 인식해요(OCR)."
                     ) {
-                        Button {
-                            isImportingFiles = true
-                        } label: {
-                            Label("파일 추가", systemImage: "doc.badge.plus")
+                        VStack(alignment: .leading, spacing: 6) {
+                            Button {
+                                isImportingFiles = true
+                            } label: {
+                                Label("파일 추가", systemImage: "doc.badge.plus")
+                            }
+                            attachErrorRow(fileAttachError)
                         }
                     }
 
@@ -292,13 +297,16 @@ public struct MeetingSetupView: View {
                             ? "페이지 링크를 붙여넣으면 본문 텍스트를 가져와요."
                             : "설정에서 Notion을 연결하면 페이지를 가져올 수 있어요."
                     ) {
-                        HStack(spacing: 6) {
-                            TextField("Notion 페이지 링크 붙여넣기", text: $notionURLInput)
-                                .textFieldStyle(.roundedBorder)
-                                .disabled(!notion.isConnected)
-                                .onSubmit { Task { await ingestNotionPage() } }
-                            Button("가져오기") { Task { await ingestNotionPage() } }
-                                .disabled(!notion.isConnected || notionURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                TextField("Notion 페이지 링크 붙여넣기", text: $notionURLInput)
+                                    .textFieldStyle(.roundedBorder)
+                                    .disabled(!notion.isConnected)
+                                    .onSubmit { Task { await ingestNotionPage() } }
+                                Button("가져오기") { Task { await ingestNotionPage() } }
+                                    .disabled(!notion.isConnected || notionURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                            attachErrorRow(notionAttachError)
                         }
                     }
 
@@ -357,6 +365,8 @@ public struct MeetingSetupView: View {
                                 .background(Color.secondary.opacity(0.07))
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
+
+                            attachErrorRow(confluenceAttachError)
                         }
                     }
 
@@ -391,7 +401,7 @@ public struct MeetingSetupView: View {
             case .success(let urls):
                 Task { await ingestFiles(urls) }
             case .failure(let error):
-                documentAttachError = error.localizedDescription
+                fileAttachError = error.localizedDescription
             }
         }
     }
@@ -414,10 +424,11 @@ public struct MeetingSetupView: View {
         }
     }
 
-    /// 어떤 소스에서 추가됐든 처리 완료된 첨부를 한 곳에 모아 보여준다(처리중/오류 포함).
+    /// 어떤 소스에서 추가됐든 처리 완료된 첨부를 한 곳에 모아 보여준다(처리중 포함).
+    /// 실패 안내는 발생한 소스 그룹 옆에 따로 보여준다(소스별 에러 상태 분리) — 동시 첨부 시 서로 덮어쓰지 않도록.
     @ViewBuilder
     private var attachedSummary: some View {
-        if !attachedFiles.isEmpty || ingestingFileCount > 0 || documentAttachError != nil {
+        if !attachedFiles.isEmpty || ingestingFileCount > 0 {
             VStack(alignment: .leading, spacing: 6) {
                 if !attachedFiles.isEmpty {
                     Text("추가된 자료 \(attachedFiles.count)개")
@@ -435,17 +446,21 @@ public struct MeetingSetupView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+            }
+        }
+    }
 
-                if let documentAttachError {
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(.orange)
-                        Text(documentAttachError)
-                            .font(.callout)
-                            .foregroundColor(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+    /// 소스 그룹별 첨부 실패 안내(있을 때만). 어느 소스의 실패인지 그 입력 옆에서 바로 보이게 한다.
+    @ViewBuilder
+    private func attachErrorRow(_ message: String?) -> some View {
+        if let message {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundColor(.orange)
+                Text(message)
+                    .font(.callout)
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -606,7 +621,7 @@ public struct MeetingSetupView: View {
     @MainActor
     private func ingestFiles(_ urls: [URL]) async {
         guard !urls.isEmpty else { return }
-        documentAttachError = nil
+        fileAttachError = nil
         ingestingFileCount += urls.count
         Log.importer.info("document attach start count=\(urls.count, privacy: .public)")
         defer { ingestingFileCount = max(0, ingestingFileCount - urls.count) }
@@ -617,7 +632,7 @@ public struct MeetingSetupView: View {
             Log.importer.info("document attach ok sourceKind=\(String(describing: attached.sourceKind), privacy: .public) chars=\(attached.text.count, privacy: .public)")
         }
         if let failure = result.failures.first {
-            documentAttachError = failure.reason.errorDescription
+            fileAttachError = failure.reason.errorDescription
             Log.importer.error("document attach failed reason=\(String(describing: failure.reason), privacy: .public)")
         }
     }
@@ -627,7 +642,7 @@ public struct MeetingSetupView: View {
     private func ingestNotionPage() async {
         let url = notionURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !url.isEmpty else { return }
-        documentAttachError = nil
+        notionAttachError = nil
         ingestingFileCount += 1
         Log.importer.info("notion attach start")
         defer { ingestingFileCount = max(0, ingestingFileCount - 1) }
@@ -641,7 +656,7 @@ public struct MeetingSetupView: View {
             }
             notionURLInput = ""
         case .failure(let reason):
-            documentAttachError = reason.errorDescription
+            notionAttachError = reason.errorDescription
             Log.importer.error("notion attach failed reason=\(String(describing: reason), privacy: .public)")
         }
     }
@@ -652,7 +667,7 @@ public struct MeetingSetupView: View {
     private func ingestConfluencePage() async {
         let url = confluenceURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !url.isEmpty else { return }
-        documentAttachError = nil
+        confluenceAttachError = nil
         ingestingFileCount += 1
         Log.importer.info("confluence attach start")
         defer { ingestingFileCount = max(0, ingestingFileCount - 1) }
@@ -666,7 +681,7 @@ public struct MeetingSetupView: View {
             }
             confluenceURLInput = ""
         case .failure(let reason):
-            documentAttachError = confluenceAttachMessage(for: reason)
+            confluenceAttachError = confluenceAttachMessage(for: reason)
             Log.importer.error("confluence attach failed reason=\(String(describing: reason), privacy: .public)")
         }
     }
