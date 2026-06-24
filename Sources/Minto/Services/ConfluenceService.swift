@@ -576,43 +576,13 @@ public final class ConfluenceService: ObservableObject {
         }
     }
 
+    /// 검색 경로(searchContext)용 본문 조회. 제목이 필요 없으므로 fetchPageContent의 본문만 취한다.
     private func fetchPageBody(contentID: String, token: String, email: String, baseURL: String) async -> String? {
-        guard let escapedID = contentID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
-            return nil
-        }
-        var components = URLComponents(string: "\(baseURL)/wiki/rest/api/content/\(escapedID)")
-        components?.queryItems = [
-            URLQueryItem(name: "expand", value: "body.storage")
-        ]
-        guard let url = components?.url else { return nil }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 12
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let credential = Data("\(email):\(token)".utf8).base64EncodedString()
-        request.setValue("Basic \(credential)", forHTTPHeaderField: "Authorization")
-
-        do {
-            let (data, response) = try await httpClient.data(for: request)
-            guard let http = response as? HTTPURLResponse else { return nil }
-            guard http.statusCode == 200 else {
-                FileHandle.standardError.write(Data("[Confluence] 본문 HTTP \(http.statusCode)\n".utf8))
-                if http.statusCode == 401 {
-                    markNeedsReconnect()
-                }
-                return nil
-            }
-            return Self.parseContentBodyText(data)
-        } catch {
-            let code = (error as? URLError)?.code.rawValue ?? -1
-            FileHandle.standardError.write(Data("[Confluence] 본문 네트워크 오류(code=\(code))\n".utf8))
-            return nil
-        }
+        await fetchPageContent(contentID: contentID, token: token, email: email, baseURL: baseURL)?.text
     }
 
-    /// 페이지 본문과 제목을 함께 가져온다(URL 첨부용). `fetchPageBody`와 동일한 content API를 쓰되
-    /// 제목까지 파싱한다 — 검색 경로는 hit에서 제목을 받지만 URL 직접 첨부는 그 출처가 없기 때문이다.
+    /// 페이지 본문과 제목을 content API로 가져온다. 검색 경로(본문만)와 URL 첨부(본문+제목)가 공유한다.
+    /// 제목까지 파싱하는 이유: 검색은 hit에서 제목을 받지만 URL 직접 첨부는 그 출처가 없기 때문이다.
     private func fetchPageContent(contentID: String, token: String, email: String, baseURL: String) async -> (title: String?, text: String)? {
         guard let escapedID = contentID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
             return nil
