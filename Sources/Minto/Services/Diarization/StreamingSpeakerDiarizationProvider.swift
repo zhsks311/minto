@@ -19,7 +19,7 @@ public actor FluidAudioLSEENDStreamingProvider: StreamingSpeakerDiarizationProvi
     private let diarizer: LSEENDDiarizer
 
     public init(
-        variant: LSEENDVariant = .dihard3,
+        variant: LSEENDVariant = .ami,
         stepSize: LSEENDStepSize = .step100ms,
         cacheDirectory: URL? = nil
     ) {
