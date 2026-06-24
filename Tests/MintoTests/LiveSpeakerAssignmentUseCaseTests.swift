@@ -3,20 +3,22 @@ import Testing
 
 @Suite("LiveSpeakerAssignmentUseCase")
 struct LiveSpeakerAssignmentUseCaseTests {
-    @Test("start, ingest, finish는 provider 결과를 누적하고 시간순으로 정렬한다")
-    func accumulatesAndSortsSegments() async throws {
+    @Test("start, ingest, finish는 provider 스냅샷을 교체하고 시간순으로 정렬한다")
+    func replacesAndSortsSnapshots() async throws {
         let provider = MockStreamingSpeakerDiarizationProvider(
             processResponses: [
                 [
-                    segment("speaker-b", start: 3, end: 4),
-                    segment("speaker-a", start: 1, end: 2),
+                    segment("speaker-a", start: 0, end: 10),
                 ],
                 [
-                    segment("speaker-a", start: 2, end: 3),
+                    segment("speaker-b", start: 2, end: 4),
+                    segment("speaker-a", start: 0, end: 2),
                 ],
             ],
             finishResponse: [
-                segment("speaker-c", start: 0, end: 0.5),
+                segment("speaker-c", start: 4, end: 5),
+                segment("speaker-b", start: 2, end: 4),
+                segment("speaker-a", start: 0, end: 2),
             ]
         )
         let useCase = LiveSpeakerAssignmentUseCase(provider: provider)
@@ -33,19 +35,16 @@ struct LiveSpeakerAssignmentUseCaseTests {
         let finalSnapshot = try await useCase.finish()
 
         #expect(firstSnapshot == [
-            segment("speaker-a", start: 1, end: 2),
-            segment("speaker-b", start: 3, end: 4),
+            segment("speaker-a", start: 0, end: 10),
         ])
         #expect(secondSnapshot == [
-            segment("speaker-a", start: 1, end: 2),
-            segment("speaker-a", start: 2, end: 3),
-            segment("speaker-b", start: 3, end: 4),
+            segment("speaker-a", start: 0, end: 2),
+            segment("speaker-b", start: 2, end: 4),
         ])
         #expect(finalSnapshot == [
-            segment("speaker-c", start: 0, end: 0.5),
-            segment("speaker-a", start: 1, end: 2),
-            segment("speaker-a", start: 2, end: 3),
-            segment("speaker-b", start: 3, end: 4),
+            segment("speaker-a", start: 0, end: 2),
+            segment("speaker-b", start: 2, end: 4),
+            segment("speaker-c", start: 4, end: 5),
         ])
         #expect(await useCase.currentSegments == finalSnapshot)
 
@@ -56,6 +55,34 @@ struct LiveSpeakerAssignmentUseCaseTests {
             MockProcessCall(sampleCount: 1, sourceSampleRate: 16_000),
         ])
         #expect(providerSnapshot.finishCallCount == 1)
+    }
+
+    @Test("새 스냅샷은 이전 tentative 세그먼트를 누적하지 않는다")
+    func replacementDropsStaleTentativeSegments() async throws {
+        let provider = MockStreamingSpeakerDiarizationProvider(
+            processResponses: [
+                [
+                    segment("speaker-a", start: 0, end: 10),
+                ],
+                [
+                    segment("speaker-a", start: 2, end: 3),
+                    segment("speaker-b", start: 3, end: 4),
+                ],
+            ]
+        )
+        let useCase = LiveSpeakerAssignmentUseCase(provider: provider)
+
+        try await useCase.start(preEnrolled: [])
+        _ = try await useCase.ingest(samples: [0.1], sourceSampleRate: 16_000)
+        let secondSnapshot = try await useCase.ingest(
+            samples: [0.2],
+            sourceSampleRate: 16_000
+        )
+
+        #expect(secondSnapshot == [
+            segment("speaker-a", start: 2, end: 3),
+            segment("speaker-b", start: 3, end: 4),
+        ])
     }
 
     @Test("빈 입력과 빈 provider 반환은 빈 스냅샷으로 처리한다")

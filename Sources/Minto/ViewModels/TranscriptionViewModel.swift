@@ -687,10 +687,16 @@ public final class TranscriptionViewModel: ObservableObject {
                 samples: samples,
                 sourceSampleRate: STTAudioUtilities.sampleRate
             )
+            let previousSpeakerIds = Set(liveDiarizedSegments.map(\.speakerId))
+            let nextSpeakerIds = Set(diarizedSegments.map(\.speakerId))
             // 라벨을 오디오 버퍼마다 다시 칠하면 committedSegments 재할당이 초당 여러 번 일어나
             // 전사 리스트가 깜빡인다. diar는 계속 누적만 하고, 실제 라벨 적용은 전사가 바뀌는 시점
-            // (청크 확정/프리뷰/교정)의 applyCurrentLiveSpeakerLabels에서만 한다.
+            // (청크 확정/프리뷰/교정)에 한다. 단, 새 화자가 등장하거나 사라진 순간은 기존 줄의
+            // 라벨이 실제로 달라질 수 있으므로 그때만 즉시 갱신한다.
             liveDiarizedSegments = diarizedSegments
+            if previousSpeakerIds != nextSpeakerIds {
+                applyCurrentLiveSpeakerLabels()
+            }
         } catch {
             liveSpeakerAssignmentActive = false
             liveDiarizedSegments = []

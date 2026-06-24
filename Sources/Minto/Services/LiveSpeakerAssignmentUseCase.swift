@@ -32,7 +32,7 @@ public actor LiveSpeakerAssignmentUseCase {
                 samples: samples,
                 sourceSampleRate: sourceSampleRate
             )
-            append(emittedSegments)
+            replaceIfUpdated(emittedSegments)
             return currentSegments
         } catch {
             logFailure(
@@ -47,7 +47,7 @@ public actor LiveSpeakerAssignmentUseCase {
     public func finish() async throws -> [DiarizedSpeakerSegment] {
         do {
             let emittedSegments = try await provider.finish()
-            append(emittedSegments)
+            replaceIfUpdated(emittedSegments)
             return currentSegments
         } catch {
             logFailure(operation: "finish")
@@ -55,13 +55,12 @@ public actor LiveSpeakerAssignmentUseCase {
         }
     }
 
-    private func append(_ segments: [DiarizedSpeakerSegment]) {
+    private func replaceIfUpdated(_ segments: [DiarizedSpeakerSegment]) {
         guard !segments.isEmpty else {
             return
         }
 
-        currentSegments.append(contentsOf: segments)
-        currentSegments = Self.sortedByTimeline(currentSegments)
+        currentSegments = Self.sortedByTimeline(segments)
     }
 
     private static func sortedByTimeline(
