@@ -120,6 +120,7 @@ extension LLMCorrectionService: MeetingFileImportCorrecting {}
 @MainActor
 protocol MeetingFileImportSummaryGenerating: AnyObject {
     func generateFinal(transcript: String, context: SummaryGenerationContext) async -> MeetingSummary?
+    func generateDocumentSummary(document: String) async -> String?
 }
 
 extension SummaryService: MeetingFileImportSummaryGenerating {}
@@ -247,7 +248,6 @@ public final class MeetingFileImportUseCase: ObservableObject {
                         startedAt: startedAt,
                         topic: topicText,
                         glossary: glossary,
-                        document: document,
                         shouldCorrect: shouldCorrect,
                         pipeline: correctionPipeline
                     )
@@ -291,9 +291,19 @@ public final class MeetingFileImportUseCase: ObservableObject {
             let segments = correctionPipeline.segments
             update(.summarizing, progress: 0.86, fileName: fileName, detail: "회의 내용을 정리하고 있어요.")
             Log.importer.info("import summarize start file=\(fileName, privacy: .public)")
+            // 문서 요약본 1회 생성(요약 직전, 소비처가 generateFinal뿐이라 조기 취소 시 낭비 방지).
+            // 실패/미설정이면 nil → "" → buildFinal이 excerpt 폴백으로 동작(fail-soft).
+            let documentSummary = await summaryService.generateDocumentSummary(document: summaryContext.document) ?? ""
+            let finalContext = SummaryGenerationContext(
+                topic: summaryContext.topic,
+                glossary: summaryContext.glossary,
+                runningSummary: summaryContext.runningSummary,
+                document: summaryContext.document,
+                documentSummary: documentSummary
+            )
             let generatedSummary = await summaryService.generateFinal(
                 transcript: Self.transcriptText(from: segments, startedAt: startedAt),
-                context: summaryContext
+                context: finalContext
             )
             let summary = generatedSummary ?? MeetingSummary()
             try Task.checkCancellation()
@@ -472,7 +482,6 @@ public final class MeetingFileImportUseCase: ObservableObject {
         startedAt: Date,
         topic: String,
         glossary: String,
-        document: String,
         shouldCorrect: Bool,
         pipeline: ImportCorrectionPipeline
     ) async throws {
@@ -495,8 +504,7 @@ public final class MeetingFileImportUseCase: ObservableObject {
             topic: topic,
             glossary: glossary,
             previousText: pipeline.contextSnapshot(),
-            runningSummary: "",
-            document: document
+            runningSummary: ""
         )
         let segment = Segment(
             id: rawResult.segment.id,

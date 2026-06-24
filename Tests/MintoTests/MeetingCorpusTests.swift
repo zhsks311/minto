@@ -646,8 +646,7 @@ struct MeetingCorpusTests {
                     topic: topic,
                     glossary: onGlossary,
                     context: prevRaw,
-                    text: raw,
-                    document: document
+                    text: raw
                 )
                 do {
                     correctedOn = try await CodexOAuthService.shared.correct(

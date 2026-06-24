@@ -440,6 +440,8 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
             return 3_000
         case .answer:
             return 1_800
+        case .documentSummary:
+            return 1_200
         }
     }
 }

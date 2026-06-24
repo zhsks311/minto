@@ -61,18 +61,24 @@
 - 로그: `Log.oauth`/`Log.importer` 시작·성공(http status, 글자수)·실패(사유). 토큰·본문 금지.
 - **검증**: 연결/미연결/needsReconnect, fetch 성공/실패/빈본문/timeout. `fetchPageDocument` 단위 테스트(연결 상태별). 실제 앱 QA. 회귀: `RelatedInfoService` Notion 검색 불변.
 
-### Phase 5 — 교정 문서 표현: 용어집만 (raw prefix 제거)
+### Phase 5 — 교정 문서 표현: 용어집만 (raw prefix 제거) ✅ 완료 (커밋 `dac501a`, 2026-06-24)
+
+> 측정 게이트(raw-doc 격리 A/B, 2개 코퍼스) 통과 후 제거: raw 문서는 global CER +0.3/+0.4pp 악화, 용어 복원 이득 거의 없음. 상세 `docs/work-log/2026-06-24-26-document-prompt-representation-phase5-6.md`.
 - 측정 선행: `documentTermInjectionCER` A/B(`CorrectionPrompt` raw `document.prefix(1500)` 있음 vs 없음)로 CER 회귀 없음 확인.
 - 확인되면 `CorrectionPrompt.build`에서 raw `document` 주입 제거(용어집=`glossaryForPrompt`만 유지). `LLMCorrectionService`의 document 전달 정리.
 - **검증**: CER A/B 회귀 없음, 교정 단위 테스트, 로그에 문서 본문 미포함.
 
-### Phase 6 — 요약 문서 표현: 문서 요약본 주입 (폴백 보유)
+### Phase 6 — 요약 문서 표현: 문서 요약본 주입 (폴백 보유) ✅ 완료 (커밋 `edef929`, 2026-06-24)
+
+> 결정: 회의 시작 즉시 생성 / ~1000자 5~10 불릿 / 재시도 없음·excerpt 폴백. 폴백 사슬 단위 테스트 GREEN. 요약 품질(요약본 vs excerpt) 정성 측정은 선택 사항으로 미실시(fail-soft·additive라 안전성 게이트 아님).
 - `MeetingContext`에 `documentSummary: String?` + 첨부 시점 1회 생성(Application use-case가 기존 LLM provider 사용, async·캐시). 생성 토큰 가드(stale 방지)는 기존 `documentTermExtractionID` 패턴 참고.
 - `SummaryPrompt`(incremental/final): 요약본 있으면 excerpt 대신 주입. **폴백 사슬**: 요약본 없음/실패/LLM미설정 → `DocumentContextSelector.excerpt` → terms. fail-soft(회의 시작·전사·저장 무영향).
 - 로그: summary 카테고리 시작·성공(글자수)·실패(사유). 본문 금지.
 - **검증**: 요약 품질(요약본 vs excerpt) 측정, 폴백 사슬 단위 테스트(요약본 실패→excerpt→terms), LLM 미설정 시 동작.
 
-### Phase 7 — 문서·로그 마무리
+### Phase 7 — 문서·로그 마무리 ✅ 완료 (2026-06-24)
+
+> 작업 로그 `docs/work-log/2026-06-24-26-...` 작성, ADR 0006에 Phase 5·6 구현 완료 note 추가.
 - 작업 로그(`docs/work-log/`) 작성, ADR 상태 Accepted(착수 시점에 이미 전환했으면 구현완료 note만).
 - 지원 포맷 안내·미지원 포맷 처리(향후 확장 표시) 정리.
 

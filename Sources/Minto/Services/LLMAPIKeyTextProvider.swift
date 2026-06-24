@@ -507,6 +507,8 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             return 3_000
         case .answer:
             return 1_800
+        case .documentSummary:
+            return 1_200
         }
     }
 
