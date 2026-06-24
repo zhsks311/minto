@@ -69,7 +69,7 @@ public final class TranscriptionViewModel: ObservableObject {
     private var liveSpeakerStartTask: Task<Void, Never>?
     private var liveSpeakerAssignmentStarted = false
     private var liveSpeakerAssignmentActive = false
-    private var liveDiarizedSegments: [DiarizedSpeakerSegment] = []
+    private(set) var liveDiarizedSegments: [DiarizedSpeakerSegment] = []
     private var liveSpeakerSessionGeneration = 0
     private(set) var editedSpeakerSegmentIds: Set<Segment.ID> = []
     /// nil이면 오디오 보존 안 함(테스트 기본). 프로덕션 convenience init이 factory를 공급한다.
@@ -102,7 +102,7 @@ public final class TranscriptionViewModel: ObservableObject {
     private var correctionTask: Task<Void, Never>?
     // 진행 중 증분 요약 Task. drop-if-running(진행 중이면 이번 배치 skip)으로 호출·종료지연을 바운드한다.
     private var summaryTask: Task<Void, Never>?
-    private var transcriptTimelineStartDate: Date?
+    private(set) var transcriptTimelineStartDate: Date?
 
     // MARK: - Init
 
@@ -113,6 +113,7 @@ public final class TranscriptionViewModel: ObservableObject {
             vadProcessor: VoiceActivityDetectorFactory.makeDefault(),
             audioSourceFactory: AudioSourceFactory.makeSource(for:),
             vadProcessorFactory: { VoiceActivityDetectorFactory.makeNext(current: $0) },
+            liveSpeakerAssignment: LiveSpeakerAssignmentUseCase(provider: FluidAudioLSEENDStreamingProvider()),
             audioArchiverFactory: { RecordingAudioArchiver() }
         )
     }
