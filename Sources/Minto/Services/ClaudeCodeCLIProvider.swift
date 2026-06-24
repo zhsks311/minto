@@ -18,6 +18,13 @@ protocol ProcessLauncher: Sendable {
 }
 
 final class FoundationProcessLauncher: ProcessLauncher, @unchecked Sendable {
+    private static let activeProcesses = RunningProcessRegistry()
+
+    @discardableResult
+    static func terminateRunningProcesses() -> Int {
+        activeProcesses.terminateAll()
+    }
+
     func run(
         executableURL: URL,
         arguments: [String],
@@ -92,6 +99,11 @@ final class FoundationProcessLauncher: ProcessLauncher, @unchecked Sendable {
             )
             throw error
         }
+        Self.activeProcesses.insert(handle)
+        defer {
+            Self.activeProcesses.remove(handle)
+            handle.clear()
+        }
 
         let stdinTask = Task {
             try? stdinPipe.fileHandleForWriting.write(contentsOf: stdin)
@@ -111,7 +123,6 @@ final class FoundationProcessLauncher: ProcessLauncher, @unchecked Sendable {
                 stderrPipe: stderrPipe,
                 stdinPipe: stdinPipe
             )
-            handle.clear()
             throw ProcessLauncherError.timedOut
         } catch is CancellationError {
             handle.terminate()
@@ -123,7 +134,6 @@ final class FoundationProcessLauncher: ProcessLauncher, @unchecked Sendable {
                 stderrPipe: stderrPipe,
                 stdinPipe: stdinPipe
             )
-            handle.clear()
             throw CancellationError()
         } catch {
             handle.terminate()
@@ -135,14 +145,12 @@ final class FoundationProcessLauncher: ProcessLauncher, @unchecked Sendable {
                 stderrPipe: stderrPipe,
                 stdinPipe: stdinPipe
             )
-            handle.clear()
             throw error
         }
 
         _ = await stdinTask.result
         let stdout = await stdoutTask.value
         let stderr = await stderrTask.value
-        handle.clear()
         return ProcessResult(exitCode: exitCode, stdout: stdout, stderr: stderr)
     }
 
@@ -181,6 +189,17 @@ final class FoundationProcessLauncher: ProcessLauncher, @unchecked Sendable {
     }
 }
 
+private enum ClaudeCodeCLIOperation: String {
+    case generate
+    case connectionCheck
+}
+
+private struct ClaudeCodeCLIRunResult: Sendable {
+    let text: String
+    let executableURL: URL
+    let warnings: [String]
+}
+
 public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked Sendable {
     public static let cliPathKey = "claudeCodeCLIPath"
     public static let modelDefaultsKey = "claudeCodeCLIModel"
@@ -190,7 +209,14 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     private static let maxStdinBytes = 10 * 1024 * 1024
     private static let anthropicAPIKeyEnvironmentName = "ANTHROPIC_API_KEY"
     private static let workingDirectoryName = "claude-cli-cwd"
-    // Phase 3에서 실제 CLI 버전별 동작을 확정한다. 빈 --tools 값은 일부 버전에서 파싱 실패할 수 있다.
+    private static let localInstallCLIPath = "~/.claude/local/claude"
+    private static let homebrewCLIPath = "/opt/homebrew/bin/claude"
+    private static let intelHomebrewCLIPath = "/usr/local/bin/claude"
+    private static let systemCLIPath = "/usr/bin/claude"
+    private static let npmPrefixEnvironmentKeys = ["NPM_CONFIG_PREFIX", "npm_config_prefix"]
+    private static let connectionCheckInstructions = "pong이라고 한 단어로만 답하세요."
+    private static let connectionCheckInput = "ping"
+    // 빈 --tools 값은 일부 Claude Code CLI 버전에서 파싱 실패할 수 있다.
     private static let toolBlockingArguments = ["--disallowedTools", "*"]
 
     public let descriptor: LLMProviderDescriptor
@@ -242,7 +268,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     }
 
     public func isConfigured() async -> Bool {
-        Self.cliPathExists(defaults.string(forKey: Self.cliPathKey) ?? "", fileManager: fileManager)
+        resolvedCLIPath() != nil
     }
 
     public func modelCatalog() async -> LLMModelCatalog {
@@ -255,12 +281,35 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
         }
     }
 
+    @discardableResult
+    public func checkConnection() async throws -> URL {
+        try await limiter.withPermit {
+            let modelID = selectedModelID(requestModelID: nil)
+            let result = try await runClaude(
+                operation: .connectionCheck,
+                instructions: Self.connectionCheckInstructions,
+                userContent: Self.connectionCheckInput,
+                modelID: modelID
+            )
+            return result.executableURL
+        }
+    }
+
+    @discardableResult
+    public static func terminateRunningProcesses() -> Int {
+        let count = FoundationProcessLauncher.terminateRunningProcesses()
+        if count > 0 {
+            Log.llm.info("claude cli terminate requested activeProcesses=\(count, privacy: .public)")
+        }
+        return count
+    }
+
     public static func bundledModelCatalog() -> LLMModelCatalog {
         LLMModelCatalog(
             models: bundledModels(),
             source: .bundledFallback,
             manualModelHelpURL: URL(string: "https://docs.anthropic.com/en/docs/about-claude/models/overview"),
-            warning: "Claude Code CLI는 이 Mac의 claude 로그인을 사용하지만 회의 내용은 Anthropic으로 전송돼요."
+            warning: "Claude Code CLI는 사용자 본인 기기와 본인 claude 로그인을 사용하지만 회의 내용은 Anthropic으로 전송돼요. 로컬 처리가 아니며 구독 약관 확인을 권장해요."
         )
     }
 
@@ -296,10 +345,67 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
         return fileManager.fileExists(atPath: path, isDirectory: &isDirectory) && !isDirectory.boolValue
     }
 
+    public static func resolvedCLIPath(
+        configuredPath rawPath: String?,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default
+    ) -> String? {
+        resolvedCLIPath(
+            configuredPath: rawPath,
+            environment: environment,
+            fileExists: { cliPathExists($0, fileManager: fileManager) }
+        )
+    }
+
+    static func resolvedCLIPath(
+        configuredPath rawPath: String?,
+        environment: [String: String],
+        fileExists: (String) -> Bool
+    ) -> String? {
+        candidateCLIPaths(configuredPath: rawPath, environment: environment)
+            .first(where: fileExists)
+    }
+
     public static func normalizedCLIPath(_ rawPath: String) -> String {
         let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("~") else { return trimmed }
         return (trimmed as NSString).expandingTildeInPath
+    }
+
+    private static func candidateCLIPaths(configuredPath rawPath: String?, environment: [String: String]) -> [String] {
+        let configuredPath = normalizedCLIPath(rawPath ?? "")
+        if !configuredPath.isEmpty {
+            return [configuredPath]
+        }
+
+        var candidates = [
+            normalizedCLIPath(localInstallCLIPath),
+            homebrewCLIPath,
+            intelHomebrewCLIPath
+        ]
+        for key in npmPrefixEnvironmentKeys {
+            guard let prefix = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !prefix.isEmpty
+            else { continue }
+            candidates.append(
+                URL(fileURLWithPath: normalizedCLIPath(prefix), isDirectory: true)
+                    .appendingPathComponent("bin")
+                    .appendingPathComponent("claude")
+                    .path
+            )
+        }
+        candidates.append(systemCLIPath)
+
+        var seen: Set<String> = []
+        return candidates.filter { seen.insert($0).inserted }
+    }
+
+    private func resolvedCLIPath() -> String? {
+        Self.resolvedCLIPath(
+            configuredPath: defaults.string(forKey: Self.cliPathKey),
+            environment: processEnvironment,
+            fileManager: fileManager
+        )
     }
 
     private func selectedModelID(requestModelID: String?) -> String {
@@ -312,18 +418,40 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
 
     private func generateTextWithoutConcurrentProcessBurst(_ request: LLMTextRequest) async throws -> LLMTextResponse {
         let modelID = selectedModelID(requestModelID: request.modelID)
-        guard await isConfigured() else {
-            Log.llm.error("claude cli generate failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) reason=notConfigured")
+        let result = try await runClaude(
+            operation: .generate,
+            instructions: request.instructions,
+            userContent: request.userContent,
+            modelID: modelID
+        )
+        return LLMTextResponse(
+            text: result.text,
+            providerID: self.descriptor.id,
+            modelID: modelID,
+            finishReason: .stop,
+            warnings: result.warnings
+        )
+    }
+
+    private func runClaude(
+        operation: ClaudeCodeCLIOperation,
+        instructions: String,
+        userContent: String,
+        modelID: String
+    ) async throws -> ClaudeCodeCLIRunResult {
+        guard let resolvedPath = resolvedCLIPath() else {
+            Log.llm.error("claude cli \(operation.rawValue, privacy: .public) failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) reason=notConfigured")
             throw LLMProviderError.notConfigured
         }
 
-        let executableURL = URL(fileURLWithPath: Self.normalizedCLIPath(defaults.string(forKey: Self.cliPathKey) ?? ""))
-        let preparedInput = Self.preparedStdinData(from: request.userContent, maxBytes: maxStdinBytes)
-        let arguments = Self.arguments(for: request, modelID: modelID)
+        let executableURL = URL(fileURLWithPath: resolvedPath)
+        let preparedInput = Self.preparedStdinData(from: userContent, maxBytes: maxStdinBytes)
+        let arguments = Self.arguments(instructions: instructions, modelID: modelID)
         let environment = sanitizedEnvironment()
         let currentDirectory = try workingDirectory()
+        let inputCharacterCount = userContent.count
 
-        Log.llm.info("claude cli generate start provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) inputBytes=\(preparedInput.data.count, privacy: .public) truncated=\(preparedInput.wasTruncated, privacy: .public)")
+        Log.llm.info("claude cli \(operation.rawValue, privacy: .public) start provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) inputChars=\(inputCharacterCount, privacy: .public) truncated=\(preparedInput.wasTruncated, privacy: .public)")
 
         let processResult: ProcessResult
         do {
@@ -336,43 +464,41 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
                 timeout: timeout
             )
         } catch is CancellationError {
-            Log.llm.error("claude cli generate cancelled provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public)")
+            Log.llm.error("claude cli \(operation.rawValue, privacy: .public) cancelled provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public)")
             throw CancellationError()
         } catch ProcessLauncherError.timedOut {
-            Log.llm.error("claude cli generate failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) reason=timeout")
+            Log.llm.error("claude cli \(operation.rawValue, privacy: .public) failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) reason=timeout")
             throw LLMProviderError.network("timeout")
         } catch {
             let publicError = Self.publicErrorDescription(error)
-            Log.llm.error("claude cli generate failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) reason=launchFailed error=\(publicError, privacy: .public)")
+            Log.llm.error("claude cli \(operation.rawValue, privacy: .public) failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) reason=launchFailed error=\(publicError, privacy: .public)")
             throw LLMProviderError.network(publicError)
         }
 
         guard processResult.exitCode == 0 else {
             let stderrPrefix = Self.stderrPrefix(from: processResult.stderr)
-            Log.llm.error("claude cli generate failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) exitCode=\(processResult.exitCode, privacy: .public) stderrPrefix=\(stderrPrefix, privacy: .public)")
+            Log.llm.error("claude cli \(operation.rawValue, privacy: .public) failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) exitCode=\(processResult.exitCode, privacy: .public) stderrPrefix=\(stderrPrefix, privacy: .public)")
             throw Self.providerError(exitCode: processResult.exitCode, stderrPrefix: stderrPrefix)
         }
 
         do {
             let text = try Self.resultText(from: processResult.stdout)
-            Log.llm.info("claude cli generate success provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) exitCode=\(processResult.exitCode, privacy: .public)")
-            return LLMTextResponse(
+            Log.llm.info("claude cli \(operation.rawValue, privacy: .public) success provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) exitCode=\(processResult.exitCode, privacy: .public) inputChars=\(inputCharacterCount, privacy: .public) truncated=\(preparedInput.wasTruncated, privacy: .public)")
+            return ClaudeCodeCLIRunResult(
                 text: text,
-                providerID: self.descriptor.id,
-                modelID: modelID,
-                finishReason: .stop,
+                executableURL: executableURL,
                 warnings: preparedInput.warnings
             )
         } catch let error as LLMProviderError {
-            Log.llm.error("claude cli generate failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) exitCode=\(processResult.exitCode, privacy: .public) error=\(Self.publicDiagnosticDescription(error), privacy: .public)")
+            Log.llm.error("claude cli \(operation.rawValue, privacy: .public) failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) exitCode=\(processResult.exitCode, privacy: .public) error=\(Self.publicDiagnosticDescription(error), privacy: .public)")
             throw error
         }
     }
 
-    private static func arguments(for request: LLMTextRequest, modelID: String) -> [String] {
+    private static func arguments(instructions: String, modelID: String) -> [String] {
         [
             "-p",
-            "--system-prompt", request.instructions,
+            "--system-prompt", instructions,
             "--model", modelID,
             "--output-format", "json"
         ] + toolBlockingArguments
@@ -465,8 +591,8 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     }
 
     private static func stderrPrefix(from stderr: Data) -> String {
-        let raw = String(decoding: stderr.prefix(200), as: UTF8.self)
-        return sanitizeForPublicLog(raw)
+        let raw = String(decoding: stderr, as: UTF8.self)
+        return sanitizeForPublicLog(String(raw.prefix(200)))
     }
 
     private static func publicErrorDescription(_ error: any Error) -> String {
@@ -516,6 +642,31 @@ private final class RunningProcessHandle: @unchecked Sendable {
         if process?.isRunning == true {
             process?.terminate()
         }
+    }
+}
+
+private final class RunningProcessRegistry: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handles: [RunningProcessHandle] = []
+
+    func insert(_ handle: RunningProcessHandle) {
+        lock.withLock {
+            handles.append(handle)
+        }
+    }
+
+    func remove(_ handle: RunningProcessHandle) {
+        lock.withLock {
+            handles.removeAll { $0 === handle }
+        }
+    }
+
+    func terminateAll() -> Int {
+        let activeHandles = lock.withLock { handles }
+        for handle in activeHandles {
+            handle.terminate()
+        }
+        return activeHandles.count
     }
 }
 

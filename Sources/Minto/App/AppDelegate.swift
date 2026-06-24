@@ -237,6 +237,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     @MainActor
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard MeetingFileImportUseCase.isAnyImportRunning else {
+            ClaudeCodeCLIProvider.terminateRunningProcesses()
             return .terminateNow
         }
 
@@ -251,6 +252,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         if response == .alertSecondButtonReturn {
             Log.importer.info("terminate accepted during active import")
             // 종료를 확정하면 pending marker를 남겨 다음 실행 때 안내 카드로 알려준다.
+            ClaudeCodeCLIProvider.terminateRunningProcesses()
             return .terminateNow
         }
         Log.importer.info("terminate cancelled during active import")

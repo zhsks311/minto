@@ -163,6 +163,66 @@ struct ClaudeCodeCLIProviderTests {
         #expect(call.environment["ANTHROPIC_API_KEY"] == nil)
     }
 
+    @Test("연결 확인은 version 조회가 아니라 trivial prompt 왕복으로 검증한다")
+    func checkConnectionRunsTrivialPrompt() async throws {
+        let fixture = try ProviderFixture(
+            result: .success(ProcessResult(
+                exitCode: 0,
+                stdout: Data(#"{"result":"pong"}"#.utf8),
+                stderr: Data()
+            ))
+        )
+        defer { fixture.cleanup() }
+
+        let executableURL = try await fixture.provider.checkConnection()
+
+        #expect(executableURL == fixture.cliURL)
+        let call = try #require(fixture.launcher.calls.first)
+        #expect(call.stdin == Data("ping".utf8))
+        #expect(call.arguments.contains("-p"))
+        #expect(call.arguments.contains("--output-format"))
+        #expect(call.arguments.contains("json"))
+        #expect(!call.arguments.contains("--version"))
+    }
+
+    @Test("CLI 경로 발견은 설정값을 기본 설치 경로보다 우선한다")
+    func cliDiscoveryPrefersConfiguredPath() {
+        let configuredPath = "\(NSHomeDirectory())/custom/bin/claude"
+        var checkedPaths: [String] = []
+
+        let resolvedPath = ClaudeCodeCLIProvider.resolvedCLIPath(
+            configuredPath: configuredPath,
+            environment: ["NPM_CONFIG_PREFIX": "/custom/npm"]
+        ) { path in
+            checkedPaths.append(path)
+            return path == configuredPath
+        }
+
+        #expect(resolvedPath == configuredPath)
+        #expect(checkedPaths == [configuredPath])
+    }
+
+    @Test("CLI 경로 발견은 설정값이 비어 있으면 절대경로 fallback 순서를 따른다")
+    func cliDiscoveryUsesAbsoluteFallbackOrder() {
+        var checkedPaths: [String] = []
+
+        let resolvedPath = ClaudeCodeCLIProvider.resolvedCLIPath(
+            configuredPath: " ",
+            environment: ["NPM_CONFIG_PREFIX": "/custom/npm"]
+        ) { path in
+            checkedPaths.append(path)
+            return path == "/usr/local/bin/claude"
+        }
+
+        #expect(resolvedPath == "/usr/local/bin/claude")
+        #expect(Array(checkedPaths.prefix(3)) == [
+            "\(NSHomeDirectory())/.claude/local/claude",
+            "/opt/homebrew/bin/claude",
+            "/usr/local/bin/claude"
+        ])
+        #expect(!checkedPaths.contains("/custom/npm/bin/claude"))
+    }
+
     private static func request() -> LLMTextRequest {
         LLMTextRequest(
             useCase: .answer,
