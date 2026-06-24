@@ -214,6 +214,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     private static let intelHomebrewCLIPath = "/usr/local/bin/claude"
     private static let systemCLIPath = "/usr/bin/claude"
     private static let npmPrefixEnvironmentKeys = ["NPM_CONFIG_PREFIX", "npm_config_prefix"]
+    private static let stdinPromptSeparator = "\n\n---\n\n"
     private static let connectionCheckInstructions = "pong이라고 한 단어로만 답하세요."
     private static let connectionCheckInput = "ping"
     // 빈 --tools 값은 일부 Claude Code CLI 버전에서 파싱 실패할 수 있다.
@@ -445,8 +446,12 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
         }
 
         let executableURL = URL(fileURLWithPath: resolvedPath)
-        let preparedInput = Self.preparedStdinData(from: userContent, maxBytes: maxStdinBytes)
-        let arguments = Self.arguments(instructions: instructions, modelID: modelID)
+        let preparedInput = Self.preparedStdinData(
+            instructions: instructions,
+            userContent: userContent,
+            maxBytes: maxStdinBytes
+        )
+        let arguments = Self.arguments(modelID: modelID)
         let environment = sanitizedEnvironment()
         let currentDirectory = try workingDirectory()
         let inputCharacterCount = userContent.count
@@ -495,10 +500,9 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
         }
     }
 
-    private static func arguments(instructions: String, modelID: String) -> [String] {
+    private static func arguments(modelID: String) -> [String] {
         [
             "-p",
-            "--system-prompt", instructions,
             "--model", modelID,
             "--output-format", "json"
         ] + toolBlockingArguments
@@ -528,8 +532,13 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
         return cwd
     }
 
-    private static func preparedStdinData(from userContent: String, maxBytes: Int) -> (data: Data, wasTruncated: Bool, warnings: [String]) {
-        let data = Data(userContent.utf8)
+    private static func preparedStdinData(
+        instructions: String,
+        userContent: String,
+        maxBytes: Int
+    ) -> (data: Data, wasTruncated: Bool, warnings: [String]) {
+        let prompt = instructions + stdinPromptSeparator + userContent
+        let data = Data(prompt.utf8)
         guard data.count > maxBytes else {
             return (data, false, [])
         }
@@ -617,7 +626,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     }
 }
 
-private enum ProcessLauncherError: Error {
+enum ProcessLauncherError: Error {
     case timedOut
 }
 

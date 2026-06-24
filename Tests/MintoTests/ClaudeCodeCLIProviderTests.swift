@@ -74,6 +74,21 @@ struct ClaudeCodeCLIProviderTests {
         }
     }
 
+    @Test("launcher timeout은 network 에러로 매핑한다")
+    func generateTextMapsTimeoutToNetwork() async throws {
+        let fixture = try ProviderFixture(result: .failure(ProcessLauncherError.timedOut))
+        defer { fixture.cleanup() }
+
+        do {
+            _ = try await fixture.provider.generateText(Self.request())
+            Issue.record("timeout은 network 에러로 매핑해야 합니다.")
+        } catch let error as LLMProviderError {
+            #expect(error == .network("timeout"))
+        } catch {
+            Issue.record("LLMProviderError가 아닌 에러: \(error)")
+        }
+    }
+
     @Test("CLI 경로가 없으면 launcher를 호출하지 않고 notConfigured를 던진다")
     func generateTextRequiresExistingCLIPath() async throws {
         let root = try Self.temporaryDirectory()
@@ -131,8 +146,9 @@ struct ClaudeCodeCLIProviderTests {
         #expect(await launcher.wasCancelled)
     }
 
-    @Test("전사는 stdin에만 전달하고 argv와 environment에는 싣지 않는다")
-    func userContentIsOnlyPassedThroughStdin() async throws {
+    @Test("전사와 instructions는 stdin에만 전달하고 argv와 environment에는 싣지 않는다")
+    func promptContentIsOnlyPassedThroughStdin() async throws {
+        let instructions = "민감한 지시: 회의 주제와 용어집을 참고하세요."
         let transcript = "민감한 회의 전사 원문"
         let fixture = try ProviderFixture(
             result: .success(ProcessResult(
@@ -149,18 +165,54 @@ struct ClaudeCodeCLIProviderTests {
 
         _ = try await fixture.provider.generateText(LLMTextRequest(
             useCase: .answer,
-            instructions: "질문에 답하세요.",
+            instructions: instructions,
             userContent: transcript,
             modelID: nil
         ))
 
         let call = try #require(fixture.launcher.calls.first)
-        #expect(call.stdin == Data(transcript.utf8))
+        let stdinText = String(decoding: call.stdin, as: UTF8.self)
+        #expect(stdinText.contains(instructions))
+        #expect(stdinText.contains(transcript))
+        #expect(!call.arguments.contains("--system-prompt"))
+        #expect(!call.arguments.contains("--system-prompt-file"))
         #expect(!call.arguments.contains { $0.contains(transcript) })
-        #expect(call.arguments.contains("--system-prompt"))
-        #expect(call.arguments.contains("질문에 답하세요."))
+        #expect(!call.arguments.contains { $0.contains(instructions) })
         #expect(call.environment["PATH"] == "/opt/homebrew/bin:/usr/bin")
         #expect(call.environment["ANTHROPIC_API_KEY"] == nil)
+    }
+
+    @Test("10MB 초과 stdin은 UTF-8 경계에 맞춰 자르고 warning을 반환한다")
+    func generateTextTruncatesOversizedStdinOnUTF8Boundary() async throws {
+        let maxBytes = 10 * 1024 * 1024
+        let instructions = "지시"
+        let stdinPrefix = instructions + "\n\n---\n\n"
+        let asciiByteCount = maxBytes - Data(stdinPrefix.utf8).count - 1
+        let userContent = String(repeating: "a", count: asciiByteCount) + "한" + "뒤쪽 내용"
+        let fixture = try ProviderFixture(
+            result: .success(ProcessResult(
+                exitCode: 0,
+                stdout: Data(#"{"result":"답변"}"#.utf8),
+                stderr: Data()
+            )),
+            maxStdinBytes: maxBytes
+        )
+        defer { fixture.cleanup() }
+
+        let response = try await fixture.provider.generateText(LLMTextRequest(
+            useCase: .answer,
+            instructions: instructions,
+            userContent: userContent,
+            modelID: nil
+        ))
+
+        let call = try #require(fixture.launcher.calls.first)
+        let stdinText = try #require(String(data: call.stdin, encoding: .utf8))
+        #expect(call.stdin.count == maxBytes - 1)
+        #expect(stdinText.hasPrefix(stdinPrefix))
+        #expect(stdinText.hasSuffix("a"))
+        #expect(!stdinText.contains("한"))
+        #expect(response.warnings == ["입력이 10MB를 넘어 앞부분만 Claude Code CLI에 전달했어요."])
     }
 
     @Test("연결 확인은 version 조회가 아니라 trivial prompt 왕복으로 검증한다")
@@ -178,10 +230,13 @@ struct ClaudeCodeCLIProviderTests {
 
         #expect(executableURL == fixture.cliURL)
         let call = try #require(fixture.launcher.calls.first)
-        #expect(call.stdin == Data("ping".utf8))
+        let stdinText = String(decoding: call.stdin, as: UTF8.self)
+        #expect(stdinText.contains("pong이라고 한 단어로만 답하세요."))
+        #expect(stdinText.contains("ping"))
         #expect(call.arguments.contains("-p"))
         #expect(call.arguments.contains("--output-format"))
         #expect(call.arguments.contains("json"))
+        #expect(!call.arguments.contains("--system-prompt"))
         #expect(!call.arguments.contains("--version"))
     }
 
@@ -211,16 +266,16 @@ struct ClaudeCodeCLIProviderTests {
             environment: ["NPM_CONFIG_PREFIX": "/custom/npm"]
         ) { path in
             checkedPaths.append(path)
-            return path == "/usr/local/bin/claude"
+            return path == "/custom/npm/bin/claude"
         }
 
-        #expect(resolvedPath == "/usr/local/bin/claude")
+        #expect(resolvedPath == "/custom/npm/bin/claude")
         #expect(Array(checkedPaths.prefix(3)) == [
             "\(NSHomeDirectory())/.claude/local/claude",
             "/opt/homebrew/bin/claude",
             "/usr/local/bin/claude"
         ])
-        #expect(!checkedPaths.contains("/custom/npm/bin/claude"))
+        #expect(checkedPaths.contains("/custom/npm/bin/claude"))
     }
 
     private static func request() -> LLMTextRequest {
@@ -254,7 +309,8 @@ private struct ProviderFixture {
 
     init(
         result: Result<ProcessResult, Error>,
-        environment: [String: String] = ["PATH": "/usr/bin"]
+        environment: [String: String] = ["PATH": "/usr/bin"],
+        maxStdinBytes: Int = 10 * 1024 * 1024
     ) throws {
         root = try ClaudeCodeCLIProviderTests.temporaryDirectory()
         cliURL = try ClaudeCodeCLIProviderTests.createCLIFile(in: root)
@@ -270,7 +326,7 @@ private struct ProviderFixture {
             environment: environment,
             appSupportDirectory: root,
             timeout: .seconds(5),
-            maxStdinBytes: 10 * 1024 * 1024
+            maxStdinBytes: maxStdinBytes
         ))
     }
 
