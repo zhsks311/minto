@@ -7,17 +7,21 @@ public struct SummaryGenerationContext: Sendable, Equatable {
     public let glossary: String
     public let runningSummary: String
     public let document: String
+    /// 문서 요약본(있으면 요약 프롬프트에 excerpt 대신 주입). 비면 document에서 excerpt 폴백.
+    public let documentSummary: String
 
     public init(
         topic: String = "",
         glossary: String = "",
         runningSummary: String = "",
-        document: String = ""
+        document: String = "",
+        documentSummary: String = ""
     ) {
         self.topic = topic
         self.glossary = glossary
         self.runningSummary = runningSummary
         self.document = document
+        self.documentSummary = documentSummary
     }
 }
 
@@ -51,7 +55,8 @@ public final class SummaryService: ObservableObject {
             glossary: meeting.glossaryForPrompt,
             runningSummary: meeting.runningSummary,
             newBatch: batch,
-            document: meeting.document
+            document: meeting.document,
+            documentSummary: meeting.documentSummary ?? ""
         )
         guard let summary = await dispatch(prompt, useCase: .incrementalSummary, documentChars: meeting.document.count) else { return nil }
         meeting.runningSummary = summary
@@ -66,7 +71,8 @@ public final class SummaryService: ObservableObject {
             topic: meeting.topic,
             glossary: meeting.glossaryForPrompt,
             runningSummary: meeting.runningSummary,
-            document: meeting.document
+            document: meeting.document,
+            documentSummary: meeting.documentSummary ?? ""
         )
         let summary = await generateFinal(transcript: transcript, context: context)
         if let summary {
@@ -86,7 +92,8 @@ public final class SummaryService: ObservableObject {
             topic: context.topic,
             glossary: context.glossary,
             transcript: transcript,
-            document: context.document
+            document: context.document,
+            documentSummary: context.documentSummary
         )
 
         if let raw = await dispatch(prompt, useCase: .finalSummary, documentChars: context.document.count) {
@@ -98,6 +105,29 @@ public final class SummaryService: ObservableObject {
         let fallback = context.runningSummary.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !fallback.isEmpty else { return nil }
         return MeetingSummary.plain(fallback)
+    }
+
+    /// 첨부 문서를 회의 요약용 참고 맥락으로 1회 압축한다(요약 provider 사용).
+    ///
+    /// 첨부/회의 시작 시점에 한 번 호출해 결과를 캐시한다(`MeetingContext.documentSummary` 등).
+    /// 모든 실패는 fail-soft로 nil을 반환한다 — **재시도하지 않는다**. 호출부는 nil이면
+    /// 요약 프롬프트에서 excerpt 폴백으로 넘어간다(문서 본문은 어떤 로그에도 남기지 않는다).
+    public func generateDocumentSummary(document: String) async -> String? {
+        let trimmed = document.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let prompt = DocumentSummaryPrompt.build(document: trimmed)
+        guard !prompt.instructions.isEmpty else { return nil }
+
+        Log.summary.info("document summary start documentChars=\(trimmed.count, privacy: .public)")
+        guard let summary = await dispatch(prompt, useCase: .documentSummary, documentChars: trimmed.count) else {
+            // nil 사유: (1) provider 미설정 = 정상(LLM off), (2) 호출 실패 = dispatch가 이미 .error 기록,
+            // (3) 빈 응답. 여기서는 fail-soft 경로 진입만 .info로 남긴다(중복 .error 방지). excerpt 폴백으로 진행.
+            Log.summary.info("document summary unavailable — excerpt 폴백")
+            return nil
+        }
+        Log.summary.info("document summary done outputChars=\(summary.count, privacy: .public)")
+        return summary
     }
 
     /// LLM 응답에서 JSON 객체를 추출해 MeetingSummary로 디코딩한다.

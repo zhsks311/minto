@@ -6,6 +6,8 @@ public enum LLMUseCase: String, Codable, CaseIterable, Hashable, Sendable {
     case incrementalSummary
     case finalSummary
     case answer
+    /// 첨부 문서를 회의 요약용 참고 맥락으로 1회 압축(plain 불릿). 전사 요약과 별도 토큰·라우팅·로그로 구분한다.
+    case documentSummary
 }
 
 /// 사용자에게 보여줄 LLM 공급자 단위.

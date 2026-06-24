@@ -14,6 +14,7 @@ public final class MeetingContext: ObservableObject {
     private init() {}
 
     private var documentTermExtractionID: UUID?
+    private var documentSummaryGenerationID: UUID?
 
     /// 회의 주제·배경·참석자 등 자유 텍스트.
     @Published public var topic: String = ""
@@ -26,6 +27,10 @@ public final class MeetingContext: ObservableObject {
 
     /// 첨부 문서에서 정적으로 추출한 이번 회의용 용어. 영구 저장하지 않는다.
     @Published public var documentTerms: [String] = []
+
+    /// 첨부 문서를 회의 시작 시 1회 LLM으로 압축한 요약본(요약 프롬프트 참고 맥락). 영구 저장하지 않는다.
+    /// 생성 전·실패 시 nil이며, 그 경우 요약 프롬프트는 excerpt 폴백으로 동작한다(fail-soft).
+    @Published public var documentSummary: String?
 
     /// 회의 진행 중 누적되는 요약(증분 갱신). 교정 context로도 쓰이고, 종료 시 최종 요약의 입력이 된다.
     @Published public var runningSummary: String = ""
@@ -67,6 +72,8 @@ public final class MeetingContext: ObservableObject {
         self.document = document
         self.documentTerms = []
         self.documentTermExtractionID = nil
+        self.documentSummary = nil
+        self.documentSummaryGenerationID = nil
         self.runningSummary = ""
         self.finalSummary = nil
         let terms = glossary.split(whereSeparator: { $0.isNewline }).count
@@ -92,6 +99,19 @@ public final class MeetingContext: ObservableObject {
                 Log.app.info("document terms extracted count=\(terms.count, privacy: .public)")
             }
         }
+
+        // 문서 요약본 1회 생성(요약 provider). 실패/미설정이면 nil 유지 → 요약은 excerpt 폴백.
+        // 토큰 가드로 다음 회의가 시작되면 늦게 도착한 결과를 버린다(세션 누수 방지).
+        // 위 documentTerms는 CPU-bound라 Task.detached + MainActor.run을 쓰지만, 여기는 async
+        // 네트워크 I/O이므로 @MainActor를 상속하는 Task {}로 충분하다(suspension 중 MainActor 양보).
+        // Task.detached로 "통일"하지 말 것 — 그 경우 documentSummary 쓰기에 MainActor.run 래핑이 필요해진다.
+        let summaryID = UUID()
+        documentSummaryGenerationID = summaryID
+        Task {
+            let summary = await SummaryService.shared.generateDocumentSummary(document: documentSnapshot)
+            guard Self.shared.documentSummaryGenerationID == summaryID else { return }
+            Self.shared.documentSummary = summary
+        }
     }
 
     /// 맥락 초기화.
@@ -101,6 +121,8 @@ public final class MeetingContext: ObservableObject {
         document = ""
         documentTerms = []
         documentTermExtractionID = nil
+        documentSummary = nil
+        documentSummaryGenerationID = nil
         runningSummary = ""
         finalSummary = nil
     }
