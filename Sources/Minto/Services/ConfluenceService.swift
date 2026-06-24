@@ -373,6 +373,41 @@ public final class ConfluenceService: ObservableObject {
         return ContextSearchResult(documents: documents, failure: nil)
     }
 
+    /// Confluence 페이지 URL을 받아 본문을 평문으로 가져온다(회의 시작 첨부용).
+    /// Notion의 같은 이름 메서드와 대칭이다 — URL에서 pageId를 파싱해 content API로 본문·제목을 조회하고,
+    /// downstream(용어 추출·교정·요약)이 소스 차이를 모르도록 평문 `AttachedDocument`로 흡수한다.
+    public func fetchPageDocument(url: String) async -> DocumentIngestionResult {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .failure(.fetchFailed)
+        }
+        guard let token = apiToken, let email, let baseURL, Self.isAllowedCloudBaseURL(baseURL) else {
+            return .failure(.notConnected)
+        }
+        guard let pageID = Self.pageID(fromURL: trimmed) else {
+            Log.importer.error("confluence fetch failed reason=invalidURL")
+            return .failure(.fetchFailed)
+        }
+
+        Log.importer.info("confluence fetch start")
+        guard let content = await fetchPageContent(contentID: pageID, token: token, email: email, baseURL: baseURL),
+              !content.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Log.importer.error("confluence fetch empty or failed")
+            return .failure(.fetchFailed)
+        }
+
+        let rawTitle = content.title?.trimmingCharacters(in: .whitespaces) ?? ""
+        let title = rawTitle.isEmpty ? "Confluence 문서" : rawTitle
+        Log.importer.info("confluence fetch ok chars=\(content.text.count, privacy: .public)")
+        return .success(AttachedDocument(
+            id: trimmed,
+            title: title,
+            text: content.text,
+            sourceKind: .confluence,
+            sourceLabel: title
+        ))
+    }
+
     public func publishPage(
         title: String,
         markdown: String,
@@ -576,6 +611,45 @@ public final class ConfluenceService: ObservableObject {
         }
     }
 
+    /// 페이지 본문과 제목을 함께 가져온다(URL 첨부용). `fetchPageBody`와 동일한 content API를 쓰되
+    /// 제목까지 파싱한다 — 검색 경로는 hit에서 제목을 받지만 URL 직접 첨부는 그 출처가 없기 때문이다.
+    private func fetchPageContent(contentID: String, token: String, email: String, baseURL: String) async -> (title: String?, text: String)? {
+        guard let escapedID = contentID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            return nil
+        }
+        var components = URLComponents(string: "\(baseURL)/wiki/rest/api/content/\(escapedID)")
+        components?.queryItems = [
+            URLQueryItem(name: "expand", value: "body.storage")
+        ]
+        guard let url = components?.url else { return nil }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 12
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let credential = Data("\(email):\(token)".utf8).base64EncodedString()
+        request.setValue("Basic \(credential)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await httpClient.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return nil }
+            guard http.statusCode == 200 else {
+                // 토큰 만료는 401뿐 아니라 403으로도 온다(검색 경로 searchHitResult와 동일하게 재연결 유도).
+                if http.statusCode == 401 || http.statusCode == 403 {
+                    markNeedsReconnect()
+                }
+                Log.importer.error("confluence page http=\(http.statusCode, privacy: .public)")
+                return nil
+            }
+            guard let text = Self.parseContentBodyText(data) else { return nil }
+            return (Self.parseContentTitle(data), text)
+        } catch {
+            let code = (error as? URLError)?.code.rawValue ?? -1
+            Log.importer.error("confluence page network error code=\(code, privacy: .public)")
+            return nil
+        }
+    }
+
     /// 검색어를 CQL `text ~ "..."` 문자열로 만든다.
     /// 큰따옴표 리터럴 안에서 안전하도록 `\` 와 `"` 를 이스케이프(순서 중요: `\` 먼저).
     /// 따옴표를 단순 제거하면 입력 끝의 `\` 가 닫는 따옴표를 이스케이프해 구문이 깨지고,
@@ -698,6 +772,40 @@ public final class ConfluenceService: ObservableObject {
         guard let html else { return nil }
         let text = htmlToPlainText(html)
         return text.isEmpty ? nil : text
+    }
+
+    /// content API 응답의 top-level `title` 필드를 꺼낸다(URL 첨부 시 표시·라벨용).
+    nonisolated static func parseContentTitle(_ data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let title = json["title"] as? String,
+              !title.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return nil
+        }
+        return title
+    }
+
+    /// Confluence 페이지 URL에서 숫자 pageId를 추출한다.
+    /// 지원: `/wiki/spaces/SPACE/pages/123/Title`, `/pages/123`, 레거시 `?pageId=123`.
+    /// 텍스트+이미지 혼합 등 다른 경로 형식(`/pages/edit-v2/...`)은 지원하지 않는다(nil 반환).
+    nonisolated static func pageID(fromURL raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let range = trimmed.range(of: #"/pages/[0-9]+"#, options: .regularExpression) {
+            let digits = trimmed[range].drop { !$0.isNumber }
+            if !digits.isEmpty {
+                return String(digits)
+            }
+        }
+
+        if let components = URLComponents(string: trimmed),
+           let value = components.queryItems?.first(where: { $0.name.lowercased() == "pageid" })?.value,
+           !value.isEmpty,
+           value.allSatisfy(\.isNumber) {
+            return value
+        }
+
+        return nil
     }
 
     nonisolated static func parseSpaceID(_ data: Data, matchingKey requestedKey: String) -> String? {
