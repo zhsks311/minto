@@ -87,6 +87,24 @@ protocol ProcessLauncher: Sendable {
 - ADR 0007은 **다중관점 리뷰 필수**(거버넌스). 리뷰 지적 반영/미반영 근거를 이 문서 또는 work-log에 남긴다.
 - 병합 게이트는 사람.
 
+## 리뷰 결과 및 후속 (2026-06-24)
+
+구현 후 code-reviewer 크로스모델 리뷰: **COMMENT(병합 가능)** — CRITICAL 0, HIGH 2, MEDIUM 4, LOW 5.
+
+**반영(커밋 c852b29):**
+- HIGH1 — `instructions`를 `--system-prompt`(argv) 노출 → **stdin 전용**으로 이동(주제·용어집·문서 문맥이 ps 노출되는 프라이버시 결함, ADR과 일치화).
+- HIGH2 — npm prefix 경로 탐색 확인 + 테스트 assertion 정정(포함 검증).
+- 테스트 보강: timeout→network, 10MB truncation, instructions argv 미노출 회귀(총 11건).
+
+**보류(미반영, 사유) — 후속 폴리시:**
+- MED: stdin write 실패 `try?` 무시 로깅 / terminate() TOCTOU 단순화 / 모델 변경 시 연결확인 초기화(설계 의도일 수 있음) → 동작 정상, 위험 낮아 보류.
+- LOW: `applicationWillTerminate`에도 정리 추가 / sanitizeForPublicLog 비-홈 경로 / 지원 CLI 최소버전 README 기록 → 견고성·문서 개선, 별도 후속.
+
+**남은 게이트(사람/사용자 환경):**
+- 실 GUI QA: `./scripts/dev.sh run` → 설정에서 Claude Code CLI를 요약·답변 provider로 선택 → "연결 확인" → 실제 요약 1건. **확인 포인트: `claude -p`가 stdin-only 프롬프트를 읽는지(real CLI 미검증분), 로그에 전사 무유출, 클라우드 고지 표시.** 사용자의 실제 `claude` 로그인 필요 + 본인 구독으로 전송되므로 하이브리드 QA.
+- ToS: 구독을 앱 백엔드로 쓰는 약관 적합성(출시 전 확인).
+- main 병합(사람).
+
 ## 비목표 (이번 범위 아님)
 
 - 실시간 교정에 CLI provider 적용(지연·rate limit로 제외 — ADR Decision).
