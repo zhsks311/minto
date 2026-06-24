@@ -298,6 +298,7 @@ public struct SettingsView: View {
 
     private func handleClaudeCodeCLIModelChange(oldValue: String, newValue: String) {
         logSettingChange(key: ClaudeCodeCLIProvider.modelDefaultsKey, oldValue: oldValue, newValue: newValue)
+        // 모델이 바뀌면 이전 확인을 무효화해 새 모델로 다시 연결 확인하게 한다.
         claudeCodeCLIConfirmedPath = ""
         if activeAIProviderAuthKind == .cliPath {
             loginError = nil

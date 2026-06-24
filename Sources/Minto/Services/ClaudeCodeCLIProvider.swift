@@ -106,7 +106,12 @@ final class FoundationProcessLauncher: ProcessLauncher, @unchecked Sendable {
         }
 
         let stdinTask = Task {
-            try? stdinPipe.fileHandleForWriting.write(contentsOf: stdin)
+            do {
+                try stdinPipe.fileHandleForWriting.write(contentsOf: stdin)
+            } catch {
+                let publicError = ClaudeCodeCLIProvider.sanitizeForPublicLog(error.localizedDescription)
+                Log.llm.error("claude stdin write failed: \(publicError, privacy: .public)")
+            }
             try? stdinPipe.fileHandleForWriting.close()
         }
 
@@ -200,6 +205,10 @@ private struct ClaudeCodeCLIRunResult: Sendable {
     let warnings: [String]
 }
 
+/// Claude Code CLI contract verified during development: `claude -p --model <id>
+/// --output-format json` reads stdin and returns a JSON object with a `result` string.
+/// CLI flags and the `result` field can vary by claude version; this adapter keeps
+/// the assumption as a soft compatibility note instead of enforcing a version gate.
 public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked Sendable {
     public static let cliPathKey = "claudeCodeCLIPath"
     public static let modelDefaultsKey = "claudeCodeCLIModel"
@@ -619,10 +628,14 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
         }
     }
 
-    private static func sanitizeForPublicLog(_ value: String) -> String {
+    fileprivate static func sanitizeForPublicLog(_ value: String) -> String {
         let home = NSHomeDirectory()
-        guard !home.isEmpty else { return value }
-        return value.replacingOccurrences(of: home, with: "~")
+        let homeMasked = home.isEmpty ? value : value.replacingOccurrences(of: home, with: "~")
+        return homeMasked.replacingOccurrences(
+            of: #"/Users/[^/\s]+/"#,
+            with: "/Users/<redacted>/",
+            options: .regularExpression
+        )
     }
 }
 
@@ -648,9 +661,7 @@ private final class RunningProcessHandle: @unchecked Sendable {
 
     func terminate() {
         let process: Process? = lock.withLock { self.process }
-        if process?.isRunning == true {
-            process?.terminate()
-        }
+        process?.terminate()
     }
 }
 
