@@ -687,8 +687,10 @@ public final class TranscriptionViewModel: ObservableObject {
                 samples: samples,
                 sourceSampleRate: STTAudioUtilities.sampleRate
             )
+            // 라벨을 오디오 버퍼마다 다시 칠하면 committedSegments 재할당이 초당 여러 번 일어나
+            // 전사 리스트가 깜빡인다. diar는 계속 누적만 하고, 실제 라벨 적용은 전사가 바뀌는 시점
+            // (청크 확정/프리뷰/교정)의 applyCurrentLiveSpeakerLabels에서만 한다.
             liveDiarizedSegments = diarizedSegments
-            applyLiveSpeakerLabels(diarizedSegments)
         } catch {
             liveSpeakerAssignmentActive = false
             liveDiarizedSegments = []
@@ -807,14 +809,20 @@ public final class TranscriptionViewModel: ObservableObject {
             updated.speaker = SpeakerLabel.normalized(matched.speaker)
             return updated
         }
-        replaceCommittedSegments(labeledCommitted)
+        // 라벨이 실제로 바뀐 경우에만 재할당(불필요한 @Published 발화·재렌더 방지).
+        if labeledCommitted != committedSegments {
+            replaceCommittedSegments(labeledCommitted)
+        }
 
         if let pendingId,
            let pending = pendingSegment,
            let matched = matchedById[pendingId] {
-            var updated = pending
-            updated.speaker = SpeakerLabel.normalized(matched.speaker)
-            pendingSegment = updated
+            let newSpeaker = SpeakerLabel.normalized(matched.speaker)
+            if pending.speaker != newSpeaker {
+                var updated = pending
+                updated.speaker = newSpeaker
+                pendingSegment = updated
+            }
         }
     }
 
