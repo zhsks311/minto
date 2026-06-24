@@ -15,6 +15,7 @@ enum Log {
     static let stt      = Logger(subsystem: subsystem, category: "stt")
     static let vad      = Logger(subsystem: subsystem, category: "vad")
     static let audio    = Logger(subsystem: subsystem, category: "audio")
+    static let llm      = Logger(subsystem: subsystem, category: "llm")
     static let correction = Logger(subsystem: subsystem, category: "correction")
     static let summary  = Logger(subsystem: subsystem, category: "summary")
     static let store    = Logger(subsystem: subsystem, category: "store")

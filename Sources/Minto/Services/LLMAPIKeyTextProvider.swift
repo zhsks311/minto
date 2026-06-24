@@ -97,7 +97,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             return try await generateClaudeText(request, apiKey: apiKey)
         case .openRouter:
             return try await generateOpenRouterText(request, apiKey: apiKey)
-        case .local, .copilot, .chatGPTAccount, .geminiAccount:
+        case .local, .claudeCodeCLI, .copilot, .chatGPTAccount, .geminiAccount:
             throw LLMProviderError.notConfigured
         }
     }
@@ -112,7 +112,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             return "claudeAPIModel"
         case .openRouter:
             return "openRouterAPIModel"
-        case .local, .copilot, .chatGPTAccount, .geminiAccount:
+        case .local, .claudeCodeCLI, .copilot, .chatGPTAccount, .geminiAccount:
             return ""
         }
     }
@@ -220,7 +220,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
                     capabilities: textCapabilities
                 )
             ]
-        case .local, .copilot, .chatGPTAccount, .geminiAccount:
+        case .local, .claudeCodeCLI, .copilot, .chatGPTAccount, .geminiAccount:
             return []
         }
     }
@@ -254,7 +254,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             return URL(string: "https://docs.anthropic.com/en/docs/about-claude/models/overview")
         case .openRouter:
             return URL(string: "https://openrouter.ai/models")
-        case .local, .copilot, .chatGPTAccount, .geminiAccount:
+        case .local, .claudeCodeCLI, .copilot, .chatGPTAccount, .geminiAccount:
             return nil
         }
     }
@@ -379,7 +379,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             return try await liveClaudeModels(apiKey: apiKey)
         case .openRouter:
             return try await liveOpenRouterModels(apiKey: apiKey)
-        case .local, .copilot, .chatGPTAccount, .geminiAccount:
+        case .local, .claudeCodeCLI, .copilot, .chatGPTAccount, .geminiAccount:
             return []
         }
     }

@@ -34,7 +34,7 @@ public struct LLMProviderRegistry: Sendable {
             return "copilot"
         case .chatGPTAccount:
             return "codex"
-        case .local, .gpt, .gemini, .claude, .openRouter:
+        case .local, .gpt, .gemini, .claude, .claudeCodeCLI, .openRouter:
             return nil
         }
     }
@@ -42,6 +42,9 @@ public struct LLMProviderRegistry: Sendable {
     public func textGenerationProvider(for id: LLMProviderID) -> (any LLMTextGenerationProvider)? {
         if id == .local {
             return LocalLLMProvider(registry: self)
+        }
+        if id == .claudeCodeCLI {
+            return ClaudeCodeCLIProvider(registry: self)
         }
         if let legacyProvider = LegacyAccountLLMTextProvider(providerID: id, registry: self) {
             return legacyProvider
@@ -53,7 +56,7 @@ public struct LLMProviderRegistry: Sendable {
         switch id {
         case .local:
             return LocalHashEmbeddingProvider(registry: self)
-        case .gpt, .gemini, .claude, .openRouter, .copilot, .chatGPTAccount, .geminiAccount:
+        case .gpt, .gemini, .claude, .claudeCodeCLI, .openRouter, .copilot, .chatGPTAccount, .geminiAccount:
             return nil
         }
     }
@@ -84,6 +87,13 @@ extension LLMProviderRegistry {
             description: "Anthropic Claude API 키로 긴 회의 문맥을 정리해요.",
             authKind: .apiKey,
             supportedCapabilities: [.textGeneration, .correction, .summary, .answer]
+        ),
+        LLMProviderDescriptor(
+            id: .claudeCodeCLI,
+            description: "로컬 Claude Code CLI 로그인으로 회의록 정리와 검색 답변을 실행해요.",
+            authKind: .cliPath,
+            requiresWarning: true,
+            supportedCapabilities: [.textGeneration, .summary, .answer]
         ),
         LLMProviderDescriptor(
             id: .openRouter,

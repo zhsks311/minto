@@ -24,7 +24,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
         case .copilot:
             let service = await CopilotOAuthService.shared
             return await service.isLoggedIn
-        case .local, .gpt, .gemini, .claude, .openRouter:
+        case .local, .gpt, .gemini, .claude, .claudeCodeCLI, .openRouter:
             return false
         }
     }
@@ -68,7 +68,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
                     maxOutputTokens: request.maxOutputTokens
                 )
             }
-        case .local, .gpt, .gemini, .claude, .openRouter:
+        case .local, .gpt, .gemini, .claude, .claudeCodeCLI, .openRouter:
             throw LLMProviderError.notConfigured
         }
 
@@ -112,7 +112,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
                     isRecommended: $0.id == CopilotOAuthService.defaultModelID
                 )
             }
-        case .local, .gpt, .gemini, .claude, .openRouter:
+        case .local, .gpt, .gemini, .claude, .claudeCodeCLI, .openRouter:
             return []
         }
     }
@@ -133,7 +133,7 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
             return await GeminiOAuthService.selectedModel
         case .copilot:
             return await CopilotOAuthService.selectedModel
-        case .local, .gpt, .gemini, .claude, .openRouter:
+        case .local, .gpt, .gemini, .claude, .claudeCodeCLI, .openRouter:
             return ""
         }
     }

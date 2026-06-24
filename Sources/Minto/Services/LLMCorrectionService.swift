@@ -178,7 +178,8 @@ public final class LLMCorrectionService: ObservableObject {
 
     public var isLoggedIn: Bool {
         switch selectedProvider {
-        case .none:
+        case .none, .claudeCodeCLI:
+            // CLI provider는 교정 capability 미지원(Registry에서 .correction 제외) → 교정 로그인 대상 아님
             return false
         case .local:
             return LocalLLMProviderConfiguration.stored().isConfigured
@@ -201,7 +202,7 @@ public final class LLMCorrectionService: ObservableObject {
 
     public var loginEmail: String {
         switch selectedProvider {
-        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
+        case .none, .local, .claudeCodeCLI, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
             return ""
         case .gemini:
             return GeminiOAuthService.shared.email
@@ -212,7 +213,7 @@ public final class LLMCorrectionService: ObservableObject {
 
     public func logout() {
         switch selectedProvider {
-        case .none, .local:
+        case .none, .local, .claudeCodeCLI:
             break
         case .gptAPI:
             LLMAPIKeyStore.shared.deleteAPIKey(for: .gpt)

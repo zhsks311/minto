@@ -88,6 +88,8 @@ public struct SettingsView: View {
     @AppStorage("gptAPIModel") private var gptAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gpt)
     @AppStorage("geminiAPIModel") private var geminiAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gemini)
     @AppStorage("claudeAPIModel") private var claudeAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .claude)
+    @AppStorage(ClaudeCodeCLIProvider.modelDefaultsKey) private var claudeCodeCLIModel = ClaudeCodeCLIProvider.defaultModelID
+    @AppStorage(ClaudeCodeCLIProvider.cliPathKey) private var claudeCodeCLIPath = ""
     @AppStorage("openRouterAPIModel") private var openRouterAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .openRouter)
     @AppStorage(LocalLLMProviderConfiguration.baseURLKey) private var localLLMBaseURL = LocalLLMProviderConfiguration.defaultBaseURL.absoluteString
     @AppStorage(LocalLLMProviderConfiguration.modelIDKey) private var localLLMModelID = ""
@@ -107,6 +109,7 @@ public struct SettingsView: View {
     @State private var geminiEmail = GeminiOAuthService.shared.email
     @State private var isLoginLoading = false
     @State private var loginError: String? = nil
+    @State private var claudeCodeCLIConfirmedPath = ""
     @State private var apiKeyInputs: [LLMProviderID: String] = [:]
     @State private var apiModelCatalogs: [LLMProviderID: LLMModelCatalog] = [:]
     @State private var loadingAPIModelProviderIDs: Set<LLMProviderID> = []
@@ -138,121 +141,180 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
+        settingsFormWithRuntimeChangeHandlers
+    }
+
+    private var settingsFormWithRuntimeChangeHandlers: some View {
+        settingsFormWithAPIModelChangeHandlers
+            .onChange(of: localLLMModelID) { oldValue, newValue in
+                logSettingChange(key: LocalLLMProviderConfiguration.modelIDKey, oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: selectedVADEngineRaw) { oldValue, newValue in
+                handleSelectedVADEngineChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: emptyFinalRepairEnabled) { oldValue, newValue in
+                logSettingChange(key: EmptyFinalRepairPolicy.preferenceKey, oldValue: "\(oldValue)", newValue: "\(newValue)")
+            }
+    }
+
+    private var settingsFormWithAPIModelChangeHandlers: some View {
+        settingsFormWithAccountModelChangeHandlers
+            .onChange(of: gptAPIModel) { oldValue, newValue in
+                logSettingChange(key: "gptAPIModel", oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: geminiAPIModel) { oldValue, newValue in
+                logSettingChange(key: "geminiAPIModel", oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: claudeAPIModel) { oldValue, newValue in
+                logSettingChange(key: "claudeAPIModel", oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: claudeCodeCLIModel) { oldValue, newValue in
+                handleClaudeCodeCLIModelChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: claudeCodeCLIPath) { _, _ in
+                handleClaudeCodeCLIPathChange()
+            }
+            .onChange(of: openRouterAPIModel) { oldValue, newValue in
+                logSettingChange(key: "openRouterAPIModel", oldValue: oldValue, newValue: newValue)
+            }
+    }
+
+    private var settingsFormWithAccountModelChangeHandlers: some View {
+        settingsFormWithAIChangeHandlers
+            // 사용자 조작 외 내부 자동 동기화로 인한 전환도 함께 기록된다(모든 유효 provider 전환을 남기는 것이 의도).
+            .onChange(of: lastLLMProviderRaw) { oldValue, newValue in
+                logSettingChange(key: "lastLLMProvider", oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: codexModel) { oldValue, newValue in
+                logSettingChange(key: "codexModel", oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: geminiModel) { oldValue, newValue in
+                logSettingChange(key: "geminiModel", oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: copilotModel) { oldValue, newValue in
+                logSettingChange(key: "copilotModel", oldValue: oldValue, newValue: newValue)
+            }
+    }
+
+    private var settingsFormWithAIChangeHandlers: some View {
+        settingsForm
+            .onAppear(perform: handleSettingsAppear)
+            .onChange(of: llmService.selectedProvider) { _, provider in
+                handleAIProviderChange(provider)
+            }
+            .onChange(of: summarySettings.effectiveProvider) { _, provider in
+                handleAIProviderChange(provider)
+            }
+            .onChange(of: answerSettings.effectiveProvider) { _, provider in
+                handleAIProviderChange(provider)
+            }
+    }
+
+    private var settingsForm: some View {
         Form {
-            aiProcessingSection
-            if aiConnectionNeeded {
-                aiConnectionSection
-            }
-            GlossarySettingsSection()
-            searchReadinessSection
-            sourceConnectionsSection
-
-            speechEngineSection
-            vadEngineSection
-            recordingAudioSection
-            VoiceprintSettingsSection()
-
-            Section("오버레이") {
-                Text("투명도는 메뉴바에서 실시간으로 조절할 수 있어요.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Section("현재 상태") {
-                LabeledContent("실행 중인 엔진", value: viewModel.speechEngineID.family.title)
-                if viewModel.speechEngineID.family == .localAI {
-                    LabeledContent("실행 중인 모델", value: viewModel.speechEngineID.title)
-                }
-                LabeledContent("엔진 상태", value: modelStateDescription)
-                if viewModel.isRecording {
-                    LabeledContent("녹음 시간", value: formatDuration(viewModel.recordingDuration))
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Button(isExportingLogs ? "로그 내보내는 중…" : "진단 로그 내보내기") {
-                        exportDiagnosticLogs()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isExportingLogs)
-                    Text("이번 실행 동안 기록된 로그를 내보내요. 내보낸 파일에는 앱 동작 기록(이벤트·에러·파일명)이 포함돼요. 회의 내용(전사·요약·주제)은 포함되지 않아요.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    if let error = logExportError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
-            }
+            settingsSections
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 640)
-        .onAppear {
-            summarySettings.migrateIfNeeded(from: llmService.selectedProvider)
-            summarySettings.migrateToFollowSemanticIfNeeded()
-            answerSettings.migrateToFollowSemanticIfNeeded()
-            normalizeSpeechEngineSelection()
-            normalizeAccountModelSelectionIfNeeded()
-            rememberCurrentProviderIfNeeded()
-            syncConfluenceInputsFromStoredValues()
-            Task { await refreshSpeechEngineAvailability() }
+    }
+
+    @ViewBuilder
+    private var settingsSections: some View {
+        aiProcessingSection
+        if aiConnectionNeeded {
+            aiConnectionSection
         }
-        .onChange(of: llmService.selectedProvider) { _, provider in
-            if provider != .none {
-                lastLLMProviderRaw = provider.rawValue
+        GlossarySettingsSection()
+        searchReadinessSection
+        sourceConnectionsSection
+
+        speechEngineSection
+        vadEngineSection
+        recordingAudioSection
+        VoiceprintSettingsSection()
+
+        overlaySection
+        currentStatusSection
+    }
+
+    private var overlaySection: some View {
+        Section("오버레이") {
+            Text("투명도는 메뉴바에서 실시간으로 조절할 수 있어요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var currentStatusSection: some View {
+        Section("현재 상태") {
+            LabeledContent("실행 중인 엔진", value: viewModel.speechEngineID.family.title)
+            if viewModel.speechEngineID.family == .localAI {
+                LabeledContent("실행 중인 모델", value: viewModel.speechEngineID.title)
             }
-            apiKeyInputs = [:]
+            LabeledContent("엔진 상태", value: modelStateDescription)
+            if viewModel.isRecording {
+                LabeledContent("녹음 시간", value: formatDuration(viewModel.recordingDuration))
+            }
+            diagnosticLogExportRows
+        }
+    }
+
+    private var diagnosticLogExportRows: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button(isExportingLogs ? "로그 내보내는 중…" : "진단 로그 내보내기") {
+                exportDiagnosticLogs()
+            }
+            .buttonStyle(.bordered)
+            .disabled(isExportingLogs)
+            Text("이번 실행 동안 기록된 로그를 내보내요. 내보낸 파일에는 앱 동작 기록(이벤트·에러·파일명)이 포함돼요. 회의 내용(전사·요약·주제)은 포함되지 않아요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            if let error = logExportError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        }
+    }
+
+    private func handleSettingsAppear() {
+        summarySettings.migrateIfNeeded(from: llmService.selectedProvider)
+        summarySettings.migrateToFollowSemanticIfNeeded()
+        answerSettings.migrateToFollowSemanticIfNeeded()
+        normalizeSpeechEngineSelection()
+        normalizeAccountModelSelectionIfNeeded()
+        rememberCurrentProviderIfNeeded()
+        syncConfluenceInputsFromStoredValues()
+        Task { await refreshSpeechEngineAvailability() }
+    }
+
+    private func handleAIProviderChange(_ provider: LLMProviderSelection) {
+        if provider != .none {
+            lastLLMProviderRaw = provider.rawValue
+        }
+        apiKeyInputs = [:]
+        loginError = nil
+    }
+
+    private func handleClaudeCodeCLIModelChange(oldValue: String, newValue: String) {
+        logSettingChange(key: ClaudeCodeCLIProvider.modelDefaultsKey, oldValue: oldValue, newValue: newValue)
+        claudeCodeCLIConfirmedPath = ""
+        if activeAIProviderAuthKind == .cliPath {
             loginError = nil
         }
-        .onChange(of: summarySettings.effectiveProvider) { _, provider in
-            if provider != .none {
-                lastLLMProviderRaw = provider.rawValue
-            }
-            apiKeyInputs = [:]
+    }
+
+    private func handleClaudeCodeCLIPathChange() {
+        invalidateClaudeCodeCLIConnectionIfNeeded()
+        if activeAIProviderAuthKind == .cliPath {
             loginError = nil
         }
-        .onChange(of: answerSettings.effectiveProvider) { _, provider in
-            if provider != .none {
-                lastLLMProviderRaw = provider.rawValue
-            }
-            apiKeyInputs = [:]
-            loginError = nil
-        }
-        // 사용자 조작 외 내부 자동 동기화로 인한 전환도 함께 기록된다(모든 유효 provider 전환을 남기는 것이 의도).
-        .onChange(of: lastLLMProviderRaw) { oldValue, newValue in
-            logSettingChange(key: "lastLLMProvider", oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: codexModel) { oldValue, newValue in
-            logSettingChange(key: "codexModel", oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: geminiModel) { oldValue, newValue in
-            logSettingChange(key: "geminiModel", oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: copilotModel) { oldValue, newValue in
-            logSettingChange(key: "copilotModel", oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: gptAPIModel) { oldValue, newValue in
-            logSettingChange(key: "gptAPIModel", oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: geminiAPIModel) { oldValue, newValue in
-            logSettingChange(key: "geminiAPIModel", oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: claudeAPIModel) { oldValue, newValue in
-            logSettingChange(key: "claudeAPIModel", oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: openRouterAPIModel) { oldValue, newValue in
-            logSettingChange(key: "openRouterAPIModel", oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: localLLMModelID) { oldValue, newValue in
-            logSettingChange(key: LocalLLMProviderConfiguration.modelIDKey, oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: selectedVADEngineRaw) { oldValue, newValue in
-            logSettingChange(key: VADEnginePreferences.selectedEngineKey, oldValue: oldValue, newValue: newValue)
-            if newValue == VADEngineID.silero.rawValue {
-                vadModelStore.prepareIfNeeded()
-            }
-        }
-        .onChange(of: emptyFinalRepairEnabled) { oldValue, newValue in
-            logSettingChange(key: EmptyFinalRepairPolicy.preferenceKey, oldValue: "\(oldValue)", newValue: "\(newValue)")
+    }
+
+    private func handleSelectedVADEngineChange(oldValue: String, newValue: String) {
+        logSettingChange(key: VADEnginePreferences.selectedEngineKey, oldValue: oldValue, newValue: newValue)
+        if newValue == VADEngineID.silero.rawValue {
+            vadModelStore.prepareIfNeeded()
         }
     }
 
@@ -338,7 +400,9 @@ public struct SettingsView: View {
             get: { llmService.selectedProvider != .none },
             set: { enabled in
                 if enabled {
-                    llmService.selectedProvider = restoredLLMProvider
+                    llmService.selectedProvider = providerSelections(supporting: [.correction]).contains(restoredLLMProvider)
+                        ? restoredLLMProvider
+                        : (providerSelections(supporting: [.correction]).first ?? .local)
                 } else {
                     rememberCurrentProviderIfNeeded()
                     llmService.selectedProvider = .none
@@ -853,11 +917,39 @@ public struct SettingsView: View {
 
     private var aiProviderRow: some View {
         Picker("AI 서비스", selection: activeAIProviderBinding) {
-            ForEach(LLMProviderSelection.allCases.filter { $0 != .none }, id: \.self) { provider in
+            ForEach(aiProviderSelections, id: \.self) { provider in
                 Text(provider.label).tag(provider)
             }
         }
         .help("AI 처리에 사용할 서비스를 선택해요.")
+    }
+
+    private var aiProviderSelections: [LLMProviderSelection] {
+        providerSelections(supporting: activeAIProviderRequiredCapabilities)
+    }
+
+    private var activeAIProviderRequiredCapabilities: Set<LLMModelInfo.Capability> {
+        var capabilities: Set<LLMModelInfo.Capability> = []
+        if llmService.selectedProvider != .none {
+            capabilities.insert(.correction)
+        }
+        if summarySettings.isEnabled {
+            capabilities.insert(.summary)
+        }
+        if answerSettings.isEnabled {
+            capabilities.insert(.answer)
+        }
+        return capabilities.isEmpty ? [.summary] : capabilities
+    }
+
+    private func providerSelections(supporting capabilities: Set<LLMModelInfo.Capability>) -> [LLMProviderSelection] {
+        LLMProviderSelection.allCases.filter { provider in
+            guard provider != .none,
+                  let providerID = provider.providerID,
+                  let descriptor = LLMProviderRegistry.shared.descriptor(for: providerID)
+            else { return false }
+            return capabilities.allSatisfy { descriptor.supportedCapabilities.contains($0) }
+        }
     }
 
     private var searchAnswerProviderRow: some View {
@@ -887,6 +979,12 @@ public struct SettingsView: View {
                     .foregroundColor(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if activeAIProviderAuthKind == .cliPath {
+                Text("사용자 본인 기기와 본인 claude 로그인으로 Anthropic에 전송돼요. 로컬 처리가 아니며 구독 약관 확인을 권장해요.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -906,6 +1004,8 @@ public struct SettingsView: View {
             apiModelPicker(title: title, providerID: .gemini, selection: $geminiAPIModel)
         case .claudeAPI:
             apiModelPicker(title: title, providerID: .claude, selection: $claudeAPIModel)
+        case .claudeCodeCLI:
+            claudeCodeCLIModelPicker(title: title)
         case .openRouterAPI:
             apiModelPicker(title: title, providerID: .openRouter, selection: $openRouterAPIModel)
         case .codex:
@@ -935,16 +1035,17 @@ public struct SettingsView: View {
     }
 
     private var activeAIProvider: LLMProviderSelection {
+        let candidate: LLMProviderSelection
         if llmService.selectedProvider != .none {
-            return llmService.selectedProvider
+            candidate = llmService.selectedProvider
+        } else if summarySettings.effectiveProvider != .none {
+            candidate = summarySettings.effectiveProvider
+        } else if answerSettings.isEnabled, answerSettings.effectiveProvider != .none {
+            candidate = answerSettings.effectiveProvider
+        } else {
+            candidate = restoredLLMProvider
         }
-        if summarySettings.effectiveProvider != .none {
-            return summarySettings.effectiveProvider
-        }
-        if answerSettings.isEnabled, answerSettings.effectiveProvider != .none {
-            return answerSettings.effectiveProvider
-        }
-        return restoredLLMProvider
+        return aiProviderSelections.contains(candidate) ? candidate : (aiProviderSelections.first ?? .local)
     }
 
     private var activeAIProviderBinding: Binding<LLMProviderSelection> {
@@ -978,13 +1079,7 @@ public struct SettingsView: View {
     }
 
     private var answerCapableProviderSelections: [LLMProviderSelection] {
-        LLMProviderSelection.allCases.filter { provider in
-            guard provider != .none,
-                  let providerID = provider.providerID,
-                  let descriptor = LLMProviderRegistry.shared.descriptor(for: providerID)
-            else { return false }
-            return descriptor.supportedCapabilities.contains(.answer)
-        }
+        providerSelections(supporting: [.answer])
     }
 
     private func answerCapableProvider(from provider: LLMProviderSelection) -> LLMProviderSelection {
@@ -1009,7 +1104,10 @@ public struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
             providerModelPicker(provider, title: "검색 답변 모델")
-            if providerID != .local {
+            if providerID == .claudeCodeCLI {
+                claudeCodeCLIStatusRow
+                claudeCodeCLISettingsRows
+            } else if providerID != .local {
                 apiKeyStatusRow(providerID)
                 apiKeySettingsRow(providerID)
             }
@@ -1175,6 +1273,106 @@ public struct SettingsView: View {
         }
     }
 
+    private var claudeCodeCLIStatusRow: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(claudeCodeCLIStatusColor)
+                .frame(width: 7, height: 7)
+            Text(LLMProviderID.claudeCodeCLI.displayName)
+                .font(.callout)
+            Spacer()
+            Text(claudeCodeCLIStatusText)
+                .font(.caption)
+                .foregroundColor(claudeCodeCLIConnectionConfirmed ? .primary : claudeCodeCLIStatusColor)
+        }
+    }
+
+    private var claudeCodeCLISettingsRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("CLI 경로", text: $claudeCodeCLIPath)
+                .textFieldStyle(.roundedBorder)
+            claudeCodeCLIConnectionCheckRow
+            Text("앱은 API 키를 저장하지 않고 이 Mac의 claude 로그인을 사용해요. 회의 내용은 Anthropic으로 전송돼요. 로컬 처리가 아니며 본인 구독 약관 확인을 권장해요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var claudeCodeCLIConnectionCheckRow: some View {
+        HStack(spacing: 8) {
+            claudeCodeCLIConnectionButton
+            Text(claudeCodeCLIConnectionHelpText)
+                .font(.caption)
+                .foregroundColor(claudeCodeCLIConnectionConfirmed ? .secondary : claudeCodeCLIStatusColor)
+        }
+    }
+
+    private var claudeCodeCLIConnectionButton: some View {
+        Button {
+            Task { await validateClaudeCodeCLIConnection() }
+        } label: {
+            claudeCodeCLIConnectionButtonLabel
+        }
+        .buttonStyle(ProminentActionButtonStyle(horizontalPadding: 10, verticalPadding: 5))
+        .disabled(!canCheckClaudeCodeCLIConnection)
+    }
+
+    @ViewBuilder
+    private var claudeCodeCLIConnectionButtonLabel: some View {
+        if claudeCodeCLIConnectionIsChecking {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("확인 중")
+            }
+        } else {
+            Label("연결 확인", systemImage: "checkmark.seal")
+        }
+    }
+
+    private func claudeCodeCLIModelPicker(title: String) -> some View {
+        let catalog = ClaudeCodeCLIProvider.bundledModelCatalog()
+        return VStack(alignment: .leading, spacing: 6) {
+            Picker(title, selection: $claudeCodeCLIModel) {
+                ForEach(catalog.models, id: \.id) { model in
+                    Text(model.displayName).tag(model.id)
+                }
+            }
+            Text("Claude Code CLI의 기본 모델 별칭이에요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 6) {
+                    TextField("모델 ID", text: $claudeCodeCLIModel)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Claude Code CLI에서 지원하는 모델 별칭이나 모델 ID를 입력하세요. 예: sonnet, opus, haiku")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } label: {
+                Text("목록에 없는 모델 ID 직접 입력")
+                    .font(.caption)
+            }
+            HStack(spacing: 6) {
+                Text("기본 추천 모델을 표시해요.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                if let url = catalog.manualModelHelpURL {
+                    Link("모델 확인", destination: url)
+                        .font(.caption)
+                }
+            }
+            if let warning = catalog.warning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+
     private func apiModelPicker(
         title: String,
         providerID: LLMProviderID,
@@ -1277,6 +1475,8 @@ public struct SettingsView: View {
             return "Gemini API 문서의 모델 ID를 입력하세요. 예: gemini-3.5-flash, gemini-3.1-flash-lite"
         case .claude:
             return "Anthropic API의 모델 ID를 입력하세요. 예: claude-sonnet-4-6, claude-haiku-4-5-20251001"
+        case .claudeCodeCLI:
+            return "Claude Code CLI에서 지원하는 모델 별칭이나 모델 ID를 입력하세요. 예: sonnet, opus, haiku"
         case .openRouter:
             return "OpenRouter 모델 ID를 입력하세요. 예: openai/gpt-5.5, anthropic/claude-sonnet-4.6"
         case .local, .copilot, .chatGPTAccount, .geminiAccount:
@@ -1353,21 +1553,28 @@ public struct SettingsView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(.orange)
                 .font(.caption)
-            Text("공식 API 키 방식이 아닙니다. 데이터 사용과 학습 여부는 각 앱의 프라이버시 설정에서 제어하세요.")
+            Text(tosWarningText)
                 .font(.caption)
                 .foregroundColor(.orange)
         }
         .padding(.vertical, 2)
     }
 
+    private var tosWarningText: String {
+        if activeAIProviderAuthKind == .cliPath {
+            return "사용자 본인 기기와 본인 claude 로그인으로 Anthropic에 전송돼요. 로컬 처리가 아니며 구독 약관 확인을 권장해요."
+        }
+        return "공식 API 키 방식이 아닙니다. 데이터 사용과 학습 여부는 각 앱의 프라이버시 설정에서 제어하세요."
+    }
+
     private var llmStatusRow: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(currentProviderLoggedIn ? Color.green : Color.secondary.opacity(0.4))
+                .fill(currentProviderStatusDotColor)
                 .frame(width: 7, height: 7)
             Text(currentProviderStatusText)
                 .font(.callout)
-                .foregroundColor(currentProviderLoggedIn ? .primary : .secondary)
+                .foregroundColor(currentProviderLoggedIn ? .primary : currentProviderStatusTextColor)
             if currentProviderLoggedIn, !currentEmail.isEmpty {
                 Text(currentEmail)
                     .font(.caption)
@@ -1380,6 +1587,8 @@ public struct SettingsView: View {
     private var llmActionRow: some View {
         if activeAIProvider == .local {
             EmptyView()
+        } else if activeAIProviderAuthKind == .cliPath {
+            claudeCodeCLISettingsRows
         } else if let providerID = currentAPIKeyProviderID {
             apiKeySettingsRow(providerID)
         } else if currentProviderLoggedIn {
@@ -1493,6 +1702,74 @@ public struct SettingsView: View {
 
     private var localLLMModelIDValue: String {
         localLLMModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var claudeCodeCLIPathValue: String {
+        claudeCodeCLIDiscoveredPath ?? ClaudeCodeCLIProvider.normalizedCLIPath(claudeCodeCLIPath)
+    }
+
+    private var claudeCodeCLIPathExists: Bool {
+        claudeCodeCLIDiscoveredPath != nil
+    }
+
+    private var claudeCodeCLIDiscoveredPath: String? {
+        ClaudeCodeCLIProvider.resolvedCLIPath(configuredPath: claudeCodeCLIPath)
+    }
+
+    private var claudeCodeCLIConnectionConfirmed: Bool {
+        guard let discoveredPath = claudeCodeCLIDiscoveredPath else { return false }
+        return claudeCodeCLIConfirmedPath == discoveredPath
+    }
+
+    private var claudeCodeCLIConnectionIsChecking: Bool {
+        activeAIProviderAuthKind == .cliPath && isLoginLoading
+    }
+
+    private var claudeCodeCLIConnectionFailed: Bool {
+        activeAIProviderAuthKind == .cliPath && loginError != nil
+    }
+
+    private var canCheckClaudeCodeCLIConnection: Bool {
+        claudeCodeCLIPathExists && !claudeCodeCLIConnectionIsChecking
+    }
+
+    private var claudeCodeCLIStatusText: String {
+        if claudeCodeCLIConnectionIsChecking {
+            return "Claude Code 확인 중…(수초)"
+        }
+        if claudeCodeCLIConnectionConfirmed {
+            return "Claude Code 연결됨"
+        }
+        if claudeCodeCLIConnectionFailed {
+            return "연결 실패"
+        }
+        return claudeCodeCLIPathExists ? "연결 확인 필요" : "CLI 경로 필요"
+    }
+
+    private var claudeCodeCLIStatusColor: Color {
+        if claudeCodeCLIConnectionConfirmed {
+            return .green
+        }
+        if claudeCodeCLIConnectionFailed {
+            return .red
+        }
+        if claudeCodeCLIConnectionIsChecking || claudeCodeCLIPathExists {
+            return .orange
+        }
+        return Color.secondary.opacity(0.4)
+    }
+
+    private var claudeCodeCLIConnectionHelpText: String {
+        if claudeCodeCLIConnectionIsChecking {
+            return "Claude Code 확인 중…(수초)"
+        }
+        if claudeCodeCLIConnectionConfirmed {
+            return "Claude Code 연결을 확인했어요."
+        }
+        if claudeCodeCLIPathExists {
+            return "CLI 파일을 찾았어요. 연결 확인으로 인증까지 확인하세요."
+        }
+        return "예: ~/.claude/local/claude, /opt/homebrew/bin/claude"
     }
 
     private var localLLMCompatibilityValue: LocalLLMEndpointCompatibility {
@@ -1616,6 +1893,8 @@ public struct SettingsView: View {
             return LLMAPIKeyStore.shared.hasAPIKey(for: .gemini)
         case .claudeAPI:
             return LLMAPIKeyStore.shared.hasAPIKey(for: .claude)
+        case .claudeCodeCLI:
+            return claudeCodeCLIConnectionConfirmed
         case .openRouterAPI:
             return LLMAPIKeyStore.shared.hasAPIKey(for: .openRouter)
         case .gemini:
@@ -1640,12 +1919,29 @@ public struct SettingsView: View {
         if currentAPIKeyProviderID != nil {
             return currentProviderLoggedIn ? "API 키 저장됨" : "API 키 필요"
         }
+        if activeAIProviderAuthKind == .cliPath {
+            return claudeCodeCLIStatusText
+        }
         return currentProviderLoggedIn ? "로그인됨" : "미연결"
+    }
+
+    private var currentProviderStatusDotColor: Color {
+        if activeAIProviderAuthKind == .cliPath {
+            return claudeCodeCLIStatusColor
+        }
+        return currentProviderLoggedIn ? .green : Color.secondary.opacity(0.4)
+    }
+
+    private var currentProviderStatusTextColor: Color {
+        if activeAIProviderAuthKind == .cliPath {
+            return claudeCodeCLIStatusColor
+        }
+        return .secondary
     }
 
     private var currentEmail: String {
         switch activeAIProvider {
-        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
+        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .claudeCodeCLI, .openRouterAPI, .codex:
             return ""
         case .gemini:
             return geminiEmail
@@ -1670,6 +1966,8 @@ public struct SettingsView: View {
             return .gemini
         case .claudeAPI:
             return .claude
+        case .claudeCodeCLI:
+            return nil
         case .openRouterAPI:
             return .openRouter
         case .none, .local, .gemini, .copilot, .codex:
@@ -1692,10 +1990,53 @@ public struct SettingsView: View {
 
     // MARK: - Login flows
 
+    @MainActor
+    private func validateClaudeCodeCLIConnection() async {
+        guard !isLoginLoading else { return }
+        guard let provider = ClaudeCodeCLIProvider() else {
+            claudeCodeCLIConfirmedPath = ""
+            loginError = "Claude Code CLI provider를 초기화하지 못했어요. 앱 설정을 확인하세요."
+            return
+        }
+
+        isLoginLoading = true
+        loginError = nil
+        defer { isLoginLoading = false }
+
+        do {
+            let executableURL = try await provider.checkConnection()
+            let path = executableURL.path
+            claudeCodeCLIPath = path
+            claudeCodeCLIConfirmedPath = path
+        } catch is CancellationError {
+            claudeCodeCLIConfirmedPath = ""
+        } catch let error as LLMProviderError {
+            claudeCodeCLIConfirmedPath = ""
+            loginError = providerConnectionErrorText(error)
+        } catch {
+            claudeCodeCLIConfirmedPath = ""
+            loginError = "Claude Code 연결을 확인하지 못했어요. CLI 설치와 로그인을 확인하세요."
+        }
+    }
+
+    private func providerConnectionErrorText(_ error: LLMProviderError) -> String {
+        if let action = error.userAction {
+            return "\(error.userMessage) \(action)"
+        }
+        return error.userMessage
+    }
+
+    private func invalidateClaudeCodeCLIConnectionIfNeeded() {
+        guard !claudeCodeCLIConfirmedPath.isEmpty,
+              claudeCodeCLIConfirmedPath != claudeCodeCLIPathValue
+        else { return }
+        claudeCodeCLIConfirmedPath = ""
+    }
+
     private func startLogin() {
         isLoginLoading = true
         switch activeAIProvider {
-        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI:
+        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .claudeCodeCLI, .openRouterAPI:
             isLoginLoading = false
         case .gemini:
             Task {
@@ -1726,7 +2067,7 @@ public struct SettingsView: View {
 
     private func disconnectCurrentAIProvider() {
         switch activeAIProvider {
-        case .none, .local:
+        case .none, .local, .claudeCodeCLI:
             break
         case .gptAPI:
             LLMAPIKeyStore.shared.deleteAPIKey(for: .gpt)

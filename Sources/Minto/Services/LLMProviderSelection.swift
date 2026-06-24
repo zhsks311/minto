@@ -6,6 +6,7 @@ public enum LLMProviderSelection: String, CaseIterable {
     case gptAPI = "gpt_api"
     case geminiAPI = "gemini_api"
     case claudeAPI = "claude_api"
+    case claudeCodeCLI = "claude_code_cli"
     case openRouterAPI = "openrouter_api"
     case gemini = "gemini"
     case copilot = "copilot"
@@ -23,6 +24,8 @@ public enum LLMProviderSelection: String, CaseIterable {
             return .gemini
         case .claudeAPI:
             return .claude
+        case .claudeCodeCLI:
+            return .claudeCodeCLI
         case .openRouterAPI:
             return .openRouter
         case .gemini, .copilot, .codex:
@@ -47,6 +50,8 @@ public enum LLMProviderSelection: String, CaseIterable {
             self = .geminiAPI
         case .claude:
             self = .claudeAPI
+        case .claudeCodeCLI:
+            self = .claudeCodeCLI
         case .openRouter:
             self = .openRouterAPI
         case .copilot, .chatGPTAccount, .geminiAccount:
