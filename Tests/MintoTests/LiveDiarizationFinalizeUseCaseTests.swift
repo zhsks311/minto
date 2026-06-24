@@ -6,14 +6,8 @@ import Testing
 struct LiveDiarizationFinalizeUseCaseTests {
     private let meetingStart = Date(timeIntervalSince1970: 1_800_000_000)
 
-    @Test("라이브 라벨을 VBx 라벨로 재조정해 transcript에 반영한다")
-    func mapsLiveLabelsToFinalVBxLabels() async throws {
-        // transcript.speaker는 Phase 3가 makeLabelMap으로 부여한 "화자 N" 공간이다
-        // (liveSpeakerSegments live-a→화자 1, live-b→화자 2).
-        let liveTranscript = [
-            segment(offset: 0, duration: 4, speaker: "화자 1"),
-            segment(offset: 4, duration: 4, speaker: "화자 2"),
-        ]
+    @Test("VBx 화자를 시간 겹침으로 transcript에 배정한다")
+    func assignsVBxSpeakersByTime() async throws {
         let useCase = makeUseCase(
             segments: [
                 diarized("vbx-a", start: 0, end: 4),
@@ -27,10 +21,9 @@ struct LiveDiarizationFinalizeUseCaseTests {
 
         let result = try await useCase.finalize(
             audioFileURL: audioURL(),
-            liveTranscript: liveTranscript,
-            liveSpeakerSegments: [
-                diarized("live-a", start: 0, end: 4),
-                diarized("live-b", start: 4, end: 8),
+            liveTranscript: [
+                segment(offset: 0, duration: 4, speaker: "화자 1"),
+                segment(offset: 4, duration: 4, speaker: "화자 1"),
             ],
             editedSegmentIds: [],
             enrolledVoiceprints: [],
@@ -42,15 +35,41 @@ struct LiveDiarizationFinalizeUseCaseTests {
         #expect(result.speakerEmbeddings.map(\.speakerLabel) == ["화자 1", "화자 2"])
     }
 
-    @Test("편집된 segment는 재조정과 실명 치환을 모두 건너뛴다")
-    func preservesEditedSegmentsDuringRelabelingAndIdentification() async throws {
-        let editedLiveID = Segment.ID()
-        let editedFinalID = Segment.ID()
-        let liveTranscript = [
-            segment(offset: 0, duration: 4, speaker: "화자 1"),
-            segment(id: editedLiveID, offset: 4, duration: 4, speaker: "live-b"),
-            segment(id: editedFinalID, offset: 8, duration: 4, speaker: "화자 2"),
-        ]
+    @Test("최종 화자 수는 라이브 라벨이 아니라 VBx 카운트를 따른다(상한 없음)")
+    func finalCountFollowsVBxNotLive() async throws {
+        // 라이브에선 전부 "화자 1"(과소추정)이었어도, VBx가 3명을 시간으로 나누면 최종은 3명.
+        let useCase = makeUseCase(
+            segments: [
+                diarized("vbx-a", start: 0, end: 4),
+                diarized("vbx-b", start: 4, end: 8),
+                diarized("vbx-c", start: 8, end: 12),
+            ],
+            embeddings: [
+                (speakerId: "vbx-a", embedding: [1, 0]),
+                (speakerId: "vbx-b", embedding: [0, 1]),
+                (speakerId: "vbx-c", embedding: [1, 1]),
+            ]
+        )
+
+        let result = try await useCase.finalize(
+            audioFileURL: audioURL(),
+            liveTranscript: [
+                segment(offset: 0, duration: 4, speaker: "화자 1"),
+                segment(offset: 4, duration: 4, speaker: "화자 1"),
+                segment(offset: 8, duration: 4, speaker: "화자 1"),
+            ],
+            editedSegmentIds: [],
+            enrolledVoiceprints: [],
+            meetingStart: meetingStart,
+            expectedSpeakerCount: nil
+        )
+
+        #expect(Set(result.segments.compactMap(\.speaker)) == ["화자 1", "화자 2", "화자 3"])
+    }
+
+    @Test("편집된 segment는 VBx 배정으로 덮지 않는다")
+    func preservesEditedSegments() async throws {
+        let editedID = Segment.ID()
         let useCase = makeUseCase(
             segments: [
                 diarized("vbx-a", start: 0, end: 4),
@@ -64,25 +83,19 @@ struct LiveDiarizationFinalizeUseCaseTests {
 
         let result = try await useCase.finalize(
             audioFileURL: audioURL(),
-            liveTranscript: liveTranscript,
-            liveSpeakerSegments: [
-                diarized("live-a", start: 0, end: 4),
-                diarized("live-b", start: 4, end: 12),
+            liveTranscript: [
+                segment(offset: 0, duration: 4, speaker: "화자 1"),
+                segment(id: editedID, offset: 4, duration: 4, speaker: "박팀장"),
+                segment(offset: 8, duration: 4, speaker: "화자 1"),
             ],
-            editedSegmentIds: [editedLiveID, editedFinalID],
-            enrolledVoiceprints: [
-                voiceprint(name: "Bob", embedding: [0, 1])
-            ],
+            editedSegmentIds: [editedID],
+            enrolledVoiceprints: [],
             meetingStart: meetingStart,
-            expectedSpeakerCount: 2
+            expectedSpeakerCount: nil
         )
 
-        #expect(result.segments.map(\.speaker) == ["화자 1", "live-b", "화자 2"])
-        #expect(result.segments[1].id == editedLiveID)
-        #expect(result.segments[2].id == editedFinalID)
-        // Bob은 화자 2와 매칭되지만 화자 2 segment가 전부 편집 보존돼 transcript가 안 바뀌므로,
-        // embedding 라벨도 실명으로 치환하지 않는다(transcript↔embedding 키 일관성 유지).
-        #expect(result.speakerEmbeddings.map(\.speakerLabel) == ["화자 1", "화자 2"])
+        #expect(result.segments.map(\.speaker) == ["화자 1", "박팀장", "화자 2"])
+        #expect(result.segments[1].id == editedID)
     }
 
     @Test("보이스프린트 매칭 시 transcript와 embedding 라벨을 실명으로 치환한다")
@@ -102,18 +115,14 @@ struct LiveDiarizationFinalizeUseCaseTests {
             audioFileURL: audioURL(),
             liveTranscript: [
                 segment(offset: 0, duration: 4, speaker: "화자 1"),
-                segment(offset: 4, duration: 4, speaker: "화자 2"),
-            ],
-            liveSpeakerSegments: [
-                diarized("live-a", start: 0, end: 4),
-                diarized("live-b", start: 4, end: 8),
+                segment(offset: 4, duration: 4, speaker: "화자 1"),
             ],
             editedSegmentIds: [],
             enrolledVoiceprints: [
                 voiceprint(name: "Alice", embedding: [1, 0])
             ],
             meetingStart: meetingStart,
-            expectedSpeakerCount: 2
+            expectedSpeakerCount: nil
         )
 
         #expect(result.segments.map(\.speaker) == ["Alice", "화자 2"])
@@ -130,7 +139,6 @@ struct LiveDiarizationFinalizeUseCaseTests {
         let result = try await useCase.finalize(
             audioFileURL: audioURL(),
             liveTranscript: [segment(offset: 0, duration: 4, speaker: "화자 1")],
-            liveSpeakerSegments: [diarized("live-a", start: 0, end: 4)],
             editedSegmentIds: [],
             enrolledVoiceprints: [],
             meetingStart: meetingStart,
@@ -158,11 +166,7 @@ struct LiveDiarizationFinalizeUseCaseTests {
             audioFileURL: audioURL(),
             liveTranscript: [
                 segment(offset: 0, duration: 4, speaker: "화자 1"),
-                segment(offset: 4, duration: 4, speaker: "화자 2"),
-            ],
-            liveSpeakerSegments: [
-                diarized("live-a", start: 0, end: 4),
-                diarized("live-b", start: 4, end: 8),
+                segment(offset: 4, duration: 4, speaker: "화자 1"),
             ],
             editedSegmentIds: [],
             enrolledVoiceprints: [
@@ -170,59 +174,12 @@ struct LiveDiarizationFinalizeUseCaseTests {
                 voiceprint(name: "Bob", embedding: [0, 1]),
             ],
             meetingStart: meetingStart,
-            expectedSpeakerCount: 2
+            expectedSpeakerCount: nil
         )
 
         let transcriptLabels = Set(result.segments.compactMap(\.speaker))
         let embeddingLabels = Set(result.speakerEmbeddings.map(\.speakerLabel))
         #expect(transcriptLabels == embeddingLabels)
-    }
-
-    @Test("라이브 화자 세그먼트가 비면 재조정 없이 라이브 라벨을 유지한다")
-    func keepsLiveLabelsWhenNoLiveSpeakerSegments() async throws {
-        let useCase = makeUseCase(
-            segments: [diarized("vbx-a", start: 0, end: 4)],
-            embeddings: [(speakerId: "vbx-a", embedding: [1, 0])]
-        )
-
-        let result = try await useCase.finalize(
-            audioFileURL: audioURL(),
-            liveTranscript: [segment(offset: 0, duration: 4, speaker: "화자 1")],
-            liveSpeakerSegments: [],
-            editedSegmentIds: [],
-            enrolledVoiceprints: [],
-            meetingStart: meetingStart,
-            expectedSpeakerCount: nil
-        )
-
-        #expect(result.segments.map(\.speaker) == ["화자 1"])
-    }
-
-    @Test("라이브 화자 수가 VBx보다 많으면 미매칭 라이브 라벨을 유지한다")
-    func keepsUnmatchedLiveLabelWhenLiveHasMoreSpeakers() async throws {
-        let useCase = makeUseCase(
-            segments: [diarized("vbx-a", start: 0, end: 4)],
-            embeddings: [(speakerId: "vbx-a", embedding: [1, 0])]
-        )
-
-        let result = try await useCase.finalize(
-            audioFileURL: audioURL(),
-            liveTranscript: [
-                segment(offset: 0, duration: 4, speaker: "화자 1"),
-                segment(offset: 5, duration: 4, speaker: "화자 2"),
-            ],
-            liveSpeakerSegments: [
-                diarized("live-a", start: 0, end: 4),
-                diarized("live-b", start: 5, end: 9),
-            ],
-            editedSegmentIds: [],
-            enrolledVoiceprints: [],
-            meetingStart: meetingStart,
-            expectedSpeakerCount: nil
-        )
-
-        // 화자 1은 VBx 화자 1과 매칭, 화자 2는 VBx에 대응이 없어 라이브 라벨을 유지(fallback).
-        #expect(result.segments.map(\.speaker) == ["화자 1", "화자 2"])
     }
 
     private func makeUseCase(

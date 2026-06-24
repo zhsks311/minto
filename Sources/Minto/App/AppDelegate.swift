@@ -55,15 +55,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             await self.viewModel.stopRecordingAndDrain()
             let summary = await self.viewModel.finalizeMeeting()
             let segments = self.viewModel.committedSegments
+            // 방법 A: 저장 시 아카이브 오디오에 offline VBx를 재실행해 화자를 확정한다(라이브 카운트에 묶지 않음).
+            // 라이브 diar 성공 여부와 무관하게 아카이브 오디오가 있으면 실행(VBx가 authoritative). 편집 라벨은 보존.
             let reconciled: (segments: [Segment], speakerEmbeddings: [MeetingRecord.MeetingSpeakerEmbedding])?
-            if self.viewModel.liveDiarizedSegments.isEmpty {
+            if let audioFileName = self.viewModel.lastArchivedAudioFileName {
                 Log.diarization.info(
-                    "live finalize skipped(no live segments) transcriptSegments=\(segments.count, privacy: .public)"
-                )
-                reconciled = nil
-            } else if let audioFileName = self.viewModel.lastArchivedAudioFileName {
-                Log.diarization.info(
-                    "live finalize reconcile start transcriptSegments=\(segments.count, privacy: .public) liveSpeakerSegments=\(self.viewModel.liveDiarizedSegments.count, privacy: .public)"
+                    "live finalize reconcile start transcriptSegments=\(segments.count, privacy: .public)"
                 )
                 let audioURL = RecordingAudioArchiver.recordingsDirectory
                     .appendingPathComponent(audioFileName)
@@ -79,7 +76,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 let result = try? await finalizeUseCase.finalize(
                     audioFileURL: audioURL,
                     liveTranscript: segments,
-                    liveSpeakerSegments: self.viewModel.liveDiarizedSegments,
                     editedSegmentIds: self.viewModel.editedSpeakerSegmentIds,
                     enrolledVoiceprints: enrolled,
                     meetingStart: meetingStart,
@@ -91,7 +87,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 reconciled = result
             } else {
                 Log.diarization.info(
-                    "live finalize skipped(no archived audio) transcriptSegments=\(segments.count, privacy: .public) liveSpeakerSegments=\(self.viewModel.liveDiarizedSegments.count, privacy: .public)"
+                    "live finalize skipped(no archived audio) transcriptSegments=\(segments.count, privacy: .public)"
                 )
                 reconciled = nil
             }

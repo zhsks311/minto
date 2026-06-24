@@ -1,5 +1,11 @@
 import Foundation
 
+/// 저장 시 아카이브 오디오에 offline VBx를 재실행해 화자 라벨을 확정한다(방법 A).
+///
+/// VBx 화자 세그먼트를 `TranscriptSpeakerMatcher`로 transcript에 직접 배정한다(시간 겹침).
+/// 라이브(LS-EEND) 라벨 식별자에 묶지 않으므로, 최종 화자 수가 VBx의 정확한 카운트를 따른다.
+/// (방법 B[mapLabels 연속성]는 최종 카운트를 라이브 카운트에 묶어 다화자를 과소추정시켰다 — 실측으로 A 채택.)
+/// 사용자가 라이브 중 편집한 라벨은 VBx 배정으로 덮지 않는다.
 public struct LiveDiarizationFinalizeUseCase: Sendable {
     private let diarizer: any SegmentEmbeddingDiarizing
 
@@ -10,7 +16,6 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
     public func finalize(
         audioFileURL: URL,
         liveTranscript: [Segment],
-        liveSpeakerSegments: [DiarizedSpeakerSegment],
         editedSegmentIds: Set<Segment.ID>,
         enrolledVoiceprints: [Voiceprint],
         meetingStart: Date,
@@ -22,54 +27,34 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
         speakerEmbeddings: [MeetingRecord.MeetingSpeakerEmbedding]
     ) {
         Log.diarization.info(
-            "live diarization finalize start transcriptSegments=\(liveTranscript.count, privacy: .public) liveSpeakerSegments=\(liveSpeakerSegments.count, privacy: .public) editedSegments=\(editedSegmentIds.count, privacy: .public) enrolledVoiceprints=\(enrolledVoiceprints.count, privacy: .public) expectedSpeakers=\(expectedSpeakerCount ?? 0, privacy: .public)"
+            "live diarization finalize start transcriptSegments=\(liveTranscript.count, privacy: .public) editedSegments=\(editedSegmentIds.count, privacy: .public) enrolledVoiceprints=\(enrolledVoiceprints.count, privacy: .public) expectedSpeakers=\(expectedSpeakerCount ?? 0, privacy: .public)"
         )
 
         do {
             let diarization = try await diarizer.diarizeWithSegmentsAndEmbeddings(audioFileURL: audioFileURL)
             let vbxTimeline = diarization.segments.filter { $0.endSeconds > $0.startSeconds }
             let vbxLabelMap = DiarizationSpeakerLabeling.makeLabelMap(from: vbxTimeline)
-            let finalLabeled = vbxTimeline.compactMap { segment -> DiarizedSpeakerSegment? in
-                guard let label = vbxLabelMap[segment.speakerId] else {
-                    return nil
-                }
-                return DiarizedSpeakerSegment(
-                    speakerId: label,
-                    startSeconds: segment.startSeconds,
-                    endSeconds: segment.endSeconds
-                )
-            }
+            let vbxSpeakerCount = Set(vbxLabelMap.values).count
 
-            // mapLabels의 live/final은 둘 다 transcript.speaker와 같은 "화자 N" 라벨 공간이어야 한다.
-            // liveTranscript.speaker는 Phase 3의 TranscriptSpeakerMatcher(내부 makeLabelMap)로 부여되므로,
-            // 여기서 liveSpeakerSegments도 같은 makeLabelMap으로 정규화해 라벨 공간을 맞춘다.
-            // (정규화 없이 LS-EEND 원시 speakerId를 넘기면 resolveFinalLabels 조회가 전부 빗나가 재조정이 no-op이 된다.)
-            let liveTimeline = liveSpeakerSegments.filter { $0.endSeconds > $0.startSeconds }
-            let liveLabelMap = DiarizationSpeakerLabeling.makeLabelMap(from: liveTimeline)
-            let liveLabeled = liveTimeline.compactMap { segment -> DiarizedSpeakerSegment? in
-                guard let label = liveLabelMap[segment.speakerId] else {
-                    return nil
-                }
-                return DiarizedSpeakerSegment(
-                    speakerId: label,
-                    startSeconds: segment.startSeconds,
-                    endSeconds: segment.endSeconds
-                )
+            // 방법 A: VBx 세그먼트를 시간 겹침으로 transcript에 직접 배정("화자 N"). import과 동일 매처.
+            // assignSpeakers는 내부적으로 makeLabelMap(vbxTimeline)을 쓰므로 위 vbxLabelMap과 라벨 공간이 일치한다
+            // → transcript 라벨과 speakerEmbeddings 라벨 키가 정렬된다.
+            let matched = TranscriptSpeakerMatcher().assignSpeakers(
+                diarizedSegments: diarization.segments,
+                transcript: liveTranscript,
+                meetingStart: meetingStart
+            )
+            var matchedById: [Segment.ID: Segment] = [:]
+            for segment in matched {
+                matchedById[segment.id] = segment
             }
-            let labelMap = LiveDiarizationReconciler.mapLabels(
-                live: liveLabeled,
-                final: finalLabeled
-            )
-            let finalLabels = LiveDiarizationReconciler.resolveFinalLabels(
-                transcript: liveTranscript.map {
-                    (
-                        liveLabel: $0.speaker ?? "",
-                        edited: editedSegmentIds.contains($0.id)
-                    )
-                },
-                labelMap: labelMap
-            )
-            let resolvedTranscript = apply(labels: finalLabels, to: liveTranscript)
+            // 사용자 편집 라벨은 VBx 배정으로 덮지 않는다.
+            let resolvedTranscript = liveTranscript.map { segment -> Segment in
+                if editedSegmentIds.contains(segment.id) {
+                    return segment
+                }
+                return matchedById[segment.id] ?? segment
+            }
 
             let rawCentroids = VoiceprintMatching.centroids(from: diarization.embeddings)
             let speakerEmbeddings = rawCentroids.compactMap { rawCentroid -> MeetingRecord.MeetingSpeakerEmbedding? in
@@ -87,7 +72,7 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
 
             guard !enrolledVoiceprints.isEmpty else {
                 Log.diarization.info(
-                    "live diarization finalize complete transcriptSegments=\(resolvedTranscript.count, privacy: .public) finalSpeakerSegments=\(finalLabeled.count, privacy: .public) speakerEmbeddings=\(speakerEmbeddings.count, privacy: .public) identifiedSpeakers=\(0, privacy: .public)"
+                    "live diarization finalize complete transcriptSegments=\(resolvedTranscript.count, privacy: .public) vbxSpeakers=\(vbxSpeakerCount, privacy: .public) speakerEmbeddings=\(speakerEmbeddings.count, privacy: .public) identifiedSpeakers=\(0, privacy: .public)"
                 )
                 return (segments: resolvedTranscript, speakerEmbeddings: speakerEmbeddings)
             }
@@ -126,7 +111,7 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
             }
 
             Log.diarization.info(
-                "live diarization finalize complete transcriptSegments=\(identifiedTranscript.count, privacy: .public) finalSpeakerSegments=\(finalLabeled.count, privacy: .public) speakerEmbeddings=\(identifiedEmbeddings.count, privacy: .public) identifiedSpeakers=\(identified.count, privacy: .public)"
+                "live diarization finalize complete transcriptSegments=\(identifiedTranscript.count, privacy: .public) vbxSpeakers=\(vbxSpeakerCount, privacy: .public) speakerEmbeddings=\(identifiedEmbeddings.count, privacy: .public) identifiedSpeakers=\(identified.count, privacy: .public)"
             )
             return (segments: identifiedTranscript, speakerEmbeddings: identifiedEmbeddings)
         } catch is CancellationError {
@@ -135,7 +120,7 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
             let errorCase = Self.errorCase(error)
             let nsError = error as NSError
             Log.diarization.error(
-                "live diarization finalize failed transcriptSegments=\(liveTranscript.count, privacy: .public) liveSpeakerSegments=\(liveSpeakerSegments.count, privacy: .public) editedSegments=\(editedSegmentIds.count, privacy: .public) enrolledVoiceprints=\(enrolledVoiceprints.count, privacy: .public) expectedSpeakers=\(expectedSpeakerCount ?? 0, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
+                "live diarization finalize failed transcriptSegments=\(liveTranscript.count, privacy: .public) editedSegments=\(editedSegmentIds.count, privacy: .public) enrolledVoiceprints=\(enrolledVoiceprints.count, privacy: .public) expectedSpeakers=\(expectedSpeakerCount ?? 0, privacy: .public) error=\(errorCase, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
             )
             throw error
         }
@@ -143,17 +128,6 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
 
     private static func errorCase(_ error: Error) -> String {
         String(describing: error).components(separatedBy: "(").first ?? String(describing: error)
-    }
-
-    private func apply(labels: [String], to transcript: [Segment]) -> [Segment] {
-        transcript.enumerated().map { index, segment in
-            guard labels.indices.contains(index) else {
-                return segment
-            }
-            var updated = segment
-            updated.speaker = SpeakerLabel.normalized(labels[index])
-            return updated
-        }
     }
 
     private func replacingSpeakerInUneditedSegments(
