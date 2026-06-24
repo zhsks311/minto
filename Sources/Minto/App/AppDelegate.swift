@@ -55,18 +55,63 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             await self.viewModel.stopRecordingAndDrain()
             let summary = await self.viewModel.finalizeMeeting()
             let segments = self.viewModel.committedSegments
+            let reconciled: (segments: [Segment], speakerEmbeddings: [MeetingRecord.MeetingSpeakerEmbedding])?
+            if self.viewModel.liveDiarizedSegments.isEmpty {
+                Log.diarization.info(
+                    "live finalize skipped(no live segments) transcriptSegments=\(segments.count, privacy: .public)"
+                )
+                reconciled = nil
+            } else if let audioFileName = self.viewModel.lastArchivedAudioFileName {
+                Log.diarization.info(
+                    "live finalize reconcile start transcriptSegments=\(segments.count, privacy: .public) liveSpeakerSegments=\(self.viewModel.liveDiarizedSegments.count, privacy: .public)"
+                )
+                let audioURL = RecordingAudioArchiver.recordingsDirectory
+                    .appendingPathComponent(audioFileName)
+                let finalizeUseCase = LiveDiarizationFinalizeUseCase(
+                    diarizer: FluidAudioOfflineDiarizationProvider()
+                )
+                let enrolled = VoiceprintStore.shared.usablePrints(
+                    forModelID: FluidAudioOfflineDiarizationProvider.embeddingModelID
+                )
+                let meetingStart = self.viewModel.transcriptTimelineStartDate
+                    ?? segments.first?.timestamp
+                    ?? Date()
+                let result = try? await finalizeUseCase.finalize(
+                    audioFileURL: audioURL,
+                    liveTranscript: segments,
+                    liveSpeakerSegments: self.viewModel.liveDiarizedSegments,
+                    editedSegmentIds: self.viewModel.editedSpeakerSegmentIds,
+                    enrolledVoiceprints: enrolled,
+                    meetingStart: meetingStart,
+                    expectedSpeakerCount: nil
+                )
+                Log.diarization.info(
+                    "live finalize reconcile complete segments=\(result?.segments.count ?? segments.count, privacy: .public) speakerEmbeddings=\(result?.speakerEmbeddings.count ?? 0, privacy: .public)"
+                )
+                reconciled = result
+            } else {
+                Log.diarization.info(
+                    "live finalize skipped(no archived audio) transcriptSegments=\(segments.count, privacy: .public) liveSpeakerSegments=\(self.viewModel.liveDiarizedSegments.count, privacy: .public)"
+                )
+                reconciled = nil
+            }
+            let recordSegments = reconciled?.segments ?? segments
             let summaryGlossary = summary == nil ? nil : MeetingContext.shared.glossary
 
             // 회의 기록을 영속화(요약이 없어도 전사가 있으면 저장 → 나중에 열람). 빈 회의는 store가 skip.
-            let record = Self.makeRecord(
+            var record = Self.makeRecord(
                 summary: summary ?? MeetingSummary(),
-                segments: segments,
+                segments: recordSegments,
                 topic: MeetingContext.shared.topic,
                 duration: self.viewModel.recordingDuration,
                 summaryGlossary: summaryGlossary,
                 document: MeetingContext.shared.document,
                 audioFileName: self.viewModel.lastArchivedAudioFileName
             )
+            if let speakerEmbeddings = reconciled?.speakerEmbeddings,
+               !speakerEmbeddings.isEmpty {
+                record.speakerEmbeddings = speakerEmbeddings
+            }
 
             // 메모리에 남은 tail 세그먼트를 보고서에 기록. evict된 배치는 이미 .transcriptionNeedsFlush로
             // 기록됐으므로 중복되지 않는다(짧은 회의는 미evict라 전량이 여기서 기록됨).
