@@ -231,6 +231,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     }
 
     @MainActor
+    public func applicationWillTerminate(_ notification: Notification) {
+        ClaudeCodeCLIProvider.terminateRunningProcesses()
+    }
+
+    @MainActor
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard MeetingFileImportUseCase.isAnyImportRunning else {
             ClaudeCodeCLIProvider.terminateRunningProcesses()
