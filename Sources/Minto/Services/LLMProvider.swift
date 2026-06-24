@@ -14,6 +14,7 @@ public enum LLMProviderID: String, Codable, CaseIterable, Hashable, Sendable {
     case gpt
     case gemini
     case claude
+    case claudeCodeCLI
     case openRouter
     case copilot
     case chatGPTAccount
@@ -29,6 +30,8 @@ public enum LLMProviderID: String, Codable, CaseIterable, Hashable, Sendable {
             return "Gemini API"
         case .claude:
             return "Claude API"
+        case .claudeCodeCLI:
+            return "Claude Code CLI"
         case .openRouter:
             return "OpenRouter API"
         case .copilot:
@@ -44,7 +47,7 @@ public enum LLMProviderID: String, Codable, CaseIterable, Hashable, Sendable {
         switch self {
         case .local:
             return false
-        case .gpt, .gemini, .claude, .openRouter, .copilot, .chatGPTAccount, .geminiAccount:
+        case .gpt, .gemini, .claude, .claudeCodeCLI, .openRouter, .copilot, .chatGPTAccount, .geminiAccount:
             return true
         }
     }
@@ -54,6 +57,7 @@ public enum LLMProviderAuthKind: String, Codable, Sendable {
     case local
     case apiKey
     case accountLogin
+    case cliPath
 }
 
 public enum LLMModelCatalogSource: String, Codable, Sendable {

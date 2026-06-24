@@ -88,6 +88,8 @@ public struct SettingsView: View {
     @AppStorage("gptAPIModel") private var gptAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gpt)
     @AppStorage("geminiAPIModel") private var geminiAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .gemini)
     @AppStorage("claudeAPIModel") private var claudeAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .claude)
+    @AppStorage(ClaudeCodeCLIProvider.modelDefaultsKey) private var claudeCodeCLIModel = ClaudeCodeCLIProvider.defaultModelID
+    @AppStorage(ClaudeCodeCLIProvider.cliPathKey) private var claudeCodeCLIPath = ""
     @AppStorage("openRouterAPIModel") private var openRouterAPIModel = LLMAPIKeyTextProvider.defaultModelID(for: .openRouter)
     @AppStorage(LocalLLMProviderConfiguration.baseURLKey) private var localLLMBaseURL = LocalLLMProviderConfiguration.defaultBaseURL.absoluteString
     @AppStorage(LocalLLMProviderConfiguration.modelIDKey) private var localLLMModelID = ""
@@ -239,6 +241,9 @@ public struct SettingsView: View {
         .onChange(of: claudeAPIModel) { oldValue, newValue in
             logSettingChange(key: "claudeAPIModel", oldValue: oldValue, newValue: newValue)
         }
+        .onChange(of: claudeCodeCLIModel) { oldValue, newValue in
+            logSettingChange(key: ClaudeCodeCLIProvider.modelDefaultsKey, oldValue: oldValue, newValue: newValue)
+        }
         .onChange(of: openRouterAPIModel) { oldValue, newValue in
             logSettingChange(key: "openRouterAPIModel", oldValue: oldValue, newValue: newValue)
         }
@@ -338,7 +343,9 @@ public struct SettingsView: View {
             get: { llmService.selectedProvider != .none },
             set: { enabled in
                 if enabled {
-                    llmService.selectedProvider = restoredLLMProvider
+                    llmService.selectedProvider = providerSelections(supporting: [.correction]).contains(restoredLLMProvider)
+                        ? restoredLLMProvider
+                        : (providerSelections(supporting: [.correction]).first ?? .local)
                 } else {
                     rememberCurrentProviderIfNeeded()
                     llmService.selectedProvider = .none
@@ -853,11 +860,39 @@ public struct SettingsView: View {
 
     private var aiProviderRow: some View {
         Picker("AI 서비스", selection: activeAIProviderBinding) {
-            ForEach(LLMProviderSelection.allCases.filter { $0 != .none }, id: \.self) { provider in
+            ForEach(aiProviderSelections, id: \.self) { provider in
                 Text(provider.label).tag(provider)
             }
         }
         .help("AI 처리에 사용할 서비스를 선택해요.")
+    }
+
+    private var aiProviderSelections: [LLMProviderSelection] {
+        providerSelections(supporting: activeAIProviderRequiredCapabilities)
+    }
+
+    private var activeAIProviderRequiredCapabilities: Set<LLMModelInfo.Capability> {
+        var capabilities: Set<LLMModelInfo.Capability> = []
+        if llmService.selectedProvider != .none {
+            capabilities.insert(.correction)
+        }
+        if summarySettings.isEnabled {
+            capabilities.insert(.summary)
+        }
+        if answerSettings.isEnabled {
+            capabilities.insert(.answer)
+        }
+        return capabilities.isEmpty ? [.summary] : capabilities
+    }
+
+    private func providerSelections(supporting capabilities: Set<LLMModelInfo.Capability>) -> [LLMProviderSelection] {
+        LLMProviderSelection.allCases.filter { provider in
+            guard provider != .none,
+                  let providerID = provider.providerID,
+                  let descriptor = LLMProviderRegistry.shared.descriptor(for: providerID)
+            else { return false }
+            return capabilities.allSatisfy { descriptor.supportedCapabilities.contains($0) }
+        }
     }
 
     private var searchAnswerProviderRow: some View {
@@ -887,6 +922,12 @@ public struct SettingsView: View {
                     .foregroundColor(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if activeAIProviderAuthKind == .cliPath {
+                Text("로컬 Claude Code CLI를 실행하지만 검색 근거는 Anthropic으로 전송돼요.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -906,6 +947,8 @@ public struct SettingsView: View {
             apiModelPicker(title: title, providerID: .gemini, selection: $geminiAPIModel)
         case .claudeAPI:
             apiModelPicker(title: title, providerID: .claude, selection: $claudeAPIModel)
+        case .claudeCodeCLI:
+            claudeCodeCLIModelPicker(title: title)
         case .openRouterAPI:
             apiModelPicker(title: title, providerID: .openRouter, selection: $openRouterAPIModel)
         case .codex:
@@ -935,16 +978,17 @@ public struct SettingsView: View {
     }
 
     private var activeAIProvider: LLMProviderSelection {
+        let candidate: LLMProviderSelection
         if llmService.selectedProvider != .none {
-            return llmService.selectedProvider
+            candidate = llmService.selectedProvider
+        } else if summarySettings.effectiveProvider != .none {
+            candidate = summarySettings.effectiveProvider
+        } else if answerSettings.isEnabled, answerSettings.effectiveProvider != .none {
+            candidate = answerSettings.effectiveProvider
+        } else {
+            candidate = restoredLLMProvider
         }
-        if summarySettings.effectiveProvider != .none {
-            return summarySettings.effectiveProvider
-        }
-        if answerSettings.isEnabled, answerSettings.effectiveProvider != .none {
-            return answerSettings.effectiveProvider
-        }
-        return restoredLLMProvider
+        return aiProviderSelections.contains(candidate) ? candidate : (aiProviderSelections.first ?? .local)
     }
 
     private var activeAIProviderBinding: Binding<LLMProviderSelection> {
@@ -978,13 +1022,7 @@ public struct SettingsView: View {
     }
 
     private var answerCapableProviderSelections: [LLMProviderSelection] {
-        LLMProviderSelection.allCases.filter { provider in
-            guard provider != .none,
-                  let providerID = provider.providerID,
-                  let descriptor = LLMProviderRegistry.shared.descriptor(for: providerID)
-            else { return false }
-            return descriptor.supportedCapabilities.contains(.answer)
-        }
+        providerSelections(supporting: [.answer])
     }
 
     private func answerCapableProvider(from provider: LLMProviderSelection) -> LLMProviderSelection {
@@ -1009,7 +1047,10 @@ public struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
             providerModelPicker(provider, title: "검색 답변 모델")
-            if providerID != .local {
+            if providerID == .claudeCodeCLI {
+                claudeCodeCLIStatusRow
+                claudeCodeCLISettingsRows
+            } else if providerID != .local {
                 apiKeyStatusRow(providerID)
                 apiKeySettingsRow(providerID)
             }
@@ -1175,6 +1216,82 @@ public struct SettingsView: View {
         }
     }
 
+    private var claudeCodeCLIStatusRow: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(claudeCodeCLIPathExists ? Color.green : Color.secondary.opacity(0.4))
+                .frame(width: 7, height: 7)
+            Text(LLMProviderID.claudeCodeCLI.displayName)
+                .font(.callout)
+            Spacer()
+            Text(claudeCodeCLIPathExists ? "CLI 경로 확인됨" : "CLI 경로 필요")
+                .font(.caption)
+                .foregroundColor(claudeCodeCLIPathExists ? .primary : .secondary)
+        }
+    }
+
+    private var claudeCodeCLISettingsRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("CLI 경로", text: $claudeCodeCLIPath)
+                .textFieldStyle(.roundedBorder)
+            HStack(spacing: 8) {
+                Button("연결 확인") {
+                }
+                .buttonStyle(ProminentActionButtonStyle(horizontalPadding: 10, verticalPadding: 5))
+                .disabled(true)
+                Text(claudeCodeCLIPathExists ? "CLI 파일을 찾았어요." : "예: ~/.claude/local/claude, /opt/homebrew/bin/claude")
+                    .font(.caption)
+                    .foregroundColor(claudeCodeCLIPathExists ? .secondary : .orange)
+            }
+            Text("앱은 API 키를 저장하지 않고 이 Mac의 claude 로그인을 사용해요. 회의 내용은 Anthropic으로 전송돼요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func claudeCodeCLIModelPicker(title: String) -> some View {
+        let catalog = ClaudeCodeCLIProvider.bundledModelCatalog()
+        return VStack(alignment: .leading, spacing: 6) {
+            Picker(title, selection: $claudeCodeCLIModel) {
+                ForEach(catalog.models, id: \.id) { model in
+                    Text(model.displayName).tag(model.id)
+                }
+            }
+            Text("Claude Code CLI의 기본 모델 별칭이에요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 6) {
+                    TextField("모델 ID", text: $claudeCodeCLIModel)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Claude Code CLI에서 지원하는 모델 별칭이나 모델 ID를 입력하세요. 예: sonnet, opus, haiku")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } label: {
+                Text("목록에 없는 모델 ID 직접 입력")
+                    .font(.caption)
+            }
+            HStack(spacing: 6) {
+                Text("기본 추천 모델을 표시해요.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                if let url = catalog.manualModelHelpURL {
+                    Link("모델 확인", destination: url)
+                        .font(.caption)
+                }
+            }
+            if let warning = catalog.warning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+
     private func apiModelPicker(
         title: String,
         providerID: LLMProviderID,
@@ -1277,6 +1394,8 @@ public struct SettingsView: View {
             return "Gemini API 문서의 모델 ID를 입력하세요. 예: gemini-3.5-flash, gemini-3.1-flash-lite"
         case .claude:
             return "Anthropic API의 모델 ID를 입력하세요. 예: claude-sonnet-4-6, claude-haiku-4-5-20251001"
+        case .claudeCodeCLI:
+            return "Claude Code CLI에서 지원하는 모델 별칭이나 모델 ID를 입력하세요. 예: sonnet, opus, haiku"
         case .openRouter:
             return "OpenRouter 모델 ID를 입력하세요. 예: openai/gpt-5.5, anthropic/claude-sonnet-4.6"
         case .local, .copilot, .chatGPTAccount, .geminiAccount:
@@ -1353,11 +1472,18 @@ public struct SettingsView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(.orange)
                 .font(.caption)
-            Text("공식 API 키 방식이 아닙니다. 데이터 사용과 학습 여부는 각 앱의 프라이버시 설정에서 제어하세요.")
+            Text(tosWarningText)
                 .font(.caption)
                 .foregroundColor(.orange)
         }
         .padding(.vertical, 2)
+    }
+
+    private var tosWarningText: String {
+        if activeAIProviderAuthKind == .cliPath {
+            return "로컬 Claude Code CLI를 실행하지만 회의 내용은 Anthropic으로 전송돼요."
+        }
+        return "공식 API 키 방식이 아닙니다. 데이터 사용과 학습 여부는 각 앱의 프라이버시 설정에서 제어하세요."
     }
 
     private var llmStatusRow: some View {
@@ -1380,6 +1506,8 @@ public struct SettingsView: View {
     private var llmActionRow: some View {
         if activeAIProvider == .local {
             EmptyView()
+        } else if activeAIProviderAuthKind == .cliPath {
+            claudeCodeCLISettingsRows
         } else if let providerID = currentAPIKeyProviderID {
             apiKeySettingsRow(providerID)
         } else if currentProviderLoggedIn {
@@ -1493,6 +1621,14 @@ public struct SettingsView: View {
 
     private var localLLMModelIDValue: String {
         localLLMModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var claudeCodeCLIPathValue: String {
+        ClaudeCodeCLIProvider.normalizedCLIPath(claudeCodeCLIPath)
+    }
+
+    private var claudeCodeCLIPathExists: Bool {
+        ClaudeCodeCLIProvider.cliPathExists(claudeCodeCLIPathValue)
     }
 
     private var localLLMCompatibilityValue: LocalLLMEndpointCompatibility {
@@ -1616,6 +1752,8 @@ public struct SettingsView: View {
             return LLMAPIKeyStore.shared.hasAPIKey(for: .gemini)
         case .claudeAPI:
             return LLMAPIKeyStore.shared.hasAPIKey(for: .claude)
+        case .claudeCodeCLI:
+            return claudeCodeCLIPathExists
         case .openRouterAPI:
             return LLMAPIKeyStore.shared.hasAPIKey(for: .openRouter)
         case .gemini:
@@ -1640,12 +1778,15 @@ public struct SettingsView: View {
         if currentAPIKeyProviderID != nil {
             return currentProviderLoggedIn ? "API 키 저장됨" : "API 키 필요"
         }
+        if activeAIProviderAuthKind == .cliPath {
+            return currentProviderLoggedIn ? "CLI 경로 확인됨" : "CLI 경로 필요"
+        }
         return currentProviderLoggedIn ? "로그인됨" : "미연결"
     }
 
     private var currentEmail: String {
         switch activeAIProvider {
-        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI, .codex:
+        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .claudeCodeCLI, .openRouterAPI, .codex:
             return ""
         case .gemini:
             return geminiEmail
@@ -1670,6 +1811,8 @@ public struct SettingsView: View {
             return .gemini
         case .claudeAPI:
             return .claude
+        case .claudeCodeCLI:
+            return nil
         case .openRouterAPI:
             return .openRouter
         case .none, .local, .gemini, .copilot, .codex:
@@ -1695,7 +1838,7 @@ public struct SettingsView: View {
     private func startLogin() {
         isLoginLoading = true
         switch activeAIProvider {
-        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .openRouterAPI:
+        case .none, .local, .gptAPI, .geminiAPI, .claudeAPI, .claudeCodeCLI, .openRouterAPI:
             isLoginLoading = false
         case .gemini:
             Task {
@@ -1726,7 +1869,7 @@ public struct SettingsView: View {
 
     private func disconnectCurrentAIProvider() {
         switch activeAIProvider {
-        case .none, .local:
+        case .none, .local, .claudeCodeCLI:
             break
         case .gptAPI:
             LLMAPIKeyStore.shared.deleteAPIKey(for: .gpt)
