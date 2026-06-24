@@ -29,8 +29,11 @@ public struct MeetingSetupView: View {
     @State private var attachedFiles: [AttachedDocument] = []
     @State private var isImportingFiles = false
     @State private var ingestingFileCount = 0
-    @State private var documentAttachError: String?
+    @State private var fileAttachError: String?
+    @State private var notionAttachError: String?
+    @State private var confluenceAttachError: String?
     @State private var notionURLInput: String = ""
+    @State private var confluenceURLInput: String = ""
 
     private let onStart: (String, String, String, AudioInputMode) -> Void
     private let onCancel: () -> Void
@@ -53,18 +56,18 @@ public struct MeetingSetupView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("새 회의")
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(.accentColor)
                 Text("바로 녹음할 수 있어요")
-                    .font(.title3.weight(.bold))
+                    .font(.title2.weight(.bold))
                 Text("주제만 적어도 충분해요. 필요한 정보는 선택해서 더하세요.")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundColor(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("회의 주제")
-                    .font(.subheadline.weight(.medium))
+                    .font(.headline)
                 TextField("예: 검색 고도화 설계 리뷰", text: $topic)
                     .textFieldStyle(.roundedBorder)
             }
@@ -77,7 +80,7 @@ public struct MeetingSetupView: View {
 
             if ingestingFileCount > 0 {
                 Text("처리 중인 첨부 \(ingestingFileCount)개는 제외돼요.")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -93,7 +96,7 @@ public struct MeetingSetupView: View {
             }
         }
         .padding(20)
-        .frame(width: 440)
+        .frame(width: 480)
         .task(id: audioInputMode) {
             await refreshAudioReadiness(for: audioInputMode)
         }
@@ -114,7 +117,7 @@ public struct MeetingSetupView: View {
     private var audioInputPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("입력")
-                .font(.subheadline.weight(.medium))
+                .font(.headline)
             Picker("입력", selection: $audioInputMode) {
                 ForEach(AudioInputMode.selectableCases) { mode in
                     Text(mode.title).tag(mode)
@@ -127,7 +130,7 @@ public struct MeetingSetupView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Text(audioInputMode.detail)
-                    .font(.caption2)
+                    .font(.callout)
                     .foregroundColor(.secondary)
             }
 
@@ -141,17 +144,17 @@ public struct MeetingSetupView: View {
                 .frame(width: 14)
             VStack(alignment: .leading, spacing: 3) {
                 Text(audioReadiness.title)
-                    .font(.caption2.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundColor(audioReadinessColor)
                 Text(audioReadiness.detail)
-                    .font(.caption2)
+                    .font(.callout)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionTitle = audioReadiness.actionTitle {
                     Button(actionTitle) {
                         Task { await requestAudioPermissionAndRefresh() }
                     }
-                    .font(.caption2)
+                    .font(.callout)
                     .buttonStyle(.link)
                 }
             }
@@ -211,7 +214,7 @@ public struct MeetingSetupView: View {
                         .foregroundColor(.secondary)
                         .frame(width: 12)
                     Text("용어집")
-                        .font(.subheadline.weight(.medium))
+                        .font(.headline)
                     Text(glossaryBadgeText)
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.secondary)
@@ -248,7 +251,7 @@ public struct MeetingSetupView: View {
                         .foregroundColor(.secondary)
                         .frame(width: 12)
                     Text("참고 문서")
-                        .font(.subheadline.weight(.medium))
+                        .font(.headline)
                     Text(documentBadgeText)
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.secondary)
@@ -262,73 +265,98 @@ public struct MeetingSetupView: View {
             }
             .buttonStyle(.plain)
 
+            Text("회의 안건·자료를 더하면 교정과 요약이 더 정확해져요.")
+                .font(.callout)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 18)
+
             if showDocument {
-                VStack(alignment: .leading, spacing: 8) {
-                    fileAttachSection
+                VStack(alignment: .leading, spacing: 16) {
+                    Divider()
 
-                    Divider().padding(.vertical, 2)
-
-                    Text("직접 입력")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(.secondary)
-
-                    TextEditor(text: $document)
-                        .font(.body)
-                        .frame(height: 92)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                        )
-
-                    Divider().padding(.vertical, 2)
-
-                    HStack(spacing: 6) {
-                        Text("Confluence")
-                            .font(.caption.weight(.medium))
-                            .foregroundColor(.secondary)
-                        Image(systemName: confluence.isConfigured ? "link.circle.fill" : "exclamationmark.circle")
-                            .font(.caption2)
-                            .foregroundColor(confluence.isConfigured ? .green : .secondary)
-                    }
-
-                    HStack(spacing: 8) {
-                        Button {
-                            Task { await fetchConfluenceContext() }
-                        } label: {
-                            if isSearchingConfluence {
-                                HStack(spacing: 6) {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                    Text("조회 중")
-                                }
-                            } else {
-                                Label("Confluence 조회", systemImage: "magnifyingglass")
-                            }
-                        }
-                        .disabled(!canSearchConfluence)
-
-                        if !confluence.isConfigured {
-                            Text("설정에서 Confluence를 먼저 연결하세요.")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    if let confluenceStatus {
-                        Text(confluenceStatus)
-                            .font(.caption2)
-                            .foregroundColor(confluenceStatusColor)
-                    }
-
-                    if !confluenceDocuments.isEmpty {
+                    documentSource(
+                        title: "파일 첨부",
+                        detail: "PDF · 이미지 · 텍스트(md, txt). 이미지 파일과 글자 없는 스캔본 PDF는 자동으로 글자를 인식해요(OCR)."
+                    ) {
                         VStack(alignment: .leading, spacing: 6) {
+                            Button {
+                                isImportingFiles = true
+                            } label: {
+                                Label("파일 추가", systemImage: "doc.badge.plus")
+                            }
+                            attachErrorRow(fileAttachError)
+                        }
+                    }
+
+                    Divider()
+
+                    documentSource(
+                        title: "Notion 페이지",
+                        detail: notion.isConnected
+                            ? "페이지 링크를 붙여넣으면 본문 텍스트를 가져와요."
+                            : "설정에서 Notion을 연결하면 페이지를 가져올 수 있어요."
+                    ) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                TextField("Notion 페이지 링크 붙여넣기", text: $notionURLInput)
+                                    .textFieldStyle(.roundedBorder)
+                                    .disabled(!notion.isConnected)
+                                    .onSubmit { Task { await ingestNotionPage() } }
+                                Button("가져오기") { Task { await ingestNotionPage() } }
+                                    .disabled(!notion.isConnected || notionURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                            attachErrorRow(notionAttachError)
+                        }
+                    }
+
+                    Divider()
+
+                    documentSource(
+                        title: "Confluence",
+                        detail: confluence.isConfigured
+                            ? "페이지 링크를 붙여넣어 가져오거나, 회의 주제로 관련 문서를 검색해요."
+                            : "설정에서 Confluence를 먼저 연결하세요."
+                    ) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                TextField("Confluence 페이지 링크 붙여넣기", text: $confluenceURLInput)
+                                    .textFieldStyle(.roundedBorder)
+                                    .disabled(!confluence.isConfigured)
+                                    .onSubmit { Task { await ingestConfluencePage() } }
+                                Button("가져오기") { Task { await ingestConfluencePage() } }
+                                    .disabled(!confluence.isConfigured || confluenceURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+
+                            Button {
+                                Task { await fetchConfluenceContext() }
+                            } label: {
+                                if isSearchingConfluence {
+                                    HStack(spacing: 6) {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                        Text("검색 중")
+                                    }
+                                } else {
+                                    Label("회의 주제로 검색", systemImage: "magnifyingglass")
+                                }
+                            }
+                            .disabled(!canSearchConfluence)
+
+                            if let confluenceStatus {
+                                Text(confluenceStatus)
+                                    .font(.callout)
+                                    .foregroundColor(confluenceStatusColor)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
                             ForEach(confluenceDocuments) { doc in
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(doc.title)
-                                        .font(.caption.weight(.semibold))
+                                        .font(.callout.weight(.semibold))
                                         .lineLimit(1)
                                     Text(doc.text)
-                                        .font(.caption2)
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
                                         .lineLimit(2)
                                 }
@@ -337,12 +365,31 @@ public struct MeetingSetupView: View {
                                 .background(Color.secondary.opacity(0.07))
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
+
+                            attachErrorRow(confluenceAttachError)
                         }
                     }
 
+                    Divider()
+
+                    documentSource(
+                        title: "메모 직접 입력",
+                        detail: "회의 안건이나 메모를 글로 적거나 붙여넣어요. (링크가 아니라 내용 자체)"
+                    ) {
+                        TextEditor(text: $document)
+                            .font(.body)
+                            .frame(height: 96)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+
+                    attachedSummary
+
                     cloudBoundaryNote
                 }
-                .padding(.leading, 18)
+                .padding(.leading, 4)
             }
         }
         .fileImporter(
@@ -354,71 +401,66 @@ public struct MeetingSetupView: View {
             case .success(let urls):
                 Task { await ingestFiles(urls) }
             case .failure(let error):
-                documentAttachError = error.localizedDescription
+                fileAttachError = error.localizedDescription
             }
         }
     }
 
-    /// 파일 첨부 진입 + 첨부 목록 + 처리중/오류 상태.
-    private var fileAttachSection: some View {
+    /// 참고 문서의 각 입력 소스를 "제목 + 한 줄 설명 + 입력 컨트롤" 동일 구조로 그린다.
+    @ViewBuilder
+    private func documentSource<Content: View>(
+        title: String,
+        detail: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Button {
-                    isImportingFiles = true
-                } label: {
-                    Label("파일 추가", systemImage: "doc.badge.plus")
+            Text(title)
+                .font(.body.weight(.semibold))
+            Text(detail)
+                .font(.callout)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            content()
+        }
+    }
+
+    /// 어떤 소스에서 추가됐든 처리 완료된 첨부를 한 곳에 모아 보여준다(처리중 포함).
+    /// 실패 안내는 발생한 소스 그룹 옆에 따로 보여준다(소스별 에러 상태 분리) — 동시 첨부 시 서로 덮어쓰지 않도록.
+    @ViewBuilder
+    private var attachedSummary: some View {
+        if !attachedFiles.isEmpty || ingestingFileCount > 0 {
+            VStack(alignment: .leading, spacing: 6) {
+                if !attachedFiles.isEmpty {
+                    Text("추가된 자료 \(attachedFiles.count)개")
+                        .font(.body.weight(.semibold))
+                    ForEach(attachedFiles) { attached in
+                        attachmentRow(attached)
+                    }
                 }
-                Text("PDF · 이미지 · 텍스트(md/txt)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
 
-            HStack(spacing: 6) {
-                Image(systemName: "link")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                TextField("Notion 페이지 링크 붙여넣기", text: $notionURLInput)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(!notion.isConnected)
-                    .onSubmit { Task { await ingestNotionPage() } }
-                Button("가져오기") { Task { await ingestNotionPage() } }
-                    .disabled(!notion.isConnected || notionURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            if !notion.isConnected {
-                Text("설정에서 Notion을 연결하면 페이지를 가져올 수 있어요.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-
-            if attachedFiles.isEmpty && ingestingFileCount == 0 {
-                Text("회의 안건·자료를 추가하면 교정과 요약에 참고해요.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-
-            ForEach(attachedFiles) { attached in
-                attachmentRow(attached)
-            }
-
-            if ingestingFileCount > 0 {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("문서에서 글자 읽는 중 \(ingestingFileCount)개")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                if ingestingFileCount > 0 {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("문서에서 글자 읽는 중 \(ingestingFileCount)개")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
+        }
+    }
 
-            if let documentAttachError {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                    Text(documentAttachError)
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                }
+    /// 소스 그룹별 첨부 실패 안내(있을 때만). 어느 소스의 실패인지 그 입력 옆에서 바로 보이게 한다.
+    @ViewBuilder
+    private func attachErrorRow(_ message: String?) -> some View {
+        if let message {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundColor(.orange)
+                Text(message)
+                    .font(.callout)
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -430,10 +472,10 @@ public struct MeetingSetupView: View {
                 .foregroundColor(.secondary)
             VStack(alignment: .leading, spacing: 1) {
                 Text(attached.sourceLabel ?? attached.title)
-                    .font(.caption.weight(.medium))
+                    .font(.callout.weight(.medium))
                     .lineLimit(1)
                 Text("완료 · \(attached.text.count)자")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
             Spacer()
@@ -465,17 +507,25 @@ public struct MeetingSetupView: View {
         }
     }
 
-    /// 클라우드 전송 경계: 데이터 흐름을 설명하는 단일 안내 지점.
+    /// 클라우드 전송 경계: 데이터 흐름과 이미지 인식 범위를 설명하는 단일 안내 지점.
     private var cloudBoundaryNote: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "lock.shield")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-            Text("파일·OCR 처리는 이 기기에서 이뤄져요. 교정·요약을 켜면 문서 내용이 클라우드 AI로 전송될 수 있어요.")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "lock.shield.fill")
+                .foregroundColor(.accentColor)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("파일·이미지의 글자 인식은 이 기기에서만 처리돼요.")
+                    .font(.callout.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Notion·Confluence는 텍스트만 가져오고, 첨부된 이미지는 인식하지 않아요. 교정·요약을 켜면 문서 내용이 클라우드 AI로 전송될 수 있어요.")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.top, 4)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var documentBadgeText: String {
@@ -571,7 +621,7 @@ public struct MeetingSetupView: View {
     @MainActor
     private func ingestFiles(_ urls: [URL]) async {
         guard !urls.isEmpty else { return }
-        documentAttachError = nil
+        fileAttachError = nil
         ingestingFileCount += urls.count
         Log.importer.info("document attach start count=\(urls.count, privacy: .public)")
         defer { ingestingFileCount = max(0, ingestingFileCount - urls.count) }
@@ -582,7 +632,7 @@ public struct MeetingSetupView: View {
             Log.importer.info("document attach ok sourceKind=\(String(describing: attached.sourceKind), privacy: .public) chars=\(attached.text.count, privacy: .public)")
         }
         if let failure = result.failures.first {
-            documentAttachError = failure.reason.errorDescription
+            fileAttachError = failure.reason.errorDescription
             Log.importer.error("document attach failed reason=\(String(describing: failure.reason), privacy: .public)")
         }
     }
@@ -592,7 +642,7 @@ public struct MeetingSetupView: View {
     private func ingestNotionPage() async {
         let url = notionURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !url.isEmpty else { return }
-        documentAttachError = nil
+        notionAttachError = nil
         ingestingFileCount += 1
         Log.importer.info("notion attach start")
         defer { ingestingFileCount = max(0, ingestingFileCount - 1) }
@@ -606,8 +656,46 @@ public struct MeetingSetupView: View {
             }
             notionURLInput = ""
         case .failure(let reason):
-            documentAttachError = reason.errorDescription
+            notionAttachError = reason.errorDescription
             Log.importer.error("notion attach failed reason=\(String(describing: reason), privacy: .public)")
+        }
+    }
+
+    /// Confluence 페이지 링크 수집. URL에서 본문을 가져와 첨부 목록에 추가한다(fail-soft).
+    /// 검색(`fetchConfluenceContext`)과 달리 사용자가 지정한 특정 페이지 한 건을 가져온다.
+    @MainActor
+    private func ingestConfluencePage() async {
+        let url = confluenceURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+        confluenceAttachError = nil
+        ingestingFileCount += 1
+        Log.importer.info("confluence attach start")
+        defer { ingestingFileCount = max(0, ingestingFileCount - 1) }
+
+        let result = await confluence.fetchPageDocument(url: url)
+        switch result {
+        case .success(let attached):
+            if !attachedFiles.contains(where: { $0.id == attached.id }) {
+                attachedFiles.append(attached)
+                Log.importer.info("confluence attach ok chars=\(attached.text.count, privacy: .public)")
+            }
+            confluenceURLInput = ""
+        case .failure(let reason):
+            confluenceAttachError = confluenceAttachMessage(for: reason)
+            Log.importer.error("confluence attach failed reason=\(String(describing: reason), privacy: .public)")
+        }
+    }
+
+    /// 공유 실패 enum의 errorDescription은 Notion 브랜드 문구라, Confluence 첨부엔 쓰지 않고 직접 매핑한다.
+    /// (errorDescription에 의존하면 향후 Notion 전용 케이스가 추가될 때 Confluence 안내에 "Notion"이 샐 수 있다.)
+    private func confluenceAttachMessage(for failure: DocumentIngestionFailure) -> String {
+        switch failure {
+        case .notConnected, .needsReconnect:
+            return "Confluence 연결을 확인하세요. 설정 > 검색 소스."
+        case .emptyContent:
+            return "페이지에서 글자를 찾지 못했어요."
+        default:
+            return "페이지를 불러오지 못했어요. 링크가 올바른지 확인하세요."
         }
     }
 
