@@ -65,7 +65,9 @@ public final class TranscriptionViewModel: ObservableObject {
     private var channelActivityProvider: (any RecordingChannelActivityProviding)?
     private var recordingInputMode: AudioInputMode = .microphone
     private let liveSpeakerAssignment: LiveSpeakerAssignmentUseCase?
-    private let transcriptSpeakerMatcher = TranscriptSpeakerMatcher()
+    /// LS-EEND/VBx timeline은 speech-only이고 STT chunk는 침묵을 포함할 수 있어,
+    /// 라이브 표시는 positive overlap만 있으면 라벨 후보로 인정한다.
+    private let transcriptSpeakerMatcher = TranscriptSpeakerMatcher(minimumOverlapRatio: 0)
     private var liveSpeakerStartTask: Task<Void, Never>?
     private var liveSpeakerAssignmentStarted = false
     private var liveSpeakerAssignmentActive = false
@@ -807,12 +809,13 @@ public final class TranscriptionViewModel: ObservableObject {
 
         let labeledCommitted = committedSegments.map { segment in
             guard !editedSpeakerSegmentIds.contains(segment.id),
-                  let matched = matchedById[segment.id] else {
+                  let matched = matchedById[segment.id],
+                  let newSpeaker = SpeakerLabel.normalized(matched.speaker) else {
                 return segment
             }
 
             var updated = segment
-            updated.speaker = SpeakerLabel.normalized(matched.speaker)
+            updated.speaker = newSpeaker
             return updated
         }
         // 라벨이 실제로 바뀐 경우에만 재할당(불필요한 @Published 발화·재렌더 방지).
@@ -822,8 +825,8 @@ public final class TranscriptionViewModel: ObservableObject {
 
         if let pendingId,
            let pending = pendingSegment,
-           let matched = matchedById[pendingId] {
-            let newSpeaker = SpeakerLabel.normalized(matched.speaker)
+           let matched = matchedById[pendingId],
+           let newSpeaker = SpeakerLabel.normalized(matched.speaker) {
             if pending.speaker != newSpeaker {
                 var updated = pending
                 updated.speaker = newSpeaker

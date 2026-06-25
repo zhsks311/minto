@@ -35,6 +35,46 @@ struct LiveDiarizationFinalizeUseCaseTests {
         #expect(result.speakerEmbeddings.map(\.speakerLabel) == ["화자 1", "화자 2"])
     }
 
+    @Test("저장 finalize는 짧은 speech overlap도 VBx 화자 라벨 후보로 인정한다")
+    func assignsVBxSpeakerFromSparseSpeechOverlap() async throws {
+        let useCase = makeUseCase(
+            segments: [diarized("vbx-a", start: 0, end: 0.2)],
+            embeddings: [(speakerId: "vbx-a", embedding: [1, 0])]
+        )
+
+        let result = try await useCase.finalize(
+            audioFileURL: audioURL(),
+            liveTranscript: [segment(offset: 0, duration: 1, speaker: nil)],
+            editedSegmentIds: [],
+            enrolledVoiceprints: [],
+            meetingStart: meetingStart,
+            expectedSpeakerCount: nil
+        )
+
+        #expect(result.segments.map(\.speaker) == ["화자 1"])
+        #expect(result.speakerEmbeddings.map(\.speakerLabel) == ["화자 1"])
+    }
+
+    @Test("저장 finalize에서 VBx 매칭이 없으면 기존 live label을 지우지 않는다")
+    func preservesExistingSpeakerWhenVBxHasNoMatch() async throws {
+        let useCase = makeUseCase(
+            segments: [diarized("vbx-a", start: 10, end: 12)],
+            embeddings: [(speakerId: "vbx-a", embedding: [1, 0])]
+        )
+
+        let result = try await useCase.finalize(
+            audioFileURL: audioURL(),
+            liveTranscript: [segment(offset: 0, duration: 1, speaker: "화자 1")],
+            editedSegmentIds: [],
+            enrolledVoiceprints: [],
+            meetingStart: meetingStart,
+            expectedSpeakerCount: nil
+        )
+
+        #expect(result.segments.map(\.speaker) == ["화자 1"])
+        #expect(result.speakerEmbeddings.map(\.speakerLabel) == ["화자 1"])
+    }
+
     @Test("최종 화자 수는 라이브 라벨이 아니라 VBx 카운트를 따른다(상한 없음)")
     func finalCountFollowsVBxNotLive() async throws {
         // 라이브에선 전부 "화자 1"(과소추정)이었어도, VBx가 3명을 시간으로 나누면 최종은 3명.
