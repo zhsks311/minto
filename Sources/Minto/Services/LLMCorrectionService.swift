@@ -179,7 +179,7 @@ public final class LLMCorrectionService: ObservableObject {
     public var isLoggedIn: Bool {
         switch selectedProvider {
         case .none, .claudeCodeCLI:
-            // CLI provider는 교정 capability 미지원(Registry에서 .correction 제외) → 교정 로그인 대상 아님
+            // Claude CLI 연결 상태는 SettingsView의 경로/연결 확인 UI가 별도로 표시한다.
             return false
         case .local:
             return LocalLLMProviderConfiguration.stored().isConfigured

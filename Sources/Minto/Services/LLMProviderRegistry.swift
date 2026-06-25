@@ -90,10 +90,10 @@ extension LLMProviderRegistry {
         ),
         LLMProviderDescriptor(
             id: .claudeCodeCLI,
-            description: "로컬 Claude Code CLI 로그인으로 회의록 정리와 검색 답변을 실행해요.",
+            description: "로컬 Claude Code CLI 로그인으로 교정, 회의록 정리, 검색 답변을 실행해요.",
             authKind: .cliPath,
             requiresWarning: true,
-            supportedCapabilities: [.textGeneration, .summary, .answer]
+            supportedCapabilities: [.textGeneration, .correction, .summary, .answer]
         ),
         LLMProviderDescriptor(
             id: .openRouter,

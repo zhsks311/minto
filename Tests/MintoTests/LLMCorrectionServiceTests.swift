@@ -41,6 +41,46 @@ struct LLMCorrectionServiceTests {
         #expect(provider.requests.count == 1)
     }
 
+    @Test("Claude Code CLI 선택값은 correction capability provider로 라우팅한다")
+    func claudeCodeCLISelectionRoutesCorrectionProvider() async {
+        let service = makeService(selectedProvider: .claudeCodeCLI)
+        let provider = StubCorrectionProvider(providerID: .claudeCodeCLI)
+
+        let result = await service.correct(
+            text: "교정전 문장",
+            context: LLMCorrectionContext(topic: "Claude CLI 교정"),
+            providerResolver: { providerID in
+                #expect(providerID == .claudeCodeCLI)
+                return provider
+            }
+        )
+
+        #expect(result == "교정된 문장")
+        #expect(provider.requests.count == 1)
+        #expect(provider.requests.first?.useCase == .correction)
+    }
+
+    @Test("Claude Code CLI 교정 실패는 nil로 fail-soft 처리한다")
+    func claudeCodeCLIProviderErrorKeepsOriginalViaFallback() async {
+        let service = makeService(selectedProvider: .claudeCodeCLI)
+        let provider = StubCorrectionProvider(
+            error: LLMProviderError.network("Claude Code CLI failed exitCode=2"),
+            providerID: .claudeCodeCLI
+        )
+
+        let result = await service.correct(
+            text: "원문 문장",
+            context: LLMCorrectionContext(),
+            providerResolver: { providerID in
+                #expect(providerID == .claudeCodeCLI)
+                return provider
+            }
+        )
+
+        #expect(result == nil)
+        #expect(provider.requests.count == 1)
+    }
+
     @Test("provider 미선택이면 provider를 호출하지 않고 nil을 반환한다")
     func noneProviderSkipsCorrection() async {
         let service = makeService(selectedProvider: .none)
@@ -181,6 +221,29 @@ struct LLMCorrectionServiceTests {
         #expect(provider.requests.first?.maxOutputTokens == 2700)
     }
 
+    @Test("Claude Code CLI correctBatch도 토큰 산정과 교정 useCase를 유지한다")
+    func claudeCodeCLICorrectBatchScalesTokens() async {
+        let service = makeService(selectedProvider: .claudeCodeCLI)
+        let provider = StubCorrectionProvider(
+            responseText: "[1] 첫째 교정\n[2] 둘째 교정",
+            providerID: .claudeCodeCLI
+        )
+
+        let result = await service.correctBatch(
+            texts: ["첫째", "둘째"],
+            context: LLMCorrectionContext(),
+            providerResolver: { providerID in
+                #expect(providerID == .claudeCodeCLI)
+                return provider
+            }
+        )
+
+        #expect(result == ["첫째 교정", "둘째 교정"])
+        #expect(provider.requests.count == 1)
+        #expect(provider.requests.first?.useCase == .correction)
+        #expect(provider.requests.first?.maxOutputTokens == 1800)
+    }
+
     private func makeService(selectedProvider: LLMProviderSelection) -> LLMCorrectionService {
         let service = LLMCorrectionService(defaults: InMemoryUserDefaults())
         service.selectedProvider = selectedProvider
@@ -202,12 +265,13 @@ private final class StubCorrectionProvider: LLMTextGenerationProvider, @unchecke
     init(
         responseText: String = "교정된 문장",
         error: Error? = nil,
-        supportedCapabilities: Set<LLMModelInfo.Capability> = [.textGeneration, .correction]
+        supportedCapabilities: Set<LLMModelInfo.Capability> = [.textGeneration, .correction],
+        providerID: LLMProviderID = .gpt
     ) {
         self.responseText = responseText
         self.error = error
         self.descriptor = LLMProviderDescriptor(
-            id: .gpt,
+            id: providerID,
             description: "테스트 provider",
             authKind: .apiKey,
             supportedCapabilities: supportedCapabilities
@@ -229,6 +293,6 @@ private final class StubCorrectionProvider: LLMTextGenerationProvider, @unchecke
         if let error {
             throw error
         }
-        return LLMTextResponse(text: responseText, providerID: .gpt, modelID: "stub-correction")
+        return LLMTextResponse(text: responseText, providerID: descriptor.id, modelID: "stub-correction")
     }
 }
