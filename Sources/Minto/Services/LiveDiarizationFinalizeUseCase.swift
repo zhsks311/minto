@@ -7,6 +7,8 @@ import Foundation
 /// (방법 B[mapLabels 연속성]는 최종 카운트를 라이브 카운트에 묶어 다화자를 과소추정시켰다 — 실측으로 A 채택.)
 /// 사용자가 라이브 중 편집한 라벨은 VBx 배정으로 덮지 않는다.
 public struct LiveDiarizationFinalizeUseCase: Sendable {
+    private static let finalSpeakerMinimumOverlapRatio: Double = 0
+
     private let diarizer: any SegmentEmbeddingDiarizing
 
     public init(diarizer: any SegmentEmbeddingDiarizing) {
@@ -39,7 +41,9 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
             // 방법 A: VBx 세그먼트를 시간 겹침으로 transcript에 직접 배정("화자 N"). import과 동일 매처.
             // assignSpeakers는 내부적으로 makeLabelMap(vbxTimeline)을 쓰므로 위 vbxLabelMap과 라벨 공간이 일치한다
             // → transcript 라벨과 speakerEmbeddings 라벨 키가 정렬된다.
-            let matched = TranscriptSpeakerMatcher().assignSpeakers(
+            let matched = TranscriptSpeakerMatcher(
+                minimumOverlapRatio: Self.finalSpeakerMinimumOverlapRatio
+            ).assignSpeakers(
                 diarizedSegments: diarization.segments,
                 transcript: liveTranscript,
                 meetingStart: meetingStart
@@ -53,7 +57,11 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
                 if editedSegmentIds.contains(segment.id) {
                     return segment
                 }
-                return matchedById[segment.id] ?? segment
+                guard let matched = matchedById[segment.id],
+                      SpeakerLabel.normalized(matched.speaker) != nil else {
+                    return segment
+                }
+                return matched
             }
 
             let rawCentroids = VoiceprintMatching.centroids(from: diarization.embeddings)

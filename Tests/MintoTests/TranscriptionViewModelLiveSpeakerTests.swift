@@ -86,6 +86,78 @@ struct TranscriptionViewModelLiveSpeakerTests {
         viewModel.clearTranscript()
     }
 
+    @Test("짧은 speech overlap도 라이브 화자 라벨 후보로 인정한다")
+    func assignsLiveSpeakerLabelFromSparseSpeechOverlap() async throws {
+        let provider = LiveSpeakerMockStreamingProvider(
+            processResponses: [
+                [diarizedSegment("speaker-a", start: 0.0, end: 0.2)],
+            ]
+        )
+        let useCase = LiveSpeakerAssignmentUseCase(provider: provider)
+        let audioSource = LiveSpeakerStubAudioSource()
+        let viewModel = makeViewModel(
+            resultTexts: ["짧게 겹친 발화"],
+            audioSource: audioSource,
+            liveSpeakerAssignment: useCase
+        )
+
+        viewModel.startRecording()
+        audioSource.emit(samples: samples(count: 16_000))
+        #expect(await waitUntil {
+            let snapshot = await provider.snapshot()
+            return snapshot.processCallCount == 1
+        })
+
+        viewModel.enqueueChunk(audioChunk(start: 0.0, end: 1.0))
+        #expect(await waitUntil {
+            viewModel.committedSegments.first?.speaker == "화자 1"
+        })
+
+        await viewModel.stopRecordingAndDrain()
+        viewModel.clearTranscript()
+    }
+
+    @Test("빈 라이브 스냅샷은 기존 화자 라벨을 지우지 않는다")
+    func emptyLiveSnapshotPreservesExistingSpeakerLabel() async throws {
+        let provider = LiveSpeakerMockStreamingProvider(
+            processResponses: [
+                [diarizedSegment("speaker-a", start: 0.0, end: 1.0)],
+                [],
+            ]
+        )
+        let useCase = LiveSpeakerAssignmentUseCase(provider: provider)
+        let audioSource = LiveSpeakerStubAudioSource()
+        let viewModel = makeViewModel(
+            resultTexts: ["첫 발화"],
+            audioSource: audioSource,
+            liveSpeakerAssignment: useCase
+        )
+
+        viewModel.startRecording()
+        audioSource.emit(samples: samples(count: 16_000))
+        #expect(await waitUntil {
+            let snapshot = await provider.snapshot()
+            return snapshot.processCallCount == 1
+        })
+
+        viewModel.enqueueChunk(audioChunk(start: 0.0, end: 1.0))
+        #expect(await waitUntil {
+            viewModel.committedSegments.first?.speaker == "화자 1"
+        })
+
+        audioSource.emit(samples: samples(count: 16_000))
+        #expect(await waitUntil {
+            let snapshot = await provider.snapshot()
+            return snapshot.processCallCount == 2
+        })
+        await waitForMainQueueTurn()
+
+        #expect(viewModel.committedSegments.first?.speaker == "화자 1")
+
+        await viewModel.stopRecordingAndDrain()
+        viewModel.clearTranscript()
+    }
+
     @Test("수동 reassign한 segment는 이후 라이브 바인딩이 덮어쓰지 않는다")
     func reassignProtectsSegmentFromLaterLiveBinding() async throws {
         let provider = LiveSpeakerMockStreamingProvider(
