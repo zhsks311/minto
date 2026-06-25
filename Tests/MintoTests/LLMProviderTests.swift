@@ -74,6 +74,16 @@ struct LLMProviderTests {
         #expect(LLMProviderRegistry.shared.embeddingProvider(for: .local) != nil)
     }
 
+    @Test("Claude Code CLI provider는 교정 capability를 노출한다")
+    func claudeCodeCLIProviderExposesCorrectionCapability() {
+        let descriptor = LLMProviderRegistry.shared.descriptor(for: .claudeCodeCLI)
+        let provider = LLMProviderRegistry.shared.textGenerationProvider(for: .claudeCodeCLI)
+
+        #expect(descriptor?.supportedCapabilities == [.textGeneration, .correction, .summary, .answer])
+        #expect(provider?.descriptor.id == .claudeCodeCLI)
+        #expect(provider?.descriptor.supportedCapabilities.contains(.correction) == true)
+    }
+
     @Test("로컬 LLM provider는 모델 ID가 있어야 설정 완료로 본다")
     func localLLMProviderRequiresModelID() async {
         let unconfigured = LocalLLMProvider(configuration: LocalLLMProviderConfiguration(modelID: ""))
@@ -357,6 +367,9 @@ struct LLMProviderTests {
 
         LLMCorrectionService.shared.selectedProvider = .codex
         #expect(LLMCorrectionService.shared.selectedTextProvider()?.descriptor.id == .chatGPTAccount)
+
+        LLMCorrectionService.shared.selectedProvider = .claudeCodeCLI
+        #expect(LLMCorrectionService.shared.selectedTextProvider()?.descriptor.id == .claudeCodeCLI)
 
         LLMCorrectionService.shared.selectedProvider = .none
         #expect(LLMCorrectionService.shared.selectedTextProvider() == nil)

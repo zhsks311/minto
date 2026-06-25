@@ -219,6 +219,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     private static let anthropicAPIKeyEnvironmentName = "ANTHROPIC_API_KEY"
     private static let workingDirectoryName = "claude-cli-cwd"
     private static let localInstallCLIPath = "~/.claude/local/claude"
+    private static let localBinCLIPath = "~/.local/bin/claude"
     private static let homebrewCLIPath = "/opt/homebrew/bin/claude"
     private static let intelHomebrewCLIPath = "/usr/local/bin/claude"
     private static let systemCLIPath = "/usr/bin/claude"
@@ -324,12 +325,12 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     }
 
     public static func bundledModels() -> [LLMModelInfo] {
-        let capabilities: Set<LLMModelInfo.Capability> = [.textGeneration, .summary, .answer]
+        let capabilities: Set<LLMModelInfo.Capability> = [.textGeneration, .correction, .summary, .answer]
         return [
             LLMModelInfo(
                 id: "sonnet",
                 displayName: "Claude Sonnet",
-                description: "회의록 정리와 검색 답변의 기본 선택",
+                description: "교정, 회의록 정리, 검색 답변의 기본 선택",
                 capabilities: capabilities,
                 isRecommended: true
             ),
@@ -390,6 +391,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
 
         var candidates = [
             normalizedCLIPath(localInstallCLIPath),
+            normalizedCLIPath(localBinCLIPath),
             homebrewCLIPath,
             intelHomebrewCLIPath
         ]
@@ -491,7 +493,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
 
         guard processResult.exitCode == 0 else {
             let stderrPrefix = Self.stderrPrefix(from: processResult.stderr)
-            Log.llm.error("claude cli \(operation.rawValue, privacy: .public) failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) exitCode=\(processResult.exitCode, privacy: .public) stderrPrefix=\(stderrPrefix, privacy: .public)")
+            Log.llm.error("claude cli \(operation.rawValue, privacy: .public) failed provider=\(self.descriptor.id.rawValue, privacy: .public) model=\(modelID, privacy: .public) exitCode=\(processResult.exitCode, privacy: .public) \(Self.failureDiagnostic(stderrPrefix: stderrPrefix), privacy: .public)")
             throw Self.providerError(exitCode: processResult.exitCode, stderrPrefix: stderrPrefix)
         }
 
@@ -513,7 +515,8 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
         [
             "-p",
             "--model", modelID,
-            "--output-format", "json"
+            "--output-format", "json",
+            "--no-session-persistence"
         ] + toolBlockingArguments
     }
 
@@ -590,8 +593,22 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     }
 
     private static func providerError(exitCode: Int32, stderrPrefix: String) -> LLMProviderError {
+        if isAuthenticationFailure(stderrPrefix: stderrPrefix) {
+            return .unauthorized
+        }
+        return .network("Claude Code CLI failed exitCode=\(exitCode)")
+    }
+
+    private static func failureDiagnostic(stderrPrefix: String) -> String {
+        if isAuthenticationFailure(stderrPrefix: stderrPrefix) {
+            return "reason=authenticationFailed"
+        }
+        return "reason=processFailed"
+    }
+
+    private static func isAuthenticationFailure(stderrPrefix: String) -> Bool {
         let lowercased = stderrPrefix.lowercased()
-        let isAuthenticationFailure = [
+        return [
             "auth",
             "login",
             "log in",
@@ -601,11 +618,6 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
             "not authenticated",
             "not logged in"
         ].contains { lowercased.contains($0) }
-
-        if isAuthenticationFailure {
-            return .unauthorized
-        }
-        return .network("Claude Code CLI failed exitCode=\(exitCode) stderrPrefix=\(stderrPrefix)")
     }
 
     private static func stderrPrefix(from stderr: Data) -> String {

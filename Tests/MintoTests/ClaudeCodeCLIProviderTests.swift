@@ -35,6 +35,7 @@ struct ClaudeCodeCLIProviderTests {
         #expect(call.currentDirectory.path.hasSuffix("/Minto/claude-cli-cwd"))
         #expect(call.arguments.contains("--output-format"))
         #expect(call.arguments.contains("json"))
+        #expect(call.arguments.contains("--no-session-persistence"))
     }
 
     @Test("비정상 종료와 인증 stderr는 unauthorized로 매핑한다")
@@ -182,6 +183,119 @@ struct ClaudeCodeCLIProviderTests {
         #expect(call.environment["ANTHROPIC_API_KEY"] == nil)
     }
 
+    @Test("교정 요청은 세션 저장 없이 stdin으로만 민감 입력을 전달한다")
+    func correctionPromptUsesStdinWithoutSessionPersistence() async throws {
+        let instructions = "교정 규칙: 제품코드 A-SECRET는 그대로 둔다."
+        let transcript = "민감한 교정 원문 A-SECRET"
+        let fixture = try ProviderFixture(
+            result: .success(ProcessResult(
+                exitCode: 0,
+                stdout: Data(#"{"result":"교정 완료"}"#.utf8),
+                stderr: Data()
+            )),
+            environment: [
+                "PATH": "/opt/homebrew/bin:/usr/bin",
+                "ANTHROPIC_API_KEY": "must-not-be-forwarded"
+            ]
+        )
+        defer { fixture.cleanup() }
+
+        _ = try await fixture.provider.generateText(LLMTextRequest(
+            useCase: .correction,
+            instructions: instructions,
+            userContent: transcript,
+            modelID: nil
+        ))
+
+        let call = try #require(fixture.launcher.calls.first)
+        let stdinText = String(decoding: call.stdin, as: UTF8.self)
+        #expect(stdinText.contains(instructions))
+        #expect(stdinText.contains(transcript))
+        #expect(call.arguments.contains("--no-session-persistence"))
+        #expect(!call.arguments.contains("--system-prompt"))
+        #expect(!call.arguments.contains("--system-prompt-file"))
+        #expect(!call.arguments.contains { $0.contains(transcript) })
+        #expect(!call.arguments.contains { $0.contains(instructions) })
+        #expect(call.environment["PATH"] == "/opt/homebrew/bin:/usr/bin")
+        #expect(call.environment["ANTHROPIC_API_KEY"] == nil)
+    }
+
+    @Test("교정 실패 stderr는 provider error에 원문 prefix를 싣지 않는다")
+    func correctionFailureDoesNotExposeStderrPrefix() async throws {
+        let sensitiveStderr = "Claude error echoed 민감한 교정 원문 A-SECRET"
+        let fixture = try ProviderFixture(
+            result: .success(ProcessResult(
+                exitCode: 2,
+                stdout: Data(),
+                stderr: Data(sensitiveStderr.utf8)
+            ))
+        )
+        defer { fixture.cleanup() }
+
+        do {
+            _ = try await fixture.provider.generateText(LLMTextRequest(
+                useCase: .correction,
+                instructions: "교정 규칙",
+                userContent: "민감한 교정 원문 A-SECRET",
+                modelID: nil
+            ))
+            Issue.record("교정 실패는 network 에러로 매핑해야 합니다.")
+        } catch let error as LLMProviderError {
+            guard case .network(let message) = error else {
+                Issue.record("예상치 못한 LLMProviderError: \(error)")
+                return
+            }
+            #expect(message == "Claude Code CLI failed exitCode=2")
+            #expect(!message.contains("stderrPrefix"))
+            #expect(!message.contains("민감한 교정 원문"))
+            #expect(!message.contains("A-SECRET"))
+        } catch {
+            Issue.record("LLMProviderError가 아닌 에러: \(error)")
+        }
+    }
+
+    @Test("답변 실패 stderr도 provider error에 원문 prefix를 싣지 않는다")
+    func answerFailureDoesNotExposeStderrPrefix() async throws {
+        let sensitiveStderr = "Claude error echoed 민감한 답변 근거 B-SECRET"
+        let fixture = try ProviderFixture(
+            result: .success(ProcessResult(
+                exitCode: 3,
+                stdout: Data(),
+                stderr: Data(sensitiveStderr.utf8)
+            ))
+        )
+        defer { fixture.cleanup() }
+
+        do {
+            _ = try await fixture.provider.generateText(LLMTextRequest(
+                useCase: .answer,
+                instructions: "답변 규칙",
+                userContent: "민감한 답변 근거 B-SECRET",
+                modelID: nil
+            ))
+            Issue.record("답변 실패는 network 에러로 매핑해야 합니다.")
+        } catch let error as LLMProviderError {
+            guard case .network(let message) = error else {
+                Issue.record("예상치 못한 LLMProviderError: \(error)")
+                return
+            }
+            #expect(message == "Claude Code CLI failed exitCode=3")
+            #expect(!message.contains("stderrPrefix"))
+            #expect(!message.contains("민감한 답변 근거"))
+            #expect(!message.contains("B-SECRET"))
+        } catch {
+            Issue.record("LLMProviderError가 아닌 에러: \(error)")
+        }
+    }
+
+    @Test("번들 모델은 교정 capability를 노출한다")
+    func bundledModelsExposeCorrectionCapability() {
+        let models = ClaudeCodeCLIProvider.bundledModels()
+
+        #expect(models.isEmpty == false)
+        #expect(models.allSatisfy { $0.capabilities.contains(.correction) })
+    }
+
     @Test("10MB 초과 stdin은 UTF-8 경계에 맞춰 자르고 warning을 반환한다")
     func generateTextTruncatesOversizedStdinOnUTF8Boundary() async throws {
         let maxBytes = 10 * 1024 * 1024
@@ -236,6 +350,7 @@ struct ClaudeCodeCLIProviderTests {
         #expect(call.arguments.contains("-p"))
         #expect(call.arguments.contains("--output-format"))
         #expect(call.arguments.contains("json"))
+        #expect(call.arguments.contains("--no-session-persistence"))
         #expect(!call.arguments.contains("--system-prompt"))
         #expect(!call.arguments.contains("--version"))
     }
@@ -270,8 +385,9 @@ struct ClaudeCodeCLIProviderTests {
         }
 
         #expect(resolvedPath == "/custom/npm/bin/claude")
-        #expect(Array(checkedPaths.prefix(3)) == [
+        #expect(Array(checkedPaths.prefix(4)) == [
             "\(NSHomeDirectory())/.claude/local/claude",
+            "\(NSHomeDirectory())/.local/bin/claude",
             "/opt/homebrew/bin/claude",
             "/usr/local/bin/claude"
         ])
