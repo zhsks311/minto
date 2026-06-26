@@ -224,7 +224,6 @@ public struct SettingsView: View {
         if aiConnectionNeeded {
             aiConnectionSection
         }
-        GlossarySettingsSection()
         searchReadinessSection
         sourceConnectionsSection
 

@@ -41,6 +41,7 @@ public struct MeetingLibraryView: View {
     @State private var showingLiveMeeting = false
     @State private var showingExportOptions = false
     @State private var showingConfluenceExport = false
+    @State private var showingGlossaryManager = false
     @State private var exportRecord: MeetingRecord?
     // 오른쪽 디테일 영역에 AI 답변 전문을 표시할지 여부.
     // 라이브 회의 디테일이 항상 우선하고, 회의 행/인용 클릭 시 꺼진다.
@@ -266,6 +267,9 @@ public struct MeetingLibraryView: View {
                 )
             }
         }
+        .sheet(isPresented: $showingGlossaryManager) {
+            GlossaryManagementSheet()
+        }
         .sheet(isPresented: Binding(
             get: { fileImportSetupURL != nil },
             set: { if !$0 { fileImportSetupURL = nil } }
@@ -314,6 +318,8 @@ public struct MeetingLibraryView: View {
                     .layoutPriority(0)
                 fileImportButton
                     .layoutPriority(2)
+                glossaryButton
+                    .layoutPriority(2)
                 newMeetingButton
                     .layoutPriority(4)
             }
@@ -328,6 +334,7 @@ public struct MeetingLibraryView: View {
                     searchField
                         .frame(minWidth: 180, maxWidth: .infinity)
                     fileImportButton
+                    glossaryButton
                 }
             }
         }
@@ -355,6 +362,16 @@ public struct MeetingLibraryView: View {
         .fixedSize()
         .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
         .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있어요." : "음성 또는 영상 파일로 회의록을 만들어요.")
+    }
+
+    private var glossaryButton: some View {
+        Button { openGlossaryManager() } label: {
+            Label("용어집", systemImage: "text.book.closed")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .controlSize(.large)
+        .fixedSize()
+        .help("전역 용어집 관리")
     }
 
     private var newMeetingButton: some View {
@@ -3264,6 +3281,11 @@ public struct MeetingLibraryView: View {
     private func openSettingsWindow() {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
+    private func openGlossaryManager() {
+        Log.app.info("glossary manager open source=main")
+        showingGlossaryManager = true
     }
 
     private func detectUnfinishedFileImportIfNeeded() {
