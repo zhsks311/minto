@@ -1,6 +1,61 @@
 import SwiftUI
 
-struct GlossarySettingsSection: View {
+struct GlossaryManagementSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("전역 용어집 관리")
+                        .font(.title3.weight(.semibold))
+                    Text("모든 회의에 기본으로 쓸 용어와 별칭을 관리합니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .help("닫기")
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+
+            Divider()
+
+            ScrollView {
+                GlossaryManagementView()
+                    .padding(20)
+            }
+
+            Divider()
+
+            HStack {
+                Text("회의별 용어 선택은 새 회의와 다시 요약 화면에서 따로 설정합니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("닫기") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .frame(width: 780, height: 720)
+    }
+}
+
+private struct GlossaryManagementView: View {
     @ObservedObject private var glossaryStore = GlossaryStore.shared
 
     @State private var glossaryCanonicalInput = ""
@@ -23,7 +78,7 @@ struct GlossarySettingsSection: View {
     private static let glossaryNewCategoryTag = "__new-glossary-category__"
 
     var body: some View {
-        Section("용어집") {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("묶음별 용어집에서 회의 주제에 맞는 용어만 추천해요.")
@@ -65,6 +120,10 @@ struct GlossarySettingsSection: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onDisappear {
+            cancelGlossaryEditing()
         }
     }
 

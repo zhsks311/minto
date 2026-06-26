@@ -1,0 +1,3221 @@
+{
+  "version": "2.13",
+  "children": [
+    {
+      "type": "frame",
+      "id": "sKJQb",
+      "x": 0,
+      "y": 0,
+      "name": "Minto2 Library with Glossary Dialog",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "#F6F7F8",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "b8iN9L",
+          "x": 0,
+          "y": 0,
+          "name": "Header",
+          "width": 1440,
+          "height": 64,
+          "fill": "#FFFFFF",
+          "stroke": "#D8DEE6",
+          "strokeWidth": {
+            "bottom": 1
+          },
+          "padding": [
+            0,
+            24
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "sALWU",
+              "name": "Header Left",
+              "height": "fill_container",
+              "gap": 14,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "qHYrB",
+                  "name": "App Icon",
+                  "width": 24,
+                  "height": 24,
+                  "icon": "audio-lines",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                },
+                {
+                  "type": "text",
+                  "id": "hEjof",
+                  "name": "App Title",
+                  "fill": "#15181C",
+                  "content": "Minto2",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "kgEi6",
+                  "name": "Header Context",
+                  "fill": "#7A838F",
+                  "content": "회의 라이브러리",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Y0Hscs",
+              "name": "Header Actions",
+              "height": "fill_container",
+              "gap": 10,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "d30wr",
+                  "name": "Search Field",
+                  "width": 260,
+                  "height": 36,
+                  "fill": "#F3F5F7",
+                  "cornerRadius": 6,
+                  "stroke": "#E4E8EE",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "aD6G7",
+                      "name": "Search Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "search",
+                      "library": "lucide",
+                      "fill": "#7A838F"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Yutcw",
+                      "name": "Search Placeholder",
+                      "fill": "#8B949E",
+                      "content": "회의, 참석자, 결정사항 검색",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "RQDyW",
+                  "name": "Glossary Header Button",
+                  "height": 36,
+                  "fill": "#EEF4FF",
+                  "cornerRadius": 6,
+                  "stroke": "#BFD4FF",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "mHYT1",
+                      "name": "Glossary Button Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "book-open",
+                      "library": "lucide",
+                      "fill": "#2563EB"
+                    },
+                    {
+                      "type": "text",
+                      "id": "LE5tP",
+                      "name": "Glossary Button Label",
+                      "fill": "#2563EB",
+                      "content": "용어집",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "w0mJ5",
+                  "name": "New Meeting Button",
+                  "height": 36,
+                  "fill": "#15181C",
+                  "cornerRadius": 6,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "Xxa1a",
+                      "name": "New Meeting Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "plus",
+                      "library": "lucide",
+                      "fill": "#FFFFFF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Ia9op",
+                      "name": "New Meeting Label",
+                      "fill": "#FFFFFF",
+                      "content": "새 회의",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "fqlMR",
+          "x": 0,
+          "y": 64,
+          "name": "Sidebar",
+          "width": 236,
+          "height": 896,
+          "fill": "#F9FAFB",
+          "stroke": "#D8DEE6",
+          "strokeWidth": {
+            "right": 1
+          },
+          "layout": "vertical",
+          "gap": 8,
+          "padding": [
+            20,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "ZYOG5",
+              "name": "Sidebar Section",
+              "fill": "#7A838F",
+              "content": "라이브러리",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "A8rl7K",
+              "name": "Sidebar 전체 회의",
+              "width": "fill_container",
+              "height": 38,
+              "fill": "#EAF1FF",
+              "cornerRadius": 6,
+              "padding": [
+                0,
+                10
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Fb3dK",
+                  "name": "전체 회의 Label Group",
+                  "gap": 9,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "mv9TC",
+                      "name": "전체 회의 Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "inbox",
+                      "library": "lucide",
+                      "fill": "#2563EB"
+                    },
+                    {
+                      "type": "text",
+                      "id": "z51f4y",
+                      "name": "전체 회의 Label",
+                      "fill": "#2563EB",
+                      "content": "전체 회의",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "EQhZ5",
+                  "name": "전체 회의 Count",
+                  "fill": "#8B949E",
+                  "content": "128",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "E1V5Ne",
+              "name": "Sidebar 이번 주",
+              "width": "fill_container",
+              "height": 38,
+              "fill": "#F9FAFB",
+              "cornerRadius": 6,
+              "padding": [
+                0,
+                10
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "zNtJL",
+                  "name": "이번 주 Label Group",
+                  "gap": 9,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "d5gwFe",
+                      "name": "이번 주 Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "calendar-days",
+                      "library": "lucide",
+                      "fill": "#7A838F"
+                    },
+                    {
+                      "type": "text",
+                      "id": "VqacL",
+                      "name": "이번 주 Label",
+                      "fill": "#15181C",
+                      "content": "이번 주",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "TcL61",
+                  "name": "이번 주 Count",
+                  "fill": "#8B949E",
+                  "content": "12",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ZANxT",
+              "name": "Sidebar 중요",
+              "width": "fill_container",
+              "height": 38,
+              "fill": "#F9FAFB",
+              "cornerRadius": 6,
+              "padding": [
+                0,
+                10
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "eyiCR",
+                  "name": "중요 Label Group",
+                  "gap": 9,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "FykXW",
+                      "name": "중요 Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "star",
+                      "library": "lucide",
+                      "fill": "#7A838F"
+                    },
+                    {
+                      "type": "text",
+                      "id": "T1i2k",
+                      "name": "중요 Label",
+                      "fill": "#15181C",
+                      "content": "중요",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "igqzA",
+                  "name": "중요 Count",
+                  "fill": "#8B949E",
+                  "content": "9",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "pNPNt",
+              "name": "Sidebar 보관함",
+              "width": "fill_container",
+              "height": 38,
+              "fill": "#F9FAFB",
+              "cornerRadius": 6,
+              "padding": [
+                0,
+                10
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "r7RAdF",
+                  "name": "보관함 Label Group",
+                  "gap": 9,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "qdGzA",
+                      "name": "보관함 Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "archive",
+                      "library": "lucide",
+                      "fill": "#7A838F"
+                    },
+                    {
+                      "type": "text",
+                      "id": "c39OqV",
+                      "name": "보관함 Label",
+                      "fill": "#15181C",
+                      "content": "보관함",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "QSCU0",
+                  "name": "보관함 Count",
+                  "fill": "#8B949E",
+                  "content": "24",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "uACsU",
+              "name": "Sidebar Space Label",
+              "fill": "#7A838F",
+              "content": "작업 공간",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "vgkGn",
+              "name": "Workspace 제품팀",
+              "width": "fill_container",
+              "height": 34,
+              "fill": "#F9FAFB",
+              "gap": 9,
+              "padding": [
+                0,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "Osp5p",
+                  "name": "제품팀 Icon",
+                  "width": 15,
+                  "height": 15,
+                  "icon": "briefcase",
+                  "library": "lucide",
+                  "fill": "#7A838F"
+                },
+                {
+                  "type": "text",
+                  "id": "j8SExu",
+                  "name": "제품팀 Label",
+                  "fill": "#15181C",
+                  "content": "제품팀",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Z7PaN",
+              "name": "Workspace 스프린트",
+              "width": "fill_container",
+              "height": 34,
+              "fill": "#F9FAFB",
+              "gap": 9,
+              "padding": [
+                0,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "w0Hs58",
+                  "name": "스프린트 Icon",
+                  "width": 15,
+                  "height": 15,
+                  "icon": "users",
+                  "library": "lucide",
+                  "fill": "#7A838F"
+                },
+                {
+                  "type": "text",
+                  "id": "wMnQu",
+                  "name": "스프린트 Label",
+                  "fill": "#15181C",
+                  "content": "스프린트",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lx3em",
+              "name": "Workspace 고객 인터뷰",
+              "width": "fill_container",
+              "height": 34,
+              "fill": "#F9FAFB",
+              "gap": 9,
+              "padding": [
+                0,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "i5lmE3",
+                  "name": "고객 인터뷰 Icon",
+                  "width": 15,
+                  "height": 15,
+                  "icon": "file-text",
+                  "library": "lucide",
+                  "fill": "#7A838F"
+                },
+                {
+                  "type": "text",
+                  "id": "OKVAp",
+                  "name": "고객 인터뷰 Label",
+                  "fill": "#15181C",
+                  "content": "고객 인터뷰",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "tG7zG",
+          "x": 236,
+          "y": 64,
+          "name": "Meeting List",
+          "width": 468,
+          "height": 896,
+          "fill": "#FFFFFF",
+          "stroke": "#D8DEE6",
+          "strokeWidth": {
+            "right": 1
+          },
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "c6HdcI",
+              "name": "Meeting List Header",
+              "width": "fill_container",
+              "stroke": "#D8DEE6",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                22,
+                22,
+                16,
+                22
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "O3RKIj",
+                  "name": "Meeting List Title",
+                  "fill": "#15181C",
+                  "content": "전체 회의",
+                  "fontFamily": "Inter",
+                  "fontSize": 22,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "text",
+                  "id": "V5mKUc",
+                  "name": "Meeting List Summary",
+                  "fill": "#6B7280",
+                  "content": "최근 저장된 회의 128개 · 전사와 요약을 함께 검색",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "KvAwl",
+              "name": "Meeting Row 로드맵 주간 회의",
+              "width": "fill_container",
+              "fill": "#F3F7FF",
+              "stroke": "#D8DEE6",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                16,
+                22
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "a2u9xW",
+                  "name": "로드맵 주간 회의 Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Xpoxp",
+                      "name": "로드맵 주간 회의 Date",
+                      "fill": "#7A838F",
+                      "content": "오늘 10:00",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Vr7y2",
+                      "name": "로드맵 주간 회의 Status",
+                      "height": 24,
+                      "fill": "#EEF4FF",
+                      "cornerRadius": 12,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "uBUgp",
+                          "name": "로드맵 주간 회의 Status Text",
+                          "fill": "#2563EB",
+                          "content": "진행 중",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "edp5H",
+                  "name": "로드맵 주간 회의 Title",
+                  "fill": "#15181C",
+                  "content": "로드맵 주간 회의",
+                  "fontFamily": "Inter",
+                  "fontSize": 15,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "text",
+                  "id": "f9EpHu",
+                  "name": "로드맵 주간 회의 Meta",
+                  "fill": "#6B7280",
+                  "content": "결정사항 3개 · 할 일 5개",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "GqXO5",
+              "name": "Meeting Row 고객 인터뷰 정리",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "stroke": "#D8DEE6",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                16,
+                22
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "KNaCy",
+                  "name": "고객 인터뷰 정리 Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qADRx",
+                      "name": "고객 인터뷰 정리 Date",
+                      "fill": "#7A838F",
+                      "content": "어제 16:20",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VamZk",
+                      "name": "고객 인터뷰 정리 Status",
+                      "height": 24,
+                      "fill": "#F3F5F7",
+                      "cornerRadius": 12,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "K1B1k",
+                          "name": "고객 인터뷰 정리 Status Text",
+                          "fill": "#59616C",
+                          "content": "요약 완료",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "FXzlg",
+                  "name": "고객 인터뷰 정리 Title",
+                  "fill": "#15181C",
+                  "content": "고객 인터뷰 정리",
+                  "fontFamily": "Inter",
+                  "fontSize": 15,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "text",
+                  "id": "E4u58",
+                  "name": "고객 인터뷰 정리 Meta",
+                  "fill": "#6B7280",
+                  "content": "미해결 질문 4개 · 태그 2개",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "q9fSdy",
+              "name": "Meeting Row STT 품질 점검",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "stroke": "#D8DEE6",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                16,
+                22
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "OHCVK",
+                  "name": "STT 품질 점검 Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cNYJW",
+                      "name": "STT 품질 점검 Date",
+                      "fill": "#7A838F",
+                      "content": "6월 24일",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "H2lFN",
+                      "name": "STT 품질 점검 Status",
+                      "height": 24,
+                      "fill": "#FFF7ED",
+                      "cornerRadius": 12,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L9Yah",
+                          "name": "STT 품질 점검 Status Text",
+                          "fill": "#C2410C",
+                          "content": "검토 필요",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "LnuhM",
+                  "name": "STT 품질 점검 Title",
+                  "fill": "#15181C",
+                  "content": "STT 품질 점검",
+                  "fontFamily": "Inter",
+                  "fontSize": 15,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "text",
+                  "id": "FC0EH",
+                  "name": "STT 품질 점검 Meta",
+                  "fill": "#6B7280",
+                  "content": "CER 비교 · 샘플 18개",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "bTlAg",
+              "name": "Meeting Row 디자인 리뷰",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "stroke": "#D8DEE6",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                16,
+                22
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "EQYN3",
+                  "name": "디자인 리뷰 Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "wz4dm",
+                      "name": "디자인 리뷰 Date",
+                      "fill": "#7A838F",
+                      "content": "6월 23일",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "A2mRuc",
+                      "name": "디자인 리뷰 Status",
+                      "height": 24,
+                      "fill": "#F3F5F7",
+                      "cornerRadius": 12,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "wprAb",
+                          "name": "디자인 리뷰 Status Text",
+                          "fill": "#59616C",
+                          "content": "요약 완료",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "dIUoJ",
+                  "name": "디자인 리뷰 Title",
+                  "fill": "#15181C",
+                  "content": "디자인 리뷰",
+                  "fontFamily": "Inter",
+                  "fontSize": 15,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "text",
+                  "id": "qJuDg",
+                  "name": "디자인 리뷰 Meta",
+                  "fill": "#6B7280",
+                  "content": "액션 아이템 7개",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lO3ta",
+              "name": "Meeting Row 릴리즈 체크인",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "stroke": "#D8DEE6",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                16,
+                22
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Tm6wR",
+                  "name": "릴리즈 체크인 Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "TGR9l",
+                      "name": "릴리즈 체크인 Date",
+                      "fill": "#7A838F",
+                      "content": "6월 21일",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "C5rMZb",
+                      "name": "릴리즈 체크인 Status",
+                      "height": 24,
+                      "fill": "#F3F5F7",
+                      "cornerRadius": 12,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lEjCo",
+                          "name": "릴리즈 체크인 Status Text",
+                          "fill": "#59616C",
+                          "content": "보관",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "xrENk",
+                  "name": "릴리즈 체크인 Title",
+                  "fill": "#15181C",
+                  "content": "릴리즈 체크인",
+                  "fontFamily": "Inter",
+                  "fontSize": 15,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "text",
+                  "id": "bp48O",
+                  "name": "릴리즈 체크인 Meta",
+                  "fill": "#6B7280",
+                  "content": "배포 전 확인 목록",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "NJDVs",
+          "x": 704,
+          "y": 64,
+          "name": "Meeting Detail",
+          "width": 736,
+          "height": 896,
+          "fill": "#FFFFFF",
+          "layout": "vertical",
+          "gap": 22,
+          "padding": [
+            28,
+            32
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "W3c1N",
+              "name": "Detail Header",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "sEfvo",
+                  "name": "Detail Eyebrow",
+                  "fill": "#7A838F",
+                  "content": "오늘 10:00 · 제품팀",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "gf4HC",
+                  "name": "Detail Title",
+                  "fill": "#15181C",
+                  "content": "로드맵 주간 회의",
+                  "fontFamily": "Inter",
+                  "fontSize": 28,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "text",
+                  "id": "AQCrP",
+                  "name": "Detail Summary",
+                  "fill": "#59616C",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "결정사항은 출시 범위와 QA 기준에 집중되어 있습니다. 할 일은 담당자와 마감일 기준으로 정리됩니다.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "M49X4",
+              "name": "Detail Metrics",
+              "width": "fill_container",
+              "height": 74,
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "vfpZv",
+                  "name": "Metric 전사",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#F7F8FA",
+                  "cornerRadius": 6,
+                  "stroke": "#E5EAF0",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "N8e0f4",
+                      "name": "전사 Label",
+                      "fill": "#7A838F",
+                      "content": "전사",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "FeDH0",
+                      "name": "전사 Value",
+                      "fill": "#15181C",
+                      "content": "완료",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "800"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "XAuB9",
+                  "name": "Metric 요약",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#F7F8FA",
+                  "cornerRadius": 6,
+                  "stroke": "#E5EAF0",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "a7HhDM",
+                      "name": "요약 Label",
+                      "fill": "#7A838F",
+                      "content": "요약",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ijRnn",
+                      "name": "요약 Value",
+                      "fill": "#15181C",
+                      "content": "진행 중",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "800"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "LocSE",
+                  "name": "Metric 할 일",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#F7F8FA",
+                  "cornerRadius": 6,
+                  "stroke": "#E5EAF0",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "J8hrx",
+                      "name": "할 일 Label",
+                      "fill": "#7A838F",
+                      "content": "할 일",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Y5PER",
+                      "name": "할 일 Value",
+                      "fill": "#15181C",
+                      "content": "5개",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "800"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "t9Lv0n",
+                  "name": "Metric 용어 매칭",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#F7F8FA",
+                  "cornerRadius": 6,
+                  "stroke": "#E5EAF0",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "oVaLz",
+                      "name": "용어 매칭 Label",
+                      "fill": "#7A838F",
+                      "content": "용어 매칭",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "YYZNE",
+                      "name": "용어 매칭 Value",
+                      "fill": "#15181C",
+                      "content": "12개",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "800"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "M2UeYQ",
+              "name": "Per Meeting Glossary Section",
+              "width": "fill_container",
+              "fill": "#FBFCFD",
+              "cornerRadius": 6,
+              "stroke": "#E2E7EE",
+              "strokeWidth": 1,
+              "padding": [
+                16,
+                18
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "h2K2pB",
+                  "name": "Per Meeting Glossary Copy",
+                  "width": 430,
+                  "layout": "vertical",
+                  "gap": 5,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "P1iBkj",
+                      "name": "Per Meeting Glossary Title",
+                      "fill": "#15181C",
+                      "content": "이 회의 용어집",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "RH6Mt",
+                      "name": "Per Meeting Glossary Description",
+                      "fill": "#6B7280",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "전역 용어집과 별개로 이 회의에만 적용할 용어 묶음을 선택합니다.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "JAoAb",
+                  "name": "Per Meeting Select Button",
+                  "height": 34,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 6,
+                  "stroke": "#C9D2DE",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "lSfLR",
+                      "name": "Per Meeting Select Icon",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "list-checks",
+                      "library": "lucide",
+                      "fill": "#15181C"
+                    },
+                    {
+                      "type": "text",
+                      "id": "SefIf",
+                      "name": "Per Meeting Select Label",
+                      "fill": "#15181C",
+                      "content": "회의별 선택",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ttThG",
+              "name": "Decisions Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "L8bnmg",
+                  "name": "Decisions Title",
+                  "fill": "#15181C",
+                  "content": "결정사항",
+                  "fontFamily": "Inter",
+                  "fontSize": 16,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "frame",
+                  "id": "d2tgA",
+                  "name": "Decision Item",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "pe3mO",
+                      "name": "Decision Check Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "circle-check",
+                      "library": "lucide",
+                      "fill": "#16A34A"
+                    },
+                    {
+                      "type": "text",
+                      "id": "OnhjD",
+                      "name": "Decision Text",
+                      "fill": "#15181C",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "베타 범위는 데스크톱 녹음과 요약 내보내기까지로 제한",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "wMSZO",
+                  "name": "Decision Item",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "mSoku",
+                      "name": "Decision Check Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "circle-check",
+                      "library": "lucide",
+                      "fill": "#16A34A"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Z9F0s",
+                      "name": "Decision Text",
+                      "fill": "#15181C",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "용어집은 전역 관리와 회의별 선택을 분리",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "a2Utp",
+                  "name": "Decision Item",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "HwJvP",
+                      "name": "Decision Check Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "circle-check",
+                      "library": "lucide",
+                      "fill": "#16A34A"
+                    },
+                    {
+                      "type": "text",
+                      "id": "qQsyk",
+                      "name": "Decision Text",
+                      "fill": "#15181C",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "릴리즈 전 STT 회귀 샘플을 18개로 고정",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "OWePI",
+          "x": 0,
+          "y": 0,
+          "name": "Dialog Scrim",
+          "width": 1440,
+          "height": 960,
+          "fill": "#10141866",
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "K2HNUU",
+              "x": 318,
+              "y": 112,
+              "name": "Global Glossary Dialog",
+              "clip": true,
+              "width": 804,
+              "height": 736,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": "#C8D0DA",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A33",
+                "offset": {
+                  "x": 0,
+                  "y": 18
+                },
+                "blur": 44
+              },
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "DGWBH",
+                  "name": "Dialog Header",
+                  "width": "fill_container",
+                  "height": 74,
+                  "stroke": "#D8DEE6",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "padding": [
+                    0,
+                    24
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "KzzBO",
+                      "name": "Dialog Title Group",
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "mLaYF",
+                          "name": "Dialog Title",
+                          "fill": "#15181C",
+                          "content": "전역 용어집 관리",
+                          "fontFamily": "Inter",
+                          "fontSize": 20,
+                          "fontWeight": "800"
+                        },
+                        {
+                          "type": "text",
+                          "id": "aDBFx",
+                          "name": "Dialog Subtitle",
+                          "fill": "#6B7280",
+                          "content": "모든 회의에 기본 적용되는 용어와 별칭을 관리합니다.",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mAhjp",
+                      "name": "Dialog Close Button",
+                      "width": 34,
+                      "height": 34,
+                      "fill": "#F3F5F7",
+                      "cornerRadius": 6,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "w02Pm8",
+                          "name": "Dialog Close Icon",
+                          "width": 17,
+                          "height": 17,
+                          "icon": "x",
+                          "library": "lucide",
+                          "fill": "#59616C"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "fh9Z4",
+                  "name": "Dialog Body",
+                  "width": "fill_container",
+                  "height": 584,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "SxfAk",
+                      "name": "Glossary Main Panel",
+                      "width": 512,
+                      "height": "fill_container",
+                      "fill": "#FFFFFF",
+                      "stroke": "#D8DEE6",
+                      "strokeWidth": {
+                        "right": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 16,
+                      "padding": [
+                        20,
+                        22
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "u2tic",
+                          "name": "Glossary Toolbar",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "RdQiC",
+                              "name": "Term Search Field",
+                              "width": 282,
+                              "height": 34,
+                              "fill": "#F6F7F9",
+                              "cornerRadius": 6,
+                              "stroke": "#E4E8EE",
+                              "strokeWidth": 1,
+                              "gap": 8,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "C6AF6s",
+                                  "name": "Term Search Icon",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "search",
+                                  "library": "lucide",
+                                  "fill": "#7A838F"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "o4xNy",
+                                  "name": "Term Search Placeholder",
+                                  "fill": "#8B949E",
+                                  "content": "용어 검색",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "nEbmJ",
+                              "name": "Add Term Button",
+                              "height": 34,
+                              "fill": "#2563EB",
+                              "cornerRadius": 6,
+                              "gap": 7,
+                              "padding": [
+                                0,
+                                12
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "stOL5",
+                                  "name": "Add Term Icon",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "plus",
+                                  "library": "lucide",
+                                  "fill": "#FFFFFF"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "GnKbi",
+                                  "name": "Add Term Label",
+                                  "fill": "#FFFFFF",
+                                  "content": "용어 추가",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "800"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "u7M9c",
+                          "name": "Global Terms Table",
+                          "clip": true,
+                          "width": "fill_container",
+                          "height": 372,
+                          "cornerRadius": 6,
+                          "stroke": "#E0E6EE",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "UwuFq",
+                              "name": "Terms Table Header",
+                              "width": "fill_container",
+                              "height": 38,
+                              "fill": "#F7F8FA",
+                              "stroke": "#E0E6EE",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "giAMA",
+                                  "name": "Header Cell 상태",
+                                  "width": 72,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "bEfzW",
+                                      "name": "Header Text 상태",
+                                      "fill": "#68717D",
+                                      "content": "상태",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "iI0ti",
+                                  "name": "Header Cell 용어",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "GsIYA",
+                                      "name": "Header Text 용어",
+                                      "fill": "#68717D",
+                                      "content": "용어",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "O7PGe2",
+                                  "name": "Header Cell 대표 표기",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "cjPEp",
+                                      "name": "Header Text 대표 표기",
+                                      "fill": "#68717D",
+                                      "content": "대표 표기",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "uoFcr",
+                                  "name": "Header Cell 작업",
+                                  "width": 108,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Qh4z1",
+                                      "name": "Header Text 작업",
+                                      "fill": "#68717D",
+                                      "content": "작업",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "f0YQHM",
+                              "name": "Term Row WhisperKit",
+                              "width": "fill_container",
+                              "height": 56,
+                              "stroke": "#E9EDF3",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "G8gqa",
+                                  "name": "WhisperKit Enabled Cell",
+                                  "width": 72,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "Uj5mM",
+                                      "name": "WhisperKit Toggle",
+                                      "width": 34,
+                                      "height": 20,
+                                      "fill": "#2563EB",
+                                      "cornerRadius": 10,
+                                      "padding": 2,
+                                      "justifyContent": "end",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "ellipse",
+                                          "id": "L5y00s",
+                                          "name": "WhisperKit Toggle Knob",
+                                          "fill": "#FFFFFF",
+                                          "width": 16,
+                                          "height": 16
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ocha3",
+                                  "name": "WhisperKit Cell WhisperKit",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "D7Q2j6",
+                                      "name": "WhisperKit Text WhisperKit",
+                                      "fill": "#15181C",
+                                      "content": "WhisperKit",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "k140jI",
+                                  "name": "WhisperKit Cell WhisperKit",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "U1FvIP",
+                                      "name": "WhisperKit Text WhisperKit",
+                                      "fill": "#15181C",
+                                      "content": "WhisperKit",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "eCO4Q",
+                                  "name": "WhisperKit Cell 편집 · 끄기",
+                                  "width": 108,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "fiEBl",
+                                      "name": "WhisperKit Text 편집 · 끄기",
+                                      "fill": "#2563EB",
+                                      "content": "편집 · 끄기",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "rc9nB",
+                              "name": "Term Row CER",
+                              "width": "fill_container",
+                              "height": 56,
+                              "stroke": "#E9EDF3",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "Pks2H",
+                                  "name": "CER Enabled Cell",
+                                  "width": 72,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "V9NLR",
+                                      "name": "CER Toggle",
+                                      "width": 34,
+                                      "height": 20,
+                                      "fill": "#2563EB",
+                                      "cornerRadius": 10,
+                                      "padding": 2,
+                                      "justifyContent": "end",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "ellipse",
+                                          "id": "EC8XO",
+                                          "name": "CER Toggle Knob",
+                                          "fill": "#FFFFFF",
+                                          "width": 16,
+                                          "height": 16
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ayVji",
+                                  "name": "CER Cell CER",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "tvMTh",
+                                      "name": "CER Text CER",
+                                      "fill": "#15181C",
+                                      "content": "CER",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "kX7Kq",
+                                  "name": "CER Cell CER",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "D4Oh3q",
+                                      "name": "CER Text CER",
+                                      "fill": "#15181C",
+                                      "content": "CER",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "EYZbF",
+                                  "name": "CER Cell 편집 · 끄기",
+                                  "width": 108,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "N3qszj",
+                                      "name": "CER Text 편집 · 끄기",
+                                      "fill": "#2563EB",
+                                      "content": "편집 · 끄기",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "NWYSb",
+                              "name": "Term Row G2",
+                              "width": "fill_container",
+                              "height": 56,
+                              "stroke": "#E9EDF3",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "sSihs",
+                                  "name": "G2 Enabled Cell",
+                                  "width": 72,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "mivQk",
+                                      "name": "G2 Toggle",
+                                      "width": 34,
+                                      "height": 20,
+                                      "fill": "#CBD5E1",
+                                      "cornerRadius": 10,
+                                      "padding": 2,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "ellipse",
+                                          "id": "f8yXm",
+                                          "name": "G2 Toggle Knob",
+                                          "fill": "#FFFFFF",
+                                          "width": 16,
+                                          "height": 16
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "g1IPHU",
+                                  "name": "G2 Cell G2",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "YVZfs",
+                                      "name": "G2 Text G2",
+                                      "fill": "#15181C",
+                                      "content": "G2",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ZL8ZK",
+                                  "name": "G2 Cell G2 STT",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "ZycBu",
+                                      "name": "G2 Text G2 STT",
+                                      "fill": "#15181C",
+                                      "content": "G2 STT",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "w4GXW7",
+                                  "name": "G2 Cell 편집 · 켜기",
+                                  "width": 108,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "G50jR",
+                                      "name": "G2 Text 편집 · 켜기",
+                                      "fill": "#2563EB",
+                                      "content": "편집 · 켜기",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ek3zY",
+                              "name": "Term Row ADR",
+                              "width": "fill_container",
+                              "height": 56,
+                              "stroke": "#E9EDF3",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "kAFSv",
+                                  "name": "ADR Enabled Cell",
+                                  "width": 72,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "GrBUi",
+                                      "name": "ADR Toggle",
+                                      "width": 34,
+                                      "height": 20,
+                                      "fill": "#2563EB",
+                                      "cornerRadius": 10,
+                                      "padding": 2,
+                                      "justifyContent": "end",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "ellipse",
+                                          "id": "t96CX",
+                                          "name": "ADR Toggle Knob",
+                                          "fill": "#FFFFFF",
+                                          "width": 16,
+                                          "height": 16
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "sNVGr",
+                                  "name": "ADR Cell ADR",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "XkvBY",
+                                      "name": "ADR Text ADR",
+                                      "fill": "#15181C",
+                                      "content": "ADR",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "GorcU",
+                                  "name": "ADR Cell ADR",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "h5VDrX",
+                                      "name": "ADR Text ADR",
+                                      "fill": "#15181C",
+                                      "content": "ADR",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "X6el6N",
+                                  "name": "ADR Cell 편집 · 끄기",
+                                  "width": 108,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "JSETK",
+                                      "name": "ADR Text 편집 · 끄기",
+                                      "fill": "#2563EB",
+                                      "content": "편집 · 끄기",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "B76HH",
+                              "name": "Term Row Pencil",
+                              "width": "fill_container",
+                              "height": 56,
+                              "stroke": "#E9EDF3",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "Is3gx",
+                                  "name": "Pencil Enabled Cell",
+                                  "width": 72,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "cqJU9",
+                                      "name": "Pencil Toggle",
+                                      "width": 34,
+                                      "height": 20,
+                                      "fill": "#2563EB",
+                                      "cornerRadius": 10,
+                                      "padding": 2,
+                                      "justifyContent": "end",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "ellipse",
+                                          "id": "zb9ND",
+                                          "name": "Pencil Toggle Knob",
+                                          "fill": "#FFFFFF",
+                                          "width": 16,
+                                          "height": 16
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "jSdsU",
+                                  "name": "Pencil Cell Pencil",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "pzUHk",
+                                      "name": "Pencil Text Pencil",
+                                      "fill": "#15181C",
+                                      "content": "Pencil",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "fA18L",
+                                  "name": "Pencil Cell Pencil",
+                                  "width": 142,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "ifYhK",
+                                      "name": "Pencil Text Pencil",
+                                      "fill": "#15181C",
+                                      "content": "Pencil",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "UTw0v",
+                                  "name": "Pencil Cell 편집 · 끄기",
+                                  "width": 108,
+                                  "height": "fill_container",
+                                  "padding": [
+                                    0,
+                                    12
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "o3cjb",
+                                      "name": "Pencil Text 편집 · 끄기",
+                                      "fill": "#2563EB",
+                                      "content": "편집 · 끄기",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "J2ZiXD",
+                          "name": "Inline Edit Panel",
+                          "width": "fill_container",
+                          "fill": "#FBFCFD",
+                          "cornerRadius": 6,
+                          "stroke": "#E2E7EE",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "padding": [
+                            14,
+                            16
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ulR2T",
+                              "name": "Inline Edit Title",
+                              "fill": "#15181C",
+                              "content": "선택한 용어 편집",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "800"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "e4ZCkT",
+                              "name": "Inline Edit Fields",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "q3I7TW",
+                                  "name": "Field 용어",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 5,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "RE9ct",
+                                      "name": "Field Label 용어",
+                                      "fill": "#7A838F",
+                                      "content": "용어",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "A82O3",
+                                      "name": "Input 용어",
+                                      "width": "fill_container",
+                                      "height": 32,
+                                      "fill": "#FFFFFF",
+                                      "cornerRadius": 5,
+                                      "stroke": "#CED6E0",
+                                      "strokeWidth": 1,
+                                      "padding": [
+                                        0,
+                                        10
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "sLX6n",
+                                          "name": "Input Text 용어",
+                                          "fill": "#15181C",
+                                          "content": "WhisperKit",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "H0W6CJ",
+                                  "name": "Field 대표 표기",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 5,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "DFPZY",
+                                      "name": "Field Label 대표 표기",
+                                      "fill": "#7A838F",
+                                      "content": "대표 표기",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Uooqn",
+                                      "name": "Input 대표 표기",
+                                      "width": "fill_container",
+                                      "height": 32,
+                                      "fill": "#FFFFFF",
+                                      "cornerRadius": 5,
+                                      "stroke": "#CED6E0",
+                                      "strokeWidth": 1,
+                                      "padding": [
+                                        0,
+                                        10
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "bS8Gb",
+                                          "name": "Input Text 대표 표기",
+                                          "fill": "#15181C",
+                                          "content": "WhisperKit",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Q4Wwr",
+                                  "name": "Field 설명",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 5,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Q3VPP",
+                                      "name": "Field Label 설명",
+                                      "fill": "#7A838F",
+                                      "content": "설명",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "TJxBR",
+                                      "name": "Input 설명",
+                                      "width": "fill_container",
+                                      "height": 32,
+                                      "fill": "#FFFFFF",
+                                      "cornerRadius": 5,
+                                      "stroke": "#CED6E0",
+                                      "strokeWidth": 1,
+                                      "padding": [
+                                        0,
+                                        10
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "ZOI1W",
+                                          "name": "Input Text 설명",
+                                          "fill": "#15181C",
+                                          "content": "로컬 STT 엔진",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ronvU",
+                      "name": "Suggestion Panel",
+                      "width": 292,
+                      "height": "fill_container",
+                      "fill": "#FBFCFD",
+                      "layout": "vertical",
+                      "gap": 18,
+                      "padding": 20,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "obbhD",
+                          "name": "Suggestion Panel Title",
+                          "fill": "#15181C",
+                          "content": "제안 검토",
+                          "fontFamily": "Inter",
+                          "fontSize": 15,
+                          "fontWeight": "800"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "dB1Av",
+                          "name": "Pending Terms",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "pAtc3",
+                              "name": "Pending Terms Title",
+                              "fill": "#6B7280",
+                              "content": "후보 용어",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "800"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "sInWR",
+                              "name": "Pending Term VAD",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 6,
+                              "stroke": "#E2E7EE",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 12,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "wk7rk",
+                                  "name": "VAD Pending Top",
+                                  "width": "fill_container",
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "SglxM",
+                                      "name": "VAD Pending Name",
+                                      "fill": "#15181C",
+                                      "content": "VAD",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 13,
+                                      "fontWeight": "800"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "McDOl",
+                                      "name": "VAD Pending Meta",
+                                      "fill": "#7A838F",
+                                      "content": "회의 8개에서 발견",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "O2vSy",
+                                  "name": "VAD Pending Actions",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "NBoak",
+                                      "name": "VAD 추가 Button",
+                                      "width": "fill_container",
+                                      "height": 28,
+                                      "fill": "#2563EB",
+                                      "cornerRadius": 5,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "BnAEZ",
+                                          "name": "VAD 추가 Label",
+                                          "fill": "#FFFFFF",
+                                          "content": "추가",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "800"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "l0S5W",
+                                      "name": "VAD 무시 Button",
+                                      "width": "fill_container",
+                                      "height": 28,
+                                      "fill": "#F3F5F7",
+                                      "cornerRadius": 5,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "XQ3yH",
+                                          "name": "VAD 무시 Label",
+                                          "fill": "#15181C",
+                                          "content": "무시",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "800"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ICljR",
+                              "name": "Pending Term MCP",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 6,
+                              "stroke": "#E2E7EE",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 12,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "AB59P",
+                                  "name": "MCP Pending Top",
+                                  "width": "fill_container",
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "O1Ahz",
+                                      "name": "MCP Pending Name",
+                                      "fill": "#15181C",
+                                      "content": "MCP",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 13,
+                                      "fontWeight": "800"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "eTvZh",
+                                      "name": "MCP Pending Meta",
+                                      "fill": "#7A838F",
+                                      "content": "회의 5개에서 발견",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "w2xNE",
+                                  "name": "MCP Pending Actions",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "j5IwUb",
+                                      "name": "MCP 추가 Button",
+                                      "width": "fill_container",
+                                      "height": 28,
+                                      "fill": "#2563EB",
+                                      "cornerRadius": 5,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "SagDn",
+                                          "name": "MCP 추가 Label",
+                                          "fill": "#FFFFFF",
+                                          "content": "추가",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "800"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "ZW4Fk",
+                                      "name": "MCP 무시 Button",
+                                      "width": "fill_container",
+                                      "height": 28,
+                                      "fill": "#F3F5F7",
+                                      "cornerRadius": 5,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "cLw7V",
+                                          "name": "MCP 무시 Label",
+                                          "fill": "#15181C",
+                                          "content": "무시",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "800"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ZPrRA",
+                              "name": "Pending Term baseline CER",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 6,
+                              "stroke": "#E2E7EE",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 12,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "cQlAl",
+                                  "name": "baseline CER Pending Top",
+                                  "width": "fill_container",
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "N1Ri8B",
+                                      "name": "baseline CER Pending Name",
+                                      "fill": "#15181C",
+                                      "content": "baseline CER",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 13,
+                                      "fontWeight": "800"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "UjXWe",
+                                      "name": "baseline CER Pending Meta",
+                                      "fill": "#7A838F",
+                                      "content": "회의 3개에서 발견",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "dVn6x",
+                                  "name": "baseline CER Pending Actions",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "TlBhW",
+                                      "name": "baseline CER 추가 Button",
+                                      "width": "fill_container",
+                                      "height": 28,
+                                      "fill": "#2563EB",
+                                      "cornerRadius": 5,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "Ba18M",
+                                          "name": "baseline CER 추가 Label",
+                                          "fill": "#FFFFFF",
+                                          "content": "추가",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "800"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "sAcz9",
+                                      "name": "baseline CER 무시 Button",
+                                      "width": "fill_container",
+                                      "height": 28,
+                                      "fill": "#F3F5F7",
+                                      "cornerRadius": 5,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "YfDKV",
+                                          "name": "baseline CER 무시 Label",
+                                          "fill": "#15181C",
+                                          "content": "무시",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "800"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Ol6ED",
+                          "name": "Alias Suggestions",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "vp1JK",
+                              "name": "Alias Suggestions Title",
+                              "fill": "#6B7280",
+                              "content": "별칭 제안",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "800"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "n0Eyj",
+                              "name": "Alias 회의록 앱 → Minto2",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 6,
+                              "stroke": "#E2E7EE",
+                              "strokeWidth": 1,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ZcH5g",
+                                  "name": "Alias Text 회의록 앱 → Minto2",
+                                  "fill": "#15181C",
+                                  "content": "회의록 앱 → Minto2",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "rOGOk",
+                                  "name": "Alias Accept Icon 회의록 앱 → Minto2",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "check",
+                                  "library": "lucide",
+                                  "fill": "#2563EB"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "J0zXGY",
+                              "name": "Alias 음성 감지 → VAD",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 6,
+                              "stroke": "#E2E7EE",
+                              "strokeWidth": 1,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "T5QfGs",
+                                  "name": "Alias Text 음성 감지 → VAD",
+                                  "fill": "#15181C",
+                                  "content": "음성 감지 → VAD",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "uJBuf",
+                                  "name": "Alias Accept Icon 음성 감지 → VAD",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "check",
+                                  "library": "lucide",
+                                  "fill": "#2563EB"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "bDodk",
+                              "name": "Alias 정답지 → Answer Sheet",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 6,
+                              "stroke": "#E2E7EE",
+                              "strokeWidth": 1,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Ra3hH",
+                                  "name": "Alias Text 정답지 → Answer Sheet",
+                                  "fill": "#15181C",
+                                  "content": "정답지 → Answer Sheet",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "bK4fu",
+                                  "name": "Alias Accept Icon 정답지 → Answer Sheet",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "check",
+                                  "library": "lucide",
+                                  "fill": "#2563EB"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ypQFv",
+                  "name": "Dialog Footer",
+                  "width": "fill_container",
+                  "height": 78,
+                  "fill": "#FFFFFF",
+                  "stroke": "#D8DEE6",
+                  "strokeWidth": {
+                    "top": 1
+                  },
+                  "padding": [
+                    0,
+                    24
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qmGll",
+                      "name": "Dialog Scope Note",
+                      "fill": "#6B7280",
+                      "content": "회의별 용어 선택은 각 회의 상세 화면에서 따로 설정합니다.",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T1efr",
+                      "name": "Dialog Footer Actions",
+                      "gap": 10,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "bdILl",
+                          "name": "삭제 Footer Button",
+                          "height": 36,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "stroke": "#F3C2C2",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "kzCsS",
+                              "name": "삭제 Footer Label",
+                              "fill": "#B91C1C",
+                              "content": "삭제",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "800"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "G5Hi7",
+                          "name": "취소 Footer Button",
+                          "height": 36,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "stroke": "#C9D2DE",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "NYHKD",
+                              "name": "취소 Footer Label",
+                              "fill": "#15181C",
+                              "content": "취소",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "800"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "DBGsP",
+                          "name": "변경 저장 Footer Button",
+                          "height": 36,
+                          "fill": "#15181C",
+                          "cornerRadius": 6,
+                          "stroke": "#15181C",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "wtSxI",
+                              "name": "변경 저장 Footer Label",
+                              "fill": "#FFFFFF",
+                              "content": "변경 저장",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "800"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
