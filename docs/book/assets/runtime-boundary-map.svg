@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="380" viewBox="0 0 1120 380" role="img" aria-labelledby="title desc">
+  <title id="title">Runtime boundary map</title>
+  <desc id="desc">Boundaries between app code, local models, Apple runtime, and external providers.</desc>
+  <rect width="1120" height="380" fill="#f8fafc"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" fill="#111827">
+    <rect x="50" y="70" width="230" height="230" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+    <text x="165" y="132" font-size="28" text-anchor="middle">App Code</text>
+    <text x="165" y="176" font-size="18" text-anchor="middle">SwiftUI / Use cases</text>
+    <text x="165" y="206" font-size="18" text-anchor="middle">Provider adapters</text>
+    <rect x="330" y="70" width="230" height="230" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+    <text x="445" y="132" font-size="28" text-anchor="middle">Local Models</text>
+    <text x="445" y="176" font-size="18" text-anchor="middle">Whisper / VAD</text>
+    <text x="445" y="206" font-size="18" text-anchor="middle">Diarization</text>
+    <rect x="610" y="70" width="230" height="230" rx="12" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+    <text x="725" y="132" font-size="28" text-anchor="middle">Apple Runtime</text>
+    <text x="725" y="176" font-size="18" text-anchor="middle">Core ML / ANE</text>
+    <text x="725" y="206" font-size="18" text-anchor="middle">Speech / Keychain</text>
+    <rect x="890" y="70" width="180" height="230" rx="12" fill="#fce7f3" stroke="#db2777" stroke-width="2"/>
+    <text x="980" y="132" font-size="28" text-anchor="middle">External</text>
+    <text x="980" y="176" font-size="18" text-anchor="middle">LLM APIs</text>
+    <text x="980" y="206" font-size="18" text-anchor="middle">Docs / OAuth</text>
+  </g>
+  <g stroke="#64748b" stroke-width="4" fill="none" marker-end="url(#arrow)">
+    <path d="M280 185 H330"/>
+    <path d="M560 185 H610"/>
+    <path d="M840 185 H890"/>
+  </g>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+</svg>

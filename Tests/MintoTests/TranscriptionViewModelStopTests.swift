@@ -3,7 +3,7 @@ import Testing
 @testable import MintoCore
 
 @MainActor
-@Suite("TranscriptionViewModel Stop/Drain")
+@Suite("TranscriptionViewModel Stop/Drain", .serialized)
 struct TranscriptionViewModelStopTests {
 
     @Test("startNewRecordingSession은 이전 회의 전사와 미리보기를 새 세션에 남기지 않는다")
@@ -343,6 +343,45 @@ struct TranscriptionViewModelStopTests {
 
         viewModel.clearTranscript()
     }
+
+    @Test("녹음 중 provider 변경은 진행 중인 증분 요약을 취소하고 같은 배치를 다시 시도한다")
+    func providerChangeDuringRecordingRetriesInFlightSummaryBatch() async throws {
+        let savedProvider = LLMCorrectionService.shared.selectedProvider
+        defer { LLMCorrectionService.shared.selectedProvider = savedProvider }
+        LLMCorrectionService.shared.selectedProvider = .none
+
+        let audioSource = StubAudioSource()
+        let vad = StubVoiceActivityDetector()
+        let stt = StubSTTService(resultText: "전환 전 배치")
+        let summary = BlockingSummaryGenerator()
+        let viewModel = TranscriptionViewModel(
+            sttService: stt,
+            audioSource: audioSource,
+            vadProcessor: vad,
+            summaryService: summary
+        )
+
+        viewModel.startRecording()
+        vad.onChunk?(
+            AudioChunk(
+                samples: [Float](repeating: 0.5, count: 8_000),
+                durationSeconds: 31,
+                trailingSilence: 0,
+                startSeconds: 0,
+                endSeconds: 31
+            )
+        )
+        await waitUntil { summary.incrementalBatches.count == 1 }
+
+        LLMCorrectionService.shared.selectedProvider = .codex
+        await waitUntil { summary.incrementalBatches.count >= 2 }
+
+        #expect(Array(summary.incrementalBatches.prefix(2)) == ["전환 전 배치", "전환 전 배치"])
+        #expect(summary.cancelledCallCount >= 1)
+
+        await viewModel.stopRecordingAndDrain()
+        viewModel.clearTranscript()
+    }
 }
 
 @MainActor
@@ -457,6 +496,28 @@ private final class StubSummaryGenerator: TranscriptionSummaryGenerating {
     func generateFinal(transcript: String) async -> MeetingSummary? {
         finalTranscripts.append(transcript)
         return nil
+    }
+}
+
+@MainActor
+private final class BlockingSummaryGenerator: TranscriptionSummaryGenerating {
+    private(set) var incrementalBatches: [String] = []
+    private(set) var cancelledCallCount = 0
+
+    func generateIncremental(correctedBatch: String) async -> String? {
+        incrementalBatches.append(correctedBatch)
+        if incrementalBatches.count == 1 {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 10_000_000)
+            }
+            cancelledCallCount += 1
+            return nil
+        }
+        return correctedBatch
+    }
+
+    func generateFinal(transcript: String) async -> MeetingSummary? {
+        nil
     }
 }
 

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import os
+import Combine
 
 @MainActor
 protocol TranscriptionSTTServicing: AnyObject {
@@ -47,6 +48,7 @@ public final class TranscriptionViewModel: ObservableObject {
     private let sttService: any TranscriptionSTTServicing
     private let llmService = LLMCorrectionService.shared
     private let summaryService: any TranscriptionSummaryGenerating
+    private var providerChangeCancellables: Set<AnyCancellable> = []
     private var transcriptionTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var timerTask: Task<Void, Never>?
@@ -104,6 +106,10 @@ public final class TranscriptionViewModel: ObservableObject {
     private var correctionTask: Task<Void, Never>?
     // 진행 중 증분 요약 Task. drop-if-running(진행 중이면 이번 배치 skip)으로 호출·종료지연을 바운드한다.
     private var summaryTask: Task<Void, Never>?
+    // provider 변경 시 이전 provider의 늦은 응답이 새 세션 상태를 덮지 않도록 하는 토큰.
+    private var liveAIProviderGeneration = 0
+    private var inFlightCorrectionIds: [UUID] = []
+    private var inFlightSummaryBatch: String?
     private(set) var transcriptTimelineStartDate: Date?
 
     // MARK: - Init
@@ -150,6 +156,7 @@ public final class TranscriptionViewModel: ObservableObject {
         self.sttService.onModelStateChange = { [weak self] state in
             self?.modelState = state
         }
+        observeLiveAIProviderChanges()
     }
 
     // MARK: - Computed
@@ -440,6 +447,9 @@ public final class TranscriptionViewModel: ObservableObject {
         pendingCorrectionIds = []
         pendingCorrectionDuration = 0
         editedSpeakerSegmentIds = []
+        inFlightCorrectionIds = []
+        inFlightSummaryBatch = nil
+        liveAIProviderGeneration += 1
         resetLiveSpeakerAssignmentState()
         // 이전 세션의 교정·요약 Task가 새 세션 상태에 새지 않도록 취소.
         correctionTask?.cancel()
@@ -450,6 +460,68 @@ public final class TranscriptionViewModel: ObservableObject {
         isFinalizingMeeting = false
     }
 
+    private func observeLiveAIProviderChanges() {
+        llmService.$selectedProvider
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleLiveAIProviderChange(source: "correction")
+                }
+            }
+            .store(in: &providerChangeCancellables)
+
+        LLMSummarySettingsService.shared.$effectiveProvider
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleLiveAIProviderChange(source: "summary")
+                }
+            }
+            .store(in: &providerChangeCancellables)
+    }
+
+    private func handleLiveAIProviderChange(source: String) {
+        guard isRecording else { return }
+
+        let retrySummaryBatch = inFlightSummaryBatch
+        let hadCorrectionTask = correctionTask != nil
+        let hadSummaryTask = summaryTask != nil
+
+        liveAIProviderGeneration += 1
+        correctionTask?.cancel()
+        correctionTask = nil
+        summaryTask?.cancel()
+        summaryTask = nil
+
+        restoreInFlightCorrectionBatchForProviderChange()
+        inFlightSummaryBatch = nil
+
+        Log.app.info(
+            "live ai provider changed source=\(source, privacy: .public) canceledCorrection=\(hadCorrectionTask, privacy: .public) canceledSummary=\(hadSummaryTask, privacy: .public) pendingCorrection=\(self.pendingCorrectionIds.count, privacy: .public)"
+        )
+
+        if !pendingCorrectionIds.isEmpty {
+            flushCorrectionBatch()
+        } else if let retrySummaryBatch {
+            enqueueIncrementalSummary(retrySummaryBatch)
+        }
+    }
+
+    private func restoreInFlightCorrectionBatchForProviderChange() {
+        guard !inFlightCorrectionIds.isEmpty else { return }
+
+        var seen = Set(pendingCorrectionIds)
+        for id in inFlightCorrectionIds where !seen.contains(id) {
+            pendingCorrectionIds.append(id)
+            seen.insert(id)
+        }
+        let pending = Set(pendingCorrectionIds)
+        pendingCorrectionDuration = state.committedSegments
+            .filter { pending.contains($0.id) }
+            .reduce(0) { $0 + $1.duration }
+        inFlightCorrectionIds = []
+    }
+
     /// 누적된 배치를 교정/요약한다.
     /// 교정 실패나 교정 off 상태에서는 원본을 유지하되, 요약이 켜져 있으면 원본으로 증분 요약을 갱신한다.
     private func flushCorrectionBatch() {
@@ -457,28 +529,42 @@ public final class TranscriptionViewModel: ObservableObject {
         let ids = pendingCorrectionIds
         pendingCorrectionIds = []
         pendingCorrectionDuration = 0
+        inFlightCorrectionIds = ids
 
         let segmentsToCorrect = state.committedSegments.filter { ids.contains($0.id) }
-        guard !segmentsToCorrect.isEmpty else { return }
+        guard !segmentsToCorrect.isEmpty else {
+            inFlightCorrectionIds = []
+            return
+        }
         let original = segmentsToCorrect.map(\.text).joined(separator: " ")
         // 교정 대상 배치 "이전" 텍스트만 맥락으로 넘긴다(배치와 겹치면 LLM이 그 문장을 출력에 에코함, BUG-1).
         // 청크 수는 #2에 따라 상향(전역 맥락은 회의 요약이 담당).
         let context = state.precedingText(beforeIds: ids, maxSegments: Self.correctionContextSegments)
+        let generation = liveAIProviderGeneration
 
         // 직전 교정 완료를 기다린 뒤 반영 → replaceRange 순서 보장 + 마지막 배치 누락 방지(SMELL-3).
         let previous = correctionTask
         correctionTask = Task { @MainActor [weak self] in
             await previous?.value
             guard let self else { return }
+            guard !Task.isCancelled, self.liveAIProviderGeneration == generation else { return }
+            defer {
+                if self.liveAIProviderGeneration == generation,
+                   self.inFlightCorrectionIds == ids {
+                    self.inFlightCorrectionIds = []
+                }
+            }
 
             let summaryBatch: String
             if let corrected = await self.llmService.correct(text: original, context: context),
                !corrected.isEmpty {
+                guard !Task.isCancelled, self.liveAIProviderGeneration == generation else { return }
                 self.state.replaceRange(ids: ids, correctedText: corrected)
                 self.committedSegments = self.state.committedSegments
                 self.applyCurrentLiveSpeakerLabels()
                 summaryBatch = corrected
             } else {
+                guard !Task.isCancelled, self.liveAIProviderGeneration == generation else { return }
                 summaryBatch = original
             }
 
@@ -489,12 +575,22 @@ public final class TranscriptionViewModel: ObservableObject {
     private func enqueueIncrementalSummary(_ batch: String) {
         let trimmed = batch.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, summaryTask == nil else { return }
+        let generation = liveAIProviderGeneration
+        inFlightSummaryBatch = trimmed
 
         // drop-if-running: 진행 중이면 이번 배치는 건너뛴다.
         // 누락분은 runningSummary 누적본 + 종료 시 최종 요약이 보완.
         summaryTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { self.summaryTask = nil }
+            defer {
+                if self.liveAIProviderGeneration == generation {
+                    self.summaryTask = nil
+                    if self.inFlightSummaryBatch == trimmed {
+                        self.inFlightSummaryBatch = nil
+                    }
+                }
+            }
+            guard !Task.isCancelled, self.liveAIProviderGeneration == generation else { return }
             _ = await self.summaryService.generateIncremental(correctedBatch: trimmed)
         }
     }

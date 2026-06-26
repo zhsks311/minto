@@ -59,6 +59,7 @@ public final class SummaryService: ObservableObject {
             documentSummary: meeting.documentSummary ?? ""
         )
         guard let summary = await dispatch(prompt, useCase: .incrementalSummary, documentChars: meeting.document.count) else { return nil }
+        guard !Task.isCancelled else { return nil }
         meeting.runningSummary = summary
         return summary
     }
@@ -97,6 +98,7 @@ public final class SummaryService: ObservableObject {
         )
 
         if let raw = await dispatch(prompt, useCase: .finalSummary, documentChars: context.document.count) {
+            guard !Task.isCancelled else { return nil }
             // JSON 파싱 시도 → 실패하면 raw를 평문 요약으로 감싼다(빈 화면 방지).
             let summary = Self.parseStructured(raw) ?? .plain(raw)
             return summary
