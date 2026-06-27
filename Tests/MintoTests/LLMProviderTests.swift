@@ -456,6 +456,58 @@ struct LLMProviderTests {
         #expect(body["max_output_tokens"] as? Int == 64)
     }
 
+    @Test("Gemini API provider는 최종 요약에 JSON 응답 형식을 요청한다")
+    func geminiAPIProviderRequestsJSONForFinalSummary() async throws {
+        let responseText = #"{"title":"제목","leadQuestion":"질문","leadAnswer":"답변","decisions":[],"actionItems":[],"openQuestions":[],"sections":[{"title":"1. 안건","time":"00:00","points":[]}],"keywords":[]}"#
+        let payload: [String: Any] = [
+            "candidates": [
+                [
+                    "content": [
+                        "parts": [
+                            ["text": responseText]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+        let responseData = try JSONSerialization.data(withJSONObject: payload)
+        let transport = StubLLMAPITransport(data: responseData)
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .gemini,
+            keyProvider: StubAPIKeyProvider(keys: [.gemini: "gemini-test"]),
+            transport: transport
+        ))
+
+        let response = try await provider.generateText(LLMTextRequest(
+            useCase: .finalSummary,
+            instructions: "JSON으로 요약하세요.",
+            userContent: "회의 원문",
+            modelID: "models/gemini-test",
+            maxOutputTokens: 128
+        ))
+
+        let request = try #require(transport.requests.first)
+        #expect(request.url?.absoluteString == "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent")
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "x-goog-api-key") == "gemini-test")
+        #expect(response.text == responseText)
+        #expect(response.modelID == "gemini-test")
+
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        let generationConfig = try #require(body["generationConfig"] as? [String: Any])
+        #expect(generationConfig["temperature"] as? Double == 0.1)
+        #expect(generationConfig["maxOutputTokens"] as? Int == 128)
+        let responseFormat = try #require(generationConfig["responseFormat"] as? [String: Any])
+        let textFormat = try #require(responseFormat["text"] as? [String: Any])
+        #expect(textFormat["mimeType"] as? String == "application/json")
+        let schema = try #require(textFormat["schema"] as? [String: Any])
+        #expect(schema["type"] as? String == "object")
+        let properties = try #require(schema["properties"] as? [String: Any])
+        #expect(properties["sections"] != nil)
+        #expect(properties["actionItems"] != nil)
+        #expect((schema["required"] as? [String])?.contains("leadAnswer") == true)
+    }
+
     @Test("API key provider HTTP 상태는 공통 오류로 매핑된다")
     func apiKeyProviderMapsHTTPStatus() async throws {
         let provider = try #require(LLMAPIKeyTextProvider(

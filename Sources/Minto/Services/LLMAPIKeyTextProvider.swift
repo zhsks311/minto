@@ -303,10 +303,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: [
             "systemInstruction": ["parts": [["text": request.instructions]]],
             "contents": [["role": "user", "parts": [["text": request.userContent]]]],
-            "generationConfig": [
-                "temperature": 0.1,
-                "maxOutputTokens": maxOutputTokens(for: request)
-            ]
+            "generationConfig": geminiGenerationConfig(for: request)
         ])
 
         let json = try await sendJSON(urlRequest)
@@ -510,6 +507,109 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
         case .documentSummary:
             return 1_200
         }
+    }
+
+    private func geminiGenerationConfig(for request: LLMTextRequest) -> [String: Any] {
+        var config: [String: Any] = [
+            "temperature": 0.1,
+            "maxOutputTokens": maxOutputTokens(for: request)
+        ]
+        if request.useCase == .finalSummary {
+            config["responseFormat"] = Self.meetingSummaryResponseFormat()
+        }
+        return config
+    }
+
+    private static func meetingSummaryResponseFormat() -> [String: Any] {
+        [
+            "text": [
+                "mimeType": "application/json",
+                "schema": meetingSummarySchema()
+            ]
+        ]
+    }
+
+    private static func meetingSummarySchema() -> [String: Any] {
+        let timedTextSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "text": ["type": "string"],
+                "time": ["type": "string"]
+            ],
+            "required": ["text", "time"]
+        ]
+        let actionItemSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "task": ["type": "string"],
+                "owner": ["type": "string"],
+                "due": ["type": "string"],
+                "time": ["type": "string"]
+            ],
+            "required": ["task", "owner", "due", "time"]
+        ]
+        let pointSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "text": ["type": "string"],
+                "subPoints": [
+                    "type": "array",
+                    "items": ["type": "string"]
+                ]
+            ],
+            "required": ["text", "subPoints"]
+        ]
+        let sectionSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "title": ["type": "string"],
+                "time": ["type": "string"],
+                "points": [
+                    "type": "array",
+                    "items": pointSchema
+                ]
+            ],
+            "required": ["title", "time", "points"]
+        ]
+
+        return [
+            "type": "object",
+            "properties": [
+                "title": ["type": "string"],
+                "leadQuestion": ["type": "string"],
+                "leadAnswer": ["type": "string"],
+                "decisions": [
+                    "type": "array",
+                    "items": timedTextSchema
+                ],
+                "actionItems": [
+                    "type": "array",
+                    "items": actionItemSchema
+                ],
+                "openQuestions": [
+                    "type": "array",
+                    "items": timedTextSchema
+                ],
+                "sections": [
+                    "type": "array",
+                    "items": sectionSchema
+                ],
+                "keywords": [
+                    "type": "array",
+                    "items": ["type": "string"]
+                ]
+            ],
+            "required": [
+                "title",
+                "leadQuestion",
+                "leadAnswer",
+                "decisions",
+                "actionItems",
+                "openQuestions",
+                "sections",
+                "keywords"
+            ]
+        ]
     }
 
     private static func providerError(statusCode: Int, body: String) -> LLMProviderError {
