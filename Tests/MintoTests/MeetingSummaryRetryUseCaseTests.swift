@@ -8,10 +8,12 @@ import Testing
 private final class StubRetryGenerator: MeetingSummaryRetryGenerating {
     var receivedTranscript: String?
     var receivedContext: SummaryGenerationContext?
+    var lastGenerationFailure: LLMProviderError?
     private let result: MeetingSummary?
 
-    init(result: MeetingSummary? = nil) {
+    init(result: MeetingSummary? = nil, failure: LLMProviderError? = nil) {
         self.result = result
+        self.lastGenerationFailure = failure
     }
 
     func generateFinal(transcript: String, context: SummaryGenerationContext) async -> MeetingSummary? {
@@ -213,9 +215,30 @@ struct MeetingSummaryRetryUseCaseTests {
             Issue.record("실패 기대했지만 성공")
             return
         }
-        #expect(reason == .llmFailed)
+        #expect(reason == .llmFailed(nil))
         #expect(store.savedRecords.isEmpty)
         #expect(ingester.ingestedRecords.isEmpty)
+    }
+
+    @Test("LLM provider 오류가 있으면 재요약 실패 사유에 전달한다")
+    func retryPropagatesProviderFailureReason() async {
+        let segments = makeSegments(texts: ["발언 내용"])
+        let record = makePlainRecord(transcript: segments)
+        let generator = StubRetryGenerator(result: nil, failure: .modelUnavailable("qwen2.5:3b"))
+        let useCase = MeetingSummaryRetryUseCase(
+            summaryService: generator,
+            store: StubRetryStore(),
+            glossaryStore: StubRetryCandidateIngester(),
+            glossaryResolver: { _ in "" }
+        )
+
+        let result = await useCase.retry(record: record)
+
+        guard case .failure(let reason) = result else {
+            Issue.record("실패 기대했지만 성공")
+            return
+        }
+        #expect(reason == .llmFailed(.modelUnavailable("qwen2.5:3b")))
     }
 
     @Test("재시도 결과가 또 plain fallback이면 교체하지 않고 stillPlainFallback 실패")
@@ -407,7 +430,7 @@ struct MeetingSummaryRetryUseCaseTests {
             Issue.record("실패 기대했지만 성공")
             return
         }
-        #expect(reason == .llmFailed)
+        #expect(reason == .llmFailed(nil))
         #expect(store.attemptedRecords.isEmpty)
         #expect(store.savedRecords.isEmpty)
         #expect(ingester.ingestedRecords.isEmpty)

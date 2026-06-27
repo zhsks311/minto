@@ -3,9 +3,9 @@ import Foundation
 
 // MARK: - 재요약 결과
 
-public enum SummaryRetryFailureReason: Sendable {
+public enum SummaryRetryFailureReason: Sendable, Equatable {
     case emptyTranscript
-    case llmFailed
+    case llmFailed(LLMProviderError?)
     case stillPlainFallback
     case saveFailed
 }
@@ -19,6 +19,8 @@ public enum SummaryRetryResult: Sendable {
 
 @MainActor
 protocol MeetingSummaryRetryGenerating: AnyObject {
+    var lastGenerationFailure: LLMProviderError? { get }
+
     // generateFinal(transcript:context:) 오버로드를 사용한다 — live MeetingContext.shared를
     // 오염시키지 않기 위해 단독 context를 명시 주입하는 경로가 필요하다.
     func generateFinal(transcript: String, context: SummaryGenerationContext) async -> MeetingSummary?
@@ -112,8 +114,9 @@ public final class MeetingSummaryRetryUseCase {
         )
 
         guard let newSummary = await summaryService.generateFinal(transcript: transcript, context: context) else {
-            Log.summary.error("summary retry failed reason=\(String(describing: SummaryRetryFailureReason.llmFailed), privacy: .public)")
-            return .failure(.llmFailed)
+            let providerError = summaryService.lastGenerationFailure
+            Log.summary.error("summary retry failed reason=llmFailed providerError=\(String(describing: providerError), privacy: .public)")
+            return .failure(.llmFailed(providerError))
         }
 
         // 빈 JSON `{}` → MeetingSummary() (isEmpty=true, isPlainFallback=false) 도 거부한다.

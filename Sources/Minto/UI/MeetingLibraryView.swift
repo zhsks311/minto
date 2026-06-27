@@ -3246,10 +3246,46 @@ public struct MeetingLibraryView: View {
     }
 
     private func retryFailureMessage(for reason: SummaryRetryFailureReason) -> String {
-        if case .saveFailed = reason {
+        switch reason {
+        case .emptyTranscript:
+            return "요약할 전사가 없어요. 회의 전사가 저장되어 있는지 확인하세요."
+        case .llmFailed(let providerError):
+            return retryLLMFailureMessage(providerError)
+        case .stillPlainFallback:
+            return "AI가 구조화된 요약 JSON을 만들지 못했어요. 다른 모델로 바꾸거나 다시 시도해 보세요."
+        case .saveFailed:
             return "다시 요약 결과 저장에 실패했어요. 다시 시도해 보세요."
         }
-        return "요약을 다시 만들지 못했어요. 다시 시도해 보세요."
+    }
+
+    private func retryLLMFailureMessage(_ error: LLMProviderError?) -> String {
+        guard let error else {
+            return "AI 요약 호출이 실패했어요. provider와 모델 설정을 확인하세요."
+        }
+
+        let isLocal = LLMSummarySettingsService.shared.effectiveProvider == .local
+        switch error {
+        case .notConfigured:
+            return isLocal
+                ? "로컬 LLM 설정이 비어 있어요. 설정에서 endpoint와 모델 ID를 확인하세요."
+                : "요약 provider가 설정되지 않았어요. 설정에서 provider와 모델을 선택하세요."
+        case .modelUnavailable(let model):
+            return isLocal
+                ? "로컬 LLM 모델을 사용할 수 없어요: \(model). Ollama 설치 모델 이름과 앱 설정 모델이 일치하는지 확인하세요."
+                : "선택한 요약 모델을 사용할 수 없어요: \(model). 다른 모델을 선택하거나 모델 이름을 확인하세요."
+        case .network:
+            return isLocal
+                ? "로컬 LLM endpoint에 연결하지 못했어요. Ollama가 실행 중인지와 endpoint 주소를 확인하세요."
+                : "요약 provider에 연결하지 못했어요. 네트워크 상태를 확인하세요."
+        case .unauthorized:
+            return "요약 provider 인증이 실패했어요. 로그인 상태나 API 키를 확인하세요."
+        case .rateLimited:
+            return "요약 provider 요청 한도에 도달했어요. 잠시 후 다시 시도하세요."
+        case .badResponse:
+            return "요약 provider 응답을 이해하지 못했어요. 다른 모델로 다시 시도하세요."
+        case .httpStatus(let statusCode, _):
+            return "요약 provider 요청이 실패했어요. HTTP \(statusCode). provider 설정과 권한을 확인하세요."
+        }
     }
 
     private func copyMarkdown(_ text: String) {

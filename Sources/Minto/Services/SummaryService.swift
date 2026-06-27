@@ -41,11 +41,13 @@ public final class SummaryService: ObservableObject {
 
     /// 요약 생성 진행 카운터 (UI 인디케이터용).
     @Published public var activeGenerations: Int = 0
+    public private(set) var lastGenerationFailure: LLMProviderError?
 
     /// 진행 중 증분 요약. 성공 시 `MeetingContext.runningSummary`를 갱신하고 반환한다.
     /// 실패하면 nil(기존 runningSummary 유지).
     @discardableResult
     public func generateIncremental(correctedBatch: String) async -> String? {
+        lastGenerationFailure = nil
         let batch = correctedBatch.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !batch.isEmpty else { return nil }
 
@@ -86,6 +88,7 @@ public final class SummaryService: ObservableObject {
     ///
     /// 파일 import처럼 live `MeetingContext`를 건드리면 안 되는 사후 처리 경로에서 사용한다.
     public func generateFinal(transcript: String, context: SummaryGenerationContext) async -> MeetingSummary? {
+        lastGenerationFailure = nil
         // 빈 회의(전사 없음)는 요약할 내용이 없으므로 LLM을 호출하지 않는다.
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
 
@@ -115,6 +118,7 @@ public final class SummaryService: ObservableObject {
     /// 모든 실패는 fail-soft로 nil을 반환한다 — **재시도하지 않는다**. 호출부는 nil이면
     /// 요약 프롬프트에서 excerpt 폴백으로 넘어간다(문서 본문은 어떤 로그에도 남기지 않는다).
     public func generateDocumentSummary(document: String) async -> String? {
+        lastGenerationFailure = nil
         let trimmed = document.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -149,7 +153,10 @@ public final class SummaryService: ObservableObject {
 
     /// provider adapter dispatch. 실패·none·빈 응답이면 nil.
     private func dispatch(_ prompt: (instructions: String, userContent: String), useCase: LLMUseCase, documentChars: Int) async -> String? {
-        guard let provider = LLMSummarySettingsService.shared.selectedTextProvider() else { return nil }
+        guard let provider = LLMSummarySettingsService.shared.selectedTextProvider() else {
+            lastGenerationFailure = .notConfigured
+            return nil
+        }
 
         activeGenerations += 1
         defer { activeGenerations -= 1 }
@@ -161,10 +168,22 @@ public final class SummaryService: ObservableObject {
                 userContent: prompt.userContent
             ))
             let trimmed = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { return nil }
+            if trimmed.isEmpty {
+                lastGenerationFailure = .badResponse("빈 provider 응답")
+                return nil
+            }
+            lastGenerationFailure = nil
             Log.summary.info("generation succeeded via \(provider.descriptor.id.rawValue, privacy: .public) useCase=\(useCase.rawValue, privacy: .public) documentChars=\(documentChars, privacy: .public) outputChars=\(trimmed.count, privacy: .public)")
             return trimmed
+        } catch let error as LLMProviderError {
+            lastGenerationFailure = error
+            Log.summary.error("generation failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        } catch is CancellationError {
+            lastGenerationFailure = nil
+            return nil
         } catch {
+            lastGenerationFailure = .network(error.localizedDescription)
             Log.summary.error("generation failed via \(provider.descriptor.id.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
