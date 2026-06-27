@@ -324,7 +324,7 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
     private func requestBody(for request: LLMTextRequest, modelID: String) -> [String: Any] {
         switch configuration.compatibility {
         case .ollamaGenerate:
-            return [
+            var body: [String: Any] = [
                 "model": modelID,
                 "system": request.instructions,
                 "prompt": request.userContent,
@@ -335,6 +335,10 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
                     "num_ctx": configuration.contextWindow
                 ]
             ]
+            if request.useCase == .finalSummary {
+                body["format"] = Self.meetingSummarySchema()
+            }
+            return body
         case .openAIChatCompletions:
             return [
                 "model": modelID,
@@ -347,6 +351,89 @@ public final class LocalLLMProvider: LLMTextGenerationProvider, @unchecked Senda
                 "stream": false
             ]
         }
+    }
+
+    private static func meetingSummarySchema() -> [String: Any] {
+        let timedTextSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "text": ["type": "string"],
+                "time": ["type": "string"]
+            ],
+            "required": ["text", "time"]
+        ]
+        let actionItemSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "task": ["type": "string"],
+                "owner": ["type": "string"],
+                "due": ["type": "string"],
+                "time": ["type": "string"]
+            ],
+            "required": ["task", "owner", "due", "time"]
+        ]
+        let pointSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "text": ["type": "string"],
+                "subPoints": [
+                    "type": "array",
+                    "items": ["type": "string"]
+                ]
+            ],
+            "required": ["text", "subPoints"]
+        ]
+        let sectionSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "title": ["type": "string"],
+                "time": ["type": "string"],
+                "points": [
+                    "type": "array",
+                    "items": pointSchema
+                ]
+            ],
+            "required": ["title", "time", "points"]
+        ]
+
+        return [
+            "type": "object",
+            "properties": [
+                "title": ["type": "string"],
+                "leadQuestion": ["type": "string"],
+                "leadAnswer": ["type": "string"],
+                "decisions": [
+                    "type": "array",
+                    "items": timedTextSchema
+                ],
+                "actionItems": [
+                    "type": "array",
+                    "items": actionItemSchema
+                ],
+                "openQuestions": [
+                    "type": "array",
+                    "items": timedTextSchema
+                ],
+                "sections": [
+                    "type": "array",
+                    "items": sectionSchema
+                ],
+                "keywords": [
+                    "type": "array",
+                    "items": ["type": "string"]
+                ]
+            ],
+            "required": [
+                "title",
+                "leadQuestion",
+                "leadAnswer",
+                "decisions",
+                "actionItems",
+                "openQuestions",
+                "sections",
+                "keywords"
+            ]
+        ]
     }
 
     private func sendJSON(_ request: URLRequest, modelID: String) async throws -> [String: Any] {

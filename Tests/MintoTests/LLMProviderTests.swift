@@ -620,6 +620,12 @@ struct LLMProviderTests {
         let options = try #require(body["options"] as? [String: Any])
         #expect(options["num_predict"] as? Int == 3_000)
         #expect(options["num_ctx"] as? Int == 2_048)
+        let format = try #require(body["format"] as? [String: Any])
+        let properties = try #require(format["properties"] as? [String: Any])
+        #expect(format["type"] as? String == "object")
+        #expect(properties["leadAnswer"] != nil)
+        #expect(properties["sections"] != nil)
+        #expect((format["required"] as? [String])?.contains("leadAnswer") == true)
     }
 
     @Test("로컬 LLM provider는 교정, 요약, 검색 답변 payload를 use case별로 만든다")
@@ -662,6 +668,11 @@ struct LLMProviderTests {
             let options = try #require(body["options"] as? [String: Any])
             #expect(options["num_predict"] as? Int == expected.3)
             #expect(options["num_ctx"] as? Int == 4_096)
+            if expected.0 == .finalSummary {
+                #expect(body["format"] != nil)
+            } else {
+                #expect(body["format"] == nil)
+            }
         }
     }
 
