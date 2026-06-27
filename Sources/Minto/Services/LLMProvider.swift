@@ -258,7 +258,10 @@ public enum LLMProviderError: Error, Equatable, Sendable {
             return "선택한 모델을 사용할 수 없어요: \(model)"
         case .rateLimited:
             return "요청 한도에 도달했어요. 잠시 후 다시 시도하세요."
-        case .network:
+        case .network(let message):
+            if Self.isTimeoutMessage(message) {
+                return "요청 시간이 초과됐어요."
+            }
             return "네트워크 연결을 확인하세요."
         case .badResponse:
             return "공급자 응답을 이해하지 못했어요."
@@ -277,7 +280,10 @@ public enum LLMProviderError: Error, Equatable, Sendable {
             return "다른 모델을 선택하거나 모델 이름을 확인하세요."
         case .rateLimited:
             return "잠시 후 다시 시도하거나 호출 빈도를 낮추세요."
-        case .network:
+        case .network(let message):
+            if Self.isTimeoutMessage(message) {
+                return "응답 대기 시간을 늘리거나 더 빠른 모델로 다시 시도하세요."
+            }
             return "인터넷 연결과 방화벽 설정을 확인하세요."
         case .badResponse:
             return "다른 모델로 다시 시도하세요."
@@ -305,6 +311,20 @@ public enum LLMProviderError: Error, Equatable, Sendable {
             return 429
         }
         return nil
+    }
+
+    public var isTimeout: Bool {
+        if case .network(let message) = self {
+            return Self.isTimeoutMessage(message)
+        }
+        return false
+    }
+
+    private static func isTimeoutMessage(_ message: String) -> Bool {
+        let lowercased = message.lowercased()
+        return lowercased.contains("timed out")
+            || lowercased.contains("timeout")
+            || lowercased.contains("timedout")
     }
 }
 

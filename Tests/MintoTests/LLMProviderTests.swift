@@ -31,6 +31,7 @@ struct LLMProviderTests {
         let notConfigured = LLMProviderError.notConfigured
         let modelUnavailable = LLMProviderError.modelUnavailable("gpt-x")
         let rateLimited = LLMProviderError.rateLimited
+        let timeout = LLMProviderError.network("The request timed out.")
 
         #expect(notConfigured.userMessage == "공급자 설정이 필요해요.")
         #expect(notConfigured.localizedDescription == notConfigured.userMessage)
@@ -38,6 +39,9 @@ struct LLMProviderTests {
         #expect(rateLimited.userMessage.contains("요청 한도"))
         #expect(rateLimited.isRetryable)
         #expect(rateLimited.statusCode == 429)
+        #expect(timeout.userMessage.contains("초과"))
+        #expect(timeout.userAction?.contains("응답 대기 시간") == true)
+        #expect(timeout.isTimeout)
     }
 
     @Test("legacy 교정 설정은 새 공급자 ID로 매핑된다")

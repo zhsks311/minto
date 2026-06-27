@@ -3273,10 +3273,17 @@ public struct MeetingLibraryView: View {
             return isLocal
                 ? "로컬 LLM 모델을 사용할 수 없어요: \(model). Ollama 설치 모델 이름과 앱 설정 모델이 일치하는지 확인하세요."
                 : "선택한 요약 모델을 사용할 수 없어요: \(model). 다른 모델을 선택하거나 모델 이름을 확인하세요."
-        case .network:
+        case .network(let message):
+            if error.isTimeout {
+                if isLocal {
+                    let timeout = Int(LocalLLMProviderConfiguration.stored().timeoutSeconds.rounded())
+                    return "로컬 LLM 응답 시간이 \(timeout)초를 넘었어요. Ollama는 연결됐지만 모델 응답이 늦습니다. 응답 대기 시간을 늘리거나 더 빠른 모델로 다시 시도하세요."
+                }
+                return "요약 provider 응답 시간이 초과됐어요. 잠시 후 다시 시도하거나 더 빠른 모델을 선택하세요."
+            }
             return isLocal
-                ? "로컬 LLM endpoint에 연결하지 못했어요. Ollama가 실행 중인지와 endpoint 주소를 확인하세요."
-                : "요약 provider에 연결하지 못했어요. 네트워크 상태를 확인하세요."
+                ? "로컬 LLM endpoint에 연결하지 못했어요. Ollama가 실행 중인지와 endpoint 주소를 확인하세요. (\(message))"
+                : "요약 provider에 연결하지 못했어요. 네트워크 상태를 확인하세요. (\(message))"
         case .unauthorized:
             return "요약 provider 인증이 실패했어요. 로그인 상태나 API 키를 확인하세요."
         case .rateLimited:
