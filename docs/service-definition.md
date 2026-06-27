@@ -1,7 +1,7 @@
 # Minto2 기능 정의서
 
 작성일: 2026-06-09
-갱신일: 2026-06-24 (현재 구현 상태 반영 — 근거: `Sources/Minto/Services` 코드)
+갱신일: 2026-06-28 (현재 구현 상태 반영 — 근거: `Sources/Minto/Services`·`Sources/Minto/UI` 코드)
 상태: 갱신본
 
 ## 1. 서비스 목적
@@ -21,7 +21,7 @@ Minto2는 Mac에서 회의를 기록하고, 전사와 요약을 사용자가 다
 ### 2.1 실시간 회의 기록
 
 1. 사용자가 새 회의를 시작한다.
-2. 회의 주제, 이번 회의 용어, 참고 문서를 선택적으로 입력한다.
+2. 회의 주제, 이번 회의 용어, 참고 문서를 선택적으로 입력한다. 용어는 전역 용어집 분류 선택과 직접 입력을 함께 쓸 수 있다.
 3. 앱이 마이크, 시스템 사운드, 또는 둘을 혼합한 입력 소스를 전사한다.
 4. 전사는 회의 목록의 현재 회의 항목에 바로 쌓이며, 발화 구간에 화자 라벨이 붙는다.
 5. 사용자는 필요할 때 오버레이를 열어 전사 흐름을 볼 수 있다.
@@ -55,7 +55,7 @@ Minto2는 Mac에서 회의를 기록하고, 전사와 요약을 사용자가 다
 
 ## 3. 현재 기능
 
-> 2026-06-24 기준. 초안의 "확장 예정" 다수가 구현되어 현재 기능으로 이동했고, 화자분리 등 신규 기능이 추가됐다.
+> 2026-06-28 기준. 초안의 "확장 예정" 다수가 구현되어 현재 기능으로 이동했고, 화자분리·문서 첨부·Claude Code CLI provider·용어집 메인 관리가 현재 기능에 포함됐다.
 
 **입력·전사**
 - 메뉴바 앱 및 회의 목록 메인 윈도우
@@ -67,22 +67,30 @@ Minto2는 Mac에서 회의를 기록하고, 전사와 요약을 사용자가 다
 
 **화자분리 (신규)**
 - 실시간 화자 배정과 종료 시 확정 (`LiveSpeakerAssignmentUseCase`, `LiveDiarizationFinalizeUseCase`, `Diarization/LiveDiarizationReconciler`)
+- 실시간 화자 라벨 표시와 저장 시 재조정. 저장 재조정은 라이브 라벨을 보존하면서 최종 구간에 맞게 매핑한다.
+- 화자분리 provider 실패 시 채널 기반 라벨로 자동 강등하는 fail-soft 경로
 - 채널 기반 화자 라벨링 (`ChannelSpeakerLabeler`)
 - 화자 라벨 편집·실명 지정, 보이스프린트로 회의 간 화자 매칭 (`VoiceprintMatching`, `VoiceprintStore`)
 
 **교정·요약**
 - LLM 기반 전사 교정과 증분/최종 요약 (교정 설정과 요약 설정 분리 — `LLMSummarySettingsService`)
 - 회의 시작 시 주제, 용어집, 문서 문맥 입력
+- 교정 prompt에는 raw 문서 본문을 직접 넣지 않고, 문서에서 추출한 용어를 용어집으로 병합해 사용한다.
+- 요약 prompt에는 첨부 문서 요약본을 우선 사용하고, 실패 시 문서 excerpt와 용어로 fail-soft fallback한다.
 - 전역/회의별 용어집 관리와 관련 용어 선별 (`GlossaryStore`, `GlossaryQueryExpander`, `GlossaryAliasPrefillService`)
+- 전역 용어집 관리는 메인 회의 목록의 `용어집` 버튼에서 열며, 새 회의·파일 가져오기·다시 요약은 회의별 용어 선택 흐름을 유지한다.
 
 **LLM provider**
-- 로컬 LLM provider (`LocalLLMProvider`) 및 API provider(OpenAI/Anthropic/Gemini 등) 레지스트리·선택 (`LLMProviderRegistry`, `LLMProviderSelection`, `LLMAPIKeyTextProvider`)
+- 로컬 LLM provider (`LocalLLMProvider`), API provider(OpenAI/Gemini/Claude/OpenRouter), 계정 로그인 provider(ChatGPT/Gemini/Copilot), Claude Code CLI provider 레지스트리·선택 (`LLMProviderRegistry`, `LLMProviderSelection`, `LLMAPIKeyTextProvider`, `ClaudeCodeCLIProvider`)
+- Claude API provider는 앱 설정/Keychain의 API 키 경로를 사용하고, Claude Code CLI provider는 사용자가 명시적으로 선택한 로컬 `claude` 로그인·구독 경로를 사용한다. CLI provider 실행 시 `ANTHROPIC_API_KEY`는 제거해 API 키 경로로 조용히 전환되는 일을 막는다.
+- 교정·요약·검색 답변 provider는 기능별 capability에 따라 노출되며, 실행 중 선택 provider 변경도 반영한다.
 
 **검색·답변**
 - 회의 목록 검색, 저장 회의 embedding index 기반 semantic search (`MeetingSearchIndex`, `MeetingSearchEmbeddingIndex`)
 - 검색 근거 기반 LLM 답변 생성 (`MeetingSearchAnswerController`, `MeetingSearchAnswerSettingsService`)
 
 **연동·내보내기**
+- 회의 시작 참고 문서로 로컬 파일(md/txt/pdf), Notion 페이지, Confluence 페이지 링크를 첨부한다. 스캔 PDF는 OCR fallback을 사용하고 OCR 인식 언어는 자동 감지한다.
 - 관련 문서 탭에서 Notion/Confluence 조회 (`NotionMCPService`, `RelatedInfoService`)
 - Markdown / 클립보드 / Confluence 내보내기 (`MeetingExporter`, `ConfluenceService`, `ConfluenceExportSheet`)
 
