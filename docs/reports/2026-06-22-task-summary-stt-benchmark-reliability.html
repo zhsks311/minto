@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STT 엔진 비교 신뢰성 작업 — 세션 요약</title>
+  <style>
+    :root {
+      --bg: #ffffff; --surface: #f6f8fa; --border: #d0d7de;
+      --text: #1f2328; --text-muted: #656d76; --accent: #0969da; --code-bg: #f6f8fa;
+      --c-critical: #cf222e; --c-critical-bg: #fff0ee; --c-critical-border: #ff818266;
+      --c-high: #9a6700; --c-high-bg: #fff8c5; --c-high-border: #f1e05a99;
+      --c-medium: #0550ae; --c-medium-bg: #ddf4ff; --c-medium-border: #79c0ff99;
+      --c-low: #116329; --c-low-bg: #dafbe1; --c-low-border: #56d36499;
+      --pass-bg: #f0fdf4; --pass-border: #bbf7d0; --fail-bg: #fff0ee; --fail-border: #fecaca;
+      --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --surface: #161b22; --border: #30363d;
+        --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff; --code-bg: #161b22;
+        --c-critical: #ff7b72; --c-critical-bg: #2d0f0f; --c-critical-border: #ff7b7266;
+        --c-high: #e3b341; --c-high-bg: #2d1f04; --c-high-border: #e3b34166;
+        --c-medium: #79c0ff; --c-medium-bg: #051d4d; --c-medium-border: #79c0ff66;
+        --c-low: #56d364; --c-low-bg: #0a2d19; --c-low-border: #56d36466;
+        --pass-bg: #0a2d19; --pass-border: #56d36444; --fail-bg: #2d0f0f; --fail-border: #ff7b7244;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--text);
+      font-size: 15px; line-height: 1.65; max-width: 900px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; }
+    h2 { font-size: 1.05rem; font-weight: 600; margin: 2.5rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+    p { margin-bottom: 0.75rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.35rem; }
+    code { font-family: var(--font-mono); font-size: 0.85em; background: var(--code-bg); padding: 0.12em 0.35em; border-radius: 4px; border: 1px solid var(--border); }
+    .summary { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 1.1rem 1.4rem; margin: 1.25rem 0 2rem; }
+    .summary-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .summary p:last-child { margin-bottom: 0; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin: 1.25rem 0 2rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.25rem; }
+    .stat-card--success { background: var(--pass-bg); border-color: var(--pass-border); }
+    .stat-card--info { background: var(--c-medium-bg); border-color: var(--c-medium-border); }
+    .stat-card--warning { background: var(--c-high-bg); border-color: var(--c-high-border); }
+    .stat-number { font-size: 2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat-card--success .stat-number { color: var(--c-low); }
+    .stat-card--info .stat-number { color: var(--c-medium); }
+    .stat-card--warning .stat-number { color: var(--c-high); }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .stat-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    th { text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 2px solid var(--border); padding: 0.45rem 0.75rem; }
+    td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .verify-table { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .verify-table th { background: var(--surface); padding: 0.5rem 0.9rem; }
+    .verify-table td { padding: 0.6rem 0.9rem; }
+    .vrow-pass { background: var(--pass-bg); }
+    .tag { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 4px; font-family: var(--font-mono); }
+    .tag-pass { background: var(--pass-bg); color: var(--c-low); }
+    .tag-wait { background: var(--c-high-bg); color: var(--c-high); }
+    .card { border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px; padding: 0.9rem 1.1rem; margin: 0.65rem 0; }
+    .card--done { border-left-color: var(--c-low); background: var(--c-low-bg); }
+    .card--wait { border-left-color: var(--c-high); background: var(--c-high-bg); }
+    .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; }
+    .card p { font-size: 0.88rem; margin-bottom: 0; }
+    .flow-diagram { width: 100%; max-width: 760px; display: block; margin: 1rem auto; overflow: visible; }
+    .flow-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+    .flow-box-accent { fill: var(--c-low-bg); stroke: var(--c-low-border); stroke-width: 1.5; }
+    .flow-box-wait { fill: var(--c-high-bg); stroke: var(--c-high-border); stroke-width: 1.5; }
+    .flow-text { font-family: var(--font-body); font-size: 12px; fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+    .flow-sub { font-family: var(--font-body); font-size: 10px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: middle; }
+    .flow-arrow { stroke: var(--text-muted); stroke-width: 1.5; }
+    .flow-arrowhead { fill: var(--text-muted); }
+    details { border: 1px solid var(--border); border-radius: 6px; margin: 0.6rem 0; }
+    details > summary { padding: 0.65rem 1rem; cursor: pointer; font-weight: 500; font-size: 0.92rem; background: var(--surface); user-select: none; list-style: none; display: flex; align-items: center; gap: 0.5rem; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before { content: '▶'; font-size: 0.65rem; transition: transform 0.12s; color: var(--text-muted); }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details[open] > summary { border-bottom: 1px solid var(--border); }
+    .details-body { padding: 1rem 1.25rem; }
+    .analogy { background: var(--c-medium-bg); border: 1px solid var(--c-medium-border); border-radius: 6px; padding: 0.8rem 1.1rem; margin: 0.75rem 0; font-size: 0.9rem; }
+    .analogy b { color: var(--c-medium); }
+    footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    @media print { body { max-width: none; padding: 0; background: #fff; color: #000; } .stat-card, .card { border: 1px solid #ccc; } footer { color: #666; } }
+  </style>
+</head>
+<body>
+
+<h1>STT 엔진 비교 신뢰성 작업 — 세션 요약</h1>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">4</div>
+    <div class="stat-label">완성된 신뢰성 도구</div>
+    <div class="stat-sub">가짜 데이터로 검증 완료</div>
+  </div>
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">701</div>
+    <div class="stat-label">테스트 통과</div>
+    <div class="stat-sub">전부 green</div>
+  </div>
+  <div class="stat-card stat-card--info">
+    <div class="stat-number">15</div>
+    <div class="stat-label">코드 커밋</div>
+    <div class="stat-sub">전부 리뷰 통과</div>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <div class="stat-number">1</div>
+    <div class="stat-label">실측 대기</div>
+    <div class="stat-sub">실제 엔진 구동(사용자 환경)</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">한 줄 결론</div>
+  <p>Minto에 <b>어떤 STT 엔진을 쓸지 믿을 수 있게 비교</b>하기 위한 "채점 규칙과 채점 도구"를 만들었습니다. 채점 두뇌는 가짜 데이터로 완성·검증했고, 실제 엔진을 돌려 진짜 점수를 내는 일(실측)만 남았습니다 — 그건 시간·환경이 필요해 사용자 환경 작업으로 분리했습니다.</p>
+</div>
+
+<h2>1. 목표 — 왜 이 일을 하나</h2>
+<p>Minto는 회의를 받아쓰는(STT) 앱입니다. 받아쓰기 엔진 후보가 5개(whisper, speech_analyzer, sf_speech, nemotron, sherpa) 있고, <b>그중 한국어 회의에서 가장 정확한 걸 골라 제품에 넣어야</b> 합니다. 단, 한 번 재서 고르면 안 되고 <b>믿을 수 있게(반복 가능하게)</b> 비교해야 합니다.</p>
+
+<div class="analogy">
+  🍳 <b>요리 대회 비유</b> — 엔진 5개 = 셰프 5명. "받아쓰기 오답률(CER)" = 요리 점수(낮을수록 좋음). 우리가 한 일은 <b>공정하고 믿을 수 있는 심사 규칙과 채점표를 만든 것</b>입니다. 아직 실제 요리(엔진)는 끓이지 않았습니다.
+</div>
+
+<h2>2. 무슨 문제를 발견했나</h2>
+<p>작업을 이어받아 보니, 기존 비교 도구에 <b>신뢰성 구멍</b>이 있었습니다. 요리 대회로 치면:</p>
+<ul>
+  <li><b>점수가 흔들린다</b> — 같은 엔진·같은 회의를 재도 잴 때마다 ±8%씩 흔들립니다(애플 칩 특성). 바람 부는 날 기록 재기와 같습니다.</li>
+  <li><b>그 흔들림을 무시하고 1점 차로 우승을 가렸다</b> — 노이즈를 실력으로 착각하던 구조.</li>
+  <li><b>비현실적 합격선</b> — "오답률 35% 넘으면 탈락"인데, 정답 자막 자체가 느슨해서 완벽히 받아써도 40~50%가 나옵니다. 즉 멀쩡한 엔진도 다 탈락하던 기준.</li>
+  <li><b>환각 무방비</b> — 엔진이 없는 말을 지어내면(환각) 오히려 점수가 좋아 보이는데, 이를 거르지 않았습니다.</li>
+</ul>
+<p>그래서 "비교 결과를 믿을 수 있게" 채점 규칙·도구를 다시 만드는 작업(<code>docs/adr/0004</code>로 설계)을 했습니다.</p>
+
+<h2>3. 무엇을 만들었나 — 채점 두뇌</h2>
+<p>아래 5개 도구가 이어져 "여러 엔진 → 믿을 수 있는 우열 판정"을 만듭니다. 초록 = 완성(가짜 데이터로 검증), 노랑 = 실제 데이터 대기.</p>
+
+<svg class="flow-diagram" viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg">
+  <rect x="20" y="20" width="150" height="46" rx="6" class="flow-box-accent"/>
+  <text x="95" y="38" class="flow-text">① 오차범위 계산</text>
+  <text x="95" y="54" class="flow-sub">"34 ± 3%"</text>
+
+  <line x1="170" y1="43" x2="205" y2="43" class="flow-arrow"/>
+  <polygon points="205,38 215,43 205,48" class="flow-arrowhead"/>
+
+  <rect x="215" y="20" width="150" height="46" rx="6" class="flow-box-accent"/>
+  <text x="290" y="38" class="flow-text">② 순위표</text>
+  <text x="290" y="54" class="flow-sub">점수순 줄세우기</text>
+
+  <line x1="365" y1="43" x2="400" y2="43" class="flow-arrow"/>
+  <polygon points="400,38 410,43 400,48" class="flow-arrowhead"/>
+
+  <rect x="410" y="20" width="160" height="46" rx="6" class="flow-box-accent"/>
+  <text x="490" y="38" class="flow-text">③ 무승부 규칙</text>
+  <text x="490" y="54" class="flow-sub">범위 겹치면 비김</text>
+
+  <line x1="490" y1="66" x2="490" y2="100" class="flow-arrow"/>
+  <polygon points="485,100 490,110 495,100" class="flow-arrowhead"/>
+
+  <rect x="410" y="110" width="160" height="46" rx="6" class="flow-box-accent"/>
+  <text x="490" y="128" class="flow-text">④ 교체 규칙</text>
+  <text x="490" y="144" class="flow-sub">확실히 나을 때만</text>
+
+  <rect x="215" y="110" width="150" height="46" rx="6" class="flow-box-accent"/>
+  <text x="290" y="128" class="flow-text">⑤ 재앙 컷</text>
+  <text x="290" y="144" class="flow-sub">70% 넘으면 탈락</text>
+
+  <rect x="20" y="110" width="150" height="46" rx="6" class="flow-box-wait"/>
+  <text x="95" y="128" class="flow-text">실제 엔진 구동</text>
+  <text x="95" y="144" class="flow-sub">아직 안 함</text>
+</svg>
+
+<div class="card card--done">
+  <div class="card-title"><span class="tag tag-pass">완성</span> ① 오차범위 계산 (반복측정 통계)</div>
+  <p>같은 엔진을 여러 번 재서 "이 엔진은 34% ± 3%" 식으로 흔들림 폭을 냅니다. 한 번만 잰 값은 "못 믿음"으로 표시. 작은 횟수에서도 정직하게 넓은 범위를 내도록 통계(t분포)를 씁니다.</p>
+</div>
+<div class="card card--done">
+  <div class="card-title"><span class="tag tag-pass">완성</span> ② 순위표 + ③ 무승부 규칙</div>
+  <p>엔진을 점수순으로 줄세우되, <b>두 엔진의 오차범위가 겹치면 "무승부"</b>로 묶습니다. "1등이 2등보다 2% 낮아도, 그게 바람(노이즈) 안이면 진짜 1등 아님."</p>
+</div>
+<div class="card card--done">
+  <div class="card-title"><span class="tag tag-pass">완성</span> ④ 교체 규칙</div>
+  <p>지금 제품 엔진을 새 엔진으로 바꾸려면, <b>새 엔진 범위 전체가 현 엔진보다 확실히 아래</b>일 때만. 살짝 좋은 건 노이즈일 수 있어 안 바꿉니다.</p>
+</div>
+<div class="card card--done">
+  <div class="card-title"><span class="tag tag-pass">완성</span> ⑤ 재앙 컷 (sanity 상한 0.70)</div>
+  <p>비현실적이던 35% 합격선을 없애고, "70% 넘으면 엔진이 고장난 것"이라는 안전선으로 바꿨습니다. 우열은 위 무승부/교체 규칙이 가립니다.</p>
+</div>
+<div class="card card--wait">
+  <div class="card-title"><span class="tag tag-wait">대기</span> 실제 엔진 구동 (실측)</div>
+  <p>위 도구들은 <b>가짜 데이터로만</b> 검증했습니다. 진짜 우열을 보려면 5개 엔진을 실제 회의 7개로 돌려야 하는데(2시간짜리 포함), 시간·환경이 필요해 사용자 환경 작업으로 남겨뒀습니다. 실행 가이드와 준비(blocker 제거)는 끝나 있습니다.</p>
+</div>
+
+<h2>4. 지금 위치와 남은 것</h2>
+<table>
+  <thead><tr><th>구분</th><th>상태</th></tr></thead>
+  <tbody>
+    <tr><td>채점 규칙·도구 (채점 두뇌)</td><td><span class="tag tag-pass">완성</span> 가짜 데이터로 전부 검증·리뷰 통과</td></tr>
+    <tr><td>도구를 실제 채점 흐름에 연결(배선)</td><td><span class="tag tag-wait">남음</span> 일부는 실측 데이터 필요</td></tr>
+    <tr><td>실제 엔진 구동 → 진짜 우열</td><td><span class="tag tag-wait">남음</span> 사용자 환경(시간 소요)</td></tr>
+    <tr><td>환각(phantom) 반영</td><td><span class="tag tag-wait">남음</span> 별도 정답 데이터 확보 후</td></tr>
+  </tbody>
+</table>
+
+<h2>5. 증거 (커밋·테스트)</h2>
+<details>
+  <summary>이번에 만든 코드 커밋 (framework worktree, 15건)</summary>
+  <div class="details-body">
+    <table>
+      <thead><tr><th>커밋</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>b1ac4f2</code> + <code>ac4b7e8</code></td><td>판정 규칙(무승부·교체) 함수 + 엣지 테스트</td></tr>
+        <tr><td><code>205a09b</code> + <code>5a97c75</code></td><td>오차범위 계산(반복측정 통계, t분포)</td></tr>
+        <tr><td><code>727695d</code> + <code>26a4ac0</code></td><td>엔진 순위표 + 엔진 단위 dedup 수정</td></tr>
+        <tr><td><code>bfbc245</code> + <code>5123267</code> + <code>ddb4182</code></td><td>재앙 컷(절대 35% → sanity 0.70) + alias 수정</td></tr>
+        <tr><td>(스키마 5건)</td><td>manifest 필드 예약(파라미터·phantom·ranking 등)</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.85rem;color:var(--text-muted)">각 커밋마다 code-reviewer 리뷰를 받았고, 발견된 실제 버그(alias 우선순위·순위 중복·CI 과소추정)를 전부 수정·재검증했습니다.</p>
+  </div>
+</details>
+<table class="verify-table">
+  <thead><tr><th>결과</th><th>검증</th><th>비고</th></tr></thead>
+  <tbody>
+    <tr class="vrow-pass"><td><span class="tag tag-pass">PASS</span></td><td><code>pytest Tests/</code></td><td>701 passed, 35 subtests</td></tr>
+    <tr class="vrow-pass"><td><span class="tag tag-pass">PASS</span></td><td>양쪽 worktree git 상태</td><td>clean (미커밋 없음)</td></tr>
+    <tr class="vrow-pass"><td><span class="tag tag-pass">PASS</span></td><td>code-review</td><td>모든 단위 리뷰 통과(수정 반영)</td></tr>
+  </tbody>
+</table>
+
+<h2>6. 다음에 이어가려면</h2>
+<p>모든 결정과 진행 상황은 <code>docs/adr/0004-stt-benchmark-reliability-methodology.md</code>와 메모리에 기록돼 있어 <b>잃어버리지 않습니다.</b> 다음 후보:</p>
+<ul>
+  <li><b>실제 엔진 구동</b>(권장 다음 단계) — 가이드: <code>docs/work/2026-06-18-stt-engine-rerun-guide.md</code>. 5개 중 3개(whisper·speech_analyzer·sf)는 이 머신에서 바로 가능, 2개(nemotron·sherpa)는 설치 필요.</li>
+  <li><b>도구 배선</b> — 채점 두뇌를 실제 채점 흐름에 연결(일부는 실측 데이터 있어야 의미).</li>
+  <li><b>환각 측정</b> — 정답(비발화 구간) 데이터 확보 후.</li>
+</ul>
+
+<footer>
+  <span>생성: 2026-06-22</span>
+  <span>모델: Claude Opus 4.8</span>
+  <span>유형: task-summary</span>
+</footer>
+
+</body>
+</html>
