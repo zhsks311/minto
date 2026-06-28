@@ -343,12 +343,20 @@ public struct MeetingLibraryView: View {
     }
 
     private var headerTitle: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("Minto")
-                .font(.system(size: 20, weight: .bold))
-            Text(isSearching ? "필요한 회의와 근거를 찾고 있어요" : "회의를 찾거나 새로 시작하세요")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
+        HStack(spacing: 10) {
+            if let logo = AppAssets.logoMark {
+                Image(nsImage: logo)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 34, height: 34)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Minto")
+                    .font(.system(size: 20, weight: .bold))
+                Text(isSearching ? "필요한 회의와 근거를 찾고 있어요" : "회의를 찾거나 새로 시작하세요")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
         }
         .fixedSize(horizontal: true, vertical: false)
     }

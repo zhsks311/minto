@@ -16,6 +16,9 @@ public enum AppAssets {
     /// Dock·Finder용 컬러 앱 아이콘(풀컬러, 라운딩 포함).
     public static let appIcon: NSImage? = bundleImage(named: "AppIcon")
 
+    /// 앱 내부 UI(메인 윈도우 헤더 등)용 컬러 깃펜 로고(배경 없음).
+    public static let logoMark: NSImage? = bundleImage(named: "LogoMark")
+
     private static func bundleImage(named name: String) -> NSImage? {
         guard let url = Bundle.module.url(forResource: name, withExtension: "png") else {
             return nil
