@@ -32,6 +32,7 @@ struct LLMProviderTests {
         let modelUnavailable = LLMProviderError.modelUnavailable("gpt-x")
         let rateLimited = LLMProviderError.rateLimited
         let timeout = LLMProviderError.network("The request timed out.")
+        let unsupported = LLMProviderError.unsupportedOutputFormat(.claudeCodeCLI, .jsonSchema(MeetingSummarySchema.schema))
 
         #expect(notConfigured.userMessage == "공급자 설정이 필요해요.")
         #expect(notConfigured.localizedDescription == notConfigured.userMessage)
@@ -42,6 +43,21 @@ struct LLMProviderTests {
         #expect(timeout.userMessage.contains("초과"))
         #expect(timeout.userAction?.contains("응답 대기 시간") == true)
         #expect(timeout.isTimeout)
+        #expect(!unsupported.isRetryable)
+        #expect(unsupported.userAction?.contains("구조화 요약") == true)
+    }
+
+    @Test("LLMTextRequest 기본 출력 형식은 plain text다")
+    func textRequestDefaultsToPlainText() {
+        let request = LLMTextRequest(useCase: .finalSummary, instructions: "요약", userContent: "원문")
+
+        #expect(request.outputFormat == .plainText)
+    }
+
+    @Test("MeetingSummary strict object schema는 추가 속성을 허용하지 않는다")
+    func meetingSummaryStrictObjectSchemasDisallowAdditionalProperties() throws {
+        let schema = try #require(MeetingSummarySchema.schema.schema.jsonObject as? [String: Any])
+        try Self.assertStrictObjectsDisallowAdditionalProperties(schema)
     }
 
     @Test("legacy 교정 설정은 새 공급자 ID로 매핑된다")
@@ -487,7 +503,8 @@ struct LLMProviderTests {
             instructions: "JSON으로 요약하세요.",
             userContent: "회의 원문",
             modelID: "models/gemini-test",
-            maxOutputTokens: 128
+            maxOutputTokens: 128,
+            outputFormat: .jsonSchema(MeetingSummarySchema.schema)
         ))
 
         let request = try #require(transport.requests.first)
@@ -510,6 +527,106 @@ struct LLMProviderTests {
         #expect(properties["sections"] != nil)
         #expect(properties["actionItems"] != nil)
         #expect((schema["required"] as? [String])?.contains("leadAnswer") == true)
+    }
+
+    @Test("OpenAI API provider는 명시적 JSON schema 요청만 text.format에 싣는다")
+    func openAIAPIProviderMapsJSONSchemaOutputFormat() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"output_text":"{}","model":"gpt-test"}"#.utf8))
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .gpt,
+            keyProvider: StubAPIKeyProvider(keys: [.gpt: "sk-test"]),
+            transport: transport
+        ))
+
+        _ = try await provider.generateText(LLMTextRequest(
+            useCase: .finalSummary,
+            instructions: "요약",
+            userContent: "원문",
+            modelID: "gpt-test",
+            outputFormat: .jsonSchema(MeetingSummarySchema.schema)
+        ))
+
+        let request = try #require(transport.requests.first)
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        let text = try #require(body["text"] as? [String: Any])
+        let format = try #require(text["format"] as? [String: Any])
+        #expect(format["type"] as? String == "json_schema")
+        #expect(format["name"] as? String == "meeting_summary")
+        #expect(format["strict"] as? Bool == true)
+        let schema = try #require(format["schema"] as? [String: Any])
+        #expect(schema["type"] as? String == "object")
+    }
+
+    @Test("Claude API provider는 JSON schema를 지원한다고 속이지 않는다")
+    func claudeAPIProviderRejectsJSONSchemaOutputFormat() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"content":[{"type":"text","text":"unused"}]}"#.utf8))
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .claude,
+            keyProvider: StubAPIKeyProvider(keys: [.claude: "claude-test"]),
+            transport: transport
+        ))
+
+        await #expect(throws: LLMProviderError.unsupportedOutputFormat(.claude, .jsonSchema(MeetingSummarySchema.schema))) {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .finalSummary,
+                instructions: "요약",
+                userContent: "원문",
+                outputFormat: .jsonSchema(MeetingSummarySchema.schema)
+            ))
+        }
+        #expect(transport.requests.isEmpty)
+    }
+
+    @Test("OpenRouter provider는 검증된 OpenAI 계열 모델에만 JSON schema를 싣는다")
+    func openRouterProviderMapsJSONSchemaForOpenAIModels() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"model":"openai/gpt-5.5","choices":[{"message":{"content":"{}"},"finish_reason":"stop"}]}"#.utf8))
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .openRouter,
+            keyProvider: StubAPIKeyProvider(keys: [.openRouter: "or-test"]),
+            transport: transport
+        ))
+
+        _ = try await provider.generateText(LLMTextRequest(
+            useCase: .finalSummary,
+            instructions: "요약",
+            userContent: "원문",
+            modelID: "openai/gpt-5.5",
+            outputFormat: .jsonSchema(MeetingSummarySchema.schema)
+        ))
+
+        let request = try #require(transport.requests.first)
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        let responseFormat = try #require(body["response_format"] as? [String: Any])
+        #expect(responseFormat["type"] as? String == "json_schema")
+        let jsonSchema = try #require(responseFormat["json_schema"] as? [String: Any])
+        #expect(jsonSchema["type"] == nil)
+        #expect(jsonSchema["name"] as? String == "meeting_summary")
+        #expect(jsonSchema["strict"] as? Bool == true)
+        let schema = try #require(jsonSchema["schema"] as? [String: Any])
+        #expect(schema["type"] as? String == "object")
+        let routingProvider = try #require(body["provider"] as? [String: Any])
+        #expect(routingProvider["require_parameters"] as? Bool == true)
+    }
+
+    @Test("OpenRouter provider는 미검증 모델의 JSON schema를 전송하지 않는다")
+    func openRouterProviderRejectsUnverifiedJSONSchemaModels() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{}"#.utf8))
+        let provider = try #require(LLMAPIKeyTextProvider(
+            providerID: .openRouter,
+            keyProvider: StubAPIKeyProvider(keys: [.openRouter: "or-test"]),
+            transport: transport
+        ))
+
+        await #expect(throws: LLMProviderError.unsupportedOutputFormat(.openRouter, .jsonSchema(MeetingSummarySchema.schema))) {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .finalSummary,
+                instructions: "요약",
+                userContent: "원문",
+                modelID: "anthropic/claude-sonnet-4.6",
+                outputFormat: .jsonSchema(MeetingSummarySchema.schema)
+            ))
+        }
+        #expect(transport.requests.isEmpty)
     }
 
     @Test("API key provider HTTP 상태는 공통 오류로 매핑된다")
@@ -601,7 +718,8 @@ struct LLMProviderTests {
             useCase: .finalSummary,
             instructions: "회의를 구조화하세요.",
             userContent: "회의 원문",
-            modelID: nil
+            modelID: nil,
+            outputFormat: .jsonSchema(MeetingSummarySchema.schema)
         ))
 
         let request = try #require(transport.requests.first)
@@ -668,12 +786,50 @@ struct LLMProviderTests {
             let options = try #require(body["options"] as? [String: Any])
             #expect(options["num_predict"] as? Int == expected.3)
             #expect(options["num_ctx"] as? Int == 4_096)
-            if expected.0 == .finalSummary {
-                #expect(body["format"] != nil)
-            } else {
-                #expect(body["format"] == nil)
-            }
+            #expect(body["format"] == nil)
         }
+    }
+
+    @Test("finalSummary use case만으로는 로컬 schema format을 추가하지 않는다")
+    func localLLMProviderDoesNotInferSchemaFromFinalSummaryUseCase() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{"model":"local-smoke","response":"ok","done":true}"#.utf8))
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(modelID: "local-smoke"),
+            transport: transport
+        )
+
+        _ = try await provider.generateText(LLMTextRequest(
+            useCase: .finalSummary,
+            instructions: "요약",
+            userContent: "원문"
+        ))
+
+        let request = try #require(transport.requests.first)
+        let body = try Self.jsonObject(from: try #require(request.httpBody))
+        #expect(body["format"] == nil)
+    }
+
+    @Test("로컬 OpenAI 호환 endpoint는 JSON schema를 조용히 prompt-only로 보내지 않는다")
+    func localOpenAICompatibleRejectsJSONSchemaOutputFormat() async throws {
+        let transport = StubLLMAPITransport(data: Data(#"{}"#.utf8))
+        let provider = LocalLLMProvider(
+            configuration: LocalLLMProviderConfiguration(
+                baseURL: URL(string: "http://127.0.0.1:8080")!,
+                modelID: "manual-model",
+                compatibility: .openAIChatCompletions
+            ),
+            transport: transport
+        )
+
+        await #expect(throws: LLMProviderError.unsupportedOutputFormat(.local, .jsonSchema(MeetingSummarySchema.schema))) {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .finalSummary,
+                instructions: "요약",
+                userContent: "원문",
+                outputFormat: .jsonSchema(MeetingSummarySchema.schema)
+            ))
+        }
+        #expect(transport.requests.isEmpty)
     }
 
     @Test("로컬 LLM provider는 요청별 출력 토큰 override를 payload에 반영한다")
@@ -782,6 +938,20 @@ struct LLMProviderTests {
         #expect(KeychainService.llmAPIService == "com.minto.app.llm-api")
     }
 
+    @Test("legacy 계정 provider는 JSON schema를 지원한다고 속이지 않는다")
+    func legacyAccountProviderRejectsJSONSchemaOutputFormat() async throws {
+        let provider = try #require(LegacyAccountLLMTextProvider(providerID: .chatGPTAccount))
+
+        await #expect(throws: LLMProviderError.unsupportedOutputFormat(.chatGPTAccount, .jsonSchema(MeetingSummarySchema.schema))) {
+            _ = try await provider.generateText(LLMTextRequest(
+                useCase: .finalSummary,
+                instructions: "요약",
+                userContent: "원문",
+                outputFormat: .jsonSchema(MeetingSummarySchema.schema)
+            ))
+        }
+    }
+
     @Test("API key 존재 확인은 비밀값을 로드하지 않는다")
     func apiKeyStoreChecksExistenceWithoutLoadingSecret() {
         let storage = StubAPIKeyStorageBackend(loadData: Data("sk-test".utf8), existsResult: true)
@@ -861,6 +1031,22 @@ struct LLMProviderTests {
 
     private static func jsonObject(from data: Data) throws -> [String: Any] {
         try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private static func assertStrictObjectsDisallowAdditionalProperties(_ schema: [String: Any]) throws {
+        if schema["type"] as? String == "object" {
+            #expect(schema["additionalProperties"] as? Bool == false)
+        }
+        if let properties = schema["properties"] as? [String: Any] {
+            for value in properties.values {
+                if let child = value as? [String: Any] {
+                    try assertStrictObjectsDisallowAdditionalProperties(child)
+                }
+            }
+        }
+        if let items = schema["items"] as? [String: Any] {
+            try assertStrictObjectsDisallowAdditionalProperties(items)
+        }
     }
 }
 

@@ -274,13 +274,17 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: [
+        var body: [String: Any] = [
             "model": modelID,
             "instructions": request.instructions,
             "input": request.userContent,
             "store": false,
             "max_output_tokens": maxOutputTokens(for: request)
-        ])
+        ]
+        if case .jsonSchema(let schema) = request.outputFormat {
+            body["text"] = ["format": schema.responseFormatJSON]
+        }
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let json = try await sendJSON(urlRequest)
         let text = Self.extractOpenAIText(from: json)
@@ -313,6 +317,9 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
     }
 
     private func generateClaudeText(_ request: LLMTextRequest, apiKey: String) async throws -> LLMTextResponse {
+        if case .jsonSchema = request.outputFormat {
+            throw LLMProviderError.unsupportedOutputFormat(descriptor.id, request.outputFormat)
+        }
         let modelID = selectedModelID(requestModelID: request.modelID)
         var urlRequest = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         urlRequest.httpMethod = "POST"
@@ -340,12 +347,15 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
 
     private func generateOpenRouterText(_ request: LLMTextRequest, apiKey: String) async throws -> LLMTextResponse {
         let modelID = selectedModelID(requestModelID: request.modelID)
+        if case .jsonSchema = request.outputFormat, !Self.openRouterStructuredOutputSupported(modelID: modelID) {
+            throw LLMProviderError.unsupportedOutputFormat(descriptor.id, request.outputFormat)
+        }
         var urlRequest = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/chat/completions")!)
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue("Minto", forHTTPHeaderField: "X-Title")
-        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: [
+        var body: [String: Any] = [
             "model": modelID,
             "max_tokens": maxOutputTokens(for: request),
             "temperature": 0.1,
@@ -353,7 +363,12 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
                 ["role": "system", "content": request.instructions],
                 ["role": "user", "content": request.userContent]
             ]
-        ])
+        ]
+        if case .jsonSchema(let schema) = request.outputFormat {
+            body["response_format"] = ["type": "json_schema", "json_schema": schema.jsonSchemaJSON]
+            body["provider"] = ["require_parameters": true]
+        }
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let json = try await sendJSON(urlRequest)
         let text = Self.extractOpenAIChatText(from: json)
@@ -514,102 +529,23 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             "temperature": 0.1,
             "maxOutputTokens": maxOutputTokens(for: request)
         ]
-        if request.useCase == .finalSummary {
-            config["responseFormat"] = Self.meetingSummaryResponseFormat()
+        if case .jsonSchema(let schema) = request.outputFormat {
+            config["responseFormat"] = Self.geminiResponseFormat(schema)
         }
         return config
     }
 
-    private static func meetingSummaryResponseFormat() -> [String: Any] {
+    private static func geminiResponseFormat(_ schema: LLMJSONSchema) -> [String: Any] {
         [
             "text": [
                 "mimeType": "application/json",
-                "schema": meetingSummarySchema()
+                "schema": schema.schema.jsonObject
             ]
         ]
     }
 
-    private static func meetingSummarySchema() -> [String: Any] {
-        let timedTextSchema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "text": ["type": "string"],
-                "time": ["type": "string"]
-            ],
-            "required": ["text", "time"]
-        ]
-        let actionItemSchema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "task": ["type": "string"],
-                "owner": ["type": "string"],
-                "due": ["type": "string"],
-                "time": ["type": "string"]
-            ],
-            "required": ["task", "owner", "due", "time"]
-        ]
-        let pointSchema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "text": ["type": "string"],
-                "subPoints": [
-                    "type": "array",
-                    "items": ["type": "string"]
-                ]
-            ],
-            "required": ["text", "subPoints"]
-        ]
-        let sectionSchema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "title": ["type": "string"],
-                "time": ["type": "string"],
-                "points": [
-                    "type": "array",
-                    "items": pointSchema
-                ]
-            ],
-            "required": ["title", "time", "points"]
-        ]
-
-        return [
-            "type": "object",
-            "properties": [
-                "title": ["type": "string"],
-                "leadQuestion": ["type": "string"],
-                "leadAnswer": ["type": "string"],
-                "decisions": [
-                    "type": "array",
-                    "items": timedTextSchema
-                ],
-                "actionItems": [
-                    "type": "array",
-                    "items": actionItemSchema
-                ],
-                "openQuestions": [
-                    "type": "array",
-                    "items": timedTextSchema
-                ],
-                "sections": [
-                    "type": "array",
-                    "items": sectionSchema
-                ],
-                "keywords": [
-                    "type": "array",
-                    "items": ["type": "string"]
-                ]
-            ],
-            "required": [
-                "title",
-                "leadQuestion",
-                "leadAnswer",
-                "decisions",
-                "actionItems",
-                "openQuestions",
-                "sections",
-                "keywords"
-            ]
-        ]
+    private static func openRouterStructuredOutputSupported(modelID: String) -> Bool {
+        modelID.lowercased().hasPrefix("openai/")
     }
 
     private static func providerError(statusCode: Int, body: String) -> LLMProviderError {
@@ -640,7 +576,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
             return "모델 목록을 확인하지 못했어요. 모델 확인 링크에서 ID를 확인해 직접 입력하세요."
         case .notConfigured:
             return "API 키를 저장하면 사용 가능한 모델 목록을 확인해요."
-        case .badResponse, .httpStatus:
+        case .badResponse, .httpStatus, .unsupportedOutputFormat:
             return "공급자 응답을 이해하지 못해 기본 추천 모델을 표시해요. 모델 ID를 직접 입력할 수 있어요."
         }
     }

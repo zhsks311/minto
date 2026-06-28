@@ -161,6 +161,45 @@ struct SummaryServiceTests {
         #expect(SummaryService.parseStructured(#"{"title":"","leadAnswer":""}"#) == nil) // 의미 내용 없음
     }
 
+    @Test("최종 요약만 JSON schema 출력 형식을 요청한다")
+    func finalSummaryRequestsJSONSchemaOutputFormat() async {
+        let provider = StubSummaryTextProvider(text: #"{"leadAnswer":"요약"}"#)
+        let service = SummaryService { provider }
+
+        let result = await service.generateFinal(
+            transcript: "[00:01] 실제 전사",
+            context: SummaryGenerationContext()
+        )
+
+        #expect(result?.leadAnswer == "요약")
+        #expect(provider.requests.first?.outputFormat == .jsonSchema(MeetingSummarySchema.schema))
+    }
+
+    @Test("증분 요약은 plain text 출력 형식을 유지한다")
+    func incrementalSummaryKeepsPlainTextOutputFormat() async {
+        let provider = StubSummaryTextProvider(text: "증분 요약")
+        let service = SummaryService { provider }
+        MeetingContext.shared.start(topic: "", glossary: "")
+        defer { MeetingContext.shared.clear() }
+
+        let result = await service.generateIncremental(correctedBatch: "새 발언")
+
+        #expect(result == "증분 요약")
+        #expect(provider.requests.first?.outputFormat == .plainText)
+    }
+
+    @Test("최종 요약 provider가 JSON schema를 지원하지 않아도 running summary로 fail-soft한다")
+    func unsupportedOutputFormatFallsBackToRunningSummary() async {
+        let provider = StubSummaryTextProvider(error: .unsupportedOutputFormat(.claudeCodeCLI, .jsonSchema(MeetingSummarySchema.schema)))
+        let service = SummaryService { provider }
+        let context = SummaryGenerationContext(runningSummary: "기존 누적 요약")
+
+        let result = await service.generateFinal(transcript: "[00:01] 실제 전사", context: context)
+
+        #expect(result?.leadAnswer == "기존 누적 요약")
+        #expect(service.lastGenerationFailure == .unsupportedOutputFormat(.claudeCodeCLI, .jsonSchema(MeetingSummarySchema.schema)))
+    }
+
     @Test("MeetingSummary.markdown: 계층 렌더")
     func markdownRender() {
         let s = MeetingSummary(
@@ -202,6 +241,40 @@ struct SummaryServiceTests {
         MeetingContext.shared.clear()
         #expect(MeetingContext.shared.runningSummary.isEmpty)
         #expect(MeetingContext.shared.finalSummary == nil)
+    }
+}
+
+private final class StubSummaryTextProvider: LLMTextGenerationProvider, @unchecked Sendable {
+    let descriptor = LLMProviderDescriptor(
+        id: .local,
+        description: "test",
+        authKind: .local,
+        supportedCapabilities: [.textGeneration, .summary]
+    )
+    private let lock = NSLock()
+    private let text: String
+    private let error: LLMProviderError?
+    private(set) var requests: [LLMTextRequest] = []
+
+    init(text: String = "", error: LLMProviderError? = nil) {
+        self.text = text
+        self.error = error
+    }
+
+    func isConfigured() async -> Bool { true }
+
+    func modelCatalog() async -> LLMModelCatalog {
+        LLMModelCatalog(models: [], source: .manualOnly)
+    }
+
+    func generateText(_ request: LLMTextRequest) async throws -> LLMTextResponse {
+        lock.withLock {
+            requests.append(request)
+        }
+        if let error {
+            throw error
+        }
+        return LLMTextResponse(text: text, providerID: .local, modelID: "stub")
     }
 }
 

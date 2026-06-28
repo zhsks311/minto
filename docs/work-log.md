@@ -33,6 +33,9 @@
 | 22 | 2026-06-13 | [임포트 교정 배치화](work-log/2026-06-13-22-import-correction-batching.md) | 청크 3개를 한 LLM 호출로 — 호출 수 1/3, 번호 파싱 fail-soft, 배치 경계 문맥 |
 | 23 | 2026-06-13 | [채널 기반 화자 라벨링](work-log/2026-06-13-23-channel-speaker-labeling.md) | mixed sample-clock 채널 활동으로 마이크=나, 시스템=상대 speaker 라벨 주입 |
 | 24 | 2026-06-13 | [Phase 2 화자분리 평가 하니스](work-log/2026-06-13-24-phase2-diarization-eval-harness.md) | FluidAudio offline diarizer 후처리 평가, 전사 화자 매칭, coverage/overlap metric, env 게이트 러너 |
+| 25 | 2026-06-24 | [다중 소스 문서 수집 Phase 0~4](work-log/2026-06-24-25-multi-source-document-ingestion-phase0-4.md) | 로컬 파일·OCR·Notion·Confluence 참고 문서 수집 레이어와 회의 시작 첨부 UI |
+| 26 | 2026-06-24 | [문서 프롬프트 표현 개정 Phase 5~6](work-log/2026-06-24-26-document-prompt-representation-phase5-6.md) | 교정은 terms-only, 요약은 문서 요약본으로 분리하고 fail-soft 폴백 유지 |
+| 27 | 2026-06-29 | [LLM 출력 형식 계약 도입](work-log/2026-06-29-27-llm-output-format-contract.md) | finalSummary 분기를 outputFormat 계약으로 분리하고 provider별 structured output 지원/미지원 경로 명시 |
 
 ## 남은 과제
 

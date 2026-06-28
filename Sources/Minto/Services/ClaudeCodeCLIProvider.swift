@@ -429,6 +429,9 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
     }
 
     private func generateTextWithoutConcurrentProcessBurst(_ request: LLMTextRequest) async throws -> LLMTextResponse {
+        if case .jsonSchema = request.outputFormat {
+            throw LLMProviderError.unsupportedOutputFormat(descriptor.id, request.outputFormat)
+        }
         let modelID = selectedModelID(requestModelID: request.modelID)
         let result = try await runClaude(
             operation: .generate,
@@ -635,7 +638,7 @@ public final class ClaudeCodeCLIProvider: LLMTextGenerationProvider, @unchecked 
             return sanitizeForPublicLog(message)
         case .httpStatus(let statusCode, let message):
             return sanitizeForPublicLog("HTTP \(statusCode) \(message)")
-        case .notConfigured, .unauthorized, .rateLimited:
+        case .notConfigured, .unauthorized, .rateLimited, .unsupportedOutputFormat:
             return sanitizeForPublicLog(error.localizedDescription)
         }
     }

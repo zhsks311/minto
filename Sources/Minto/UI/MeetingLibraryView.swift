@@ -3292,6 +3292,8 @@ public struct MeetingLibraryView: View {
             return "요약 provider 응답을 이해하지 못했어요. 다른 모델로 다시 시도하세요."
         case .httpStatus(let statusCode, _):
             return "요약 provider 요청이 실패했어요. HTTP \(statusCode). provider 설정과 권한을 확인하세요."
+        case .unsupportedOutputFormat:
+            return [error.userMessage, error.userAction].compactMap { $0 }.joined(separator: " ")
         }
     }
 

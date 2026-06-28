@@ -37,7 +37,13 @@ public struct SummaryGenerationContext: Sendable, Equatable {
 public final class SummaryService: ObservableObject {
 
     public static let shared = SummaryService()
-    private init() {}
+    private let providerResolver: @MainActor @Sendable () -> (any LLMTextGenerationProvider)?
+
+    init(providerResolver: @escaping @MainActor @Sendable () -> (any LLMTextGenerationProvider)? = {
+        LLMSummarySettingsService.shared.selectedTextProvider()
+    }) {
+        self.providerResolver = providerResolver
+    }
 
     /// 요약 생성 진행 카운터 (UI 인디케이터용).
     @Published public var activeGenerations: Int = 0
@@ -100,7 +106,12 @@ public final class SummaryService: ObservableObject {
             documentSummary: context.documentSummary
         )
 
-        if let raw = await dispatch(prompt, useCase: .finalSummary, documentChars: context.document.count) {
+        if let raw = await dispatch(
+            prompt,
+            useCase: .finalSummary,
+            documentChars: context.document.count,
+            outputFormat: .jsonSchema(MeetingSummarySchema.schema)
+        ) {
             guard !Task.isCancelled else { return nil }
             // JSON 파싱 시도 → 실패하면 raw를 평문 요약으로 감싼다(빈 화면 방지).
             let summary = Self.parseStructured(raw) ?? .plain(raw)
@@ -152,8 +163,13 @@ public final class SummaryService: ObservableObject {
     }
 
     /// provider adapter dispatch. 실패·none·빈 응답이면 nil.
-    private func dispatch(_ prompt: (instructions: String, userContent: String), useCase: LLMUseCase, documentChars: Int) async -> String? {
-        guard let provider = LLMSummarySettingsService.shared.selectedTextProvider() else {
+    private func dispatch(
+        _ prompt: (instructions: String, userContent: String),
+        useCase: LLMUseCase,
+        documentChars: Int,
+        outputFormat: LLMOutputFormat = .plainText
+    ) async -> String? {
+        guard let provider = providerResolver() else {
             lastGenerationFailure = .notConfigured
             return nil
         }
@@ -165,7 +181,8 @@ public final class SummaryService: ObservableObject {
             let response = try await provider.generateText(LLMTextRequest(
                 useCase: useCase,
                 instructions: prompt.instructions,
-                userContent: prompt.userContent
+                userContent: prompt.userContent,
+                outputFormat: outputFormat
             ))
             let trimmed = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {

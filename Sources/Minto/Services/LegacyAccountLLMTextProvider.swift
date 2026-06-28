@@ -39,6 +39,10 @@ public final class LegacyAccountLLMTextProvider: LLMTextGenerationProvider, @unc
     }
 
     public func generateText(_ request: LLMTextRequest) async throws -> LLMTextResponse {
+        if case .jsonSchema = request.outputFormat {
+            throw LLMProviderError.unsupportedOutputFormat(descriptor.id, request.outputFormat)
+        }
+
         let rawText: String
         switch descriptor.id {
         case .chatGPTAccount:

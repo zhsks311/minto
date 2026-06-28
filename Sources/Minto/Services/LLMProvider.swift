@@ -155,19 +155,82 @@ public struct LLMTextRequest: Sendable {
     public let userContent: String
     public let modelID: String?
     public let maxOutputTokens: Int?
+    public let outputFormat: LLMOutputFormat
 
     public init(
         useCase: LLMUseCase,
         instructions: String,
         userContent: String,
         modelID: String? = nil,
-        maxOutputTokens: Int? = nil
+        maxOutputTokens: Int? = nil,
+        outputFormat: LLMOutputFormat = .plainText
     ) {
         self.useCase = useCase
         self.instructions = instructions
         self.userContent = userContent
         self.modelID = modelID
         self.maxOutputTokens = maxOutputTokens
+        self.outputFormat = outputFormat
+    }
+}
+
+public enum LLMOutputFormat: Equatable, Sendable {
+    case plainText
+    case jsonSchema(LLMJSONSchema)
+}
+
+public struct LLMJSONSchema: Equatable, Sendable {
+    public let name: String
+    public let strict: Bool
+    public let schema: LLMJSONValue
+
+    public init(name: String, strict: Bool = true, schema: LLMJSONValue) {
+        self.name = name
+        self.strict = strict
+        self.schema = schema
+    }
+
+    public var responseFormatJSON: [String: Any] {
+        [
+            "type": "json_schema",
+            "name": name,
+            "strict": strict,
+            "schema": schema.jsonObject
+        ]
+    }
+
+    public var jsonSchemaJSON: [String: Any] {
+        [
+            "name": name,
+            "strict": strict,
+            "schema": schema.jsonObject
+        ]
+    }
+}
+
+public indirect enum LLMJSONValue: Equatable, Sendable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case array([LLMJSONValue])
+    case object([String: LLMJSONValue])
+
+    public var jsonObject: Any {
+        switch self {
+        case .string(let value):
+            return value
+        case .int(let value):
+            return value
+        case .double(let value):
+            return value
+        case .bool(let value):
+            return value
+        case .array(let values):
+            return values.map(\.jsonObject)
+        case .object(let values):
+            return values.mapValues(\.jsonObject)
+        }
     }
 }
 
@@ -247,6 +310,7 @@ public enum LLMProviderError: Error, Equatable, Sendable {
     case network(String)
     case badResponse(String)
     case httpStatus(Int, String)
+    case unsupportedOutputFormat(LLMProviderID, LLMOutputFormat)
 
     public var userMessage: String {
         switch self {
@@ -267,6 +331,8 @@ public enum LLMProviderError: Error, Equatable, Sendable {
             return "공급자 응답을 이해하지 못했어요."
         case .httpStatus(let statusCode, _):
             return "공급자 요청이 실패했어요. HTTP \(statusCode)"
+        case .unsupportedOutputFormat(let providerID, _):
+            return "\(providerID.displayName)은 요청한 출력 형식을 지원하지 않아요."
         }
     }
 
@@ -289,6 +355,8 @@ public enum LLMProviderError: Error, Equatable, Sendable {
             return "다른 모델로 다시 시도하세요."
         case .httpStatus(let statusCode, _):
             return statusCode == 429 ? "잠시 후 다시 시도하세요." : "공급자 설정과 권한을 확인하세요."
+        case .unsupportedOutputFormat:
+            return "구조화 요약을 지원하는 공급자나 모델을 선택하세요."
         }
     }
 
@@ -298,7 +366,7 @@ public enum LLMProviderError: Error, Equatable, Sendable {
             return true
         case .httpStatus(let statusCode, _):
             return statusCode == 408 || statusCode == 429 || (500...599).contains(statusCode)
-        case .notConfigured, .unauthorized, .modelUnavailable, .badResponse:
+        case .notConfigured, .unauthorized, .modelUnavailable, .badResponse, .unsupportedOutputFormat:
             return false
         }
     }

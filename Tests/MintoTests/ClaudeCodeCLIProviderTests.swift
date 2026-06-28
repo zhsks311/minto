@@ -38,6 +38,28 @@ struct ClaudeCodeCLIProviderTests {
         #expect(call.arguments.contains("--no-session-persistence"))
     }
 
+    @Test("JSON schema 출력 형식은 CLI wrapper JSON과 다르므로 거부한다")
+    func generateTextRejectsJSONSchemaOutputFormat() async throws {
+        let fixture = try ProviderFixture(
+            result: .success(ProcessResult(
+                exitCode: 0,
+                stdout: Data(#"{"result":"unused"}"#.utf8),
+                stderr: Data()
+            ))
+        )
+        defer { fixture.cleanup() }
+
+        await #expect(throws: LLMProviderError.unsupportedOutputFormat(.claudeCodeCLI, .jsonSchema(MeetingSummarySchema.schema))) {
+            _ = try await fixture.provider.generateText(LLMTextRequest(
+                useCase: .finalSummary,
+                instructions: "요약",
+                userContent: "원문",
+                outputFormat: .jsonSchema(MeetingSummarySchema.schema)
+            ))
+        }
+        #expect(fixture.launcher.calls.isEmpty)
+    }
+
     @Test("비정상 종료와 인증 stderr는 unauthorized로 매핑한다")
     func generateTextMapsAuthenticationFailure() async throws {
         let fixture = try ProviderFixture(
