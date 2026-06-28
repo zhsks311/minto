@@ -6,7 +6,7 @@ struct MintoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("Minto", systemImage: "waveform.circle.fill") {
+        MenuBarExtra {
             MenuBarView(
                 viewModel: appDelegate.viewModel,
                 onRequestStart: { appDelegate.requestStartSession() },
@@ -14,6 +14,12 @@ struct MintoApp: App {
                 onOpacityChange: appDelegate.floatingWindowManager.setOpacity,
                 onOpenLibrary: { appDelegate.mainWindowManager.show() }
             )
+        } label: {
+            if let icon = AppAssets.menuBarIcon {
+                Image(nsImage: icon)
+            } else {
+                Image(systemName: "waveform.circle.fill")
+            }
         }
         .menuBarExtraStyle(.window)
 
