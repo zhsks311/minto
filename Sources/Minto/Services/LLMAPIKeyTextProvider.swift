@@ -538,7 +538,7 @@ public final class LLMAPIKeyTextProvider: LLMTextGenerationProvider, @unchecked 
     private static func geminiResponseFormat(_ schema: LLMJSONSchema) -> [String: Any] {
         [
             "text": [
-                "mimeType": "application/json",
+                "mimeType": "APPLICATION_JSON",
                 "schema": schema.schema.jsonObject
             ]
         ]

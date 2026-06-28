@@ -520,7 +520,7 @@ struct LLMProviderTests {
         #expect(generationConfig["maxOutputTokens"] as? Int == 128)
         let responseFormat = try #require(generationConfig["responseFormat"] as? [String: Any])
         let textFormat = try #require(responseFormat["text"] as? [String: Any])
-        #expect(textFormat["mimeType"] as? String == "application/json")
+        #expect(textFormat["mimeType"] as? String == "APPLICATION_JSON")
         let schema = try #require(textFormat["schema"] as? [String: Any])
         #expect(schema["type"] as? String == "object")
         let properties = try #require(schema["properties"] as? [String: Any])
