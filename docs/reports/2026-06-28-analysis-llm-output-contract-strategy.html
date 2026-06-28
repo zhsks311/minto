@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM 출력 계약 전략 검토 — analysis</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --surface-strong: #eef4ff;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --code-bg: #f6f8fa;
+      --c-critical: #cf222e; --c-critical-bg: #fff0ee; --c-critical-border: #ff818266;
+      --c-high: #9a6700; --c-high-bg: #fff8c5; --c-high-border: #f1e05a99;
+      --c-medium: #0550ae; --c-medium-bg: #ddf4ff; --c-medium-border: #79c0ff99;
+      --c-low: #116329; --c-low-bg: #dafbe1; --c-low-border: #56d36499;
+      --pass-bg: #f0fdf4; --pass-border: #bbf7d0;
+      --fail-bg: #fff0ee; --fail-border: #fecaca;
+      --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --surface: #161b22; --surface-strong: #0f2347; --border: #30363d;
+        --text: #e6edf3; --text-muted: #8b949e; --accent: #79c0ff; --accent-soft: #051d4d; --code-bg: #161b22;
+        --c-critical: #ff7b72; --c-critical-bg: #2d0f0f; --c-critical-border: #ff7b7266;
+        --c-high: #e3b341; --c-high-bg: #2d1f04; --c-high-border: #e3b34166;
+        --c-medium: #79c0ff; --c-medium-bg: #051d4d; --c-medium-border: #79c0ff66;
+        --c-low: #56d364; --c-low-bg: #0a2d19; --c-low-border: #56d36466;
+        --pass-bg: #0a2d19; --pass-border: #56d36444;
+        --fail-bg: #2d0f0f; --fail-border: #ff7b7244;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.65;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+    h1 { font-size: 1.75rem; font-weight: 760; letter-spacing: -0.01em; }
+    h2 { font-size: 1.08rem; font-weight: 680; margin: 2.5rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 0.96rem; font-weight: 680; margin: 1.25rem 0 0.4rem; }
+    p { margin-bottom: 0.75rem; }
+    ul { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    pre {
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+      line-height: 1.5;
+    }
+    pre code { background: none; border: none; padding: 0; font-size: inherit; }
+    .summary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 1.15rem 1.4rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .summary-label {
+      font-size: 0.72rem;
+      font-weight: 780;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .stat-card--warning { background: var(--c-high-bg); border-color: var(--c-high-border); }
+    .stat-card--success { background: var(--pass-bg); border-color: var(--pass-border); }
+    .stat-card--info { background: var(--c-medium-bg); border-color: var(--c-medium-border); }
+    .stat-number { font-size: 2rem; font-weight: 760; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat-card--warning .stat-number { color: var(--c-high); }
+    .stat-card--success .stat-number { color: var(--c-low); }
+    .stat-card--info .stat-number { color: var(--c-medium); }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 560; }
+    .stat-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 760;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      vertical-align: middle;
+    }
+    .tag-pass { background: var(--pass-bg); color: var(--c-low); }
+    .tag-fail { background: var(--fail-bg); color: var(--c-critical); }
+    .tag-warning { background: var(--c-high-bg); color: var(--c-high); }
+    .tag-info { background: var(--c-medium-bg); color: var(--c-medium); }
+    .tag-neutral { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
+    .finding {
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 8px;
+      padding: 0.95rem 1.1rem;
+      margin: 0.75rem 0;
+      background: var(--surface);
+    }
+    .finding--high { border-left-color: var(--c-high); background: var(--c-high-bg); }
+    .finding--medium { border-left-color: var(--c-medium); background: var(--c-medium-bg); }
+    .finding--low { border-left-color: var(--c-low); background: var(--c-low-bg); }
+    .finding-header { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+    .finding-title { font-weight: 680; font-size: 0.96rem; }
+    .finding-location { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    th {
+      text-align: left;
+      font-size: 0.74rem;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      padding: 0.5rem 0.75rem;
+    }
+    td { padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .matrix td:nth-child(2), .matrix td:nth-child(3), .matrix td:nth-child(4) { min-width: 130px; }
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0 1.5rem;
+    }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 1rem;
+    }
+    .panel h3 { margin-top: 0; }
+    .flow-diagram { width: 100%; display: block; margin: 1rem 0; overflow: visible; }
+    .flow-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+    .flow-box-accent { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+    .flow-box-warn { fill: var(--c-high-bg); stroke: var(--c-high-border); stroke-width: 1.5; }
+    .flow-box-ok { fill: var(--pass-bg); stroke: var(--pass-border); stroke-width: 1.5; }
+    .flow-text { font-family: var(--font-body); font-size: 12px; fill: var(--text); text-anchor: middle; dominant-baseline: middle; font-weight: 620; }
+    .flow-label { font-family: var(--font-mono); font-size: 10px; fill: var(--text-muted); text-anchor: middle; dominant-baseline: middle; }
+    .flow-arrow { stroke: var(--text-muted); stroke-width: 1.5; }
+    .flow-arrowhead { fill: var(--text-muted); }
+    details { border: 1px solid var(--border); border-radius: 6px; margin: 0.75rem 0; }
+    details > summary {
+      padding: 0.65rem 1rem;
+      cursor: pointer;
+      font-weight: 560;
+      background: var(--surface);
+      user-select: none;
+      list-style: none;
+    }
+    details > summary::-webkit-details-marker { display: none; }
+    .details-body { padding: 1rem 1.25rem; }
+    footer {
+      margin-top: 3.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
+    @media print {
+      body { max-width: none; padding: 0; background: #fff; color: #000; }
+      .stat-card, .finding, .panel { border: 1px solid #ccc; background: #fff; }
+      a[href]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #666; }
+      footer { color: #666; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>LLM 출력 계약 전략 검토</h1>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card--info">
+    <div class="stat-number">9</div>
+    <div class="stat-label">provider ID</div>
+    <div class="stat-sub">로컬, API 키, CLI, 계정 로그인 포함</div>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <div class="stat-number">6</div>
+    <div class="stat-label">서로 다른 출력 문법</div>
+    <div class="stat-sub">Ollama, OpenAI, Gemini, Claude, OpenRouter, 계정/CLI</div>
+  </div>
+  <div class="stat-card stat-card--success">
+    <div class="stat-number">1</div>
+    <div class="stat-label">권장 추상화</div>
+    <div class="stat-sub">업무 전략이 아니라 출력 계약</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="summary-label">Summary</div>
+  <p>기존 구조는 여러 LLM을 끼우기 좋은 provider adapter 계약을 이미 갖고 있다. 부족한 부분은 provider 선택 전략이 아니라, “이 요청은 구조화 JSON이어야 한다”는 출력 계약을 공통 타입으로 표현하지 못한다는 점이다.</p>
+</div>
+
+<h2>한 줄 결론</h2>
+<div class="finding finding--medium">
+  <div class="finding-header">
+    <span class="tag tag-info">권장</span>
+    <span class="finding-title">provider 업무 전략은 늘리지 말고 출력 형식 adapter만 추가한다</span>
+  </div>
+  <p>provider가 “회의 요약”, “교정”, “검색 답변” 같은 업무 맥락을 알기 시작하면 결합도가 커진다. 반대로 provider가 <code>plainText</code>와 <code>jsonSchema</code> 같은 출력 형식만 자기 API 문법으로 바꾸면 기존 확장 구조를 유지한다.</p>
+</div>
+
+<h2>현재 구조</h2>
+<svg class="flow-diagram" viewBox="0 0 960 190" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="현재 LLM provider 흐름">
+  <rect x="24" y="42" width="140" height="54" rx="8" class="flow-box-accent"/>
+  <text x="94" y="63" class="flow-text">SummaryService</text>
+  <text x="94" y="82" class="flow-label">finalSummary</text>
+  <line x1="164" y1="69" x2="224" y2="69" class="flow-arrow"/>
+  <polygon points="224,64 235,69 224,74" class="flow-arrowhead"/>
+  <rect x="235" y="42" width="150" height="54" rx="8" class="flow-box"/>
+  <text x="310" y="63" class="flow-text">LLMTextRequest</text>
+  <text x="310" y="82" class="flow-label">useCase + prompt</text>
+  <line x1="385" y1="69" x2="445" y2="69" class="flow-arrow"/>
+  <polygon points="445,64 456,69 445,74" class="flow-arrowhead"/>
+  <rect x="456" y="42" width="150" height="54" rx="8" class="flow-box"/>
+  <text x="531" y="63" class="flow-text">Registry</text>
+  <text x="531" y="82" class="flow-label">provider 선택</text>
+  <line x1="606" y1="69" x2="666" y2="69" class="flow-arrow"/>
+  <polygon points="666,64 677,69 666,74" class="flow-arrowhead"/>
+  <rect x="677" y="20" width="124" height="42" rx="8" class="flow-box-warn"/>
+  <text x="739" y="42" class="flow-text">OpenAI</text>
+  <rect x="815" y="20" width="124" height="42" rx="8" class="flow-box-warn"/>
+  <text x="877" y="42" class="flow-text">Gemini</text>
+  <rect x="677" y="76" width="124" height="42" rx="8" class="flow-box-warn"/>
+  <text x="739" y="98" class="flow-text">Claude</text>
+  <rect x="815" y="76" width="124" height="42" rx="8" class="flow-box-warn"/>
+  <text x="877" y="98" class="flow-text">OpenRouter</text>
+  <rect x="746" y="132" width="124" height="42" rx="8" class="flow-box-ok"/>
+  <text x="808" y="154" class="flow-text">Ollama</text>
+  <text x="470" y="142" class="flow-label">출력 계약은 prompt와 각 provider 내부 분기에서 처리</text>
+</svg>
+
+<div class="compare-grid">
+  <div class="panel">
+    <h3>현재 계약이 잘하는 일</h3>
+    <ul>
+      <li>새 provider를 <code>LLMTextGenerationProvider</code>로 붙인다.</li>
+      <li>호출자는 <code>generateText</code> 하나만 알면 된다.</li>
+      <li><code>LLMProviderRegistry</code>가 provider 생성을 숨긴다.</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>현재 계약이 놓치는 일</h3>
+    <ul>
+      <li><code>LLMTextRequest</code>에 출력 형식 필드가 없다.</li>
+      <li><code>finalSummary</code>의 JSON 요구가 prompt와 provider 구현에 흩어진다.</li>
+      <li>provider별 structured output 문법 차이가 테스트 표면으로 올라오지 않는다.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>제안 구조</h2>
+<svg class="flow-diagram" viewBox="0 0 960 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="제안 LLM 출력 계약 흐름">
+  <rect x="24" y="56" width="140" height="58" rx="8" class="flow-box-accent"/>
+  <text x="94" y="78" class="flow-text">SummaryService</text>
+  <text x="94" y="98" class="flow-label">MeetingSummary 필요</text>
+  <line x1="164" y1="85" x2="224" y2="85" class="flow-arrow"/>
+  <polygon points="224,80 235,85 224,90" class="flow-arrowhead"/>
+  <rect x="235" y="56" width="170" height="58" rx="8" class="flow-box-accent"/>
+  <text x="320" y="77" class="flow-text">LLMTextRequest</text>
+  <text x="320" y="97" class="flow-label">outputFormat: jsonSchema</text>
+  <line x1="405" y1="85" x2="465" y2="85" class="flow-arrow"/>
+  <polygon points="465,80 476,85 465,90" class="flow-arrowhead"/>
+  <rect x="476" y="56" width="164" height="58" rx="8" class="flow-box-ok"/>
+  <text x="558" y="77" class="flow-text">Provider Adapter</text>
+  <text x="558" y="97" class="flow-label">업무가 아닌 형식 변환</text>
+  <line x1="640" y1="85" x2="700" y2="85" class="flow-arrow"/>
+  <polygon points="700,80 711,85 700,90" class="flow-arrowhead"/>
+  <rect x="711" y="20" width="116" height="40" rx="8" class="flow-box"/>
+  <text x="769" y="41" class="flow-text">text.format</text>
+  <rect x="838" y="20" width="116" height="40" rx="8" class="flow-box"/>
+  <text x="896" y="41" class="flow-text">responseFormat</text>
+  <rect x="711" y="74" width="116" height="40" rx="8" class="flow-box"/>
+  <text x="769" y="95" class="flow-text">format</text>
+  <rect x="838" y="74" width="116" height="40" rx="8" class="flow-box"/>
+  <text x="896" y="95" class="flow-text">response_format</text>
+  <rect x="775" y="128" width="116" height="40" rx="8" class="flow-box"/>
+  <text x="833" y="149" class="flow-text">output_config</text>
+  <text x="320" y="165" class="flow-label">MeetingSummarySchema는 한 곳에서 만든다</text>
+  <text x="558" y="188" class="flow-label">provider는 업무 맥락 대신 API 문법만 안다</text>
+</svg>
+
+<h2>provider별 매핑</h2>
+<table class="matrix">
+  <thead>
+    <tr>
+      <th>Provider</th>
+      <th>현재 상태</th>
+      <th>제안 후 변환</th>
+      <th>판단</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>Local / Ollama</code></td>
+      <td><span class="tag tag-pass">적용됨</span><br><code>format</code>에 schema 전달</td>
+      <td><code>outputFormat.jsonSchema</code>를 <code>format</code>으로 변환</td>
+      <td>현재 구현을 공통 계약으로 옮기면 된다.</td>
+    </tr>
+    <tr>
+      <td><code>Local / OpenAI compatible</code></td>
+      <td><span class="tag tag-fail">누락</span><br>일반 chat completions body만 사용</td>
+      <td><code>response_format</code> 또는 미지원 fallback</td>
+      <td>서버별 지원 차이를 명시해야 한다.</td>
+    </tr>
+    <tr>
+      <td><code>OpenAI API</code></td>
+      <td><span class="tag tag-fail">누락</span><br><code>Responses API</code>에 <code>text.format</code> 없음</td>
+      <td><code>text.format.type=json_schema</code></td>
+      <td>가장 자연스럽게 보강된다.</td>
+    </tr>
+    <tr>
+      <td><code>Gemini API</code></td>
+      <td><span class="tag tag-warning">부분 적용</span><br><code>responseFormat</code> shape 검증 필요</td>
+      <td><code>generationConfig.responseFormat</code> 배열 형태로 정렬</td>
+      <td>schema 타입 표기와 body shape를 테스트해야 한다.</td>
+    </tr>
+    <tr>
+      <td><code>Claude API</code></td>
+      <td><span class="tag tag-fail">누락</span><br>일반 Messages API body만 사용</td>
+      <td><code>output_config.format</code> 또는 tool schema</td>
+      <td>Claude 방식은 별도 adapter 구현이 필요하다.</td>
+    </tr>
+    <tr>
+      <td><code>OpenRouter</code></td>
+      <td><span class="tag tag-fail">누락</span><br>chat completions body만 사용</td>
+      <td><code>response_format.type=json_schema</code></td>
+      <td>모델별 지원 여부를 함께 확인해야 한다.</td>
+    </tr>
+    <tr>
+      <td><code>Claude Code CLI</code></td>
+      <td><span class="tag tag-warning">wrapper JSON</span><br><code>--output-format json</code>은 result wrapper</td>
+      <td>prompt-only fallback 또는 CLI 지원 기능 확인</td>
+      <td><code>result</code> 내부 JSON 보장은 별도 문제다.</td>
+    </tr>
+    <tr>
+      <td><code>Account login</code></td>
+      <td><span class="tag tag-warning">legacy 경로</span><br><code>correct(...)</code> 재사용</td>
+      <td>지원 provider만 변환, 나머지는 prompt-only fallback</td>
+      <td>비공식/내부 API라 좁게 다뤄야 한다.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>도입 범위</h2>
+<div class="compare-grid">
+  <div class="panel">
+    <h3>넣을 것</h3>
+    <ul>
+      <li><code>LLMOutputFormat</code>: <code>plainText</code>, <code>jsonSchema</code></li>
+      <li><code>LLMTextRequest.outputFormat</code>: 호출자가 원하는 출력 계약</li>
+      <li><code>MeetingSummarySchema</code>: 한 곳에서 공유하는 schema builder</li>
+      <li>provider adapter별 output format 변환 테스트</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>넣지 않을 것</h3>
+    <ul>
+      <li><code>FinalSummaryStrategy</code> 같은 업무별 provider 전략</li>
+      <li>provider registry 전면 개편</li>
+      <li>교정/검색 답변 로직의 동시 재작성</li>
+      <li>계정 로그인 provider의 무리한 schema 강제</li>
+    </ul>
+  </div>
+</div>
+
+<h2>왜 업무 전략이 아닌 출력 계약인가</h2>
+<table>
+  <thead>
+    <tr>
+      <th>구분</th>
+      <th>업무 전략을 provider에 넣는 방식</th>
+      <th>출력 계약을 request에 넣는 방식</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>provider가 아는 것</td>
+      <td>회의 요약, 교정, 검색 답변의 업무 의미</td>
+      <td>plain text인지 JSON schema인지</td>
+    </tr>
+    <tr>
+      <td>결합도</td>
+      <td>앱 기능이 늘 때 provider가 같이 변한다</td>
+      <td>새 출력 형식이 생길 때만 provider가 변한다</td>
+    </tr>
+    <tr>
+      <td>테스트 포인트</td>
+      <td>provider x useCase 조합이 커진다</td>
+      <td>provider x outputFormat 조합만 본다</td>
+    </tr>
+    <tr>
+      <td>이번 문제와의 관계</td>
+      <td>문제를 가릴 뿐 누락을 막기 어렵다</td>
+      <td>schema 누락을 request 계약에서 바로 잡는다</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>작은 설계 스케치</h2>
+<pre><code>public enum LLMOutputFormat: Sendable, Equatable {
+    case plainText
+    case jsonSchema(LLMJSONSchema)
+}
+
+public struct LLMJSONSchema: Sendable, Equatable {
+    public let name: String
+    public let schema: [String: JSONValue]
+    public let strict: Bool
+}
+
+public struct LLMTextRequest: Sendable {
+    public let useCase: LLMUseCase
+    public let instructions: String
+    public let userContent: String
+    public let outputFormat: LLMOutputFormat
+}</code></pre>
+
+<h2>권장 단계</h2>
+<div class="finding finding--low">
+  <div class="finding-header">
+    <span class="tag tag-pass">1</span>
+    <span class="finding-title">schema builder를 한 곳으로 이동</span>
+  </div>
+  <p>Ollama와 Gemini에 복사된 <code>MeetingSummary</code> schema를 공유 타입으로 옮긴다. 이 단계는 동작을 바꾸지 않고 중복만 줄인다.</p>
+</div>
+<div class="finding finding--medium">
+  <div class="finding-header">
+    <span class="tag tag-info">2</span>
+    <span class="finding-title">LLMTextRequest에 outputFormat 추가</span>
+  </div>
+  <p><code>SummaryService</code>는 최종 요약에서 <code>.jsonSchema(MeetingSummarySchema)</code>를 요청한다. provider는 업무 맥락 대신 출력 형식만 본다.</p>
+</div>
+<div class="finding finding--medium">
+  <div class="finding-header">
+    <span class="tag tag-info">3</span>
+    <span class="finding-title">provider별 변환 테스트 추가</span>
+  </div>
+  <p>OpenAI, Gemini, Ollama, OpenRouter, Claude의 request body 테스트를 각각 둔다. 계정 로그인과 CLI는 지원 여부를 명시하고 prompt-only fallback을 문서화한다.</p>
+</div>
+
+<details>
+  <summary>근거 코드</summary>
+  <div class="details-body">
+    <ul>
+      <li><code>Sources/Minto/Services/LLMProvider.swift:152</code> - 현재 <code>LLMTextRequest</code> 필드에는 출력 형식이 없다.</li>
+      <li><code>Sources/Minto/Services/LLMProviderRegistry.swift:42</code> - provider 선택은 registry가 이미 맡고 있다.</li>
+      <li><code>Sources/Minto/Services/SummaryService.swift:165</code> - 최종 요약도 일반 <code>generateText</code> 요청으로 내려간다.</li>
+      <li><code>Sources/Minto/Services/LocalLLMProvider.swift:338</code> - Ollama만 <code>finalSummary</code>에서 schema를 넣는다.</li>
+      <li><code>Sources/Minto/Services/LLMAPIKeyTextProvider.swift:271</code> - OpenAI body에는 <code>text.format</code>이 없다.</li>
+      <li><code>Sources/Minto/Services/LLMAPIKeyTextProvider.swift:296</code> - Gemini는 <code>responseFormat</code>을 넣지만 shape 검증이 필요하다.</li>
+      <li><code>Sources/Minto/Services/LLMAPIKeyTextProvider.swift:315</code> - Claude API body에는 구조화 출력 계약이 없다.</li>
+      <li><code>Sources/Minto/Services/LLMAPIKeyTextProvider.swift:341</code> - OpenRouter body에는 <code>response_format</code>이 없다.</li>
+      <li><code>Sources/Minto/Services/ClaudeCodeCLIProvider.swift:514</code> - CLI JSON은 result wrapper다.</li>
+      <li><code>Sources/Minto/Services/LegacyAccountLLMTextProvider.swift:41</code> - 계정 로그인 provider는 legacy correction 경로를 재사용한다.</li>
+    </ul>
+  </div>
+</details>
+
+<footer>
+  <span>생성: 2026-06-28 17:40:52 KST</span>
+  <span>모델: GPT-5 Codex</span>
+  <span>유형: analysis</span>
+</footer>
+
+</body>
+</html>
