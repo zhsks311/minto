@@ -8,6 +8,11 @@
 <meta property="og:title" content="Minto2 — 기기 안에서 끝나는 Mac 회의록" />
 <meta property="og:description" content="회의 음성은 이 Mac을 떠나지 않습니다. 전사는 기기 안에서 끝나고, 텍스트만 선택했을 때만 나갑니다." />
 <meta property="og:type" content="website" />
+<meta property="og:image" content="assets/app-icon.png" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="Minto2 — 기기 안에서 끝나는 Mac 회의록" />
+<meta name="twitter:description" content="회의 음성은 이 Mac을 떠나지 않습니다. 전사는 기기 안에서 끝납니다." />
+<meta name="twitter:image" content="assets/app-icon.png" />
 <link rel="icon" type="image/png" href="assets/app-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,14 +22,14 @@
   :root {
     --ink: #163f39;
     --ink-2: #2c5c54;
-    --moss: #2e8c6e;
-    --moss-bright: #4fb893;
+    --moss: #1f7a5b;       /* text/accent green — WCAG AA on paper/mist */
+    --moss-bright: #4fb893; /* decoration only (borders, dots) — not for text */
     --mist: #e6f4ee;
     --mist-2: #f2f9f6;
     --paper: #fcfdfc;
     --line: #d5e5de;
-    --clay: #b5734f;
-    --muted: #6f827c;
+    --clay: #9c5d3c;
+    --muted: #5c6e68;
     --serif: "Gowun Batang", "Apple SD Gothic Neo", serif;
     --sans: "Pretendard", "Pretendard Variable", -apple-system, system-ui, sans-serif;
     --maxw: 1080px;
@@ -226,10 +231,22 @@
     .reveal { opacity: 1; transform: none; transition: none; }
     html { scroll-behavior: auto; }
   }
-  :focus-visible { outline: 3px solid var(--moss-bright); outline-offset: 2px; border-radius: 4px; }
+  :focus-visible { outline: 3px solid var(--moss); outline-offset: 2px; border-radius: 4px; }
+  .skip {
+    position: absolute; left: 12px; top: -60px; z-index: 100;
+    background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 8px;
+    text-decoration: none; font-weight: 600; transition: top .2s;
+  }
+  .skip:focus { top: 12px; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
 </style>
 </head>
 <body>
+
+<a class="skip" href="#main">본문으로 건너뛰기</a>
 
 <nav>
   <div class="nav-inner">
@@ -239,12 +256,15 @@
     </a>
     <div class="nav-links">
       <a href="#privacy">프라이버시</a>
+      <a href="#why">왜 다른가</a>
       <a href="#features">기능</a>
       <a href="#flow">동작 방식</a>
       <a class="ghbtn" href="https://github.com/zhsks311/Minto2">GitHub</a>
     </div>
   </div>
 </nav>
+
+<main id="main">
 
 <header class="hero" id="top">
   <div class="wrap">
@@ -323,6 +343,7 @@
     </div>
     <div class="cmp-scroll reveal">
       <table class="cmp">
+        <caption class="visually-hidden">일반 클라우드 회의록 앱과 Minto2 비교</caption>
         <thead>
           <tr><th></th><th class="them">일반 클라우드 회의록 앱</th><th class="us">Minto2</th></tr>
         </thead>
@@ -409,6 +430,8 @@
     <a class="btn btn-primary" href="https://github.com/zhsks311/Minto2">GitHub에서 보기 →</a>
   </div>
 </section>
+
+</main>
 
 <footer>
   <div class="wrap foot-inner">
