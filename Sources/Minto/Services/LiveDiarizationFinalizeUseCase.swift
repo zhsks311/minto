@@ -53,7 +53,7 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
                 matchedById[segment.id] = segment
             }
             // 사용자 편집 라벨은 VBx 배정으로 덮지 않는다.
-            let resolvedTranscript = liveTranscript.map { segment -> Segment in
+            let matchedTranscript = liveTranscript.map { segment -> Segment in
                 if editedSegmentIds.contains(segment.id) {
                     return segment
                 }
@@ -63,6 +63,18 @@ public struct LiveDiarizationFinalizeUseCase: Sendable {
                 }
                 return matched
             }
+
+            // 문장 단위 화자 분할: word 타임스탬프로 화자 전환·문장 경계에서 세그먼트를 쪼개고
+            // 단어 단위 다수결로 화자를 재배정한다. VBx 타임라인을 직접 재소비하므로 라벨 공간이
+            // 위 매처와 같다("화자 N"=vbxLabelMap). 편집 세그먼트는 분할하지 않아 id·라벨이 보존된다
+            // → 아래 voiceprint 실명 치환의 편집 스킵(editedSegmentIds)이 그대로 작동한다.
+            // words==nil(SpeechAnalyzer 등) 세그먼트는 폴백해 매처 결과를 그대로 유지(회귀 0).
+            let resolvedTranscript = SentenceSpeakerSplitter().split(
+                transcript: matchedTranscript,
+                diarizedSegments: diarization.segments,
+                meetingStart: meetingStart,
+                preserveSegmentIds: editedSegmentIds
+            )
 
             let rawCentroids = VoiceprintMatching.centroids(from: diarization.embeddings)
             let speakerEmbeddings = rawCentroids.compactMap { rawCentroid -> MeetingRecord.MeetingSpeakerEmbedding? in
