@@ -79,6 +79,9 @@ public struct MeetingLibraryView: View {
     /// 검색 결과를 특정 chunk 종류로 좁히는 필터. 검색어가 비면 .all로 리셋된다.
     @State private var activeSearchFilter: SearchKindFilter = .all
     @AppStorage("meetingDetailReadableText") private var useReadableDetailText = true
+    /// 튜토리얼을 본 적 있는지. 내용이 바뀌면 키의 V1을 올려 다시 노출한다.
+    @AppStorage("hasSeenTutorialV1") private var hasSeenTutorial = false
+    @State private var showingTutorial = false
     private let onNewMeeting: () -> Void
     private let onShowOverlay: () -> Void
     private let onStopRecording: () -> Void
@@ -131,6 +134,10 @@ public struct MeetingLibraryView: View {
             selectFirstAvailableIfNeeded()
             searchAnswerController.refreshReadiness()
             detectUnfinishedFileImportIfNeeded()
+            if !hasSeenTutorial {
+                Log.app.info("tutorial auto-present firstRun")
+                showingTutorial = true
+            }
         }
         .onChange(of: store.meetings) { _, _ in
             searchAnswerController.reset()
@@ -303,6 +310,19 @@ public struct MeetingLibraryView: View {
                 await retrySummary(for: record, glossary: glossary)
             }
         }
+        .overlayPreferenceValue(TutorialAnchorKey.self) { anchors in
+            if showingTutorial {
+                GeometryReader { proxy in
+                    TutorialCoachView(
+                        targets: anchors.mapValues { proxy[$0] }
+                    ) {
+                        showingTutorial = false
+                        hasSeenTutorial = true
+                        Log.app.info("tutorial closed")
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Header
@@ -320,6 +340,8 @@ public struct MeetingLibraryView: View {
                     .layoutPriority(2)
                 glossaryButton
                     .layoutPriority(2)
+                helpButton
+                    .layoutPriority(2)
                 newMeetingButton
                     .layoutPriority(4)
             }
@@ -335,6 +357,7 @@ public struct MeetingLibraryView: View {
                         .frame(minWidth: 180, maxWidth: .infinity)
                     fileImportButton
                     glossaryButton
+                    helpButton
                 }
             }
         }
@@ -362,6 +385,7 @@ public struct MeetingLibraryView: View {
         .fixedSize()
         .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
         .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있어요." : "음성 또는 영상 파일로 회의록을 만들어요.")
+        .tutorialTarget(.fileImport)
     }
 
     private var glossaryButton: some View {
@@ -372,6 +396,21 @@ public struct MeetingLibraryView: View {
         .controlSize(.large)
         .fixedSize()
         .help("전역 용어집 관리")
+        .tutorialTarget(.glossary)
+    }
+
+    private var helpButton: some View {
+        Button {
+            Log.app.info("tutorial reopened")
+            showingTutorial = true
+        } label: {
+            Label("사용법", systemImage: "questionmark.circle")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .controlSize(.large)
+        .fixedSize()
+        .help("앱 사용법 다시 보기")
+        .tutorialTarget(.help)
     }
 
     private var newMeetingButton: some View {
@@ -381,6 +420,7 @@ public struct MeetingLibraryView: View {
         }
         .buttonStyle(ProminentActionButtonStyle(horizontalPadding: 16, verticalPadding: 9))
         .fixedSize()
+        .tutorialTarget(.newMeeting)
     }
 
     private var searchField: some View {
@@ -405,6 +445,7 @@ public struct MeetingLibraryView: View {
         .background(LibraryPalette.elevated)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .tutorialTarget(.search)
     }
 
     // MARK: - Content
@@ -1394,6 +1435,7 @@ public struct MeetingLibraryView: View {
                     Label("내보내기", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.bordered)
+                .tutorialTarget(.exportDetail)
             }
 
             HStack(spacing: 8) {
