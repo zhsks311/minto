@@ -1,0 +1,1174 @@
+{
+  "version": "2.13",
+  "children": [
+    {
+      "type": "frame",
+      "id": "j2bDf5",
+      "x": 0,
+      "y": 0,
+      "name": "Sidebar",
+      "reusable": true,
+      "width": 220,
+      "height": 680,
+      "fill": "$bg-sidebar",
+      "layout": "vertical",
+      "gap": 4,
+      "padding": [
+        16,
+        12
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "F91A5",
+          "name": "Nav 모든 회의",
+          "width": "fill_container",
+          "fill": "#00000000",
+          "cornerRadius": 6,
+          "gap": 8,
+          "padding": [
+            8,
+            10
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "Uk5HA",
+              "name": "Icon 모든 회의",
+              "width": 16,
+              "height": 16,
+              "icon": "list",
+              "library": "lucide",
+              "fill": "$text-secondary"
+            },
+            {
+              "type": "text",
+              "id": "DAVLJ",
+              "name": "Label 모든 회의",
+              "fill": "$text-primary",
+              "content": "모든 회의",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "500"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "k3bE5o",
+          "name": "Nav 미완료 할일",
+          "width": "fill_container",
+          "fill": "$bg-sidebar-selected",
+          "cornerRadius": 6,
+          "gap": 8,
+          "padding": [
+            8,
+            10
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "D0GF08",
+              "name": "Icon 미완료 할일",
+              "width": 16,
+              "height": 16,
+              "icon": "square-check-big",
+              "library": "lucide",
+              "fill": "#FFFFFF"
+            },
+            {
+              "type": "text",
+              "id": "XM4OI",
+              "name": "Label 미완료 할일",
+              "fill": "#FFFFFF",
+              "content": "미완료 할일",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "500"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "FFsn7",
+          "name": "Nav 검색",
+          "width": "fill_container",
+          "fill": "#00000000",
+          "cornerRadius": 6,
+          "gap": 8,
+          "padding": [
+            8,
+            10
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "P8YXA5",
+              "name": "Icon 검색",
+              "width": 16,
+              "height": 16,
+              "icon": "search",
+              "library": "lucide",
+              "fill": "$text-secondary"
+            },
+            {
+              "type": "text",
+              "id": "d83FZ",
+              "name": "Label 검색",
+              "fill": "$text-primary",
+              "content": "검색",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "500"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "gJ2uA",
+          "name": "Spacer",
+          "width": "fill_container",
+          "height": "fill_container"
+        },
+        {
+          "type": "frame",
+          "id": "a719G",
+          "name": "Nav 설정",
+          "width": "fill_container",
+          "cornerRadius": 6,
+          "gap": 8,
+          "padding": [
+            8,
+            10
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "WkYl6",
+              "name": "Icon 설정",
+              "width": 16,
+              "height": 16,
+              "icon": "settings",
+              "library": "lucide",
+              "fill": "$text-secondary"
+            },
+            {
+              "type": "text",
+              "id": "dkOwa",
+              "name": "Label 설정",
+              "fill": "$text-primary",
+              "content": "설정",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "500"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "PeMAE",
+      "x": 320,
+      "y": 0,
+      "name": "Label State 3",
+      "fill": "$text-secondary",
+      "content": "State 3 — Items",
+      "fontFamily": "Inter",
+      "fontSize": 14,
+      "fontWeight": "600"
+    },
+    {
+      "type": "frame",
+      "id": "WPttX",
+      "x": 320,
+      "y": 28,
+      "name": "State 3 Items",
+      "clip": true,
+      "width": 960,
+      "height": 680,
+      "fill": "$bg-window",
+      "cornerRadius": 10,
+      "effect": {
+        "type": "shadow",
+        "shadowType": "outer",
+        "color": "#00000018",
+        "offset": {
+          "x": 0,
+          "y": 4
+        },
+        "blur": 20
+      },
+      "children": [
+        {
+          "id": "pOuGc",
+          "type": "ref",
+          "ref": "j2bDf5",
+          "name": "Sidebar Instance"
+        },
+        {
+          "type": "frame",
+          "id": "f2dkV",
+          "name": "Content Area",
+          "width": "fill_container",
+          "height": "fill_container",
+          "fill": "$bg-content",
+          "layout": "vertical",
+          "padding": [
+            24,
+            32
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "OuAE8",
+              "name": "Header",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "hB8tO",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "미완료 할일",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "Jy6ol",
+                  "name": "Count Badge",
+                  "fill": "$text-secondary",
+                  "content": "5개 남음",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qdSAz",
+              "name": "Spacer Header",
+              "width": "fill_container",
+              "height": 24
+            },
+            {
+              "type": "frame",
+              "id": "UvHni",
+              "name": "Section 1",
+              "width": "fill_container",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "jM7yx",
+                  "name": "Section Header 1",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    0,
+                    10,
+                    0
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "N2QpWe",
+                      "name": "Meeting Title 1",
+                      "fill": "$text-primary",
+                      "content": "프로덕트 주간 싱크",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "n9emb",
+                      "name": "Meeting Date 1",
+                      "fill": "$text-tertiary",
+                      "content": "2026-06-27",
+                      "fontFamily": "Inter",
+                      "fontSize": 12
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "P9lkC",
+                  "name": "Item 검색 UX ",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "msWsP",
+                      "name": "Checkbox",
+                      "fill": "#00000000",
+                      "width": 16,
+                      "height": 16,
+                      "stroke": "$border-checkbox",
+                      "strokeWidth": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "chc8c",
+                      "name": "Item Text",
+                      "fill": "$text-primary",
+                      "content": "검색 UX 개선안 정리해서 슬랙에 공유",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "F1CSCd",
+                  "name": "Item QA 시나리",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "M9krh",
+                      "name": "Checkbox",
+                      "fill": "#00000000",
+                      "width": 16,
+                      "height": 16,
+                      "stroke": "$border-checkbox",
+                      "strokeWidth": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "nC95Z",
+                      "name": "Item Text",
+                      "fill": "$text-primary",
+                      "content": "QA 시나리오 문서 업데이트",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "PSnP0",
+                  "name": "Item 디자인 시스",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "yriXt",
+                      "name": "Checkbox",
+                      "fill": "#00000000",
+                      "width": 16,
+                      "height": 16,
+                      "stroke": "$border-checkbox",
+                      "strokeWidth": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "l2Wvao",
+                      "name": "Item Text",
+                      "fill": "$text-primary",
+                      "content": "디자인 시스템 컬러 토큰 확인",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "GV9Jj",
+              "name": "Section Divider",
+              "width": "fill_container",
+              "height": 1,
+              "fill": "$divider"
+            },
+            {
+              "type": "frame",
+              "id": "gUvNr",
+              "name": "Spacer Sections",
+              "width": "fill_container",
+              "height": 16
+            },
+            {
+              "type": "frame",
+              "id": "Vkrio",
+              "name": "Section 2",
+              "width": "fill_container",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ufS3C",
+                  "name": "Section Header 2",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    0,
+                    10,
+                    0
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "w6TMg",
+                      "name": "Meeting Title 2",
+                      "fill": "$text-primary",
+                      "content": "디자인 리뷰",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "MwDdD",
+                      "name": "Meeting Date 2",
+                      "fill": "$text-tertiary",
+                      "content": "2026-06-25",
+                      "fontFamily": "Inter",
+                      "fontSize": 12
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "HjFab",
+                  "name": "Item 온보딩 플로",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "xcHvv",
+                      "name": "Checkbox",
+                      "fill": "#00000000",
+                      "width": 16,
+                      "height": 16,
+                      "stroke": "$border-checkbox",
+                      "strokeWidth": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "S1uj0D",
+                      "name": "Item Text",
+                      "fill": "$text-primary",
+                      "content": "온보딩 플로우 와이어프레임 피드백 반영",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "MWW5R",
+                  "name": "Item 모바일 반응",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "ZxHZk",
+                      "name": "Checkbox",
+                      "fill": "#00000000",
+                      "width": 16,
+                      "height": 16,
+                      "stroke": "$border-checkbox",
+                      "strokeWidth": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "XVp3r",
+                      "name": "Item Text",
+                      "fill": "$text-primary",
+                      "content": "모바일 반응형 이슈 목록 공유",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "w1BPSn",
+      "x": -1040,
+      "y": 28,
+      "name": "Label State 1",
+      "fill": "$text-secondary",
+      "content": "State 1 — Empty",
+      "fontFamily": "Inter",
+      "fontSize": 14,
+      "fontWeight": "600"
+    },
+    {
+      "type": "frame",
+      "id": "h6PbHV",
+      "x": -1040,
+      "y": 56,
+      "name": "State 1 Empty",
+      "clip": true,
+      "width": 960,
+      "height": 680,
+      "fill": "$bg-window",
+      "cornerRadius": 10,
+      "effect": {
+        "type": "shadow",
+        "shadowType": "outer",
+        "color": "#00000018",
+        "offset": {
+          "x": 0,
+          "y": 4
+        },
+        "blur": 20
+      },
+      "children": [
+        {
+          "id": "TcP3C",
+          "type": "ref",
+          "ref": "j2bDf5",
+          "name": "Sidebar Instance"
+        },
+        {
+          "type": "frame",
+          "id": "Nhbhv",
+          "name": "Content Area",
+          "width": "fill_container",
+          "height": "fill_container",
+          "fill": "$bg-content",
+          "layout": "vertical",
+          "padding": [
+            24,
+            32
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "M9ZNe6",
+              "name": "Header",
+              "width": "fill_container",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "TuT8o",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "미완료 할일",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "mDxqz",
+              "name": "Empty Center",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "vwxsz",
+                  "name": "Icon Circle",
+                  "width": 56,
+                  "height": 56,
+                  "fill": "$bg-tag",
+                  "cornerRadius": 28,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "bTkhW",
+                      "name": "Check Icon",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "check",
+                      "library": "lucide",
+                      "fill": "$accent-green"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "Y7H9Q9",
+                  "name": "Empty Title",
+                  "fill": "$text-primary",
+                  "content": "모든 할일이 완료됐어요",
+                  "fontFamily": "Inter",
+                  "fontSize": 16,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "g2Mdyc",
+                  "name": "Empty Subtitle",
+                  "fill": "$text-secondary",
+                  "content": "새로운 회의에서 할일이 추가되면 여기에 표시됩니다",
+                  "fontFamily": "Inter",
+                  "fontSize": 13
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "tpWwv",
+      "x": -1040,
+      "y": 816,
+      "name": "Label State 2",
+      "fill": "$text-secondary",
+      "content": "State 2 — Loading",
+      "fontFamily": "Inter",
+      "fontSize": 14,
+      "fontWeight": "600"
+    },
+    {
+      "type": "frame",
+      "id": "DRKwl",
+      "x": -1040,
+      "y": 844,
+      "name": "State 2 Loading",
+      "clip": true,
+      "width": 960,
+      "height": 680,
+      "fill": "$bg-window",
+      "cornerRadius": 10,
+      "effect": {
+        "type": "shadow",
+        "shadowType": "outer",
+        "color": "#00000018",
+        "offset": {
+          "x": 0,
+          "y": 4
+        },
+        "blur": 20
+      },
+      "children": [
+        {
+          "id": "xAsW5",
+          "type": "ref",
+          "ref": "j2bDf5",
+          "name": "Sidebar Instance"
+        },
+        {
+          "type": "frame",
+          "id": "E9NNoU",
+          "name": "Content Area",
+          "width": "fill_container",
+          "height": "fill_container",
+          "fill": "$bg-content",
+          "layout": "vertical",
+          "padding": [
+            24,
+            32
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "mQWrK",
+              "name": "Header",
+              "width": "fill_container",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "LVm7l",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "미완료 할일",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "CnX3G",
+              "name": "Spacer",
+              "width": "fill_container",
+              "height": 24
+            },
+            {
+              "type": "frame",
+              "id": "zVrov",
+              "name": "Skeleton Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "yncHM",
+                  "name": "Skeleton Header",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    0,
+                    12,
+                    0
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 4,
+                      "id": "eMFHU",
+                      "name": "Skeleton Title Bar",
+                      "fill": "$bg-skeleton",
+                      "width": 140,
+                      "height": 14
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 4,
+                      "id": "wSY7o",
+                      "name": "Skeleton Date Bar",
+                      "opacity": 0.6,
+                      "fill": "$bg-skeleton",
+                      "width": 80,
+                      "height": 12
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Ndgc7",
+                  "name": "Skeleton Row 1",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "aZvye",
+                      "name": "Skeleton Checkbox",
+                      "opacity": 0.5,
+                      "fill": "$bg-skeleton",
+                      "width": 16,
+                      "height": 16
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 4,
+                      "id": "m8Ji3",
+                      "name": "Skeleton Text",
+                      "opacity": 0.7,
+                      "fill": "$bg-skeleton",
+                      "width": 280,
+                      "height": 14
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "BMVdY",
+                  "name": "Skeleton Row 2",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "aqxKW",
+                      "name": "Skeleton Checkbox",
+                      "opacity": 0.5,
+                      "fill": "$bg-skeleton",
+                      "width": 16,
+                      "height": 16
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 4,
+                      "id": "pNUls",
+                      "name": "Skeleton Text",
+                      "opacity": 0.6,
+                      "fill": "$bg-skeleton",
+                      "width": 220,
+                      "height": 14
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bcXLj",
+                  "name": "Skeleton Row 3",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "g8YSk",
+                      "name": "Skeleton Checkbox",
+                      "opacity": 0.5,
+                      "fill": "$bg-skeleton",
+                      "width": 16,
+                      "height": 16
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 4,
+                      "id": "Rnk2t",
+                      "name": "Skeleton Text",
+                      "opacity": 0.49999999999999994,
+                      "fill": "$bg-skeleton",
+                      "width": 260,
+                      "height": 14
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nVx5Z",
+                  "name": "Skeleton Row 4",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 3,
+                      "id": "O49lPE",
+                      "name": "Skeleton Checkbox",
+                      "opacity": 0.5,
+                      "fill": "$bg-skeleton",
+                      "width": 16,
+                      "height": 16
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": 4,
+                      "id": "GoKNv",
+                      "name": "Skeleton Text",
+                      "opacity": 0.3999999999999999,
+                      "fill": "$bg-skeleton",
+                      "width": 200,
+                      "height": 14
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "NM4V9",
+      "x": 320,
+      "y": 788,
+      "name": "Label State 4",
+      "fill": "$text-secondary",
+      "content": "State 4 — Disabled / No Summaries",
+      "fontFamily": "Inter",
+      "fontSize": 14,
+      "fontWeight": "600"
+    },
+    {
+      "type": "frame",
+      "id": "p2txOV",
+      "x": 320,
+      "y": 816,
+      "name": "State 4 Disabled",
+      "clip": true,
+      "width": 960,
+      "height": 680,
+      "fill": "$bg-window",
+      "cornerRadius": 10,
+      "effect": {
+        "type": "shadow",
+        "shadowType": "outer",
+        "color": "#00000018",
+        "offset": {
+          "x": 0,
+          "y": 4
+        },
+        "blur": 20
+      },
+      "children": [
+        {
+          "id": "kpP5C",
+          "type": "ref",
+          "ref": "j2bDf5",
+          "name": "Sidebar Instance"
+        },
+        {
+          "type": "frame",
+          "id": "L8vYf",
+          "name": "Content Area",
+          "width": "fill_container",
+          "height": "fill_container",
+          "fill": "$bg-content",
+          "layout": "vertical",
+          "padding": [
+            24,
+            32
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "qhW6A",
+              "name": "Header",
+              "width": "fill_container",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "W6saj",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "미완료 할일",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "VZgTN",
+              "name": "Disabled Center",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "a4IVi",
+                  "name": "Info Circle",
+                  "width": 56,
+                  "height": 56,
+                  "fill": "$bg-tag",
+                  "cornerRadius": 28,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "PW6i2",
+                      "name": "Info Icon",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "info",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "Lw0OA",
+                  "name": "Disabled Title",
+                  "fill": "$text-primary",
+                  "textGrowth": "fixed-width",
+                  "width": 300,
+                  "content": "요약이 없는 회의에서는\n할일을 가져올 수 없어요",
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 15,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "s1IOgk",
+                  "name": "Disabled Subtitle",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 300,
+                  "content": "회의 요약을 활성화하면 할일이 자동으로 수집됩니다",
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 13
+                },
+                {
+                  "type": "frame",
+                  "id": "aYxpc",
+                  "name": "Spacer Button",
+                  "width": 10,
+                  "height": 4
+                },
+                {
+                  "type": "frame",
+                  "id": "u7nb5d",
+                  "name": "Button Settings",
+                  "fill": "$bg-button-secondary",
+                  "cornerRadius": 6,
+                  "gap": 6,
+                  "padding": [
+                    8,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "JVOze",
+                      "name": "Btn Icon",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "settings",
+                      "library": "lucide",
+                      "fill": "$text-primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "j3G9o",
+                      "name": "Btn Label",
+                      "fill": "$text-primary",
+                      "content": "회의 요약 설정하기",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "accent": {
+      "type": "color",
+      "value": "#007AFF"
+    },
+    "accent-green": {
+      "type": "color",
+      "value": "#34C759"
+    },
+    "bg-button-secondary": {
+      "type": "color",
+      "value": "#E8E8ED"
+    },
+    "bg-content": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "bg-sidebar": {
+      "type": "color",
+      "value": "#E8E8ED"
+    },
+    "bg-sidebar-selected": {
+      "type": "color",
+      "value": "#007AFF"
+    },
+    "bg-skeleton": {
+      "type": "color",
+      "value": "#E5E5EA"
+    },
+    "bg-tag": {
+      "type": "color",
+      "value": "#F2F2F7"
+    },
+    "bg-window": {
+      "type": "color",
+      "value": "#F5F5F7"
+    },
+    "border-checkbox": {
+      "type": "color",
+      "value": "#C7C7CC"
+    },
+    "divider": {
+      "type": "color",
+      "value": "#D1D1D6"
+    },
+    "text-primary": {
+      "type": "color",
+      "value": "#1D1D1F"
+    },
+    "text-secondary": {
+      "type": "color",
+      "value": "#86868B"
+    },
+    "text-tertiary": {
+      "type": "color",
+      "value": "#AEAEB2"
+    }
+  }
+}
