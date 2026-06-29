@@ -35,6 +35,8 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
     /// summaryGlossary와 같은 additive optional 필드라 schemaVersion은 1을 유지한다:
     /// 구 파일은 nil로 로드되고, 키가 있으나 손상된 값은 decodeIfPresent가 throw해 quarantine된다.
     public var document: String?
+    /// 매칭된 캘린더 이벤트 식별자. optional이라 기존 저장 파일은 nil로 로드된다.
+    public var calendarEventIdentifier: String?
     public var transcript: [Segment]
     /// 보존된 녹음 오디오 파일명(recordings 디렉터리 기준). 화자분리 등 사후 처리 입력.
     /// optional이라 기존 저장 파일은 nil로 로드된다. 보관 기간 경과로 파일이 지워졌을 수 있다.
@@ -52,6 +54,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         summary: MeetingSummary = MeetingSummary(),
         summaryGlossary: String? = nil,
         document: String? = nil,
+        calendarEventIdentifier: String? = nil,
         transcript: [Segment] = [],
         audioFileName: String? = nil,
         speakerEmbeddings: [MeetingSpeakerEmbedding]? = nil,
@@ -66,6 +69,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         self.summary = summary
         self.summaryGlossary = Self.normalizedSummaryGlossary(summaryGlossary)
         self.document = Self.normalizedDocument(document)
+        self.calendarEventIdentifier = Self.normalizedCalendarEventIdentifier(calendarEventIdentifier)
         self.transcript = transcript
         self.audioFileName = audioFileName
         self.speakerEmbeddings = speakerEmbeddings
@@ -81,6 +85,7 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         case summary
         case summaryGlossary
         case document
+        case calendarEventIdentifier
         case transcript
         case audioFileName
         case speakerEmbeddings
@@ -104,6 +109,9 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
         document = Self.normalizedDocument(
             try c.decodeIfPresent(String.self, forKey: .document)
         )
+        calendarEventIdentifier = Self.normalizedCalendarEventIdentifier(
+            try c.decodeIfPresent(String.self, forKey: .calendarEventIdentifier)
+        )
         transcript = try c.decodeIfPresent([Segment].self, forKey: .transcript) ?? []
         audioFileName = try c.decodeIfPresent(String.self, forKey: .audioFileName)
         speakerEmbeddings = try c.decodeIfPresent([MeetingSpeakerEmbedding].self, forKey: .speakerEmbeddings)
@@ -115,6 +123,11 @@ public struct MeetingRecord: Identifiable, Codable, Sendable, Equatable {
     }
 
     static func normalizedDocument(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    static func normalizedCalendarEventIdentifier(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
     }

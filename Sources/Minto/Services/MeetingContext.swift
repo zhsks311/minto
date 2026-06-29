@@ -25,6 +25,9 @@ public final class MeetingContext: ObservableObject {
     /// 회의 안건/문서(선택). 주어지면 교정·요약 프롬프트에 참고자료로 주입해 품질을 올린다.
     @Published public var document: String = ""
 
+    /// 매칭된 캘린더 이벤트 식별자. 세션 동안만 보관하고 저장 시 MeetingRecord로 넘긴다.
+    @Published public var calendarEventIdentifier: String?
+
     /// 첨부 문서에서 정적으로 추출한 이번 회의용 용어. 영구 저장하지 않는다.
     @Published public var documentTerms: [String] = []
 
@@ -66,10 +69,16 @@ public final class MeetingContext: ObservableObject {
     }
 
     /// 새 회의 세션 시작 시 호출. 지정값으로 교체하고 이전 회의의 요약은 비운다(세션 간 누수 방지).
-    public func start(topic: String, glossary: String, document: String = "") {
+    public func start(
+        topic: String,
+        glossary: String,
+        document: String = "",
+        calendarEventIdentifier: String? = nil
+    ) {
         self.topic = topic
         self.glossary = glossary
         self.document = document
+        self.calendarEventIdentifier = calendarEventIdentifier
         self.documentTerms = []
         self.documentTermExtractionID = nil
         self.documentSummary = nil
@@ -119,6 +128,7 @@ public final class MeetingContext: ObservableObject {
         topic = ""
         glossary = ""
         document = ""
+        calendarEventIdentifier = nil
         documentTerms = []
         documentTermExtractionID = nil
         documentSummary = nil

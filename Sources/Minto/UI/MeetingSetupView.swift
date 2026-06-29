@@ -35,13 +35,13 @@ public struct MeetingSetupView: View {
     @State private var notionURLInput: String = ""
     @State private var confluenceURLInput: String = ""
 
-    private let onStart: (String, String, String, AudioInputMode) -> Void
+    private let onStart: (String, String, String, AudioInputMode, String?) -> Void
     private let onCancel: () -> Void
     private let audioReadinessChecker: AudioInputReadinessChecker
     private let glossarySelectionDefaults: UserDefaults
 
     public init(
-        onStart: @escaping (String, String, String, AudioInputMode) -> Void,
+        onStart: @escaping (String, String, String, AudioInputMode, String?) -> Void,
         onCancel: @escaping () -> Void,
         audioReadinessChecker: AudioInputReadinessChecker = .live,
         glossarySelectionDefaults: UserDefaults = .standard
@@ -89,7 +89,7 @@ public struct MeetingSetupView: View {
                 Spacer()
                 Button("닫기") { onCancel() }
                     .keyboardShortcut(.cancelAction)
-                Button("녹음 시작") { onStart(topic, combinedGlossary, combinedDocument, audioInputMode) }
+                Button("녹음 시작") { onStart(topic, combinedGlossary, combinedDocument, audioInputMode, nil) }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(ProminentActionButtonStyle())
                     .disabled(!audioReadiness.canStartRecording)

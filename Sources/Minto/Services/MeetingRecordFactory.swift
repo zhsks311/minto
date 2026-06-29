@@ -12,6 +12,7 @@ enum MeetingRecordFactory {
         startedAt fallbackStart: Date = Date(),
         summaryGlossary: String? = nil,
         document: String? = nil,
+        calendarEventIdentifier: String? = nil,
         audioFileName: String? = nil
     ) -> MeetingRecord {
         let transcript = TranscriptNormalizer.normalize(segments)
@@ -38,6 +39,7 @@ enum MeetingRecordFactory {
             summary: summary,
             summaryGlossary: summaryGlossary,
             document: document,
+            calendarEventIdentifier: calendarEventIdentifier,
             transcript: transcript,
             audioFileName: audioFileName
         )
