@@ -2027,20 +2027,24 @@ public struct MeetingLibraryView: View {
                     .foregroundColor(.secondary)
             } else {
                 ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    let currentSpeaker = SpeakerLabel.normalized(segment.speaker)
+                    let previousSpeaker = index > 0 ? SpeakerLabel.normalized(segments[index - 1].speaker) : nil
+                    let isSpeakerContinuation = currentSpeaker != nil && currentSpeaker == previousSpeaker
+
                     HStack(alignment: .top, spacing: 10) {
                         Text(relativeTimestamp(segment, in: record, fallbackSegments: segments))
                             .font(.system(size: detailTimestampFontSize, weight: .bold, design: .monospaced))
                             .foregroundColor(.secondary)
                             .frame(width: 46, alignment: .leading)
                         if let record, !speakerLabels.isEmpty {
-                            segmentSpeakerReassignmentMenu(segment: segment, labels: speakerLabels, record: record)
-                        } else if let speaker = SpeakerLabel.normalized(segment.speaker) {
-                            Text(speaker)
-                                .font(.system(size: detailTimestampFontSize, weight: .semibold))
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .frame(maxWidth: 64, alignment: .leading)
+                            segmentSpeakerReassignmentMenu(
+                                segment: segment,
+                                labels: speakerLabels,
+                                record: record,
+                                isSpeakerContinuation: isSpeakerContinuation
+                            )
+                        } else if let speaker = currentSpeaker {
+                            speakerContinuationLabel(speaker, isContinuation: isSpeakerContinuation)
                         }
                         Text(segment.text)
                             .font(.system(size: detailBodyFontSize))
@@ -2134,10 +2138,21 @@ public struct MeetingLibraryView: View {
         }
     }
 
+    private func speakerContinuationLabel(_ speaker: String, isContinuation: Bool) -> some View {
+        Text(speaker)
+            .font(.system(size: detailTimestampFontSize, weight: isContinuation ? .regular : .semibold))
+            .foregroundColor(.secondary.opacity(isContinuation ? 0.55 : 1))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: 64, alignment: .leading)
+            .help(isContinuation ? "같은 화자가 이어서 말하고 있어요." : "화자가 바뀌었어요.")
+    }
+
     private func segmentSpeakerReassignmentMenu(
         segment: Segment,
         labels: [String],
-        record: MeetingRecord
+        record: MeetingRecord,
+        isSpeakerContinuation: Bool
     ) -> some View {
         let currentSpeaker = SpeakerLabel.normalized(segment.speaker)
 
@@ -2165,14 +2180,14 @@ public struct MeetingLibraryView: View {
         } label: {
             HStack(spacing: 3) {
                 Text(currentSpeaker ?? "화자 지정")
-                    .font(.system(size: detailTimestampFontSize, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: detailTimestampFontSize, weight: isSpeakerContinuation ? .regular : .semibold))
+                    .foregroundColor(.secondary.opacity(isSpeakerContinuation ? 0.55 : 1))
                     .lineLimit(1)
                     .truncationMode(.tail)
 
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondary.opacity(isSpeakerContinuation ? 0.55 : 1))
             }
             .frame(maxWidth: 76, alignment: .leading)
         }
