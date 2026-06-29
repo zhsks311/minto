@@ -257,7 +257,58 @@ LS-EEND와 VBx는 같은 문제를 풀지만 접근이 다르다.
 
 > LS-EEND는 "지금 보이는 화면"을 위한 빠른 판단자고, VBx는 "회의가 끝난 뒤 회의록"을 위한 최종 정리자다.
 
-## 11. 공부할 때 헷갈리지 않는 규칙
+## 11. 화자분리 결과를 전사 문장에 붙이는 단계
+
+화자분리 모델이 만든 것은 "누가 언제 말했나"라는 시간표다. 하지만 회의록에서 사용자가 보는 것은 "이 문장은 누가 말했나"다. 둘 사이에는 한 번 더 정렬 단계가 필요하다.
+
+Minto2에는 세 종류의 시간 정보가 있다.
+
+- `Segment.timestamp`와 `duration`
+  - 전사 청크 전체의 시작/길이.
+- `Segment.words`
+  - WhisperKit이 만든 단어별 시작/끝 시간.
+  - 각 단어 시간은 청크 안에서의 상대 초다.
+- `DiarizedSpeakerSegment`
+  - VBx나 LS-EEND가 만든 화자별 시작/끝 시간.
+  - 오디오 전체 기준의 절대 초다.
+
+예전 방식은 `TranscriptSpeakerMatcher`가 전사 청크 전체와 화자 구간을 겹쳐 봤다.
+
+> 전사 청크 1개 → 가장 많이 겹친 화자 1명
+
+이 방식은 빠르고 단순하지만, 한 청크 안에 여러 화자가 섞이면 짧게 끼어든 화자가 사라질 수 있다.
+
+현재 저장/파일 임포트 경로는 `SentenceSpeakerSplitter`가 한 단계를 더 수행한다.
+
+> 전사 청크 → 단어별 시간 확인 → 각 단어를 화자 시간표에 배정 → 화자 전환/문장 경계/침묵 gap에서 분할 → 문장 단위 화자 세그먼트 저장
+
+예를 들면:
+
+| 단어 | 단어 시간 | 화자분리 시간표와 겹침 | 배정 |
+|------|-----------|------------------------|------|
+| 이번 | 0.2~0.7초 | 화자 A 구간 | 화자 A |
+| 안건은 | 0.8~1.2초 | 화자 A 구간 | 화자 A |
+| 제가 | 3.2~3.5초 | 화자 B 구간 | 화자 B |
+| 볼게요 | 3.6~4.1초 | 화자 B 구간 | 화자 B |
+
+그러면 저장 회의록은 다음처럼 나뉠 수 있다.
+
+> `화자 A` 이번 안건은
+>
+> `화자 B` 제가 볼게요
+
+중요한 점:
+
+- 라이브 화면은 여전히 미리보기라 청크 단위 라벨을 유지한다.
+- 최종 저장/파일 임포트 결과만 문장 단위로 정밀화한다.
+- 이유는 라이브 중 세그먼트를 계속 쪼개면 화면 깜빡임과 교정 배치 id 충돌이 생길 수 있기 때문이다.
+- `words`가 없거나 화자분리 결과가 없으면 기존 청크 단위 결과를 그대로 둔다.
+
+쉽게 말하면:
+
+> 화자분리는 "시간표"를 만들고, `SentenceSpeakerSplitter`는 그 시간표를 전사 단어에 붙여서 사용자가 읽는 문장 단위 회의록으로 바꾼다.
+
+## 12. 공부할 때 헷갈리지 않는 규칙
 
 규칙 1:
 
@@ -279,7 +330,7 @@ LS-EEND와 VBx는 같은 문제를 풀지만 접근이 다르다.
 
 > 검출 화자 수가 많다고 항상 좋은 것은 아니다. 화자 수 count와 실제 구간 배정 품질 DER은 별개다.
 
-## 12. Minto2에서 이어서 볼 파일
+## 13. Minto2에서 이어서 볼 파일
 
 - `Sources/Minto/Services/Diarization/StreamingSpeakerDiarizationProvider.swift`
   - LS-EEND streaming provider와 `.ami` 기본값.
@@ -287,6 +338,10 @@ LS-EEND와 VBx는 같은 문제를 풀지만 접근이 다르다.
   - provider snapshot을 앱 상태로 반영하는 use case.
 - `Sources/Minto/ViewModels/TranscriptionViewModel.swift`
   - 전사 segment와 live diarization segment를 시간으로 맞춰 UI 라벨을 갱신하는 곳.
+- `Sources/Minto/Services/Diarization/SentenceSpeakerSplitter.swift`
+  - 저장/파일 임포트 결과를 word timestamp 기반 문장 단위 화자 세그먼트로 다시 나누는 곳.
+- `docs/work/2026-06-29-sentence-level-speaker-attribution-research.md`
+  - 문장 단위 화자 귀속 설계, critic 리뷰 반영, AB/e2e 측정 결과.
 - `docs/work/lseend-streaming-api-notes.md`
   - FluidAudio `LSEENDDiarizer` API를 Minto2 관점에서 정리한 노트.
 - `docs/benchmark/2026-06-22-lseend-vs-vbx-count.md`
@@ -294,7 +349,7 @@ LS-EEND와 VBx는 같은 문제를 풀지만 접근이 다르다.
 - `docs/work/2026-06-25-live-diarization-ami-experiment.md`
   - `.ami`를 라이브 기본값 후보로 선택한 실제 실험 기록.
 
-## 13. 추천 학습 순서
+## 14. 추천 학습 순서
 
 1. 먼저 화자분리 출력표를 이해한다.
    - 시간별로 어떤 화자가 말하는지 표시하는 문제다.
@@ -306,10 +361,12 @@ LS-EEND와 VBx는 같은 문제를 풀지만 접근이 다르다.
    - 블록 경계와 latency가 핵심이다.
 5. LS-EEND가 long-form streaming을 어떻게 목표로 삼는지 본다.
    - online attractor와 frame-in-frame-out이 핵심이다.
-6. 마지막으로 `.ami`와 `.dihard3`를 본다.
+6. `.ami`와 `.dihard3`를 본다.
    - 이들은 구조 이름이 아니라 LS-EEND의 학습된 모델 선택지다.
+7. 마지막으로 `SentenceSpeakerSplitter`를 본다.
+   - 화자분리 시간표를 전사 단어와 문장에 붙이는 제품 단계다.
 
-## 14. 참고 자료
+## 15. 참고 자료
 
 논문:
 
