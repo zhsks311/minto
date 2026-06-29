@@ -108,15 +108,18 @@ public struct SentenceSpeakerSplitter: Sendable {
                 diarized.startSeconds
             )
         }
-        return seconds.keys.max { lhs, rhs in
+        // TranscriptSpeakerMatcher.isHigherPriority와 같은 규칙: 겹침 많은 순 →
+        // 동률이면 더 이른 화자 → speakerId 사전순. sorted().first로 부등호 방향을 직관적으로 둔다.
+        let ranked = seconds.keys.sorted { lhs, rhs in
             let lhsSeconds = seconds[lhs] ?? 0
             let rhsSeconds = seconds[rhs] ?? 0
-            if lhsSeconds != rhsSeconds { return lhsSeconds < rhsSeconds }
+            if lhsSeconds != rhsSeconds { return lhsSeconds > rhsSeconds }
             let lhsStart = earliestStart[lhs] ?? .infinity
             let rhsStart = earliestStart[rhs] ?? .infinity
-            if lhsStart != rhsStart { return lhsStart > rhsStart }
-            return lhs > rhs
+            if lhsStart != rhsStart { return lhsStart < rhsStart }
+            return lhs < rhs
         }
+        return ranked.first
     }
 
     /// nil 단어를 가장 가까운 비-nil 이웃 화자로 채운다. 전부 nil이면 false(폴백 신호).
@@ -131,7 +134,7 @@ public struct SentenceSpeakerSplitter: Sendable {
             }
         }
         // 선두에 남은 nil은 첫 비-nil로 역채움
-        if let firstNonNil = speakers.first(where: { $0 != nil }) ?? nil {
+        if let firstNonNil = speakers.compactMap({ $0 }).first {
             for index in speakers.indices where speakers[index] == nil {
                 speakers[index] = firstNonNil
             }
@@ -147,13 +150,11 @@ public struct SentenceSpeakerSplitter: Sendable {
             let runs = contiguousRuns(speakers)
             guard runs.count > 1 else { return }
             for (runIndex, run) in runs.enumerated() where run.count < minWordsPerSpeakerRun {
-                let replacement: String?
-                if runIndex > 0 {
-                    replacement = speakers[runs[runIndex - 1].first!]
-                } else {
-                    replacement = speakers[runs[runIndex + 1].first!]
-                }
-                guard let replacement, replacement != speakers[run.first!] else { continue }
+                guard let currentIndex = run.first else { continue }
+                let neighborRun = runIndex > 0 ? runs[runIndex - 1] : runs[runIndex + 1]
+                guard let neighborIndex = neighborRun.first else { continue }
+                let replacement = speakers[neighborIndex]
+                guard let replacement, replacement != speakers[currentIndex] else { continue }
                 for wordIndex in run {
                     speakers[wordIndex] = replacement
                 }
@@ -232,7 +233,7 @@ public struct SentenceSpeakerSplitter: Sendable {
             id: inheritsOriginalId ? originalSegment.id : UUID(),
             text: text,
             timestamp: originalSegment.timestamp.addingTimeInterval(firstStart),
-            duration: words[lastIndex].end - firstStart,
+            duration: max(0, words[lastIndex].end - firstStart),
             speaker: speakers[firstIndex],
             words: rebasedWords
         )

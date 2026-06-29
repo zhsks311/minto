@@ -174,6 +174,70 @@ struct SentenceSpeakerSplitterTests {
         #expect(result.map(\.speaker) == ["화자 1", "화자 2"])
     }
 
+    @Test("여러 입력 세그먼트의 순서가 보존된다 (분할 + 폴백 혼재)")
+    func multipleSegmentsPreserveOrder() {
+        let splitting = segment(
+            offset: 0,
+            words: [("가", 0, 1), ("나", 1, 2), ("다", 2, 3), ("라", 3, 4), ("마", 4, 5), ("바", 5, 6)]
+        )
+        let passthrough = Segment(
+            text: "통과 세그먼트",
+            timestamp: meetingStart.addingTimeInterval(6),
+            duration: 2,
+            speaker: "기존 라벨",
+            words: nil
+        )
+        let result = SentenceSpeakerSplitter().split(
+            transcript: [splitting, passthrough],
+            diarizedSegments: [diarized("spk-a", 0, 3), diarized("spk-b", 3, 6)],
+            meetingStart: meetingStart
+        )
+
+        #expect(result.count == 3)
+        #expect(result[0].id == splitting.id)
+        #expect(result[1].id != splitting.id)
+        #expect(result[2].id == passthrough.id)
+        #expect(result[2].text == "통과 세그먼트")
+    }
+
+    @Test("종결 부호와 화자 전환이 같은 지점이면 경계는 한 번만 생긴다")
+    func terminatorAtSpeakerChangeIsSingleBoundary() {
+        let original = segment(
+            offset: 0,
+            words: [("시작", 0, 1), ("끝.", 1, 2), ("다시", 2, 3), ("시작", 3, 4)]
+        )
+        // 인덱스 0,1 = spk-a / 2,3 = spk-b. 인덱스 1("끝.")이 종결부호 + 직후 화자 전환
+        let result = SentenceSpeakerSplitter().split(
+            transcript: [original],
+            diarizedSegments: [diarized("spk-a", 0, 2), diarized("spk-b", 2, 4)],
+            meetingStart: meetingStart
+        )
+
+        #expect(result.count == 2)
+        #expect(result.map(\.speaker) == ["화자 1", "화자 2"])
+        #expect(result[0].text == "시작 끝.")
+        #expect(result[1].text == "다시 시작")
+    }
+
+    @Test("어떤 단어도 화자 구간과 안 겹치면 폴백하고 원본 speaker를 보존한다")
+    func allWordsUnmatchedFallbackKeepsSpeaker() {
+        let original = segment(
+            offset: 0,
+            words: [("가", 0, 1), ("나", 1, 2), ("다", 2, 3)],
+            speaker: "기존 라벨"
+        )
+        // diarization 구간이 전사 단어들과 전혀 겹치지 않는다(100초 이후)
+        let result = SentenceSpeakerSplitter().split(
+            transcript: [original],
+            diarizedSegments: [diarized("spk-a", 100, 106)],
+            meetingStart: meetingStart
+        )
+
+        #expect(result.count == 1)
+        #expect(result[0].id == original.id)
+        #expect(result[0].speaker == "기존 라벨")
+    }
+
     private func segment(
         offset: TimeInterval,
         words: [(String, TimeInterval, TimeInterval)],
