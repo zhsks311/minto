@@ -403,9 +403,18 @@ public final class MeetingFileImportUseCase: ObservableObject {
         do {
             let diarization = try await provider.diarizeWithSegmentsAndEmbeddings(audioFileURL: audioFileURL)
             let diarizedSegments = diarization.segments
-            let labeledTranscript = TranscriptSpeakerMatcher().assignSpeakers(
+            let matchedTranscript = TranscriptSpeakerMatcher().assignSpeakers(
                 diarizedSegments: diarizedSegments,
                 transcript: transcript,
+                meetingStart: meetingStart
+            )
+            // 문장 단위 화자 분할: word 타임스탬프로 화자 전환·문장 경계에서 세그먼트를 쪼개고
+            // 단어 단위 다수결로 화자를 재배정한다. diarization 타임라인을 직접 재소비하므로 라벨 공간이
+            // 위 매처와 같다. 임포트는 사용자 편집이 없어 보존 대상 없음(기본 빈 set).
+            // words==nil 세그먼트는 폴백해 매처 결과를 유지(회귀 0).
+            let labeledTranscript = SentenceSpeakerSplitter().split(
+                transcript: matchedTranscript,
+                diarizedSegments: diarizedSegments,
                 meetingStart: meetingStart
             )
             let timeline = diarizedSegments.filter { $0.endSeconds > $0.startSeconds }
