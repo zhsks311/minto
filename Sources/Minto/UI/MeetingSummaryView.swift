@@ -44,6 +44,7 @@ public struct MeetingResult: Sendable {
     public let metaText: String
     public let summary: MeetingSummary
     public let transcript: [TranscriptLine]
+    public let segments: [Segment]
     public let document: String?
 
     public struct TranscriptLine: Sendable, Identifiable {
@@ -59,8 +60,8 @@ public struct MeetingResult: Sendable {
         }
     }
 
-    public init(title: String, metaText: String, summary: MeetingSummary, transcript: [TranscriptLine], document: String? = nil) {
-        self.title = title; self.metaText = metaText; self.summary = summary; self.transcript = transcript; self.document = document
+    public init(title: String, metaText: String, summary: MeetingSummary, transcript: [TranscriptLine], segments: [Segment] = [], document: String? = nil) {
+        self.title = title; self.metaText = metaText; self.summary = summary; self.transcript = transcript; self.segments = segments; self.document = document
     }
 }
 
@@ -129,7 +130,12 @@ public struct MeetingSummaryView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if tab == .summary { digest(r.summary) } else { transcriptList(r.transcript) }
+                    if tab == .summary {
+                        speakerTalkTimeCard(r.segments)
+                        digest(r.summary)
+                    } else {
+                        transcriptList(r.transcript)
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
@@ -273,6 +279,46 @@ public struct MeetingSummaryView: View {
         }
     }
 
+    @ViewBuilder
+    private func speakerTalkTimeCard(_ segments: [Segment]) -> some View {
+        if segments.contains(where: { SpeakerLabel.normalized($0.speaker) != nil }) {
+            let entries = TalkTimeAnalyzer.analyze(segments: segments)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("화자별 발화").font(.system(size: 16, weight: .bold)).foregroundColor(RC.heading)
+                    if entries.count == 1 {
+                        Text("단일 화자").font(.system(size: 11, weight: .bold)).foregroundColor(RC.time)
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(RC.tabBg).clipShape(Capsule())
+                    }
+                    Spacer(minLength: 0)
+                }
+                if entries.count == 1, let entry = entries.first {
+                    Text("전체 발화를 혼자 맡았어요. \(talkTimeText(entry.seconds))")
+                        .font(.system(size: 13))
+                        .foregroundColor(RC.bodyAlt)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(entries, id: \.speakerLabel) { entry in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text(entry.speakerLabel).font(.system(size: 13, weight: .semibold)).foregroundColor(RC.bodyAlt)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Spacer(minLength: 8)
+                            Text(talkTimeText(entry.seconds)).font(.system(size: 12, weight: .bold)).foregroundColor(RC.time)
+                            Text(talkTimeRatioText(entry.ratio)).font(.system(size: 12, weight: .bold)).foregroundColor(RC.meta)
+                                .frame(width: 42, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RC.card)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(RC.cardBorder, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
     // MARK: - Transcript
 
     @ViewBuilder
@@ -355,6 +401,14 @@ public struct MeetingSummaryView: View {
         NSPasteboard.general.setString(r.summary.markdown(), forType: .string)
     }
 
+    private func talkTimeText(_ seconds: TimeInterval) -> String {
+        MeetingRecord.durationText(seconds)
+    }
+
+    private func talkTimeRatioText(_ ratio: Double) -> String {
+        "\(Int((ratio * 100).rounded()))%"
+    }
+
 }
 
 extension MeetingResult {
@@ -369,6 +423,6 @@ extension MeetingResult {
                 speaker: seg.speaker
             )
         }
-        return MeetingResult(title: record.title, metaText: record.subtitle, summary: record.summary, transcript: lines, document: record.document)
+        return MeetingResult(title: record.title, metaText: record.subtitle, summary: record.summary, transcript: lines, segments: record.transcript, document: record.document)
     }
 }
