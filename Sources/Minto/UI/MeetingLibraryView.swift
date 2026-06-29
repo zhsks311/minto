@@ -1804,7 +1804,7 @@ public struct MeetingLibraryView: View {
 
     private func actionItemRow(_ item: MeetingSummary.ActionItem) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "square")
+            Image(systemName: item.isDone ? "checkmark.square.fill" : "square")
                 .font(.system(size: detailSubBodyFontSize, weight: .semibold))
                 .foregroundColor(.secondary)
                 .padding(.top, 2)

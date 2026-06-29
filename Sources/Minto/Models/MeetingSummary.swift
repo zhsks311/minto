@@ -43,17 +43,20 @@ public struct MeetingSummary: Codable, Sendable, Equatable {
         public var owner: String
         public var due: String
         public var time: String
+        public var isDone: Bool
 
-        public init(task: String = "", owner: String = "", due: String = "", time: String = "") {
+        public init(task: String = "", owner: String = "", due: String = "", time: String = "", isDone: Bool = false) {
             self.task = task; self.owner = owner; self.due = due; self.time = time
+            self.isDone = isDone
         }
-        private enum CodingKeys: String, CodingKey { case task, owner, due, time }
+        private enum CodingKeys: String, CodingKey { case task, owner, due, time, isDone }
         public init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
             task = (try? c.decode(String.self, forKey: .task)) ?? ""
             owner = (try? c.decode(String.self, forKey: .owner)) ?? ""
             due = (try? c.decode(String.self, forKey: .due)) ?? ""
             time = (try? c.decode(String.self, forKey: .time)) ?? ""
+            isDone = (try? c.decodeIfPresent(Bool.self, forKey: .isDone)) ?? false
         }
     }
 
@@ -261,7 +264,8 @@ public struct MeetingSummary: Codable, Sendable, Equatable {
         if !due.isEmpty { meta.append("기한: \(due)") }
 
         let suffix = meta.isEmpty ? "" : " _(\(meta.joined(separator: " · ")))_"
-        return "- [ ] \(timePrefix(item.time))\(task)\(suffix)"
+        let checkbox = item.isDone ? "[x]" : "[ ]"
+        return "- \(checkbox) \(timePrefix(item.time))\(task)\(suffix)"
     }
 
     private func questionLine(_ question: OpenQuestion) -> String? {
