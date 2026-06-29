@@ -20,6 +20,9 @@ let package = Package(
             ],
             path: "Sources/Minto",
             exclude: ["Bridge"],
+            resources: [
+                .process("Resources"),
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
             ]

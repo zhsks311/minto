@@ -171,6 +171,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         Log.app.info("app launched version=\(version, privacy: .public) build=\(build, privacy: .public)")
 
         NSApp.setActivationPolicy(.regular)
+        // raw 바이너리 실행(.app 번들 아님)에선 CFBundleIconFile이 적용되지 않으므로 Dock 아이콘을 런타임 주입한다.
+        if let appIcon = AppAssets.appIcon {
+            NSApp.applicationIconImage = appIcon
+            Log.app.info("dock icon applied")
+        } else {
+            Log.app.error("dock icon asset missing, using system default")
+        }
         // migrateIfNeeded(교정 → 요약 초기 복사)를 먼저 실행한 뒤,
         // follow 시맨틱 마이그레이션을 수행해야 한다.
         // 순서 중요: migrateIfNeeded가 override를 먼저 채워야 follow 판단이 올바르다.

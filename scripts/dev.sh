@@ -16,6 +16,7 @@
 #   ./scripts/dev.sh run             앱 빌드 + 서명 + 실행 (swift run 대신 사용)
 #   ./scripts/dev.sh test [filter]   테스트 빌드 + 서명 + 실행
 #   ./scripts/dev.sh sign            현재 빌드 산출물만 재서명
+#   ./scripts/dev.sh package         배포용 .app 번들 조립(.icns·Info.plist·리소스·서명)
 #
 # 주의: `swift run`은 SPM이 실행 직전 다시 adhoc 서명을 덮어쓰므로 쓰지 말 것.
 #       반드시 `./scripts/dev.sh run`(또는 build 후 .build/debug/minto2 직접 실행).
@@ -29,6 +30,8 @@ cd "$ROOT"
 APP_BIN=".build/debug/minto2"
 TEST_BUNDLE=".build/debug/minto2PackageTests.xctest"
 TEST_BIN="$TEST_BUNDLE/Contents/MacOS/minto2PackageTests"
+ICON_SRC="Sources/Minto/Resources/AppIcon.png"
+APP_BUNDLE=".build/debug/Minto.app"
 
 # get-task-allow(디버거 attach)를 보존하기 위해 Minto.entitlements에 합쳐
 # 임시 dev 권한 파일을 만든다.
@@ -78,6 +81,63 @@ do_sign() {
   codesign -dv "$APP_BIN" 2>&1 | grep -E "Signature|Authority|TeamIdentifier" | sed 's/^/  /' || true
 }
 
+# 1024 마스터 PNG(squircle 포함)에서 다중 해상도 .icns를 만든다.
+make_icns() {
+  local out="$1"
+  local tmp iconset
+  tmp="$(mktemp -d)"
+  iconset="$tmp/AppIcon.iconset"
+  mkdir -p "$iconset"
+  local s
+  for s in 16 32 128 256 512; do
+    sips -z "$s" "$s" "$ICON_SRC" --out "$iconset/icon_${s}x${s}.png" >/dev/null
+    sips -z "$((s * 2))" "$((s * 2))" "$ICON_SRC" --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$iconset" -o "$out"
+  rm -rf "$tmp"
+}
+
+# raw 바이너리를 배포용 .app 번들로 조립한다(아이콘·Info.plist·리소스 번들·서명).
+# 개발 중 Dock/메뉴바 아이콘은 런타임 주입으로 이미 보이며, 이건 Finder/Spotlight 아이콘과 배포 산출물용이다.
+do_package() {
+  assert_identity
+  echo "→ swift build"
+  swift build
+
+  local app="$ROOT/$APP_BUNDLE"
+  local contents="$app/Contents"
+  rm -rf "$app"
+  mkdir -p "$contents/MacOS" "$contents/Resources"
+
+  cp "$ROOT/$APP_BIN" "$contents/MacOS/minto2"
+  # Bundle.module이 찾도록 리소스 번들을 Contents/Resources에 복사한다(아이콘 로드에 필요).
+  cp -R "$ROOT"/.build/debug/*.bundle "$contents/Resources/" 2>/dev/null || true
+  make_icns "$contents/Resources/AppIcon.icns"
+
+  # 임베드용 Info.plist를 복사한 뒤 번들 필수 키와 아이콘 연결을 추가한다.
+  cp "$ROOT/Sources/MintoApp/Info.plist" "$contents/Info.plist"
+  local pb=/usr/libexec/PlistBuddy
+  "$pb" -c "Add :CFBundleExecutable string minto2" "$contents/Info.plist" 2>/dev/null || true
+  "$pb" -c "Add :CFBundlePackageType string APPL" "$contents/Info.plist" 2>/dev/null || true
+  "$pb" -c "Add :CFBundleIconFile string AppIcon" "$contents/Info.plist" 2>/dev/null \
+    || "$pb" -c "Set :CFBundleIconFile AppIcon" "$contents/Info.plist"
+
+  # 서명: 내부 번들 → 실행파일 → .app 순(안쪽부터).
+  local dev_ent
+  dev_ent="$(mktemp -t minto-dev-ent).plist"
+  # shellcheck disable=SC2064
+  trap "rm -f '$dev_ent'" RETURN
+  make_dev_entitlements "$dev_ent"
+  echo "→ .app 서명 (identity: $IDENTITY)"
+  local b
+  for b in "$contents/Resources"/*.bundle; do
+    [ -e "$b" ] && codesign --force --sign "$IDENTITY" "$b" >/dev/null 2>&1 || true
+  done
+  codesign --force --sign "$IDENTITY" --entitlements "$dev_ent" "$contents/MacOS/minto2"
+  codesign --force --sign "$IDENTITY" --entitlements "$dev_ent" "$app"
+  echo "  ✔ packaged: $app"
+}
+
 cmd="${1:-build}"
 case "$cmd" in
   build)
@@ -108,8 +168,11 @@ case "$cmd" in
   sign)
     do_sign
     ;;
+  package)
+    do_package
+    ;;
   *)
-    echo "사용법: $0 {build|run|test [filter]|sign}" >&2
+    echo "사용법: $0 {build|run|test [filter]|sign|package}" >&2
     exit 1
     ;;
 esac
