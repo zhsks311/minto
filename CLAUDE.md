@@ -21,6 +21,7 @@ Minto2는 macOS 회의 기록 앱이다.
 - 업무 문서와 연결하고 내보낸다.
 
 자세한 기능 정의는 `docs/service-definition.md`를 본다.
+UI/브랜드 디자인 기준은 `docs/ui-design-guide.md`를 본다.
 
 ## 기술 스택
 
@@ -41,6 +42,7 @@ Minto2는 macOS 회의 기록 앱이다.
 - `Sources/Minto/ViewModels`: recording/transcription state orchestration
 - `Tests/MintoTests`: 단위/통합 테스트
 - `Resources/models`: 로컬 모델 파일 placeholder. 대용량 모델은 git에 넣지 않는다.
+- `docs/ui-design-guide.md`: UI/브랜드 디자인 시스템과 macOS 디자인 규칙
 - 문서 경로는 아래 "문서 산출물" 참조.
 
 ## 작업 전 확인 순서
@@ -121,6 +123,7 @@ Minto2는 macOS 회의 기록 앱이다.
 
 ### UI
 
+- UI/브랜드 변경 전 `docs/ui-design-guide.md`를 확인하고, 새 규칙이 생기면 함께 갱신한다.
 - 심플함과 사용 편의성을 우선한다.
 - 설정은 단계적으로 펼친다.
 - Toss식 원칙을 적용한다: 좋은 기본값, 명확한 상태, 쉬운 다음 행동.
@@ -147,6 +150,7 @@ Minto2는 macOS 회의 기록 앱이다.
 - benchmark 결과: `docs/benchmark/`
 - ADR: `docs/adr/`
 - 기능 정의: `docs/service-definition.md`
+- UI/브랜드 디자인 가이드: `docs/ui-design-guide.md`
 - 기술 선택지/후보 비교(살아있는 레지스트리, 날짜 없는 파일명): `docs/stt-candidate-registry.md` 등. 시각화 스냅샷은 `docs/reports/`에 날짜 포함.
 - Pencil 결과물: `Resources/designs/`
 
