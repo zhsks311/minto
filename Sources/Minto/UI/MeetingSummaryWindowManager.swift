@@ -30,7 +30,7 @@ public final class MeetingSummaryWindowManager: NSObject, NSWindowDelegate {
             defer: false
         )
         window.title = "회의 결과"
-        window.contentViewController = NSHostingController(rootView: view)
+        window.contentViewController = NSHostingController(rootView: view.tint(MintoDesignTokens.brandTeal))
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()

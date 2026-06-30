@@ -13,7 +13,7 @@ struct ProminentActionButtonStyle: ButtonStyle {
             .foregroundColor(.white)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .background(Capsule().fill(isEnabled ? Color.accentColor : Color.gray.opacity(0.45)))
+            .background(Capsule().fill(isEnabled ? MintoDesignTokens.brandTeal : Color.gray.opacity(0.45)))
             .opacity(configuration.isPressed ? 0.75 : 1)
             .contentShape(Capsule())
     }

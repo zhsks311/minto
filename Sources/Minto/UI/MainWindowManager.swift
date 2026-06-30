@@ -44,7 +44,7 @@ public final class MainWindowManager: NSObject, NSWindowDelegate {
             defer: false
         )
         window.title = "Minto — 회의"
-        window.contentViewController = NSHostingController(rootView: view)
+        window.contentViewController = NSHostingController(rootView: view.tint(MintoDesignTokens.brandTeal))
         window.isReleasedWhenClosed = false
         window.delegate = self
         // 저장된 프레임이 있으면 복원, 없을 때만 중앙 정렬(center가 복원 위치를 덮어쓰지 않게).

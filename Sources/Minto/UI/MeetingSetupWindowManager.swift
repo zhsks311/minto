@@ -42,7 +42,7 @@ public final class MeetingSetupWindowManager: NSObject, NSWindowDelegate {
             defer: false
         )
         window.title = "회의 시작"
-        window.contentViewController = NSHostingController(rootView: view)
+        window.contentViewController = NSHostingController(rootView: view.tint(MintoDesignTokens.brandTeal))
         window.isReleasedWhenClosed = false
         window.delegate = self   // 창 X 닫기도 windowWillClose로 받아 상태를 초기화
         window.center()

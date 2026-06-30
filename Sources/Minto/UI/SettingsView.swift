@@ -2725,6 +2725,6 @@ public struct SettingsView: View {
 
     private func selectionBorder(isSelected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 8)
-            .stroke(isSelected ? Color.accentColor.opacity(0.32) : Color.clear, lineWidth: 1)
+            .stroke(isSelected ? MintoDesignTokens.brandMintDeep.opacity(0.48) : Color.clear, lineWidth: 1)
     }
 }

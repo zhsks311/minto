@@ -34,6 +34,7 @@ public final class FloatingWindowManager {
                             : TranscriptionOverlayView.expandedWindowSize
                     )
                 }
+                .tint(MintoDesignTokens.brandTeal)
             )
             panel.contentViewController = hostingController
 

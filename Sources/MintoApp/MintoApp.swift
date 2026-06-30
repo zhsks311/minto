@@ -14,6 +14,7 @@ struct MintoApp: App {
                 onOpacityChange: appDelegate.floatingWindowManager.setOpacity,
                 onOpenLibrary: { appDelegate.mainWindowManager.show() }
             )
+            .tint(MintoDesignTokens.brandTeal)
         } label: {
             if let icon = AppAssets.menuBarIcon {
                 Image(nsImage: icon)
@@ -25,6 +26,7 @@ struct MintoApp: App {
 
         Settings {
             SettingsView(viewModel: appDelegate.viewModel)
+                .tint(MintoDesignTokens.brandTeal)
         }
     }
 }

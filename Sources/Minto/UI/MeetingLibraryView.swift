@@ -8,6 +8,8 @@ private enum LibraryPalette {
     static let elevated = Color(nsColor: .textBackgroundColor)
     static let border = Color.secondary.opacity(0.18)
     static let accentSoft = Color.accentColor.opacity(0.12)
+    static let accentBorder = MintoDesignTokens.brandMintDeep.opacity(0.48)
+    static let accentBorderStrong = MintoDesignTokens.brandTeal.opacity(0.56)
 }
 
 private struct MeetingSearchMatch {
@@ -1133,7 +1135,7 @@ public struct MeetingLibraryView: View {
         .background(selected ? LibraryPalette.accentSoft : LibraryPalette.elevated)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(selected ? Color.accentColor.opacity(0.45) : LibraryPalette.border, lineWidth: 1)
+                .stroke(selected ? LibraryPalette.accentBorder : LibraryPalette.border, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .contentShape(RoundedRectangle(cornerRadius: 8))
@@ -1196,7 +1198,7 @@ public struct MeetingLibraryView: View {
             .background(selected ? LibraryPalette.accentSoft : LibraryPalette.elevated)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(selected ? Color.accentColor.opacity(0.45) : LibraryPalette.border, lineWidth: 1)
+                    .stroke(selected ? LibraryPalette.accentBorder : LibraryPalette.border, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -1568,7 +1570,7 @@ public struct MeetingLibraryView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(LibraryPalette.accentSoft)
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor.opacity(0.22), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LibraryPalette.accentBorder, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -2907,7 +2909,7 @@ public struct MeetingLibraryView: View {
     }
 
     private func citationCardBorder(_ id: String) -> Color {
-        isCitationHighlightTarget(id) ? Color.accentColor.opacity(0.55) : LibraryPalette.border
+        isCitationHighlightTarget(id) ? LibraryPalette.accentBorderStrong : LibraryPalette.border
     }
 
     /// 행/그룹용 하이라이트. 음수 패딩으로 레이아웃을 건드리지 않고 칠만 확장한다.
