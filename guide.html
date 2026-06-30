@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Minto2 사용법 — 회의 기록부터 다시 찾기까지</title>
+<meta name="description" content="Minto2로 회의를 기록하고, 요약하고, 검색하고, 내보내는 기본 사용 흐름을 안내합니다." />
+<meta property="og:title" content="Minto2 사용법" />
+<meta property="og:description" content="회의 전 준비, 회의 중 기록, 회의 후 요약과 검색, 내보내기까지 Minto2의 기본 흐름을 안내합니다." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="assets/app-icon.png" />
+<link rel="icon" type="image/png" href="assets/app-icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
+<style>
+  :root {
+    --ink: #123b35;
+    --ink-2: #2a5a52;
+    --green: #1f7a5b;
+    --leaf: #5ad0a3;
+    --mint: #e7f6ef;
+    --mint-2: #f4fbf8;
+    --paper: #fcfdfb;
+    --card: #ffffff;
+    --line: #d2e4dc;
+    --amber: #a6643f;
+    --muted: #5b6f68;
+    --shadow: 0 30px 70px -44px rgba(18, 59, 53, .46);
+    --serif: "Gowun Batang", "Apple SD Gothic Neo", serif;
+    --sans: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --maxw: 1040px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink-2);
+    background: linear-gradient(180deg, var(--paper), #f7fbf8 48%, var(--paper));
+    line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a { color: inherit; }
+  h1, h2, h3, p { overflow-wrap: break-word; }
+  h1, h2, h3 { color: var(--ink); }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .skip { position: absolute; left: 12px; top: -70px; z-index: 100; background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 700; text-decoration: none; transition: top .18s ease; }
+  .skip:focus { top: 12px; }
+  nav { position: sticky; top: 0; z-index: 40; background: rgba(252, 253, 251, .84); border-bottom: 1px solid var(--line); backdrop-filter: blur(14px) saturate(160%); }
+  .nav-inner { max-width: var(--maxw); margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font-weight: 800; }
+  .brand img { width: 32px; height: 32px; border-radius: 9px; box-shadow: 0 8px 18px -12px var(--ink); }
+  .nav-links { display: flex; align-items: center; gap: 18px; font-size: .92rem; font-weight: 650; }
+  .nav-links a { text-decoration: none; color: var(--ink-2); }
+  .nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--green); }
+  .nav-links .repo { padding: 8px 16px; border-radius: 999px; background: var(--ink); color: #fff; box-shadow: 0 12px 26px -18px var(--ink); }
+  .hero { padding: 82px 0 54px; }
+  .eyebrow { color: var(--green); font-size: .76rem; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+  h1 { margin: 14px 0 18px; max-width: 12ch; font-family: var(--serif); font-size: clamp(2.7rem, 7vw, 5.1rem); font-weight: 400; line-height: 1.08; letter-spacing: -.035em; }
+  .lead { max-width: 64ch; margin: 0; font-size: clamp(1.04rem, 1.8vw, 1.22rem); }
+  .layout { display: grid; grid-template-columns: 240px 1fr; gap: 34px; align-items: start; padding-bottom: 84px; }
+  .toc { position: sticky; top: 78px; padding: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 18px 52px -44px rgba(18,59,53,.4); }
+  .toc strong { display: block; margin-bottom: 12px; color: var(--ink); }
+  .toc a { display: block; padding: 7px 0; text-decoration: none; color: var(--ink-2); font-size: .93rem; font-weight: 650; }
+  .toc a:hover { color: var(--green); }
+  .content { display: grid; gap: 22px; }
+  .card { padding: 28px; background: var(--card); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 18px 52px -44px rgba(18,59,53,.4); }
+  .card h2 { margin: 0 0 10px; font-family: var(--serif); font-size: clamp(1.75rem, 3vw, 2.35rem); font-weight: 400; letter-spacing: -.02em; }
+  .card h3 { margin: 20px 0 8px; font-size: 1.04rem; }
+  .card p { margin: 0 0 12px; }
+  .steps { margin: 18px 0 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 12px; }
+  .steps li { position: relative; padding: 16px 16px 16px 54px; background: var(--mint-2); border: 1px solid var(--line); border-radius: 16px; }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 16px; top: 17px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--green); color: #fff; font-weight: 800; font-size: .82rem; }
+  .checklist { margin: 12px 0 0; padding-left: 20px; }
+  .checklist li { margin: 7px 0; }
+  .note { margin-top: 16px; padding: 14px 16px; border-radius: 16px; background: #f7ece5; color: #5d3c27; font-weight: 620; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .mini { padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--mint-2); }
+  .mini h3 { margin-top: 0; }
+  footer { padding: 38px 0; color: var(--muted); font-size: .88rem; border-top: 1px solid var(--line); }
+  .foot-inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+  footer a { color: var(--ink-2); text-decoration: none; font-weight: 700; }
+  :focus-visible { outline: 3px solid var(--green); outline-offset: 3px; border-radius: 8px; }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    .toc { position: static; }
+    .split { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 680px) {
+    .nav-links a:not(.repo):not([aria-current="page"]) { display: none; }
+    .nav-inner, .wrap { padding-left: 20px; padding-right: 20px; }
+    .hero { padding-top: 58px; }
+    .card { padding: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .skip { transition: none; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<nav>
+  <div class="nav-inner">
+    <a class="brand" href="index.html" aria-label="Minto2 홈으로 이동">
+      <img src="assets/app-icon.png" alt="" />
+      <span>Minto2</span>
+    </a>
+    <div class="nav-links" aria-label="문서 메뉴">
+      <a href="index.html">소개</a>
+      <a href="guide.html" aria-current="page">사용법</a>
+      <a href="privacy.html">데이터</a>
+      <a href="troubleshooting.html">문제 해결</a>
+      <a class="repo" href="https://github.com/zhsks311/minto">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+  <header class="hero">
+    <div class="wrap">
+      <span class="eyebrow">User Guide</span>
+      <h1>회의를 남기고 다시 쓰는 법.</h1>
+      <p class="lead">Minto2는 녹음 버튼 하나로 끝나는 앱이 아닙니다. 회의 전 문맥을 넣고, 회의 중 전사를 쌓고, 회의 후에는 요약·검색·내보내기로 업무 문서까지 이어갑니다.</p>
+    </div>
+  </header>
+
+  <div class="wrap layout">
+    <aside class="toc" aria-label="사용법 목차">
+      <strong>사용법</strong>
+      <a href="#start">빠른 시작</a>
+      <a href="#prepare">회의 전 준비</a>
+      <a href="#record">회의 중 기록</a>
+      <a href="#after">회의 후 정리</a>
+      <a href="#search">검색과 답변</a>
+      <a href="#export">내보내기</a>
+    </aside>
+
+    <div class="content">
+      <section class="card" id="start">
+        <h2>빠른 시작</h2>
+        <p>처음에는 모든 설정을 만질 필요가 없습니다. 권한을 허용하고, 입력 소스를 고른 뒤, 회의를 시작하면 됩니다.</p>
+        <ol class="steps">
+          <li><strong>앱을 실행합니다.</strong><br />macOS 메뉴바에서 Minto2 상태를 확인하고 새 회의를 시작합니다.</li>
+          <li><strong>마이크 권한을 허용합니다.</strong><br />시스템 사운드나 혼합 입력을 쓰는 경우 앱이 안내하는 추가 권한도 확인합니다.</li>
+          <li><strong>입력 소스를 선택합니다.</strong><br />마이크, 시스템 사운드, 마이크+시스템 혼합 입력 중 회의 상황에 맞게 고릅니다.</li>
+          <li><strong>회의를 종료합니다.</strong><br />종료 후 요약, 목차, 결정사항, 할 일, 미해결 질문, 전사를 확인합니다.</li>
+        </ol>
+      </section>
+
+      <section class="card" id="prepare">
+        <h2>회의 전 준비</h2>
+        <p>회의록 품질은 회의 전에 넣은 문맥의 영향을 받습니다. 필요한 만큼만 넣는 것이 좋습니다.</p>
+        <div class="split">
+          <div class="mini">
+            <h3>주제와 용어</h3>
+            <p>회의 주제, 이번 회의에서 자주 나올 용어, 프로젝트명, 제품명, 사람 이름을 넣습니다. 전역 용어집이 있다면 관련 용어만 골라 씁니다.</p>
+          </div>
+          <div class="mini">
+            <h3>참고 문서</h3>
+            <p>로컬 md/txt/pdf, Notion, Confluence 문서를 붙일 수 있습니다. Minto2는 raw 문서 전체보다 요약·발췌·용어 중심으로 fail-soft하게 활용합니다.</p>
+          </div>
+        </div>
+        <p class="note">문맥은 LLM에 대한 지시문이 아니라 참고자료입니다. 회의에 없는 내용을 만들지 않도록 전사와 문맥을 구분합니다.</p>
+      </section>
+
+      <section class="card" id="record">
+        <h2>회의 중 기록</h2>
+        <p>회의 중에는 빠르게 보이는 preview와 저장에 쓰이는 final 전사가 분리됩니다. 마지막 발화 버퍼가 누락되지 않도록 종료 시점에 남은 구간을 정리합니다.</p>
+        <ul class="checklist">
+          <li>마이크 입력은 내 목소리 중심 회의에 적합합니다.</li>
+          <li>시스템 사운드는 온라인 회의 상대방 음성을 기록할 때 사용합니다.</li>
+          <li>혼합 입력은 내 목소리와 상대방 음성을 함께 남길 때 사용합니다.</li>
+          <li>화자 라벨은 회의 중 표시되고, 종료 후 더 안정적인 결과로 재정리될 수 있습니다.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="after">
+        <h2>회의 후 정리</h2>
+        <p>회의가 끝나면 Minto2는 저장된 전사를 바탕으로 읽기 좋은 회의록을 만듭니다.</p>
+        <ul class="checklist">
+          <li>요약과 목차로 긴 회의를 빠르게 훑습니다.</li>
+          <li>결정사항, 할 일, 미해결 질문을 분리해 다음 행동으로 이어갑니다.</li>
+          <li>문장 단위 화자 세그먼트로 누가 어떤 말을 했는지 확인합니다.</li>
+          <li>화자 라벨은 사용자가 편집하거나 실명으로 지정할 수 있습니다.</li>
+        </ul>
+        <p class="note">교정 기능을 꺼도 원문 전사를 바탕으로 요약할 수 있습니다. 교정과 요약 설정은 독립적으로 다룹니다.</p>
+      </section>
+
+      <section class="card" id="search">
+        <h2>검색과 답변</h2>
+        <p>회의록은 다시 찾으려고 남깁니다. 일반 검색은 LLM 없이도 동작하고, 답변 생성은 사용자가 요청했을 때만 실행됩니다.</p>
+        <ul class="checklist">
+          <li>요약, 전사, 결정사항, 할 일, 미해결 질문을 검색합니다.</li>
+          <li>임베딩 인덱스가 준비되면 의미가 가까운 회의 조각도 함께 찾습니다.</li>
+          <li>답변 생성은 검색된 관련 근거 chunk만 LLM에 전달합니다.</li>
+          <li>답변에는 출처 회의, 섹션, 시간 정보가 함께 표시되는 방향으로 설계되어 있습니다.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="export">
+        <h2>내보내기</h2>
+        <p>정리한 회의록은 업무 도구로 옮길 수 있습니다.</p>
+        <ul class="checklist">
+          <li>Markdown 파일로 저장합니다.</li>
+          <li>클립보드로 복사해 다른 도구에 붙여 넣습니다.</li>
+          <li>Confluence token이 있으면 위치와 제목을 확인한 뒤 publish합니다.</li>
+          <li>token이 없으면 Confluence 선택지는 비활성화하고 설정으로 안내합니다.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span>Minto2 사용법 · 회의 기록부터 다시 찾기까지</span>
+    <span><a href="privacy.html">데이터 경계</a> · <a href="troubleshooting.html">문제 해결</a></span>
+  </div>
+</footer>
+</body>
+</html>

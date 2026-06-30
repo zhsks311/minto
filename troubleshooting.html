@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Minto2 문제 해결 — 권한, 전사, 요약, 내보내기</title>
+<meta name="description" content="Minto2 사용 중 녹음, 전사, 요약, 검색, Confluence 내보내기에서 자주 확인할 문제 해결 가이드입니다." />
+<meta property="og:title" content="Minto2 문제 해결" />
+<meta property="og:description" content="마이크 권한, 시스템 사운드, 전사 결과, LLM 요약, Confluence 내보내기 문제를 확인하는 방법입니다." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="assets/app-icon.png" />
+<link rel="icon" type="image/png" href="assets/app-icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" />
+<style>
+  :root { --ink:#123b35; --ink-2:#2a5a52; --green:#1f7a5b; --mint:#e7f6ef; --mint-2:#f4fbf8; --paper:#fcfdfb; --card:#fff; --line:#d2e4dc; --amber:#a6643f; --muted:#5b6f68; --serif:"Gowun Batang","Apple SD Gothic Neo",serif; --sans:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,system-ui,sans-serif; --maxw:1040px; }
+  *{box-sizing:border-box;} html{scroll-behavior:smooth;} body{margin:0;font-family:var(--sans);color:var(--ink-2);background:linear-gradient(180deg,var(--paper),#f7fbf8 48%,var(--paper));line-height:1.72;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;} a{color:inherit;} h1,h2,h3,p{overflow-wrap:break-word;} h1,h2,h3{color:var(--ink);} .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px;}
+  .skip{position:absolute;left:12px;top:-70px;z-index:100;background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;text-decoration:none;transition:top .18s ease;} .skip:focus{top:12px;} nav{position:sticky;top:0;z-index:40;background:rgba(252,253,251,.84);border-bottom:1px solid var(--line);backdrop-filter:blur(14px) saturate(160%);} .nav-inner{max-width:var(--maxw);margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;} .brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:800;} .brand img{width:32px;height:32px;border-radius:9px;box-shadow:0 8px 18px -12px var(--ink);} .nav-links{display:flex;align-items:center;gap:18px;font-size:.92rem;font-weight:650;} .nav-links a{text-decoration:none;color:var(--ink-2);} .nav-links a:hover,.nav-links a[aria-current="page"]{color:var(--green);} .nav-links .repo{padding:8px 16px;border-radius:999px;background:var(--ink);color:#fff;box-shadow:0 12px 26px -18px var(--ink);}
+  .hero{padding:82px 0 54px;} .eyebrow{color:var(--green);font-size:.76rem;font-weight:750;letter-spacing:.16em;text-transform:uppercase;} h1{margin:14px 0 18px;max-width:13ch;font-family:var(--serif);font-size:clamp(2.7rem,7vw,5.1rem);font-weight:400;line-height:1.08;letter-spacing:-.035em;} .lead{max-width:66ch;margin:0;font-size:clamp(1.04rem,1.8vw,1.22rem);}
+  .layout{display:grid;grid-template-columns:240px 1fr;gap:34px;align-items:start;padding-bottom:84px;} .toc{position:sticky;top:78px;padding:20px;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 18px 52px -44px rgba(18,59,53,.4);} .toc strong{display:block;margin-bottom:12px;color:var(--ink);} .toc a{display:block;padding:7px 0;text-decoration:none;color:var(--ink-2);font-size:.93rem;font-weight:650;} .toc a:hover{color:var(--green);}
+  .content{display:grid;gap:18px;} .card{padding:26px;background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:0 18px 52px -44px rgba(18,59,53,.4);} .card h2{margin:0 0 10px;font-family:var(--serif);font-size:clamp(1.75rem,3vw,2.35rem);font-weight:400;letter-spacing:-.02em;} .card p{margin:0 0 12px;} .card ul{margin:12px 0 0;padding-left:20px;} .card li{margin:8px 0;} .label{display:inline-flex;margin-bottom:12px;padding:4px 11px;border-radius:999px;background:var(--mint);color:var(--green);font-size:.78rem;font-weight:800;} .label.warn{background:#f7ece5;color:var(--amber);} .note{margin-top:14px;padding:14px 16px;border-radius:16px;background:var(--mint-2);border:1px solid var(--line);font-weight:620;} footer{padding:38px 0;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);} .foot-inner{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;} footer a{color:var(--ink-2);text-decoration:none;font-weight:700;} :focus-visible{outline:3px solid var(--green);outline-offset:3px;border-radius:8px;}
+  @media(max-width:860px){.layout{grid-template-columns:1fr;}.toc{position:static;}} @media(max-width:680px){.nav-links a:not(.repo):not([aria-current="page"]){display:none;}.nav-inner,.wrap{padding-left:20px;padding-right:20px;}.hero{padding-top:58px;}.card{padding:22px;}} @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto;}.skip{transition:none;}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<nav>
+  <div class="nav-inner">
+    <a class="brand" href="index.html" aria-label="Minto2 홈으로 이동"><img src="assets/app-icon.png" alt="" /><span>Minto2</span></a>
+    <div class="nav-links" aria-label="문서 메뉴">
+      <a href="index.html">소개</a>
+      <a href="guide.html">사용법</a>
+      <a href="privacy.html">데이터</a>
+      <a href="troubleshooting.html" aria-current="page">문제 해결</a>
+      <a class="repo" href="https://github.com/zhsks311/minto">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+  <header class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Troubleshooting</span>
+      <h1>안 될 때 먼저 볼 것들.</h1>
+      <p class="lead">녹음, 전사, 요약, 검색, 내보내기는 각각 다른 권한과 설정을 사용합니다. 문제가 생기면 증상별로 경계를 나눠 확인하는 편이 빠릅니다.</p>
+    </div>
+  </header>
+
+  <div class="wrap layout">
+    <aside class="toc" aria-label="문제 해결 목차">
+      <strong>문제 해결</strong>
+      <a href="#permission">권한</a>
+      <a href="#recording">녹음과 전사</a>
+      <a href="#speaker">화자 라벨</a>
+      <a href="#llm">교정·요약</a>
+      <a href="#search">검색·답변</a>
+      <a href="#export">내보내기</a>
+    </aside>
+
+    <div class="content">
+      <section class="card" id="permission">
+        <span class="label warn">권한</span>
+        <h2>마이크나 시스템 사운드가 잡히지 않을 때</h2>
+        <ul>
+          <li>macOS 시스템 설정에서 Minto2의 마이크 권한이 켜져 있는지 확인합니다.</li>
+          <li>온라인 회의 소리를 기록하려면 시스템 사운드 입력 준비 상태를 확인합니다.</li>
+          <li>권한을 바꾼 뒤에는 앱을 완전히 종료했다가 다시 실행합니다.</li>
+        </ul>
+        <p class="note">시스템 사운드와 마이크는 서로 다른 경로입니다. 내 목소리는 들어오는데 상대방 음성이 없거나, 반대로 상대방 음성만 들어오는 경우 입력 소스 선택을 먼저 봅니다.</p>
+      </section>
+
+      <section class="card" id="recording">
+        <span class="label">전사</span>
+        <h2>전사가 늦거나 일부 발화가 빠진 것처럼 보일 때</h2>
+        <ul>
+          <li>회의 중 보이는 preview 전사는 임시 결과입니다. 저장 시 final 전사가 다시 정리됩니다.</li>
+          <li>회의 종료 직후에는 남은 VAD 버퍼와 마지막 교정이 정리될 수 있습니다.</li>
+          <li>소리가 너무 작거나 배경 소음이 크면 VAD가 발화 구간을 다르게 나눌 수 있습니다.</li>
+          <li>파일 임포트는 먼저 16kHz mono PCM 변환을 거친 뒤 전사합니다.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="speaker">
+        <span class="label">화자</span>
+        <h2>화자 라벨이 예상과 다를 때</h2>
+        <ul>
+          <li>회의 중 라벨은 실시간 판단이고, 종료 후 VBx 기반 결과로 재정리될 수 있습니다.</li>
+          <li>한 전사 청크 안에 여러 화자가 섞이면 저장 시 문장 단위로 다시 쪼갤 수 있습니다.</li>
+          <li>화자분리 provider가 실패하면 채널 기반 라벨로 낮춰 계속 저장하는 fail-soft 경로가 있습니다.</li>
+          <li>저장된 회의에서 화자 라벨을 편집하거나 실명으로 지정할 수 있습니다.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="llm">
+        <span class="label warn">LLM</span>
+        <h2>교정이나 요약이 만들어지지 않을 때</h2>
+        <ul>
+          <li>선택한 provider가 교정 또는 요약 capability를 지원하는지 확인합니다.</li>
+          <li>API provider를 쓰는 경우 token이 Keychain에 저장되어 있는지 확인합니다.</li>
+          <li>로컬 LLM을 쓰는 경우 모델 실행 상태와 응답 시간을 확인합니다.</li>
+          <li>교정을 꺼도 원문 전사 기반 요약은 사용할 수 있습니다.</li>
+        </ul>
+        <p class="note">요약 실패가 저장이나 전사를 망치면 안 됩니다. Minto2는 실패하더라도 가능한 결과를 남기는 fail-soft 흐름을 우선합니다.</p>
+      </section>
+
+      <section class="card" id="search">
+        <span class="label">검색</span>
+        <h2>검색 답변이 기대와 다를 때</h2>
+        <ul>
+          <li>일반 검색은 LLM 없이 저장된 회의 텍스트를 찾습니다.</li>
+          <li>답변 생성은 검색된 근거 chunk를 바탕으로 별도로 실행됩니다.</li>
+          <li>질문이 너무 넓으면 회의명, 날짜, 결정사항, 할 일처럼 범위를 좁혀 입력합니다.</li>
+          <li>답변에는 근거 회의와 시간이 함께 표시되는지 확인합니다.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="export">
+        <span class="label warn">내보내기</span>
+        <h2>Confluence 내보내기가 비활성화될 때</h2>
+        <ul>
+          <li>Confluence token이 없으면 선택지가 비활성화됩니다.</li>
+          <li>설정에서 token을 등록한 뒤 다시 내보내기를 시도합니다.</li>
+          <li>publish 전에는 위치와 제목을 확인합니다.</li>
+          <li>외부 도구 연동이 어렵다면 Markdown 파일 또는 클립보드 복사를 fallback으로 사용합니다.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span>Minto2 문제 해결 · 권한과 설정을 경계별로 확인</span>
+    <span><a href="guide.html">사용법</a> · <a href="privacy.html">데이터 경계</a></span>
+  </div>
+</footer>
+</body>
+</html>

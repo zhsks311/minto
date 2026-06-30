@@ -4,8 +4,11 @@
 
 ## 구성
 
-- `index.html` — 단일 파일 랜딩 페이지 (CSS 인라인)
-- `assets/` — 앱 아이콘·로고 (`main`의 `feat/app-icon-logo`에서 가져옴)
+- `index.html` — 제품 소개 랜딩 페이지 (CSS 인라인)
+- `guide.html` — 회의 기록·요약·검색·내보내기 사용법
+- `privacy.html` — 로컬 처리와 외부 전송 데이터 경계
+- `troubleshooting.html` — 권한·전사·요약·내보내기 문제 해결
+- `assets/` — 앱 아이콘
 - `.nojekyll` — Jekyll 처리 비활성화
 
 폰트(Pretendard, Gowun Batang)는 CDN으로 로드한다. 오프라인이면 system-ui로 폴백된다.
@@ -15,7 +18,7 @@
 1. GitHub 저장소 → **Settings → Pages**
 2. **Source**: `Deploy from a branch`
 3. **Branch**: `gh-pages` / `/ (root)` 선택 후 Save
-4. 1~2분 뒤 `https://zhsks311.github.io/Minto2/` 에 게시된다.
+4. 1~2분 뒤 `https://zhsks311.github.io/minto/` 에 게시된다.
 
 > 무료 플랜은 공개 저장소에서만 Pages가 동작한다(비공개는 Pro 필요).
 
