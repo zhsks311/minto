@@ -1,0 +1,1312 @@
+{
+  "version": "2.13",
+  "children": [
+    {
+      "type": "frame",
+      "id": "ZyQ5A",
+      "x": 0,
+      "y": 0,
+      "name": "component/InputField",
+      "reusable": true,
+      "width": 320,
+      "layout": "vertical",
+      "gap": 6,
+      "children": [
+        {
+          "type": "text",
+          "id": "TZnKg",
+          "name": "Label",
+          "fill": "$text-secondary",
+          "content": "주제",
+          "fontFamily": "$font-main",
+          "fontSize": 12,
+          "fontWeight": "500"
+        },
+        {
+          "type": "frame",
+          "id": "u20d5j",
+          "name": "Box",
+          "width": "fill_container",
+          "height": 36,
+          "fill": "#FFFFFF",
+          "cornerRadius": 8,
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "padding": [
+            0,
+            12
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "uUxtB",
+              "name": "Placeholder",
+              "fill": "$text-tertiary",
+              "content": "회의 주제를 입력하세요",
+              "fontFamily": "$font-main",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "ATQXo",
+      "x": 380,
+      "y": 0,
+      "name": "component/PickerRow",
+      "reusable": true,
+      "width": 320,
+      "height": 40,
+      "fill": "$bg-field",
+      "cornerRadius": 8,
+      "gap": 10,
+      "padding": [
+        0,
+        12
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "icon",
+          "id": "C5cDk0",
+          "name": "Icon",
+          "width": 16,
+          "height": 16,
+          "icon": "book-open",
+          "library": "lucide",
+          "fill": "$text-secondary"
+        },
+        {
+          "type": "text",
+          "id": "n66l9q",
+          "name": "Label",
+          "fill": "$text-primary",
+          "content": "용어집",
+          "fontFamily": "$font-main",
+          "fontSize": 14,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "hQf2H",
+          "name": "Spacer",
+          "width": "fill_container",
+          "height": 1
+        },
+        {
+          "type": "text",
+          "id": "ZA83v",
+          "name": "Value",
+          "fill": "$text-tertiary",
+          "content": "선택 안 함",
+          "fontFamily": "$font-main",
+          "fontSize": 13,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "icon",
+          "id": "M1u2wZ",
+          "name": "Chevron",
+          "width": 14,
+          "height": 14,
+          "icon": "chevron-right",
+          "library": "lucide",
+          "fill": "$text-tertiary"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "RddHZ",
+      "x": 780,
+      "y": 0,
+      "name": "Calendar Prefill — 5 States",
+      "fill": "$canvas-bg",
+      "cornerRadius": 16,
+      "gap": 32,
+      "padding": 48,
+      "children": [
+        {
+          "type": "frame",
+          "id": "J8XsB",
+          "name": "1. 권한 없음",
+          "layout": "vertical",
+          "gap": 14,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "y1GdX",
+              "name": "State Label",
+              "fill": "$text-secondary",
+              "content": "1. 권한 없음",
+              "fontFamily": "$font-main",
+              "fontSize": 12,
+              "fontWeight": "600",
+              "letterSpacing": 0.3
+            },
+            {
+              "type": "frame",
+              "id": "ZWwdB",
+              "name": "Sheet",
+              "width": 360,
+              "fill": "$bg-sheet",
+              "cornerRadius": 12,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0000001A",
+                "offset": {
+                  "x": 0,
+                  "y": 4
+                },
+                "blur": 20
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "L2GWIf",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "새 회의 시작",
+                  "fontFamily": "$font-main",
+                  "fontSize": 17,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "SRlmH",
+                  "name": "Warning Banner",
+                  "width": "fill_container",
+                  "fill": "$bg-warning",
+                  "cornerRadius": 8,
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "LytfR",
+                      "name": "Warn Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "triangle-alert",
+                      "library": "lucide",
+                      "fill": "$warning"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vefXN",
+                      "name": "Warn Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "F8AQT",
+                          "name": "Warn Msg",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "캘린더 권한이 없어요",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "crw6z",
+                          "name": "Warn Link",
+                          "fill": "$accent",
+                          "content": "설정에서 허용하세요 →",
+                          "fontFamily": "$font-main",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "N5iQak",
+                  "type": "ref",
+                  "ref": "ZyQ5A",
+                  "name": "Topic Field",
+                  "width": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "zGiKs",
+                  "name": "Pickers",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "id": "wAHMz",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Glossary",
+                      "width": "fill_container"
+                    },
+                    {
+                      "id": "Gy0hy",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Document",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "file-text"
+                        },
+                        "n66l9q": {
+                          "content": "문서"
+                        }
+                      }
+                    },
+                    {
+                      "id": "ZAbiT",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Audio Source",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "mic"
+                        },
+                        "n66l9q": {
+                          "content": "오디오 소스"
+                        },
+                        "ZA83v": {
+                          "content": "시스템 오디오"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "u11Fx",
+                  "name": "Divider",
+                  "fill": "$divider",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "Vt7sy",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "s4QpMS",
+                      "name": "Cancel",
+                      "fill": "$btn-secondary-bg",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n0WPb",
+                          "name": "Cancel Label",
+                          "fill": "$text-primary",
+                          "content": "취소",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wWnBU",
+                      "name": "Start",
+                      "fill": "$accent",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "I2qzE",
+                          "name": "Start Label",
+                          "fill": "#FFFFFF",
+                          "content": "시작",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "PPHUs",
+          "name": "2. 예정 일정 없음",
+          "layout": "vertical",
+          "gap": 14,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "UH1CU",
+              "name": "State Label",
+              "fill": "$text-secondary",
+              "content": "2. 예정 일정 없음",
+              "fontFamily": "$font-main",
+              "fontSize": 12,
+              "fontWeight": "600",
+              "letterSpacing": 0.3
+            },
+            {
+              "type": "frame",
+              "id": "Rge2j",
+              "name": "Sheet",
+              "width": 360,
+              "fill": "$bg-sheet",
+              "cornerRadius": 12,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0000001A",
+                "offset": {
+                  "x": 0,
+                  "y": 4
+                },
+                "blur": 20
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "y1JfZ",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "새 회의 시작",
+                  "fontFamily": "$font-main",
+                  "fontSize": 17,
+                  "fontWeight": "600"
+                },
+                {
+                  "id": "L5Waxp",
+                  "type": "ref",
+                  "ref": "ZyQ5A",
+                  "name": "Topic Field",
+                  "width": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "GTSyv",
+                  "name": "Pickers",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "id": "Biupx",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Glossary",
+                      "width": "fill_container"
+                    },
+                    {
+                      "id": "Pxrhn",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Document",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "file-text"
+                        },
+                        "n66l9q": {
+                          "content": "문서"
+                        }
+                      }
+                    },
+                    {
+                      "id": "EVHbh",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Audio Source",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "mic"
+                        },
+                        "n66l9q": {
+                          "content": "오디오 소스"
+                        },
+                        "ZA83v": {
+                          "content": "시스템 오디오"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "uIztB",
+                  "name": "Divider",
+                  "fill": "$divider",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "p6qUdf",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "QvYDF",
+                      "name": "Cancel",
+                      "fill": "$btn-secondary-bg",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "bx0fR",
+                          "name": "Cancel Label",
+                          "fill": "$text-primary",
+                          "content": "취소",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "m4jbHJ",
+                      "name": "Start",
+                      "fill": "$accent",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ONplS",
+                          "name": "Start Label",
+                          "fill": "#FFFFFF",
+                          "content": "시작",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ti6H9",
+          "name": "3. 다음 일정 발견",
+          "layout": "vertical",
+          "gap": 14,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "QE4Wl",
+              "name": "State Label",
+              "fill": "$text-secondary",
+              "content": "3. 다음 일정 발견",
+              "fontFamily": "$font-main",
+              "fontSize": 12,
+              "fontWeight": "600",
+              "letterSpacing": 0.3
+            },
+            {
+              "type": "frame",
+              "id": "S7LM4",
+              "name": "Sheet",
+              "width": 360,
+              "fill": "$bg-sheet",
+              "cornerRadius": 12,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0000001A",
+                "offset": {
+                  "x": 0,
+                  "y": 4
+                },
+                "blur": 20
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bWPu6",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "새 회의 시작",
+                  "fontFamily": "$font-main",
+                  "fontSize": 17,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "SEiXg",
+                  "name": "Event Card",
+                  "width": "fill_container",
+                  "fill": "$bg-highlight",
+                  "cornerRadius": 10,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "O6mpVr",
+                      "name": "Cal Icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "calendar",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CsHJ1",
+                      "name": "Event Info",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "wMcrN",
+                          "name": "Event Prefix",
+                          "fill": "$text-secondary",
+                          "content": "다음 일정",
+                          "fontFamily": "$font-main",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "MQNoi",
+                          "name": "Event Title",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "프로덕트 주간 싱크",
+                          "fontFamily": "$font-main",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "dRhzp",
+                          "name": "Event Time",
+                          "fill": "$text-secondary",
+                          "content": "오전 10:00",
+                          "fontFamily": "$font-main",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Y8ySN",
+                      "name": "Event Actions",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "rPlfU",
+                          "name": "Accept Btn",
+                          "fill": "$accent",
+                          "cornerRadius": 6,
+                          "padding": [
+                            5,
+                            12
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "nRRw1",
+                              "name": "Accept Label",
+                              "fill": "#FFFFFF",
+                              "content": "수락",
+                              "fontFamily": "$font-main",
+                              "fontSize": 12,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Z40iQO",
+                          "name": "Dismiss Btn",
+                          "cornerRadius": 6,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            5,
+                            12
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "u0hRTc",
+                              "name": "Dismiss Label",
+                              "fill": "$text-secondary",
+                              "content": "무시",
+                              "fontFamily": "$font-main",
+                              "fontSize": 12,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "fdZLl",
+                  "type": "ref",
+                  "ref": "ZyQ5A",
+                  "name": "Topic Field",
+                  "width": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "n4zvI",
+                  "name": "Pickers",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "id": "pIWgc",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Glossary",
+                      "width": "fill_container"
+                    },
+                    {
+                      "id": "ZsV1T",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Document",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "file-text"
+                        },
+                        "n66l9q": {
+                          "content": "문서"
+                        }
+                      }
+                    },
+                    {
+                      "id": "ZtEeY",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Audio Source",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "mic"
+                        },
+                        "n66l9q": {
+                          "content": "오디오 소스"
+                        },
+                        "ZA83v": {
+                          "content": "시스템 오디오"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "Y6Phta",
+                  "name": "Divider",
+                  "fill": "$divider",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "eRa1g",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "SE84D",
+                      "name": "Cancel",
+                      "fill": "$btn-secondary-bg",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "uceNs",
+                          "name": "Cancel Label",
+                          "fill": "$text-primary",
+                          "content": "취소",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Z5vaC7",
+                      "name": "Start",
+                      "fill": "$accent",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CCuFk",
+                          "name": "Start Label",
+                          "fill": "#FFFFFF",
+                          "content": "시작",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "uUKBj",
+          "name": "4. 수락됨",
+          "layout": "vertical",
+          "gap": 14,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "g47z4x",
+              "name": "State Label",
+              "fill": "$text-secondary",
+              "content": "4. 수락됨",
+              "fontFamily": "$font-main",
+              "fontSize": 12,
+              "fontWeight": "600",
+              "letterSpacing": 0.3
+            },
+            {
+              "type": "frame",
+              "id": "v8GbT",
+              "name": "Sheet",
+              "width": 360,
+              "fill": "$bg-sheet",
+              "cornerRadius": 12,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0000001A",
+                "offset": {
+                  "x": 0,
+                  "y": 4
+                },
+                "blur": 20
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "oy5qD",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "새 회의 시작",
+                  "fontFamily": "$font-main",
+                  "fontSize": 17,
+                  "fontWeight": "600"
+                },
+                {
+                  "id": "oBBev",
+                  "type": "ref",
+                  "ref": "ZyQ5A",
+                  "name": "Topic Filled",
+                  "width": "fill_container",
+                  "descendants": {
+                    "uUxtB": {
+                      "content": "프로덕트 주간 싱크",
+                      "fill": "$text-primary"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "Xw3W0",
+                  "name": "Chip Row",
+                  "width": "fill_container",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "CGIMD",
+                      "name": "Calendar Chip",
+                      "fill": "$chip-bg",
+                      "cornerRadius": 12,
+                      "gap": 5,
+                      "padding": [
+                        4,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "wgHmP",
+                          "name": "Chip Icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "calendar-check",
+                          "library": "lucide",
+                          "fill": "$chip-text"
+                        },
+                        {
+                          "type": "text",
+                          "id": "C5v3Gz",
+                          "name": "Chip Label",
+                          "fill": "$chip-text",
+                          "content": "캘린더에서 가져옴",
+                          "fontFamily": "$font-main",
+                          "fontSize": 11,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Nlnu0",
+                  "name": "Pickers",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "id": "k6Lst",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Glossary",
+                      "width": "fill_container"
+                    },
+                    {
+                      "id": "RCMSs",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Document",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "file-text"
+                        },
+                        "n66l9q": {
+                          "content": "문서"
+                        }
+                      }
+                    },
+                    {
+                      "id": "bDnA9",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Audio Source",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "mic"
+                        },
+                        "n66l9q": {
+                          "content": "오디오 소스"
+                        },
+                        "ZA83v": {
+                          "content": "시스템 오디오"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "f0YS6",
+                  "name": "Divider",
+                  "fill": "$divider",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "tgqVg",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YUs4Z",
+                      "name": "Cancel",
+                      "fill": "$btn-secondary-bg",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "WkI0Y",
+                          "name": "Cancel Label",
+                          "fill": "$text-primary",
+                          "content": "취소",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "xPUzo",
+                      "name": "Start",
+                      "fill": "$accent",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Rc0Ri",
+                          "name": "Start Label",
+                          "fill": "#FFFFFF",
+                          "content": "시작",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Q1p2yB",
+          "name": "5. 무시됨",
+          "layout": "vertical",
+          "gap": 14,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "ww69I",
+              "name": "State Label",
+              "fill": "$text-secondary",
+              "content": "5. 무시됨",
+              "fontFamily": "$font-main",
+              "fontSize": 12,
+              "fontWeight": "600",
+              "letterSpacing": 0.3
+            },
+            {
+              "type": "frame",
+              "id": "eQuOh",
+              "name": "Sheet",
+              "width": 360,
+              "fill": "$bg-sheet",
+              "cornerRadius": 12,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0000001A",
+                "offset": {
+                  "x": 0,
+                  "y": 4
+                },
+                "blur": 20
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "vEWV2",
+                  "name": "Title",
+                  "fill": "$text-primary",
+                  "content": "새 회의 시작",
+                  "fontFamily": "$font-main",
+                  "fontSize": 17,
+                  "fontWeight": "600"
+                },
+                {
+                  "id": "LXJjz",
+                  "type": "ref",
+                  "ref": "ZyQ5A",
+                  "name": "Topic Field",
+                  "width": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "fZLdC",
+                  "name": "Pickers",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "id": "N37jb0",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Glossary",
+                      "width": "fill_container"
+                    },
+                    {
+                      "id": "TTRdP",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Document",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "file-text"
+                        },
+                        "n66l9q": {
+                          "content": "문서"
+                        }
+                      }
+                    },
+                    {
+                      "id": "RKCcn",
+                      "type": "ref",
+                      "ref": "ATQXo",
+                      "name": "Audio Source",
+                      "width": "fill_container",
+                      "descendants": {
+                        "C5cDk0": {
+                          "icon": "mic"
+                        },
+                        "n66l9q": {
+                          "content": "오디오 소스"
+                        },
+                        "ZA83v": {
+                          "content": "시스템 오디오"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "V17Ln",
+                  "name": "Divider",
+                  "fill": "$divider",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "nasaH",
+                  "name": "Actions",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "justifyContent": "end",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "IAV3X",
+                      "name": "Cancel",
+                      "fill": "$btn-secondary-bg",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MDKCP",
+                          "name": "Cancel Label",
+                          "fill": "$text-primary",
+                          "content": "취소",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YeTcm",
+                      "name": "Start",
+                      "fill": "$accent",
+                      "cornerRadius": 6,
+                      "padding": [
+                        7,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "fO8ou",
+                          "name": "Start Label",
+                          "fill": "#FFFFFF",
+                          "content": "시작",
+                          "fontFamily": "$font-main",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "accent": {
+      "type": "color",
+      "value": "#007AFF"
+    },
+    "bg-field": {
+      "type": "color",
+      "value": "#F5F5F7"
+    },
+    "bg-highlight": {
+      "type": "color",
+      "value": "#EBF3FE"
+    },
+    "bg-sheet": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "bg-warning": {
+      "type": "color",
+      "value": "#FFF8F0"
+    },
+    "border": {
+      "type": "color",
+      "value": "#D1D1D6"
+    },
+    "btn-secondary-bg": {
+      "type": "color",
+      "value": "#F2F2F7"
+    },
+    "canvas-bg": {
+      "type": "color",
+      "value": "#F0F0F2"
+    },
+    "chip-bg": {
+      "type": "color",
+      "value": "#E8F0FE"
+    },
+    "chip-text": {
+      "type": "color",
+      "value": "#1A56DB"
+    },
+    "divider": {
+      "type": "color",
+      "value": "#E5E5EA"
+    },
+    "font-main": {
+      "type": "string",
+      "value": "Inter"
+    },
+    "text-primary": {
+      "type": "color",
+      "value": "#1D1D1F"
+    },
+    "text-secondary": {
+      "type": "color",
+      "value": "#86868B"
+    },
+    "text-tertiary": {
+      "type": "color",
+      "value": "#AEAEB2"
+    },
+    "warning": {
+      "type": "color",
+      "value": "#FF9500"
+    }
+  }
+}
