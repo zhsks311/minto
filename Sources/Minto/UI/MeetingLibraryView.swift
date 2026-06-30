@@ -17,6 +17,27 @@ private struct MeetingSearchMatch {
     let text: String
 }
 
+private struct HeaderSecondaryActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundColor(isEnabled ? MintoDesignTokens.brandTeal : .secondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .background(
+                Capsule()
+                    .fill(isEnabled ? MintoDesignTokens.brandMint.opacity(0.10) : Color.secondary.opacity(0.06))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isEnabled ? MintoDesignTokens.brandMintDeep.opacity(0.56) : Color.secondary.opacity(0.18), lineWidth: 1)
+            )
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .contentShape(Capsule())
+    }
+}
+
 
 /// 회의 목록 + 검색 + 선택한 회의 미리보기.
 /// v2는 검색을 첫 화면의 중심 작업으로 두고, 상세 리포트 전체보다 빠른 회고/탐색에 집중한다.
@@ -391,7 +412,7 @@ public struct MeetingLibraryView: View {
             Label("파일 가져오기", systemImage: "tray.and.arrow.down")
                 .font(.system(size: 13, weight: .semibold))
         }
-        .controlSize(.large)
+        .buttonStyle(HeaderSecondaryActionButtonStyle())
         .fixedSize()
         .disabled(hasLiveMeeting || fileImportUseCase.state.isRunning)
         .help(hasLiveMeeting ? "진행 중인 회의를 종료한 뒤 파일을 가져올 수 있어요." : "음성 또는 영상 파일로 회의록을 만들어요.")
@@ -403,7 +424,7 @@ public struct MeetingLibraryView: View {
             Label("용어집", systemImage: "text.book.closed")
                 .font(.system(size: 13, weight: .semibold))
         }
-        .controlSize(.large)
+        .buttonStyle(HeaderSecondaryActionButtonStyle())
         .fixedSize()
         .help("전역 용어집 관리")
         .tutorialTarget(.glossary)
@@ -417,7 +438,7 @@ public struct MeetingLibraryView: View {
             Label("사용법", systemImage: "questionmark.circle")
                 .font(.system(size: 13, weight: .semibold))
         }
-        .controlSize(.large)
+        .buttonStyle(HeaderSecondaryActionButtonStyle())
         .fixedSize()
         .help("앱 사용법 다시 보기")
         .tutorialTarget(.help)
