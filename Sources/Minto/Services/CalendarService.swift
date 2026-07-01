@@ -4,6 +4,7 @@ import Foundation
 public protocol CalendarServiceProtocol: Sendable {
     func requestAccess() async -> Bool
     func upcomingEvents(within interval: TimeInterval) async -> [CalendarEvent]
+    func events(around date: Date, window: TimeInterval) async -> [CalendarEvent]
 }
 
 public struct CalendarEvent: Sendable, Equatable {
@@ -84,6 +85,33 @@ public actor CalendarService: CalendarServiceProtocol {
         Log.calendar.info("calendar upcoming events count=\(events.count, privacy: .public)")
         return events
     }
+
+    public func events(around date: Date, window: TimeInterval) async -> [CalendarEvent] {
+        guard window > 0 else {
+            return []
+        }
+        guard await requestAccess() else {
+            return []
+        }
+
+        let startDate = date.addingTimeInterval(-window)
+        let endDate = date.addingTimeInterval(window)
+        let predicate = eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: nil)
+        let events = eventStore.events(matching: predicate)
+            .sorted { $0.startDate < $1.startDate }
+            .map { event in
+                CalendarEvent(
+                    identifier: event.calendarItemIdentifier,
+                    title: event.title ?? "",
+                    startDate: event.startDate,
+                    endDate: event.endDate,
+                    attendeeNames: (event.attendees ?? []).compactMap(\.name)
+                )
+            }
+
+        Log.calendar.info("calendar surrounding events count=\(events.count, privacy: .public)")
+        return events
+    }
 }
 
 public final class CalendarServiceStub: CalendarServiceProtocol, @unchecked Sendable {
@@ -101,5 +129,12 @@ public final class CalendarServiceStub: CalendarServiceProtocol, @unchecked Send
 
     public func upcomingEvents(within interval: TimeInterval) async -> [CalendarEvent] {
         accessGranted && interval > 0 ? events : []
+    }
+
+    public func events(around date: Date, window: TimeInterval) async -> [CalendarEvent] {
+        guard accessGranted, window > 0 else {
+            return []
+        }
+        return events.filter { abs($0.startDate.timeIntervalSince(date)) <= window }
     }
 }

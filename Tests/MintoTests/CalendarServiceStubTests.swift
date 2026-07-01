@@ -39,6 +39,28 @@ struct CalendarServiceStubTests {
         #expect(negative.isEmpty)
     }
 
+    @Test("기준 시각 주변 과거 이벤트도 반환한다")
+    func returnsPastEventsInsideSurroundingWindow() async {
+        let referenceDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let pastEvent = CalendarEvent(
+            identifier: "past-event",
+            title: "이미 시작한 회의",
+            startDate: referenceDate.addingTimeInterval(-300),
+            endDate: referenceDate.addingTimeInterval(3_300)
+        )
+        let outsideEvent = CalendarEvent(
+            identifier: "outside-event",
+            title: "너무 오래전 회의",
+            startDate: referenceDate.addingTimeInterval(-1_200),
+            endDate: referenceDate.addingTimeInterval(-900)
+        )
+        let service = CalendarServiceStub(events: [pastEvent, outsideEvent])
+
+        let events = await service.events(around: referenceDate, window: 900)
+
+        #expect(events == [pastEvent])
+    }
+
     @Test("권한 거부 시 빈 배열을 반환한다")
     func returnsEmptyEventsWhenAccessDenied() async {
         let event = CalendarEvent(
