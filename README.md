@@ -137,6 +137,7 @@ Resources/                  # 모델·자원 (대용량 모델 파일은 git 제
 - [`docs/work-log.md`](docs/work-log.md) — 작업 로그 인덱스
 - [`docs/stt-engine-benchmark-guide.md`](docs/stt-engine-benchmark-guide.md) — STT 엔진 벤치마크 한 명령 사용법(측정→비교→판정→리포트)
 - [`docs/stt-benchmark-glossary.md`](docs/stt-benchmark-glossary.md) — STT 벤치마크 용어집(비전문가용, 받아쓰기 시험 비유)
+- [`docs/release-preview-checklist.md`](docs/release-preview-checklist.md) — 소수 테스터용 preview zip 배포 체크리스트
 
 ## 라이선스
 
