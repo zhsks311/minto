@@ -137,3 +137,9 @@ Resources/                  # 모델·자원 (대용량 모델 파일은 git 제
 - [`docs/work-log.md`](docs/work-log.md) — 작업 로그 인덱스
 - [`docs/stt-engine-benchmark-guide.md`](docs/stt-engine-benchmark-guide.md) — STT 엔진 벤치마크 한 명령 사용법(측정→비교→판정→리포트)
 - [`docs/stt-benchmark-glossary.md`](docs/stt-benchmark-glossary.md) — STT 벤치마크 용어집(비전문가용, 받아쓰기 시험 비유)
+
+## 라이선스
+
+Minto2는 현재 검토와 개인 평가를 위해 소스가 공개되어 있습니다.
+
+오픈소스 라이선스는 부여하지 않습니다. 작성자의 명시적 허가 없이 재배포, 상업적 사용, 파생 제품 제작을 허용하지 않습니다.
