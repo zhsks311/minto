@@ -89,6 +89,8 @@ Minto2는 반대 방향으로 설계됐습니다.
 ./scripts/bundle.sh --zip       # 위 + 배포용 dist/Minto2.zip 생성
 ```
 
+번들에는 `Resources/AppIcon.icns`가 포함되어 Finder/Dock에서 앱 아이콘이 표시됩니다.
+
 > ⚠️ 이 번들은 **공증(notarization)되지 않습니다.** 받는 사람은 첫 실행 시 한 번만 아래가 필요합니다.
 > - **우클릭 > 열기** → "열기" 확인, 또는
 > - 터미널에서 `xattr -dr com.apple.quarantine Minto2.app`
