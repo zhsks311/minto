@@ -11,10 +11,10 @@ public final class MeetingSetupWindowManager: NSObject, NSWindowDelegate {
     public override init() { super.init() }
 
     /// - Parameters:
-    ///   - onStart: 사용자가 "시작"을 누르면 (topic, glossary)와 함께 호출
+    ///   - onStart: 사용자가 "시작"을 누르면 (topic, glossary, document, inputMode, calendarEventIdentifier)와 함께 호출
     ///   - onCancel: 사용자가 "취소"하거나 창을 닫으면 호출
     public func show(
-        onStart: @escaping (String, String, String, AudioInputMode) -> Void,
+        onStart: @escaping (String, String, String, AudioInputMode, String?) -> Void,
         onCancel: @escaping () -> Void
     ) {
         // 이미 떠 있으면 앞으로만 가져온다 (중복 생성 방지)
@@ -25,9 +25,9 @@ public final class MeetingSetupWindowManager: NSObject, NSWindowDelegate {
         }
 
         let view = MeetingSetupView(
-            onStart: { [weak self] topic, glossary, document, inputMode in
+            onStart: { [weak self] topic, glossary, document, inputMode, calendarEventIdentifier in
                 self?.close()
-                onStart(topic, glossary, document, inputMode)
+                onStart(topic, glossary, document, inputMode, calendarEventIdentifier)
             },
             onCancel: { [weak self] in
                 self?.close()

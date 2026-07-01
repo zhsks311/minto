@@ -1,8 +1,9 @@
 # ADR 0008: EventKit 캘린더·미리알림 권한 도입
 
-상태: Proposed
+상태: Accepted
 작성일: 2026-06-29
-검토: ralplan 합의(Planner → Architect → Critic, Critic APPROVE) 통과. 사람 최종 승인 대기.
+승인일: 2026-06-29 (사용자 "진행하자" 승인)
+검토: ralplan 합의(Planner → Architect → Critic, Critic APPROVE) 통과.
 관련 계획: `docs/work/2026-06-29-meeting-context-eventkit-track-plan.md`
 
 ## Context

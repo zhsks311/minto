@@ -65,6 +65,7 @@ public struct MeetingLibraryView: View {
     @State private var showingExportOptions = false
     @State private var showingConfluenceExport = false
     @State private var showingGlossaryManager = false
+    @State private var showingPendingActionItems = false
     @State private var exportRecord: MeetingRecord?
     // 오른쪽 디테일 영역에 AI 답변 전문을 표시할지 여부.
     // 라이브 회의 디테일이 항상 우선하고, 회의 행/인용 클릭 시 꺼진다.
@@ -300,6 +301,10 @@ public struct MeetingLibraryView: View {
         .sheet(isPresented: $showingGlossaryManager) {
             GlossaryManagementSheet()
         }
+        .sheet(isPresented: $showingPendingActionItems) {
+            PendingActionItemsView(meetings: store.meetings)
+                .frame(width: 620, height: 540)
+        }
         .sheet(isPresented: Binding(
             get: { fileImportSetupURL != nil },
             set: { if !$0 { fileImportSetupURL = nil } }
@@ -359,6 +364,8 @@ public struct MeetingLibraryView: View {
                 searchField
                     .frame(minWidth: 220, idealWidth: 360, maxWidth: 360)
                     .layoutPriority(0)
+                pendingActionItemsButton
+                    .layoutPriority(2)
                 fileImportButton
                     .layoutPriority(2)
                 glossaryButton
@@ -378,6 +385,7 @@ public struct MeetingLibraryView: View {
                 HStack(spacing: 10) {
                     searchField
                         .frame(minWidth: 180, maxWidth: .infinity)
+                    pendingActionItemsButton
                     fileImportButton
                     glossaryButton
                     helpButton
@@ -442,6 +450,16 @@ public struct MeetingLibraryView: View {
         .fixedSize()
         .help("앱 사용법 다시 보기")
         .tutorialTarget(.help)
+    }
+
+    private var pendingActionItemsButton: some View {
+        Button { showingPendingActionItems = true } label: {
+            Label("할일", systemImage: "checklist")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .controlSize(.large)
+        .fixedSize()
+        .help("미완료 할일 모아보기")
     }
 
     private var newMeetingButton: some View {
@@ -1877,7 +1895,7 @@ public struct MeetingLibraryView: View {
 
     private func actionItemRow(_ item: MeetingSummary.ActionItem) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "square")
+            Image(systemName: item.isDone ? "checkmark.square.fill" : "square")
                 .font(.system(size: detailSubBodyFontSize, weight: .semibold))
                 .foregroundColor(.secondary)
                 .padding(.top, 2)

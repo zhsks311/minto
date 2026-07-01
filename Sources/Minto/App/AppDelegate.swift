@@ -30,9 +30,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
     @MainActor
     public func requestStartSession() {
         meetingSetupManager.show(
-            onStart: { [weak self] topic, glossary, document, inputMode in
+            onStart: { [weak self] topic, glossary, document, inputMode, calendarEventIdentifier in
                 guard let self else { return }
-                MeetingContext.shared.start(topic: topic, glossary: glossary, document: document)
+                MeetingContext.shared.start(
+                    topic: topic,
+                    glossary: glossary,
+                    document: document,
+                    calendarEventIdentifier: calendarEventIdentifier
+                )
                 self.reportService.startNewReport(startedAt: Date())
                 self.viewModel.startNewRecordingSession(inputMode: inputMode)
                 self.mainWindowManager.show()
@@ -102,6 +107,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
                 duration: self.viewModel.recordingDuration,
                 summaryGlossary: summaryGlossary,
                 document: MeetingContext.shared.document,
+                calendarEventIdentifier: MeetingContext.shared.calendarEventIdentifier,
                 audioFileName: self.viewModel.lastArchivedAudioFileName
             )
             if let speakerEmbeddings = reconciled?.speakerEmbeddings,
@@ -151,6 +157,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
         duration: TimeInterval,
         summaryGlossary: String? = nil,
         document: String? = nil,
+        calendarEventIdentifier: String? = nil,
         audioFileName: String? = nil
     ) -> MeetingRecord {
         MeetingRecordFactory.makeRecord(
@@ -160,6 +167,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObjec
             duration: duration,
             summaryGlossary: summaryGlossary,
             document: document,
+            calendarEventIdentifier: calendarEventIdentifier,
             audioFileName: audioFileName
         )
     }

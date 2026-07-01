@@ -8,6 +8,14 @@ private enum ConfluenceContextStatusTone {
     case error
 }
 
+private enum CalendarPrefillState: Equatable {
+    case hidden
+    case loading
+    case noPermission
+    case eventFound(CalendarEvent)
+    case accepted(CalendarEvent)
+}
+
 /// "녹음 시작" 시 뜨는 회의 시작 시트.
 /// 주제·용어집을 입력받아 그 회의 세션의 교정 맥락으로 쓴다. 비우고 시작해도 된다.
 public struct MeetingSetupView: View {
@@ -34,22 +42,34 @@ public struct MeetingSetupView: View {
     @State private var confluenceAttachError: String?
     @State private var notionURLInput: String = ""
     @State private var confluenceURLInput: String = ""
+    @State private var calendarPrefillState: CalendarPrefillState = .loading
+    @State private var selectedCalendarEventIdentifier: String?
+    @State private var calendarPrefillEventCount = 0
 
-    private let onStart: (String, String, String, AudioInputMode) -> Void
+    private let onStart: (String, String, String, AudioInputMode, String?) -> Void
     private let onCancel: () -> Void
     private let audioReadinessChecker: AudioInputReadinessChecker
     private let glossarySelectionDefaults: UserDefaults
+    private let calendarService: any CalendarServiceProtocol
+    private let calendarPrefillUseCase: CalendarPrefillUseCase
+    private let calendarPrefillWindow: TimeInterval
 
     public init(
-        onStart: @escaping (String, String, String, AudioInputMode) -> Void,
+        onStart: @escaping (String, String, String, AudioInputMode, String?) -> Void,
         onCancel: @escaping () -> Void,
         audioReadinessChecker: AudioInputReadinessChecker = .live,
-        glossarySelectionDefaults: UserDefaults = .standard
+        glossarySelectionDefaults: UserDefaults = .standard,
+        calendarService: any CalendarServiceProtocol = CalendarService(),
+        calendarPrefillUseCase: CalendarPrefillUseCase = CalendarPrefillUseCase(),
+        calendarPrefillWindow: TimeInterval = 900
     ) {
         self.onStart = onStart
         self.onCancel = onCancel
         self.audioReadinessChecker = audioReadinessChecker
         self.glossarySelectionDefaults = glossarySelectionDefaults
+        self.calendarService = calendarService
+        self.calendarPrefillUseCase = calendarPrefillUseCase
+        self.calendarPrefillWindow = calendarPrefillWindow
     }
 
     public var body: some View {
@@ -64,6 +84,8 @@ public struct MeetingSetupView: View {
                     .font(.callout)
                     .foregroundColor(.secondary)
             }
+
+            calendarPrefillSection
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("회의 주제")
@@ -89,7 +111,9 @@ public struct MeetingSetupView: View {
                 Spacer()
                 Button("닫기") { onCancel() }
                     .keyboardShortcut(.cancelAction)
-                Button("녹음 시작") { onStart(topic, combinedGlossary, combinedDocument, audioInputMode) }
+                Button("녹음 시작") {
+                    onStart(topic, combinedGlossary, combinedDocument, audioInputMode, selectedCalendarEventIdentifier)
+                }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(ProminentActionButtonStyle())
                     .disabled(!audioReadiness.canStartRecording)
@@ -99,6 +123,9 @@ public struct MeetingSetupView: View {
         .frame(width: 480)
         .task(id: audioInputMode) {
             await refreshAudioReadiness(for: audioInputMode)
+        }
+        .task {
+            await loadCalendarPrefill()
         }
         .onAppear {
             restoreGlossarySelection()
@@ -112,6 +139,97 @@ public struct MeetingSetupView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await refreshAudioReadiness(for: audioInputMode) }
         }
+    }
+
+    @ViewBuilder
+    private var calendarPrefillSection: some View {
+        switch calendarPrefillState {
+        case .hidden:
+            EmptyView()
+        case .loading:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("캘린더 확인 중")
+                    .font(.callout.weight(.medium))
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.07))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        case .noPermission:
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                Text("캘린더 권한이 없어요 — 설정에서 허용하세요")
+                    .font(.callout.weight(.medium))
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        case .eventFound(let event):
+            calendarEventCard(event)
+        case .accepted(let event):
+            HStack(spacing: 6) {
+                Image(systemName: "calendar.badge.checkmark")
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
+                Text("캘린더에서 가져옴")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.accentColor)
+                Text(calendarEventTimeText(for: event))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color.accentColor.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+    }
+
+    private func calendarEventCard(_ event: CalendarEvent) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "calendar")
+                .font(.body)
+                .foregroundColor(.accentColor)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("다음 일정")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(event.title.isEmpty ? "제목 없는 일정" : event.title)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(calendarEventTimeText(for: event))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 6) {
+                Button("무시") { ignoreCalendarPrefill() }
+                    .buttonStyle(.bordered)
+                Button("수락") { acceptCalendarPrefill(event) }
+                    .buttonStyle(ProminentActionButtonStyle(horizontalPadding: 10, verticalPadding: 5))
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func calendarEventTimeText(for event: CalendarEvent) -> String {
+        event.startDate.formatted(date: .omitted, time: .shortened)
     }
 
     private var audioInputPicker: some View {
@@ -732,6 +850,52 @@ public struct MeetingSetupView: View {
                 : "Confluence 문서 \(result.documents.count)개를 참고자료로 사용해요."
             confluenceStatusTone = result.documents.isEmpty ? .neutral : .success
         }
+    }
+
+    @MainActor
+    private func loadCalendarPrefill() async {
+        calendarPrefillState = .loading
+        selectedCalendarEventIdentifier = nil
+        calendarPrefillEventCount = 0
+        Log.calendar.info("calendar prefill lookup started")
+
+        guard calendarPrefillWindow > 0 else {
+            calendarPrefillState = .hidden
+            Log.calendar.info("calendar prefill lookup completed access=\(false, privacy: .public) eventCount=\(0, privacy: .public) matched=\(false, privacy: .public) accepted=\(false, privacy: .public)")
+            return
+        }
+
+        guard await calendarService.requestAccess() else {
+            calendarPrefillState = .noPermission
+            Log.calendar.info("calendar prefill lookup completed access=\(false, privacy: .public) eventCount=\(0, privacy: .public) matched=\(false, privacy: .public) accepted=\(false, privacy: .public)")
+            return
+        }
+
+        let now = Date()
+        let events = await calendarService.events(around: now, window: calendarPrefillWindow)
+        calendarPrefillEventCount = events.count
+        let event = calendarPrefillUseCase.findBestMatch(events: events, relativeTo: now, window: calendarPrefillWindow)
+        if let event {
+            calendarPrefillState = .eventFound(event)
+        } else {
+            calendarPrefillState = .hidden
+        }
+        Log.calendar.info("calendar prefill lookup completed access=\(true, privacy: .public) eventCount=\(events.count, privacy: .public) matched=\(event != nil, privacy: .public) accepted=\(false, privacy: .public)")
+    }
+
+    private func acceptCalendarPrefill(_ event: CalendarEvent) {
+        selectedCalendarEventIdentifier = event.identifier
+        if topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            topic = event.title
+        }
+        calendarPrefillState = .accepted(event)
+        Log.calendar.info("calendar prefill selection accepted=\(true, privacy: .public) eventCount=\(calendarPrefillEventCount, privacy: .public)")
+    }
+
+    private func ignoreCalendarPrefill() {
+        selectedCalendarEventIdentifier = nil
+        calendarPrefillState = .hidden
+        Log.calendar.info("calendar prefill selection accepted=\(false, privacy: .public) eventCount=\(calendarPrefillEventCount, privacy: .public)")
     }
 
     @MainActor
