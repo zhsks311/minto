@@ -36,6 +36,7 @@
 | 25 | 2026-06-24 | [다중 소스 문서 수집 Phase 0~4](work-log/2026-06-24-25-multi-source-document-ingestion-phase0-4.md) | 로컬 파일·OCR·Notion·Confluence 참고 문서 수집 레이어와 회의 시작 첨부 UI |
 | 26 | 2026-06-24 | [문서 프롬프트 표현 개정 Phase 5~6](work-log/2026-06-24-26-document-prompt-representation-phase5-6.md) | 교정은 terms-only, 요약은 문서 요약본으로 분리하고 fail-soft 폴백 유지 |
 | 27 | 2026-06-29 | [LLM 출력 형식 계약 도입](work-log/2026-06-29-27-llm-output-format-contract.md) | finalSummary 분기를 outputFormat 계약으로 분리하고 provider별 structured output 지원/미지원 경로 명시 |
+| 28 | 2026-07-01 | [회의 전후 EventKit 트랙](work-log/2026-07-01-28-eventkit-meeting-context-track.md) | 캘린더 프리필·미리알림 내보내기·발화 분석·미완료 할일 뷰를 병렬 Wave로 구현, 새 의존성 0·809 테스트 통과 |
 
 ## 남은 과제
 

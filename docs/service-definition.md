@@ -55,7 +55,7 @@ Minto2는 Mac에서 회의를 기록하고, 전사와 요약을 사용자가 다
 
 ## 3. 현재 기능
 
-> 2026-06-28 기준. 초안의 "확장 예정" 다수가 구현되어 현재 기능으로 이동했고, 화자분리·문서 첨부·Claude Code CLI provider·용어집 메인 관리가 현재 기능에 포함됐다.
+> 2026-07-01 기준. 초안의 "확장 예정" 다수가 구현되어 현재 기능으로 이동했고, 화자분리·문서 첨부·Claude Code CLI provider·용어집 메인 관리에 더해 회의 전후 EventKit 연동(캘린더 프리필·미리알림 내보내기)과 발화 분석이 현재 기능에 포함됐다.
 
 **입력·전사**
 - 메뉴바 앱 및 회의 목록 메인 윈도우
@@ -71,6 +71,12 @@ Minto2는 Mac에서 회의를 기록하고, 전사와 요약을 사용자가 다
 - 화자분리 provider 실패 시 채널 기반 라벨로 자동 강등하는 fail-soft 경로
 - 채널 기반 화자 라벨링 (`ChannelSpeakerLabeler`)
 - 화자 라벨 편집·실명 지정, 보이스프린트로 회의 간 화자 매칭 (`VoiceprintMatching`, `VoiceprintStore`)
+
+**회의 전후 · 발화 분석 (신규)**
+- 회의 시작 시 macOS 캘린더의 다가오는 일정을 감지해 제목·시각·참석자를 프리필한다. 기준 시각 ±15분 창에서 가장 가까운 일정 1개를 제안하고, 사용자가 수락할 때만 빈 주제를 채운다 (`CalendarService`, `CalendarPrefillUseCase`). 저장된 회의는 캘린더 일정 식별자와 매칭한다 (`MeetingRecord.calendarEventIdentifier`).
+- 화자별 발화 시간·비율을 회의 상세에 표시한다 (`TalkTimeAnalyzer`, `MeetingSummaryView`). 기존 화자분리 세그먼트를 집계하며, 화자 미상 구간은 "알 수 없음"으로 별도 집계한다.
+- 회의 할 일(ActionItem)에 완료 상태를 두고, macOS 미리알림으로 내보낸다 (`RemindersService`, `ActionItemReminderUseCase`). 여러 회의에 걸친 미완료 할 일을 모아 본다 (`PendingActionItemsUseCase`, `PendingActionItemsView`).
+- 캘린더·미리알림은 EventKit 온디바이스 접근이며 새 외부 의존성이 없다. 권한 거부 시 기능만 숨기고 녹음·전사·저장 흐름은 유지한다(fail-soft). 미리알림은 단방향 내보내기이며, 미리알림 앱에서 완료해도 앱 내 완료 상태는 바뀌지 않는다. (근거: ADR 0008)
 
 **교정·요약**
 - LLM 기반 전사 교정과 증분/최종 요약 (교정 설정과 요약 설정 분리 — `LLMSummarySettingsService`)
