@@ -5,6 +5,7 @@
 ## 구성
 
 - `index.html` — 제품 소개 랜딩 페이지 (CSS 인라인)
+- `download.html` — 현재 배포 상태와 설치 안내
 - `guide.html` — 회의 기록·요약·검색·내보내기 사용법
 - `privacy.html` — 로컬 처리와 외부 전송 데이터 경계
 - `troubleshooting.html` — 권한·전사·요약·내보내기 문제 해결
