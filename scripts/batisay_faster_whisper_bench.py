@@ -20,7 +20,7 @@ MAX_GAP_SECONDS = 1.5
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Benchmark BatiSay CT2 with faster-whisper on Minto meeting samples.")
-    parser.add_argument("--raw-dir", default="/Users/d66hjkxwt9/Idea/private/minto2/sample/meeting/raw")
+    parser.add_argument("--raw-dir", default="~/Idea/private/minto2/sample/meeting/raw")
     parser.add_argument("--wav", default="haengan_20260526_full.wav")
     parser.add_argument("--smi", default="haengan_20260526_smi.json")
     parser.add_argument("--repo-id", default="batiai/batisay-ko-base")
