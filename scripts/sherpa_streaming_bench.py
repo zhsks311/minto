@@ -17,7 +17,7 @@ SAMPLE_RATE = 16000
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Benchmark sherpa-onnx Korean streaming Zipformer on Minto meeting samples.")
-    parser.add_argument("--raw-dir", default="/Users/d66hjkxwt9/Idea/private/minto2/sample/meeting/raw")
+    parser.add_argument("--raw-dir", default="~/Idea/private/minto2/sample/meeting/raw")
     parser.add_argument("--wav", default="haengan_20260526_full.wav")
     parser.add_argument("--smi", default="haengan_20260526_smi.json")
     parser.add_argument("--repo-id", default="kangkyu/icefall-asr-ko-streaming-zipformer-72m")

@@ -740,8 +740,8 @@ struct ConfluenceSettingsInputValidatorTests {
 
     @Test("@ 없는 이메일은 전체 계정 이메일 경고")
     func warnsWhenEmailHasNoAtSign() {
-        #expect(ConfluenceSettingsInputValidator.emailWarning(for: "jaehwi.kim") == "Atlassian 계정 이메일 전체를 입력하세요")
-        #expect(!ConfluenceSettingsInputValidator.hasCompleteAccountEmail("jaehwi.kim"))
+        #expect(ConfluenceSettingsInputValidator.emailWarning(for: "test.user") == "Atlassian 계정 이메일 전체를 입력하세요")
+        #expect(!ConfluenceSettingsInputValidator.hasCompleteAccountEmail("test.user"))
     }
 
     @Test("전체 이메일과 빈 값은 인라인 경고를 내지 않는다")
