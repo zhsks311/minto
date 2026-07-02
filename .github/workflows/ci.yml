@@ -14,11 +14,15 @@ concurrency:
 
 jobs:
   build-test:
-    runs-on: macos-14          # Xcode 16 / Swift 6 toolchain 기본 탑재
+    runs-on: macos-15          # Xcode 16 / Swift 6 toolchain 기본 탑재 (Package는 swift-tools 6.0 필수)
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0        # 아래 whitespace 비교에 base 커밋이 필요
+
+      # 실제 사용된 툴체인을 로그에 남긴다 (Swift 6 미만이면 빌드가 실패하므로 진단용)
+      - name: Toolchain
+        run: swift --version
 
       # 공백 오류·conflict 마커 검출 (CLAUDE.md 기본 검증의 `git diff --check`)
       - name: Whitespace / conflict marker check

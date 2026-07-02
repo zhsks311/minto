@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   bundle:
-    runs-on: macos-14
+    runs-on: macos-15          # Swift 6 release 빌드 (bundle.sh)에 Xcode 16+ 필요
     steps:
       - uses: actions/checkout@v4
 
