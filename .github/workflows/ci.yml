@@ -15,7 +15,10 @@ concurrency:
 
 jobs:
   build-test:
-    runs-on: macos-15          # Xcode 16 / Swift 6 toolchain 기본 탑재 (Package는 swift-tools 6.0 필수)
+    runs-on: macos-26          # macOS 26 SDK + Xcode 26(Swift 6.3) 필수.
+                               # SpeechAnalyzer/SpeechTranscriber가 macOS 26 API라 하위 SDK에선
+                               # #available 게이팅에도 불구하고 컴파일 자체가 불가(심볼 부재).
+                               # macos-15(Swift 6.1.2)에선 SDK 심볼 부재 + 구버전 Sendable로 빌드 실패.
     steps:
       - uses: actions/checkout@v4
         with:

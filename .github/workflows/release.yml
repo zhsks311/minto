@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   bundle:
-    runs-on: macos-15          # Swift 6 release 빌드 (bundle.sh)에 Xcode 16+ 필요
+    runs-on: macos-26          # macOS 26 SDK + Xcode 26 필수 (SpeechAnalyzer API가 macOS 26 전용)
     steps:
       - uses: actions/checkout@v4
 
