@@ -7,6 +7,7 @@ on:
     branches: [staging, main]
   push:
     branches: [staging]
+  workflow_dispatch:          # UI/`gh workflow run`으로 수동 실행 (재검증·재실행용)
 
 concurrency:
   group: ci-${{ github.ref }}
