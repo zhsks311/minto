@@ -1,4 +1,0 @@
-case_id,case_type,repeat_index,status,latency_seconds,term_recall,json_valid,required_field_recall,server_rss_peak_mb,error
-correction_terms,correction,0,passed,10.733,0.0,,,121.31,
-summary_json,summary,0,passed,8.311,1.0,True,1.0,76.97,
-grounded_answer,answer,0,passed,1.638,0.3333333333333333,,,74.08,

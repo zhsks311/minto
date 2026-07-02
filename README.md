@@ -99,7 +99,7 @@ Minto2는 반대 방향으로 설계됐습니다.
 > - **우클릭 > 열기** → "열기" 확인, 또는
 > - 터미널에서 `xattr -dr com.apple.quarantine Minto2.app`
 >
-> 이 방식은 **개발자/소수 동료 배포**용입니다. 외부 일반 사용자에게 "더블클릭하면 바로 열리는" 경험으로 배포하려면 유료 Apple Developer Program($99/년) + Developer ID 서명 + 공증이 필요합니다. 자세한 배경은 [`docs/dev-onboarding-and-distribution-plan.md`](docs/dev-onboarding-and-distribution-plan.md) 참고.
+> 이 방식은 **개발자/소수 동료 배포**용입니다. 외부 일반 사용자에게 "더블클릭하면 바로 열리는" 경험으로 배포하려면 유료 Apple Developer Program($99/년) + Developer ID 서명 + 공증이 필요합니다.
 
 ---
 
@@ -116,7 +116,7 @@ Sources/
 └── MintoApp/               # minto2: 실행 타깃 (Info.plist 주입)
 Tests/MintoTests/           # Swift 단위·통합 테스트
 scripts/                    # dev.sh (개발 빌드) + Python STT 분석·벤치 도구
-docs/                       # 기능 정의·작업 로그·STT 연구 문서
+docs/                       # 공개 문서 (기능 정의·디자인 가이드·배포/브랜치 문서)
 Resources/                  # 모델·자원 (대용량 모델 파일은 git 제외)
 ```
 
@@ -133,8 +133,6 @@ Resources/                  # 모델·자원 (대용량 모델 파일은 git 제
 ## 더 읽을거리
 
 - [`docs/service-definition.md`](docs/service-definition.md) — 기능 정의서
-- [`docs/mac-meeting-recorder.md`](docs/mac-meeting-recorder.md) — 아키텍처 설계·결정 기록
-- [`docs/work-log.md`](docs/work-log.md) — 작업 로그 인덱스
 - [`docs/stt-engine-benchmark-guide.md`](docs/stt-engine-benchmark-guide.md) — STT 엔진 벤치마크 한 명령 사용법(측정→비교→판정→리포트)
 - [`docs/stt-benchmark-glossary.md`](docs/stt-benchmark-glossary.md) — STT 벤치마크 용어집(비전문가용, 받아쓰기 시험 비유)
 - [`docs/release-preview-checklist.md`](docs/release-preview-checklist.md) — 소수 테스터용 preview zip 배포 체크리스트
