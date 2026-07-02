@@ -1,0 +1,59 @@
+name: Release (preview)
+
+# v* 태그를 push하면 자가서명(ad-hoc) .app + zip을 만들어
+# GitHub Release(prerelease)에 첨부한다.
+#
+# ⚠️ 현재는 Apple Developer 유료 계정이 없어 공증(notarization)을 하지 않는다.
+#    받는 사람은 첫 실행 시 우클릭 > 열기가 필요하다 (docs/release-preview-checklist.md).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write            # gh release create 에 필요
+
+jobs:
+  bundle:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # 러너엔 "Minto2 Dev" 인증서가 없으므로 ad-hoc(-) 서명.
+      # 공증이 없으면 자가서명이든 ad-hoc이든 Gatekeeper 신뢰는 동일하다.
+      - name: Bundle .app + zip
+        run: MINTO_SIGN_IDENTITY=- ./scripts/bundle.sh --zip
+
+      # ── 유료 Apple Developer 계정 확보 시 아래를 활성화 (지금은 미사용) ──
+      # 선행 PoC 필수: cs.disable-library-validation(Metal 셰이더) ↔ Hardened Runtime
+      #               ↔ 공증 3자 호환성 (docs/dev-onboarding-and-distribution-plan.md).
+      #
+      # - name: Developer ID 서명
+      #   env:
+      #     DEV_ID_CERT_P12: ${{ secrets.DEV_ID_CERT_P12 }}   # base64 인코딩된 .p12
+      #     DEV_ID_CERT_PW: ${{ secrets.DEV_ID_CERT_PW }}
+      #   run: |
+      #     echo "$DEV_ID_CERT_P12" | base64 --decode > /tmp/devid.p12
+      #     security create-keychain -p "" build.keychain
+      #     security import /tmp/devid.p12 -k build.keychain -P "$DEV_ID_CERT_PW" -T /usr/bin/codesign
+      #     security list-keychains -s build.keychain
+      #     MINTO_SIGN_IDENTITY="Developer ID Application" ./scripts/bundle.sh
+      #
+      # - name: 공증 + stapling
+      #   env:
+      #     AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+      #     AC_API_ISSUER: ${{ secrets.AC_API_ISSUER }}
+      #     AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
+      #   run: |
+      #     xcrun notarytool submit dist/Minto2.zip \
+      #       --key <(echo "$AC_API_KEY_P8") --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER" --wait
+      #     xcrun stapler staple dist/Minto2.app
+      #     ditto -c -k --keepParent dist/Minto2.app dist/Minto2.zip   # staple 후 재압축
+
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/Minto2.zip \
+            --prerelease \
+            --title "$GITHUB_REF_NAME" \
+            --notes "자가서명 preview 빌드입니다. 첫 실행은 우클릭 → 열기가 필요합니다. 설치 안내: docs/release-preview-checklist.md"

@@ -1,0 +1,46 @@
+name: CI
+
+# feat/* → staging → main 흐름을 자동 게이트로 강제한다.
+# staging/main 으로 가는 PR과 staging push에서 빌드+테스트를 검증한다.
+on:
+  pull_request:
+    branches: [staging, main]
+  push:
+    branches: [staging]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: macos-14          # Xcode 16 / Swift 6 toolchain 기본 탑재
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # 아래 whitespace 비교에 base 커밋이 필요
+
+      # 공백 오류·conflict 마커 검출 (CLAUDE.md 기본 검증의 `git diff --check`)
+      - name: Whitespace / conflict marker check
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          if [ -n "$base" ]; then
+            git diff --check "$base" HEAD
+          else
+            git diff --check HEAD^ HEAD
+          fi
+
+      # SPM 빌드 산출물 캐시 (WhisperKit/FluidAudio 등 대형 의존성 재빌드 회피)
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/minto2-build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build
+        run: swift build --disable-sandbox --scratch-path /tmp/minto2-build
+
+      # 테스트는 mock(로컬 URL·MockURLProtocol) 기반이라 모델 다운로드·네트워크 불필요.
+      - name: Test
+        run: swift test --disable-sandbox --scratch-path /tmp/minto2-test

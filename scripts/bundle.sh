@@ -32,6 +32,13 @@ MAKE_ZIP=0
 [ "${1:-}" = "--zip" ] && MAKE_ZIP=1
 
 assert_identity() {
+  # MINTO_SIGN_IDENTITY=- 이면 ad-hoc 서명. CI 러너처럼 "Minto2 Dev" 인증서가
+  # 없는 환경용. 자가서명이든 ad-hoc이든 공증이 없으면 Gatekeeper 신뢰는 동일
+  # (둘 다 rejected → 첫 실행 우클릭>열기 필요)하므로 preview 배포엔 등가다.
+  if [ "$IDENTITY" = "-" ]; then
+    echo "→ ad-hoc 서명 (인증서 없음 — CI/러너용, Gatekeeper 신뢰 없음)"
+    return
+  fi
   if ! security find-identity -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
     echo "❌ 코드서명 인증서 '$IDENTITY' 를 찾을 수 없습니다." >&2
     echo "   README의 '1회 설정: 코드서명 인증서'를 참고해 먼저 만드세요." >&2
