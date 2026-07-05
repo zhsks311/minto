@@ -30,8 +30,11 @@
 <a class="skip" href="#main">본문으로 건너뛰기</a>
 <nav>
   <div class="nav-inner">
-    <a class="brand" href="index.html" aria-label="Minto2 홈으로 이동"><img src="assets/app-icon.png" alt="" /><span>Minto2</span></a>
-    <div class="nav-links" aria-label="문서 메뉴">
+    <a class="brand" href="index.html" aria-label="Minto2 홈으로 이동">
+      <img src="assets/app-icon.png" alt="" />
+      <span>Minto2</span>
+    </a>
+    <div class="nav-links" aria-label="주요 메뉴">
       <a href="index.html">소개</a>
       <a href="download.html">다운로드</a>
       <a href="guide.html">사용법</a>
@@ -52,9 +55,9 @@
   </header>
 
   <section class="wrap grid" aria-label="핵심 데이터 원칙">
-    <article class="card"><span class="big">안</span><h2>음성 전사는 로컬</h2><p>회의 음성은 WhisperKit 기반 로컬 STT 흐름에서 처리됩니다. 전사를 위해 회의 음성 자체를 서버로 올리는 방향이 아닙니다.</p></article>
-    <article class="card"><span class="big">선</span><h2>LLM은 선택</h2><p>교정, 요약, 답변 생성에서 클라우드 provider를 고르면 텍스트가 외부로 나갈 수 있습니다. 로컬 LLM을 고르면 이 경계를 줄일 수 있습니다.</p></article>
-    <article class="card"><span class="big">잠</span><h2>비밀값은 Keychain</h2><p>API token 같은 비밀값은 기본적으로 macOS Keychain에 저장합니다. 개발용 file 기반 저장은 opt-in 경로입니다.</p></article>
+    <article class="card"><span class="big">로컬</span><h2>음성 전사는 로컬</h2><p>회의 음성은 WhisperKit 기반 로컬 STT 흐름에서 처리됩니다. 전사를 위해 회의 음성 자체를 서버로 올리는 방향이 아닙니다.</p></article>
+    <article class="card"><span class="big">선택</span><h2>LLM은 선택</h2><p>교정, 요약, 답변 생성에서 클라우드 provider를 고르면 텍스트가 외부로 나갈 수 있습니다. 로컬 LLM을 고르면 이 경계를 줄일 수 있습니다.</p></article>
+    <article class="card"><span class="big">보관</span><h2>비밀값은 Keychain</h2><p>API token 같은 비밀값은 기본적으로 macOS Keychain에 저장합니다. 개발용 file 기반 저장은 opt-in 경로입니다.</p></article>
   </section>
 
   <section class="section">
