@@ -4,9 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Minto2 다운로드 — 현재 배포 상태와 설치 안내</title>
-<meta name="description" content="Minto2의 현재 배포 상태와 설치 방법을 안내합니다. 지금은 정식 다운로드보다 직접 빌드 또는 소수 공유 빌드를 기준으로 안내합니다." />
+<meta name="description" content="Apple Silicon Mac용 Minto 0.0.1 Preview를 다운로드하고 설치하는 방법을 안내합니다." />
 <meta property="og:title" content="Minto2 다운로드" />
-<meta property="og:description" content="Minto2는 아직 정식 다운로드 빌드를 제공하지 않습니다. 직접 빌드하거나 공유받은 preview 빌드를 설치하는 방법을 안내합니다." />
+<meta property="og:description" content="GitHub Releases에서 Minto 0.0.1 Preview를 다운로드할 수 있습니다. macOS 14 이상과 Apple Silicon을 지원합니다." />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="assets/app-icon.png" />
 <link rel="icon" type="image/png" href="assets/app-icon.png" />
@@ -54,7 +54,6 @@
   h1 { margin: 14px 0 18px; max-width: 16ch; font-family: var(--serif); font-size: clamp(2.7rem, 6.3vw, 4.7rem); font-weight: 400; line-height: 1.1; letter-spacing: -.035em; }
   .lead { max-width: 68ch; margin: 0; font-size: clamp(1.04rem, 1.8vw, 1.22rem); }
   .content { display: grid; gap: 18px; padding-bottom: 84px; }
-  .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .card { padding: 28px; background: var(--card); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 18px 52px -44px rgba(18,59,53,.4); }
   .card h2 { margin: 0 0 10px; font-family: var(--serif); font-size: clamp(1.75rem, 3vw, 2.35rem); font-weight: 400; letter-spacing: -.02em; }
   .card h3 { margin: 20px 0 8px; font-size: 1.04rem; }
@@ -73,7 +72,7 @@
   .foot-inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
   footer a { color: var(--ink-2); text-decoration: none; font-weight: 700; }
   :focus-visible { outline: 3px solid var(--green); outline-offset: 3px; border-radius: 8px; }
-  @media (max-width: 860px) { .grid, .choice-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
   @media (max-width: 680px) { .nav-links a:not(.repo):not([aria-current="page"]) { display: none; } .nav-inner, .wrap { padding-left: 20px; padding-right: 20px; } .hero { padding-top: 58px; } .card { padding: 22px; } }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .skip { transition: none; } }
 </style>
@@ -101,22 +100,19 @@
   <header class="hero">
     <div class="wrap">
       <span class="eyebrow">다운로드</span>
-      <h1>아직 정식 다운로드 빌드는 없습니다.</h1>
-      <p class="lead">지금은 직접 빌드해서 실행하거나, 신뢰하는 사람에게 받은 preview 빌드를 설치하는 단계입니다. 일반 사용자용 공증 배포는 준비 중입니다.</p>
+      <h1>Minto 0.0.1 Preview를 받을 수 있습니다.</h1>
+      <p class="lead">Apple Silicon Mac에서 사용할 수 있는 공개 Preview 빌드입니다. Apple 공증을 받지 않아 처음 실행할 때 macOS 확인 절차가 필요합니다.</p>
     </div>
   </header>
 
   <div class="wrap content">
     <section class="card">
-      <span class="status">현재 상태</span>
-      <h2>지금은 정식 설치 파일을 제공하지 않습니다.</h2>
-      <p>GitHub Releases에서 바로 받을 수 있는 공개 빌드는 아직 없습니다. 아래 두 가지 방법 중 하나로 확인할 수 있습니다.</p>
-      <div class="choice-grid">
-        <div class="mini"><h3>직접 빌드</h3><p>개발 환경을 준비한 뒤 저장소에서 앱을 빌드해 실행합니다.</p></div>
-        <div class="mini"><h3>공유받은 preview 빌드</h3><p>신뢰하는 사람에게 받은 `.app` 번들을 설치합니다. 첫 실행 때 macOS 확인 절차가 필요할 수 있습니다.</p></div>
-      </div>
-      <p class="note">일반 사용자에게 더블클릭으로 바로 열리는 앱을 제공하려면 Developer ID 서명과 공증이 필요합니다.</p>
-      <a class="btn" href="https://github.com/zhsks311/minto">GitHub에서 코드 보기 →</a>
+      <span class="status">공개 Preview</span>
+      <h2>현재 버전은 0.0.1입니다.</h2>
+      <p>아래 버튼을 누르면 앱 설치 파일인 <code>Minto.zip</code>을 바로 내려받습니다. GitHub가 함께 표시하는 Source code 압축 파일은 앱이 아닙니다.</p>
+      <p class="note">이 빌드는 Apple 공증을 받지 않았습니다. 설치 후 Finder의 응용 프로그램에서 Minto를 우클릭하고 <strong>열기</strong>를 선택하세요.</p>
+      <a class="btn" href="https://github.com/zhsks311/minto/releases/download/v0.0.1/Minto.zip">Minto 0.0.1 다운로드 →</a>
+      <p><a href="https://github.com/zhsks311/minto/releases/tag/v0.0.1">릴리스 정보와 파일 해시 확인 →</a></p>
     </section>
 
     <section class="card">
@@ -129,34 +125,35 @@
     </section>
 
     <section class="card">
-      <h2>직접 빌드해서 실행하기</h2>
-      <p>저장소를 받은 뒤 프로젝트 README의 개발자 안내를 따릅니다. Keychain 권한이 안정적으로 유지되도록 `swift run` 대신 프로젝트 스크립트를 사용합니다.</p>
+      <h2>설치하기</h2>
+      <p>내려받은 ZIP을 풀고 앱을 응용 프로그램 폴더로 옮깁니다.</p>
       <ol class="steps">
-        <li><strong>저장소를 받습니다.</strong><br />GitHub에서 코드를 내려받습니다.</li>
-        <li><strong>자가서명 코드서명 인증서를 준비합니다.</strong><br />이름은 기본적으로 <code>Minto2 Dev</code>를 사용합니다.</li>
-        <li><strong><code>./scripts/dev.sh run</code>으로 실행합니다.</strong><br />빌드, 서명, 실행을 한 번에 처리합니다.</li>
+        <li><strong><code>Minto.zip</code>의 압축을 풉니다.</strong><br />압축을 풀면 <code>Minto.app</code>이 나타납니다.</li>
+        <li><strong><code>Minto.app</code>을 응용 프로그램 폴더로 옮깁니다.</strong><br />Finder 사이드바의 응용 프로그램으로 드래그하면 됩니다.</li>
+        <li><strong>처음에는 우클릭 후 열기를 사용합니다.</strong><br />응용 프로그램 폴더에서 Minto를 우클릭하고 <strong>열기</strong>를 선택합니다.</li>
+        <li><strong>macOS 경고에서 다시 열기를 선택합니다.</strong><br />앱의 출처를 확인한 뒤 <strong>열기</strong>를 누릅니다.</li>
+        <li><strong>필요한 권한을 허용합니다.</strong><br />회의 전사에 필요한 마이크와 시스템 오디오 권한을 허용합니다.</li>
       </ol>
     </section>
 
     <section class="card">
-      <h2>공유받은 preview 빌드를 설치하기</h2>
-      <p>자가서명된 `.app`은 공증된 앱처럼 바로 열리지 않을 수 있습니다. 먼저 신뢰하는 경로에서 받은 빌드인지 확인하세요.</p>
+      <h2>macOS에서 열리지 않을 때</h2>
+      <p>더블클릭하면 “Apple에서 악성 소프트웨어가 있는지 확인할 수 없습니다”라는 경고가 나타날 수 있습니다. 앱의 출처를 확인했다면 아래 순서로 여세요.</p>
       <ol class="steps">
-        <li><strong>압축을 풉니다.</strong><br />`Minto2.app`을 원하는 위치로 옮깁니다.</li>
-        <li><strong>처음에는 우클릭 후 열기를 사용합니다.</strong><br />macOS 경고가 뜨면 다시 “열기”를 선택합니다.</li>
-        <li><strong>필요한 권한을 허용합니다.</strong><br />마이크와 시스템 사운드 관련 권한을 허용합니다.</li>
+        <li><strong>Finder에서 응용 프로그램을 엽니다.</strong><br />설치한 <code>Minto.app</code>을 찾습니다.</li>
+        <li><strong>Minto를 우클릭하고 열기를 선택합니다.</strong><br />단축 메뉴의 <strong>열기</strong>를 누릅니다.</li>
+        <li><strong>경고창에서 열기를 확인합니다.</strong><br />이 확인은 처음 실행할 때만 필요합니다.</li>
       </ol>
-      <p class="note">터미널에 익숙하다면 quarantine 속성을 제거할 수도 있지만, 기본 안내는 우클릭 후 열기입니다.</p>
+      <p class="note">그래도 열리지 않으면 <a href="troubleshooting.html">문제 해결 안내</a>를 확인하세요.</p>
     </section>
 
     <section class="card">
-      <h2>정식 배포 전 필요한 일</h2>
-      <p>누구나 내려받아 바로 실행할 수 있게 하려면 아래 준비가 필요합니다.</p>
+      <h2>Preview 빌드 안내</h2>
+      <p>Minto 0.0.1은 기능을 먼저 사용해 볼 수 있도록 공개한 Preview 버전입니다.</p>
       <ol class="steps">
-        <li><strong>.app 번들 생성 자동화</strong><br />릴리스 빌드, 아이콘, Info.plist, 리소스를 표준 앱 번들로 묶습니다.</li>
-        <li><strong>Developer ID 서명</strong><br />유료 Apple Developer Program으로 Developer ID Application 인증서를 사용합니다.</li>
-        <li><strong>공증과 stapling</strong><br />Gatekeeper 경고를 줄이기 위해 notarytool 제출과 stapler 처리를 통과시킵니다.</li>
-        <li><strong>GitHub Releases 또는 DMG 배포</strong><br />사용자는 정식 릴리스 페이지에서 내려받고, 문서는 이 페이지에서 바로 연결합니다.</li>
+        <li><strong>지원 환경을 확인하세요.</strong><br />macOS 14 이상이 설치된 Apple Silicon Mac에서 사용할 수 있습니다.</li>
+        <li><strong>첫 전사 전에 인터넷 연결이 필요할 수 있습니다.</strong><br />음성 전사 모델을 처음 한 번 내려받은 뒤에는 전사를 기기 안에서 처리합니다.</li>
+        <li><strong>중요한 회의 전에는 짧게 시험하세요.</strong><br />마이크와 시스템 오디오가 정상적으로 들어오는지 먼저 확인하세요.</li>
       </ol>
     </section>
   </div>
@@ -164,7 +161,7 @@
 
 <footer>
   <div class="wrap foot-inner">
-    <span>Minto2 다운로드 · 현재는 직접 빌드와 preview 빌드 중심</span>
+    <span>Minto2 0.0.1 Preview 다운로드</span>
     <span><a href="guide.html">사용법</a> · <a href="troubleshooting.html">문제 해결</a></span>
   </div>
 </footer>
