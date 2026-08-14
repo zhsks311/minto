@@ -1,6 +1,6 @@
-# Minto2 소개 사이트 (GitHub Pages)
+# Minto 소개 사이트 (GitHub Pages)
 
-이 브랜치(`gh-pages`)는 Minto2 공개 소개 사이트만 담는 정적 GitHub Pages 브랜치다. 앱 소스 브랜치와 merge하지 않는다.
+이 브랜치(`gh-pages`)는 Minto 공개 소개 사이트만 담는 정적 GitHub Pages 브랜치다. 앱 소스 브랜치와 merge하지 않는다.
 
 ## 역할
 
