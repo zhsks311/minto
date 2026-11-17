@@ -37,7 +37,7 @@
   a { color: inherit; }
   h1, h2, h3, p { word-break: keep-all; overflow-wrap: break-word; }
   h1, h2, h3 { color: var(--ink); }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .92em; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .92em; overflow-wrap: anywhere; }
   .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
   .skip { position: absolute; left: 12px; top: -70px; z-index: 100; background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 700; text-decoration: none; transition: top .18s ease; }
   .skip:focus { top: 12px; }
@@ -54,7 +54,7 @@
   h1 { margin: 14px 0 18px; max-width: 16ch; font-family: var(--serif); font-size: clamp(2.7rem, 6.3vw, 4.7rem); font-weight: 400; line-height: 1.1; letter-spacing: -.035em; }
   .lead { max-width: 68ch; margin: 0; font-size: clamp(1.04rem, 1.8vw, 1.22rem); }
   .content { display: grid; gap: 18px; padding-bottom: 84px; }
-  .card { padding: 28px; background: var(--card); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 18px 52px -44px rgba(18,59,53,.4); }
+  .card { min-width: 0; padding: 28px; background: var(--card); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 18px 52px -44px rgba(18,59,53,.4); }
   .card h2 { margin: 0 0 10px; font-family: var(--serif); font-size: clamp(1.75rem, 3vw, 2.35rem); font-weight: 400; letter-spacing: -.02em; }
   .card h3 { margin: 20px 0 8px; font-size: 1.04rem; }
   .card p { margin: 0 0 12px; }
@@ -101,7 +101,7 @@
     <div class="wrap">
       <span class="eyebrow">다운로드</span>
       <h1>Minto 0.0.10 정식 버전을 받을 수 있습니다.</h1>
-      <p class="lead">Apple Silicon Mac에서 사용할 수 있는 정식 배포 빌드입니다. Apple 공증을 받지 않아 처음 실행할 때 macOS 확인 절차가 필요합니다.</p>
+      <p class="lead">Apple Silicon Mac에서 사용할 수 있는 배포 빌드입니다. Stable과 Preview 중 사용할 채널을 고르세요. 두 채널 모두 ad-hoc 서명이며 Apple 공증을 받지 않았습니다.</p>
     </div>
   </header>
 
@@ -110,9 +110,19 @@
       <span class="status">Stable</span>
       <h2>현재 버전은 0.0.10입니다.</h2>
       <p>아래 버튼을 누르면 앱 설치 파일인 <code>Minto.zip</code>을 바로 내려받습니다. GitHub가 함께 표시하는 Source code 압축 파일은 앱이 아닙니다.</p>
-      <p class="note">이 빌드는 Apple 공증을 받지 않았습니다. 설치 후 Finder의 응용 프로그램에서 Minto를 우클릭하고 <strong>열기</strong>를 선택하세요.</p>
+      <p class="note">이 빌드는 ad-hoc 서명이며 Apple 공증을 받지 않았습니다. 첫 실행이 차단되면 아래 macOS 안내를 확인하세요.</p>
       <a class="btn" href="https://github.com/zhsks311/minto/releases/download/v0.0.10/Minto.zip">Minto 0.0.10 다운로드 →</a>
       <p><a href="https://github.com/zhsks311/minto/releases/tag/v0.0.10">릴리스 정보와 파일 해시 확인 →</a></p>
+      <p><a href="https://github.com/zhsks311/minto/releases/download/v0.0.10/artifact-manifest.json">파일 검증 정보 보기 →</a><br />ZIP SHA-256: <code>6bdf63487ae1aae80c161d3785ffbcf0963da5241d1cd141afbde875243bdf4f</code></p>
+    </section>
+
+    <section class="card">
+      <span class="status">Preview · 미리 사용해 보기</span>
+      <h2>Preview 0.0.10-preview.1</h2>
+      <p>현재 공개된 Preview는 0.0.10-preview.1입니다. 지금은 Stable 0.0.10과 같은 앱 파일을 제공합니다. 중요한 회의 전에는 짧은 녹음과 저장을 먼저 확인하세요.</p>
+      <p>Stable과 Preview는 같은 <code>Minto.app</code>을 설치하므로 동시에 설치하지 마세요.</p>
+      <a class="btn" href="https://github.com/zhsks311/minto/releases/download/v0.0.10-preview.1/Minto.zip">Preview 0.0.10-preview.1 다운로드 →</a>
+      <p><a href="https://github.com/zhsks311/minto/releases/tag/v0.0.10-preview.1">Preview 릴리스 정보와 파일 검증 정보 →</a></p>
     </section>
 
     <section class="card">
@@ -130,19 +140,19 @@
       <ol class="steps">
         <li><strong><code>Minto.zip</code>의 압축을 풉니다.</strong><br />압축을 풀면 <code>Minto.app</code>이 나타납니다.</li>
         <li><strong><code>Minto.app</code>을 응용 프로그램 폴더로 옮깁니다.</strong><br />Finder 사이드바의 응용 프로그램으로 드래그하면 됩니다.</li>
-        <li><strong>처음에는 우클릭 후 열기를 사용합니다.</strong><br />응용 프로그램 폴더에서 Minto를 우클릭하고 <strong>열기</strong>를 선택합니다.</li>
-        <li><strong>macOS 경고에서 다시 열기를 선택합니다.</strong><br />앱의 출처를 확인한 뒤 <strong>열기</strong>를 누릅니다.</li>
+        <li><strong>응용 프로그램에서 Minto를 엽니다.</strong><br />확인되지 않은 개발자 경고가 나오면 경고를 닫고 다음 단계를 확인하세요.</li>
+        <li><strong>앱의 출처를 확인한 뒤 실행을 허용합니다.</strong><br /><strong>시스템 설정 → 개인정보 보호 및 보안 → 확인 없이 열기</strong>에서 Minto의 실행을 허용합니다. macOS 버전에 따라 우클릭 후 <strong>열기</strong>로 확인할 수도 있습니다.</li>
         <li><strong>필요한 권한을 허용합니다.</strong><br />회의 전사에 필요한 마이크와 시스템 오디오 권한을 허용합니다.</li>
       </ol>
     </section>
 
     <section class="card">
       <h2>macOS에서 열리지 않을 때</h2>
-      <p>더블클릭하면 “Apple에서 악성 소프트웨어가 있는지 확인할 수 없습니다”라는 경고가 나타날 수 있습니다. 앱의 출처를 확인했다면 아래 순서로 여세요.</p>
+      <p>“Apple에서 악성 소프트웨어가 있는지 확인할 수 없습니다”라는 경고가 나타날 수 있습니다. 다운로드한 파일과 출처를 확인한 경우에만 아래 절차로 실행을 허용하세요.</p>
       <ol class="steps">
         <li><strong>Finder에서 응용 프로그램을 엽니다.</strong><br />설치한 <code>Minto.app</code>을 찾습니다.</li>
-        <li><strong>Minto를 우클릭하고 열기를 선택합니다.</strong><br />단축 메뉴의 <strong>열기</strong>를 누릅니다.</li>
-        <li><strong>경고창에서 열기를 확인합니다.</strong><br />이 확인은 처음 실행할 때만 필요합니다.</li>
+        <li><strong>시스템 설정에서 개인정보 보호 및 보안을 엽니다.</strong><br />차단된 Minto 안내 옆의 <strong>확인 없이 열기</strong>를 선택합니다.</li>
+        <li><strong>경고창에서 열기를 확인합니다.</strong><br />macOS 버전에 따라 우클릭 후 <strong>열기</strong>로 확인할 수도 있습니다. 보안 기능을 끄거나 터미널로 격리를 해제할 필요는 없습니다.</li>
       </ol>
       <p class="note">그래도 열리지 않으면 <a href="troubleshooting.html">문제 해결 안내</a>를 확인하세요.</p>
     </section>
